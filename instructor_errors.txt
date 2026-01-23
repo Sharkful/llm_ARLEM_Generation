@@ -1,0 +1,872 @@
+### gpt-5
+
+---------------------------------------------------------------------------
+ValidationError                           Traceback (most recent call last)
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\core\retry.py:250, in retry_sync(func, response_model, args, kwargs, context, max_retries, strict, mode, hooks)
+    243     kwargs = handle_reask_kwargs(
+    244         kwargs=kwargs,
+    245         mode=mode,
+   (...)    248         failed_attempts=failed_attempts,
+    249     )
+--> 250     raise e
+    251 except Exception as e:
+    252     # Emit completion:error for non-validation errors (API errors, network errors, etc.)
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\core\retry.py:199, in retry_sync(func, response_model, args, kwargs, context, max_retries, strict, mode, hooks)
+    195     response = update_total_usage(
+    196         response=response, total_usage=total_usage
+    197     )
+--> 199     return process_response(  # type: ignore
+    200         response=response,
+    201         response_model=response_model,
+    202         validation_context=context,
+    203         strict=strict,
+    204         mode=mode,
+    205         stream=stream,
+    206     )
+    207 except (
+    208     ValidationError,
+    209     JSONDecodeError,
+    210     InstructorValidationError,
+    211 ) as e:
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\processing\response.py:345, in process_response(response, response_model, stream, validation_context, strict, mode)
+    343     return tasks
+--> 345 model = response_model.from_response(  # type: ignore
+    346     response,
+    347     validation_context=validation_context,
+    348     strict=strict,
+    349     mode=mode,
+    350 )
+    352 # ? This really hints at the fact that we need a better way of
+    353 # ? attaching usage data and the raw response to the model we return.
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\processing\function_calls.py:247, in OpenAISchema.from_response(cls, completion, validation_context, strict, mode)
+    240 if mode in {
+    241     Mode.TOOLS,
+    242     Mode.MISTRAL_TOOLS,
+   (...)    245     Mode.FIREWORKS_TOOLS,
+    246 }:
+--> 247     return cls.parse_tools(completion, validation_context, strict)
+    249 if mode in {
+    250     Mode.JSON,
+    251     Mode.JSON_SCHEMA,
+   (...)    257     Mode.OPENROUTER_STRUCTURED_OUTPUTS,
+    258 }:
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\processing\function_calls.py:744, in OpenAISchema.parse_tools(cls, completion, validation_context, strict)
+    741 assert (
+    742     tool_call.function.name == cls.openai_schema["name"]  # type: ignore[index]
+    743 ), "Tool name does not match"
+--> 744 return cls.model_validate_json(
+    745     tool_call.function.arguments,  # type: ignore
+    746     context=validation_context,
+    747     strict=strict,
+    748 )
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\pydantic\main.py:766, in BaseModel.model_validate_json(cls, json_data, strict, extra, context, by_alias, by_name)
+    761     raise PydanticUserError(
+    762         'At least one of `by_alias` or `by_name` must be set to True.',
+    763         code='validate-by-alias-and-name-false',
+    764     )
+--> 766 return cls.__pydantic_validator__.validate_json(
+    767     json_data, strict=strict, extra=extra, context=context, by_alias=by_alias, by_name=by_name
+    768 )
+
+ValidationError: 21 validation errors for ARLEMScenario
+workplace.sensors.0.data.0
+  Input should be an object [type=model_type, input_value='printer/status', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+workplace.sensors.0.data.1
+  Input should be an object [type=model_type, input_value='printer/temps/bed', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+workplace.sensors.0.data.2
+  Input should be an object [type=model_type, input_value='printer/temps/nozzle', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.0.instruction
+  Input should be an object [type=model_type, input_value='Welcome to the 3D printe...rlays with the printer.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.1.instruction
+  Input should be an object [type=model_type, input_value='Safety first: Hot surfac...now the emergency stop.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.2.instruction
+  Input should be an object [type=model_type, input_value='Pre-print inspection: 1)...zzle is free of debris.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.3.instruction
+  Input should be an object [type=model_type, input_value='Power on the printer. If...fy the LCD shows Ready.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.4.instruction
+  Input should be an object [type=model_type, input_value='Load filament: 1) Mount ...s grab and purge clean.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.5.instruction
+  Input should be an object [type=model_type, input_value='Bed preparation: With th...nstall the sheet flush.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.6.instruction
+  Input should be an object [type=model_type, input_value='Calibration: Run Mesh Be...quished and continuous.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.7.instruction
+  Input should be an object [type=model_type, input_value='Slicing: Open PrusaSlice...lice and export G-code.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.8.instruction
+  Input should be an object [type=model_type, input_value='Transfer G-code: Insert ...rs on the printer menu.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.9.instruction
+  Input should be an object [type=model_type, input_value='Emergency stop: If unsaf...uring the first layers.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.10.instruction
+  Input should be an object [type=model_type, input_value='Start the print: On the ...djust Live-Z if needed.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.10.triggers.0.type
+  Input should be 'tangible' or 'action' [type=literal_error, input_value='mqtt', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/literal_error
+activity.actions.10.triggers.1.mode
+  Field required [type=missing, input_value={'duration': 120}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.10.triggers.1.id
+  Field required [type=missing, input_value={'duration': 120}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.11.instruction
+  Input should be an object [type=model_type, input_value='After completion and coo...Do not gouge the sheet.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.11.triggers.0.type
+  Input should be 'tangible' or 'action' [type=literal_error, input_value='mqtt', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/literal_error
+activity.actions.11.triggers.0.value
+  Input should be a valid string [type=string_type, input_value=40, input_type=int]
+    For further information visit https://errors.pydantic.dev/2.12/v/string_type
+activity.actions.12.instruction
+  Input should be an object [type=model_type, input_value='Shutdown and tidy: Retur..., and log your session.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+
+The above exception was the direct cause of the following exception:
+
+RetryError                                Traceback (most recent call last)
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\core\retry.py:188, in retry_sync(func, response_model, args, kwargs, context, max_retries, strict, mode, hooks)
+    187 response = None
+--> 188 for attempt in max_retries:
+    189     with attempt:
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\tenacity\__init__.py:445, in BaseRetrying.__iter__(self)
+    444 while True:
+--> 445     do = self.iter(retry_state=retry_state)
+    446     if isinstance(do, DoAttempt):
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\tenacity\__init__.py:378, in BaseRetrying.iter(self, retry_state)
+    377 for action in self.iter_state.actions:
+--> 378     result = action(retry_state)
+    379 return result
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\tenacity\__init__.py:421, in BaseRetrying._post_stop_check_actions.<locals>.exc_check(rs)
+    420     raise retry_exc.reraise()
+--> 421 raise retry_exc from fut.exception()
+
+RetryError: RetryError[<Future at 0x1da0e200550 state=finished raised ValidationError>]
+
+The above exception was the direct cause of the following exception:
+
+InstructorRetryException                  Traceback (most recent call last)
+Cell In[10], line 16
+     10 start_time = time.time()
+     12 # Extract structured data
+     13 # Old method, without access to raw response
+     14 # lab = client.create(
+     15 # New method, which gives us access to token usage
+---> 16 lab, completion = client.create_with_completion(
+     17     response_model=ARLEMScenario,
+     18     messages=[
+     19         {"role": "user", "content": prompt}
+     20     ],
+     21     max_retries=1
+     22 )
+     24 # end timer
+     25 end_time = time.time()
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\core\client.py:546, in Instructor.create_with_completion(self, messages, response_model, max_retries, validation_context, context, strict, hooks, **kwargs)
+    543 if hooks is not None:
+    544     combined_hooks = self.hooks + hooks
+--> 546 model = self.create_fn(
+    547     messages=messages,
+    548     response_model=response_model,
+    549     max_retries=max_retries,
+    550     validation_context=validation_context,
+    551     context=context,
+    552     strict=strict,
+    553     hooks=combined_hooks,
+    554     **kwargs,
+    555 )
+    556 return model, model._raw_response
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\core\patch.py:258, in patch.<locals>.new_create_sync(response_model, validation_context, context, max_retries, strict, hooks, *args, **kwargs)
+    255     if obj is not None:
+    256         return obj  # type: ignore[return-value]
+--> 258 response = retry_sync(
+    259     func=func,  # type: ignore
+    260     response_model=response_model,
+    261     context=context,
+    262     max_retries=max_retries,
+    263     args=args,
+    264     hooks=hooks,
+    265     strict=strict,
+    266     kwargs=new_kwargs,
+    267     mode=mode,
+    268 )
+    270 # Save to cache
+    271 if cache is not None and response_model is not None:
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\core\retry.py:285, in retry_sync(func, response_model, args, kwargs, context, max_retries, strict, mode, hooks)
+    283 except RetryError as e:
+    284     logger.debug(f"Retry error: {e}")
+--> 285     raise InstructorRetryException(
+    286         e.last_attempt._exception,
+    287         last_completion=response,
+    288         n_attempts=attempt.retry_state.attempt_number,
+    289         #! deprecate messages soon
+    290         messages=extract_messages(
+    291             kwargs
+    292         ),  # Use the optimized function instead of nested lookups
+    293         create_kwargs=kwargs,
+    294         total_usage=total_usage,
+    295         failed_attempts=failed_attempts,
+    296     ) from e
+
+InstructorRetryException: <failed_attempts>
+
+<generation number="1">
+<exception>
+    21 validation errors for ARLEMScenario
+workplace.sensors.0.data.0
+  Input should be an object [type=model_type, input_value='printer/status', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+workplace.sensors.0.data.1
+  Input should be an object [type=model_type, input_value='printer/temps/bed', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+workplace.sensors.0.data.2
+  Input should be an object [type=model_type, input_value='printer/temps/nozzle', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.0.instruction
+  Input should be an object [type=model_type, input_value='Welcome to the 3D printe...rlays with the printer.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.1.instruction
+  Input should be an object [type=model_type, input_value='Safety first: Hot surfac...now the emergency stop.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.2.instruction
+  Input should be an object [type=model_type, input_value='Pre-print inspection: 1)...zzle is free of debris.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.3.instruction
+  Input should be an object [type=model_type, input_value='Power on the printer. If...fy the LCD shows Ready.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.4.instruction
+  Input should be an object [type=model_type, input_value='Load filament: 1) Mount ...s grab and purge clean.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.5.instruction
+  Input should be an object [type=model_type, input_value='Bed preparation: With th...nstall the sheet flush.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.6.instruction
+  Input should be an object [type=model_type, input_value='Calibration: Run Mesh Be...quished and continuous.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.7.instruction
+  Input should be an object [type=model_type, input_value='Slicing: Open PrusaSlice...lice and export G-code.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.8.instruction
+  Input should be an object [type=model_type, input_value='Transfer G-code: Insert ...rs on the printer menu.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.9.instruction
+  Input should be an object [type=model_type, input_value='Emergency stop: If unsaf...uring the first layers.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.10.instruction
+  Input should be an object [type=model_type, input_value='Start the print: On the ...djust Live-Z if needed.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.10.triggers.0.type
+  Input should be 'tangible' or 'action' [type=literal_error, input_value='mqtt', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/literal_error
+activity.actions.10.triggers.1.mode
+  Field required [type=missing, input_value={'duration': 120}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.10.triggers.1.id
+  Field required [type=missing, input_value={'duration': 120}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.11.instruction
+  Input should be an object [type=model_type, input_value='After completion and coo...Do not gouge the sheet.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.11.triggers.0.type
+  Input should be 'tangible' or 'action' [type=literal_error, input_value='mqtt', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/literal_error
+activity.actions.11.triggers.0.value
+  Input should be a valid string [type=string_type, input_value=40, input_type=int]
+    For further information visit https://errors.pydantic.dev/2.12/v/string_type
+activity.actions.12.instruction
+  Input should be an object [type=model_type, input_value='Shutdown and tidy: Retur..., and log your session.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+</exception>
+<completion>
+    ChatCompletion(id='chatcmpl-D1EdBJ8v6yBjKvUh9PfH7wQDEakle', choices=[Choice(finish_reason='tool_calls', index=0, logprobs=None, message=ChatCompletionMessage(content=None, refusal=None, role='assistant', annotations=[], audio=None, function_call=None, tool_calls=[ChatCompletionMessageFunctionToolCall(id='call_X2qRar366hS0GyTpeTkL5K65', function=Function(arguments='{"workplace":{"id":"makerspace1","name":"University Makerspace - FDM 3D Printer Station","origin":"room_anchor","things":[{"id":"prusa_mk3s","name":"Prusa i3 MK3S+ 3D Printer","detectable":"printer_marker","pois":[{"id":"extruder_poi","name":"Extruder/Hotend"},{"id":"build_plate_poi","name":"Build Plate"},{"id":"control_knob_poi","name":"Control Knob & LCD"}]},{"id":"filament_pla","name":"1.75mm PLA Filament Spool","detectable":"filament_marker","pois":[{"id":"filament_tip_poi","name":"Filament Tip"}]},{"id":"spool_holder","name":"Spool Holder","pois":[]},{"id":"build_plate","name":"Spring Steel Sheet","detectable":"plate_marker","pois":[]},{"id":"usb_drive","name":"SD/USB Storage","detectable":"usb_marker","pois":[]},{"id":"scraper","name":"Print Removal Scraper","detectable":"scraper_marker","pois":[]},{"id":"ipa_bottle","name":"Isopropyl Alcohol (90%+)","detectable":"ipa_marker","pois":[]},{"id":"lint_free_cloth","name":"Lint-free Cloth","detectable":"cloth_marker","pois":[]},{"id":"e_stop","name":"Emergency Stop Button","detectable":"estop_marker","pois":[]},{"id":"enclosure_door","name":"Printer Enclosure Door","detectable":"door_marker","pois":[]}],"places":[{"id":"printer_station","name":"3D Printer Workstation","detectable":"printer_marker","pois":[]},{"id":"consumables_shelf","name":"Consumables & Tools Shelf","pois":[]},{"id":"computer_station","name":"Computer/Slicer Station","pois":[]}],"persons":[{"id":"student1","name":"Learner","persona":"learner","mbox":"student1@makerspace.edu"},{"id":"instructor1","name":"Lab Instructor","persona":"instructor","mbox":"instructor@makerspace.edu"}],"sensors":[{"id":"octoprint","url":"mqtt://octoprint-broker.makerspace.edu:1883","data":["printer/status","printer/temps/bed","printer/temps/nozzle"]}],"devices":[{"id":"hl2","type":"hololens","name":"HoloLens 2 #15","owner":"student1","url":"mqtt://hl2-bridge.local:1883","topic":"arlem/hl2/15"},{"id":"tablet1","type":"tablet","name":"iPad Pro at Station","owner":"instructor1","url":"mqtt://tablet-bridge.local:1883","topic":"arlem/tablet/1"}],"apps":[{"id":"octoprint_dash","type":"widget","name":"OctoPrint Dashboard","url":"https://octoprint.makerspace.edu"}],"detectables":[{"id":"room_anchor","type":"anchor","sensor":"mapping","url":"https://assets.makerspace.edu/anchors/room_anchor"},{"id":"printer_marker","type":"marker","sensor":"tracking","url":"https://assets.makerspace.edu/markers/prusa_mk3s.marker"},{"id":"filament_marker","type":"marker","sensor":"tracking","url":"https://assets.makerspace.edu/markers/filament_pla.marker"},{"id":"plate_marker","type":"marker","sensor":"tracking","url":"https://assets.makerspace.edu/markers/build_plate.marker"},{"id":"usb_marker","type":"marker","sensor":"tracking","url":"https://assets.makerspace.edu/markers/usb_drive.marker"},{"id":"scraper_marker","type":"marker","sensor":"tracking","url":"https://assets.makerspace.edu/markers/scraper.marker"},{"id":"ipa_marker","type":"marker","sensor":"tracking","url":"https://assets.makerspace.edu/markers/ipa_bottle.marker"},{"id":"cloth_marker","type":"marker","sensor":"tracking","url":"https://assets.makerspace.edu/markers/lint_free_cloth.marker"},{"id":"estop_marker","type":"marker","sensor":"tracking","url":"https://assets.makerspace.edu/markers/emergency_stop.marker"},{"id":"door_marker","type":"marker","sensor":"tracking","url":"https://assets.makerspace.edu/markers/enclosure_door.marker"}],"primitives":[{"id":"label","x_size":30,"y_size":10},{"id":"image","x_size":30,"y_size":30},{"id":"video","x_size":60,"y_size":34},{"id":"audio"},{"id":"animation","x_size":20,"y_size":20,"z_size":20}],"predicates":[{"id":"intro_label","type":"label"},{"id":"safety_audio","type":"audio","url":"https://assets.makerspace.edu/audio/3dp_safety_intro.mp3"},{"id":"load_filament_video","type":"video","url":"https://assets.makerspace.edu/video/load_filament_prusa.mp4"},{"id":"clean_bed_video","type":"video","url":"https://assets.makerspace.edu/video/clean_bed.mp4"},{"id":"z_calibration_video","type":"video","url":"https://assets.makerspace.edu/video/z_calibration_prusa.mp4"},{"id":"slice_widget_label","type":"label"},{"id":"start_print_label","type":"label"},{"id":"remove_print_video","type":"video","url":"https://assets.makerspace.edu/video/remove_print_safely.mp4"},{"id":"shutdown_label","type":"label"},{"id":"estop_warning_label","type":"label"},{"id":"arrow_animation","type":"animation","url":"https://assets.makerspace.edu/models/arrow_pointer.glb"}],"warnings":[{"id":"hot_surface","type":"image","symbol":"W017 Hot surface","scale":1.2},{"id":"pinch_point","type":"image","symbol":"W024 Crushing of fingers","scale":1.2},{"id":"general_warning","type":"image","symbol":"W001 General warning","scale":1.0}]},"activity":{"id":"3dp_basic_ops","name":"Operate an FDM 3D Printer (Prusa MK3S+)","description":"XR-guided training to safely set up, start, monitor, and complete a print on a Prusa i3 MK3S+ FDM 3D printer, including safety checks, filament loading, bed prep, slicing, print start, first-layer verification, part removal, and shutdown.","language":"en","workplace":"makerspace1","start":"welcome","actions":[{"id":"welcome","viewport":"actions","type":"actions","device":"hl2","location":"printer_station","predicate":"intro_label","instruction":"Welcome to the 3D printer station. You will learn safe and correct operation of the Prusa MK3S+. Follow on-screen prompts and align AR overlays with the printer.","enter":{"show":["label:intro_label"],"message":"Stand at the printer station and face the machine."},"triggers":[{"id":"welcome","mode":"click","type":"action","viewport":"actions"},{"id":"welcome","mode":"voice","type":"action","viewport":"actions","phrase":"next"}]},{"id":"safety","viewport":"warnings","type":"warnings","device":"hl2","location":"printer_station","predicate":"safety_audio","instruction":"Safety first: Hot surfaces, moving parts, and sharp tools. Tie back hair, avoid loose clothing. Never reach into the machine while moving. Know the emergency stop.","enter":{"show":["warning:hot_surface","warning:pinch_point","label:estop_warning_label","audio:safety_audio"],"highlight":[{"detectable":"estop_marker","predicate":"arrow_animation"}]},"triggers":[{"id":"safety","mode":"click","type":"action","viewport":"warnings"},{"id":"safety","mode":"voice","type":"action","viewport":"warnings","phrase":"acknowledge"}]},{"id":"precheck","viewport":"actions","type":"actions","device":"hl2","location":"printer_station","predicate":null,"instruction":"Pre-print inspection: 1) Ensure printer is on stable surface and enclosure door is closed. 2) Verify build plate is installed and clean. 3) Confirm nozzle is free of debris.","enter":{"highlight":[{"detectable":"printer_marker","predicate":"arrow_animation"},{"detectable":"plate_marker","predicate":"arrow_animation"}]},"triggers":[{"id":"printer_marker","mode":"detect","type":"tangible"},{"id":"plate_marker","mode":"detect","type":"tangible"},{"id":"precheck","mode":"click","type":"action","viewport":"actions"}]},{"id":"poweron","viewport":"actions","type":"actions","device":"hl2","location":"printer_station","predicate":null,"instruction":"Power on the printer. If already on, verify the LCD shows Ready.","enter":{"highlight":[{"detectable":"printer_marker","predicate":"arrow_animation"}]},"triggers":[{"id":"poweron","mode":"click","type":"action","viewport":"actions"},{"id":"poweron","mode":"voice","type":"action","viewport":"actions","phrase":"ready"}]},{"id":"loadfilament","viewport":"actions","type":"actions","device":"hl2","location":"printer_station","predicate":"load_filament_video","instruction":"Load filament: 1) Mount spool on holder. 2) Preheat PLA (Nozzle 215°C). 3) Run Load Filament on the printer. 4) Insert filament until extruder gears grab and purge clean.","enter":{"show":["video:load_filament_video"],"highlight":[{"detectable":"filament_marker","predicate":"arrow_animation"},{"detectable":"printer_marker","predicate":"arrow_animation"}]},"triggers":[{"id":"filament_marker","mode":"detect","type":"tangible"},{"id":"printer_marker","mode":"detect","type":"tangible"},{"id":"loadfilament","mode":"voice","type":"action","viewport":"actions","phrase":"loaded"}]},{"id":"bedprep","viewport":"actions","type":"actions","device":"hl2","location":"printer_station","predicate":"clean_bed_video","instruction":"Bed preparation: With the bed cool, clean the build plate using IPA and a lint-free cloth. Remove oils and debris. Reinstall the sheet flush.","enter":{"show":["video:clean_bed_video"],"highlight":[{"detectable":"ipa_marker","predicate":"arrow_animation"},{"detectable":"cloth_marker","predicate":"arrow_animation"},{"detectable":"plate_marker","predicate":"arrow_animation"}]},"triggers":[{"id":"ipa_marker","mode":"detect","type":"tangible"},{"id":"cloth_marker","mode":"detect","type":"tangible"},{"id":"plate_marker","mode":"detect","type":"tangible"},{"id":"bedprep","mode":"click","type":"action","viewport":"actions"}]},{"id":"calibrate","viewport":"actions","type":"actions","device":"hl2","location":"printer_station","predicate":"z_calibration_video","instruction":"Calibration: Run Mesh Bed Leveling if needed and verify Live-Z is correct. Use a single-layer test to ensure lines are slightly squished and continuous.","enter":{"show":["video:z_calibration_video"],"highlight":[{"detectable":"printer_marker","predicate":"arrow_animation"}]},"triggers":[{"id":"calibrate","mode":"click","type":"action","viewport":"actions"},{"id":"calibrate","mode":"voice","type":"action","viewport":"actions","phrase":"calibrated"}]},{"id":"slice","viewport":"actions","type":"actions","device":"tablet1","location":"computer_station","predicate":"slice_widget_label","instruction":"Slicing: Open PrusaSlicer. Select correct printer profile (MK3S+), filament (PLA), and quality. Import model, orient, add supports if required, set infill and layer height, then slice and export G-code.","enter":{"show":["label:slice_widget_label"],"launch_app":"octoprint_dash"},"triggers":[{"id":"slice","mode":"click","type":"action","viewport":"actions"},{"id":"slice","mode":"voice","type":"action","viewport":"actions","phrase":"sliced"}]},{"id":"transfer","viewport":"actions","type":"actions","device":"hl2","location":"printer_station","predicate":null,"instruction":"Transfer G-code: Insert SD/USB into the printer or upload via OctoPrint. Confirm the file appears on the printer menu.","enter":{"highlight":[{"detectable":"usb_marker","predicate":"arrow_animation"},{"detectable":"printer_marker","predicate":"arrow_animation"}]},"triggers":[{"id":"usb_marker","mode":"detect","type":"tangible"},{"id":"transfer","mode":"click","type":"action","viewport":"actions"}]},{"id":"emergency","viewport":"warnings","type":"warnings","device":"hl2","location":"printer_station","predicate":"estop_warning_label","instruction":"Emergency stop: If unsafe conditions occur (smoke, fire, entanglement), press the E-STOP immediately and notify staff. Do not leave the printer unattended during the first layers.","enter":{"show":["warning:general_warning","label:estop_warning_label"],"highlight":[{"detectable":"estop_marker","predicate":"arrow_animation"}]},"triggers":[{"id":"estop_marker","mode":"detect","type":"tangible"},{"id":"emergency","mode":"click","type":"action","viewport":"warnings"}]},{"id":"startprint","viewport":"actions","type":"actions","device":"hl2","location":"printer_station","predicate":"start_print_label","instruction":"Start the print: On the printer, select the correct G-code. Watch the first layer: lines should adhere smoothly with slight squish and no gaps. Adjust Live-Z if needed.","enter":{"show":["label:start_print_label"],"highlight":[{"detectable":"printer_marker","predicate":"arrow_animation"},{"detectable":"plate_marker","predicate":"arrow_animation"}]},"triggers":[{"id":"printer/status","mode":"sensor","type":"mqtt","topic":"printer/status","value":"printing","sensor":"octoprint"},{"duration":120},{"id":"startprint","mode":"click","type":"action","viewport":"actions"}]},{"id":"remove","viewport":"actions","type":"actions","device":"hl2","location":"printer_station","predicate":"remove_print_video","instruction":"After completion and cooling (< 40°C bed), flex the plate to release the part, or use the scraper carefully away from your body. Do not gouge the sheet.","enter":{"show":["video:remove_print_video"],"highlight":[{"detectable":"plate_marker","predicate":"arrow_animation"},{"detectable":"scraper_marker","predicate":"arrow_animation"}]},"triggers":[{"id":"printer/temps/bed","mode":"sensor","type":"mqtt","comparison":"lt","value":40,"sensor":"octoprint"},{"id":"scraper_marker","mode":"detect","type":"tangible"},{"id":"remove","mode":"voice","type":"action","viewport":"actions","phrase":"removed"}]},{"id":"shutdown","viewport":"actions","type":"actions","device":"hl2","location":"printer_station","predicate":"shutdown_label","instruction":"Shutdown and tidy: Return tools, remove filament if required, power down the printer, clean the area, and log your session.","enter":{"show":["label:shutdown_label"],"highlight":[{"detectable":"printer_marker","predicate":"arrow_animation"}]},"triggers":[{"id":"shutdown","mode":"click","type":"action","viewport":"actions"},{"id":"shutdown","mode":"voice","type":"action","viewport":"actions","phrase":"finished"}]}]}}', name='ARLEMScenario'), type='function')]))], created=1769186941, model='gpt-5-2025-08-07', object='chat.completion', service_tier='default', system_fingerprint=None, usage=CompletionUsage(completion_tokens=6832, prompt_tokens=2799, total_tokens=9631, completion_tokens_details=CompletionTokensDetails(accepted_prediction_tokens=None, audio_tokens=0, reasoning_tokens=3520, rejected_prediction_tokens=None), prompt_tokens_details=PromptTokensDetails(audio_tokens=0, cached_tokens=0)))
+</completion>
+</generation>
+
+</failed_attempts>
+
+<last_exception>
+    21 validation errors for ARLEMScenario
+workplace.sensors.0.data.0
+  Input should be an object [type=model_type, input_value='printer/status', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+workplace.sensors.0.data.1
+  Input should be an object [type=model_type, input_value='printer/temps/bed', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+workplace.sensors.0.data.2
+  Input should be an object [type=model_type, input_value='printer/temps/nozzle', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.0.instruction
+  Input should be an object [type=model_type, input_value='Welcome to the 3D printe...rlays with the printer.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.1.instruction
+  Input should be an object [type=model_type, input_value='Safety first: Hot surfac...now the emergency stop.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.2.instruction
+  Input should be an object [type=model_type, input_value='Pre-print inspection: 1)...zzle is free of debris.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.3.instruction
+  Input should be an object [type=model_type, input_value='Power on the printer. If...fy the LCD shows Ready.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.4.instruction
+  Input should be an object [type=model_type, input_value='Load filament: 1) Mount ...s grab and purge clean.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.5.instruction
+  Input should be an object [type=model_type, input_value='Bed preparation: With th...nstall the sheet flush.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.6.instruction
+  Input should be an object [type=model_type, input_value='Calibration: Run Mesh Be...quished and continuous.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.7.instruction
+  Input should be an object [type=model_type, input_value='Slicing: Open PrusaSlice...lice and export G-code.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.8.instruction
+  Input should be an object [type=model_type, input_value='Transfer G-code: Insert ...rs on the printer menu.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.9.instruction
+  Input should be an object [type=model_type, input_value='Emergency stop: If unsaf...uring the first layers.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.10.instruction
+  Input should be an object [type=model_type, input_value='Start the print: On the ...djust Live-Z if needed.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.10.triggers.0.type
+  Input should be 'tangible' or 'action' [type=literal_error, input_value='mqtt', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/literal_error
+activity.actions.10.triggers.1.mode
+  Field required [type=missing, input_value={'duration': 120}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.10.triggers.1.id
+  Field required [type=missing, input_value={'duration': 120}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.11.instruction
+  Input should be an object [type=model_type, input_value='After completion and coo...Do not gouge the sheet.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.11.triggers.0.type
+  Input should be 'tangible' or 'action' [type=literal_error, input_value='mqtt', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/literal_error
+activity.actions.11.triggers.0.value
+  Input should be a valid string [type=string_type, input_value=40, input_type=int]
+    For further information visit https://errors.pydantic.dev/2.12/v/string_type
+activity.actions.12.instruction
+  Input should be an object [type=model_type, input_value='Shutdown and tidy: Retur..., and log your session.', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+</last_exception>
+
+### gpt-5.2  ~$0.09
+---------------------------------------------------------------------------
+ValidationError                           Traceback (most recent call last)
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\core\retry.py:250, in retry_sync(func, response_model, args, kwargs, context, max_retries, strict, mode, hooks)
+    243     kwargs = handle_reask_kwargs(
+    244         kwargs=kwargs,
+    245         mode=mode,
+   (...)    248         failed_attempts=failed_attempts,
+    249     )
+--> 250     raise e
+    251 except Exception as e:
+    252     # Emit completion:error for non-validation errors (API errors, network errors, etc.)
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\core\retry.py:199, in retry_sync(func, response_model, args, kwargs, context, max_retries, strict, mode, hooks)
+    195     response = update_total_usage(
+    196         response=response, total_usage=total_usage
+    197     )
+--> 199     return process_response(  # type: ignore
+    200         response=response,
+    201         response_model=response_model,
+    202         validation_context=context,
+    203         strict=strict,
+    204         mode=mode,
+    205         stream=stream,
+    206     )
+    207 except (
+    208     ValidationError,
+    209     JSONDecodeError,
+    210     InstructorValidationError,
+    211 ) as e:
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\processing\response.py:345, in process_response(response, response_model, stream, validation_context, strict, mode)
+    343     return tasks
+--> 345 model = response_model.from_response(  # type: ignore
+    346     response,
+    347     validation_context=validation_context,
+    348     strict=strict,
+    349     mode=mode,
+    350 )
+    352 # ? This really hints at the fact that we need a better way of
+    353 # ? attaching usage data and the raw response to the model we return.
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\processing\function_calls.py:247, in OpenAISchema.from_response(cls, completion, validation_context, strict, mode)
+    240 if mode in {
+    241     Mode.TOOLS,
+    242     Mode.MISTRAL_TOOLS,
+   (...)    245     Mode.FIREWORKS_TOOLS,
+    246 }:
+--> 247     return cls.parse_tools(completion, validation_context, strict)
+    249 if mode in {
+    250     Mode.JSON,
+    251     Mode.JSON_SCHEMA,
+   (...)    257     Mode.OPENROUTER_STRUCTURED_OUTPUTS,
+    258 }:
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\processing\function_calls.py:744, in OpenAISchema.parse_tools(cls, completion, validation_context, strict)
+    741 assert (
+    742     tool_call.function.name == cls.openai_schema["name"]  # type: ignore[index]
+    743 ), "Tool name does not match"
+--> 744 return cls.model_validate_json(
+    745     tool_call.function.arguments,  # type: ignore
+    746     context=validation_context,
+    747     strict=strict,
+    748 )
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\pydantic\main.py:766, in BaseModel.model_validate_json(cls, json_data, strict, extra, context, by_alias, by_name)
+    761     raise PydanticUserError(
+    762         'At least one of `by_alias` or `by_name` must be set to True.',
+    763         code='validate-by-alias-and-name-false',
+    764     )
+--> 766 return cls.__pydantic_validator__.validate_json(
+    767     json_data, strict=strict, extra=extra, context=context, by_alias=by_alias, by_name=by_name
+    768 )
+
+ValidationError: 35 validation errors for ARLEMScenario
+workplace
+  Value error, The Person 'ps_learner' references a missing detectable 'None'. [type=value_error, input_value={'id': 'wp_3dprint_lab_01...16_Toxic', 'scale': 1}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/value_error
+activity.actions.0.instruction.description
+  Field required [type=missing, input_value={'title': 'Welcome: FDM 3... 'Tap NEXT to begin.'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.0.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a01_ppe'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.1.instruction.description
+  Field required [type=missing, input_value={'title': 'Safety & PPE',...tion': 'PPE reminder'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.1.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a02_power_on'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.2.instruction.description
+  Field required [type=missing, input_value={'title': 'Power On & Hom...: 'Select: Auto Home'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.2.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a03_clean_bed'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.3.instruction.description
+  Field required [type=missing, input_value={'title': 'Clean the Prin...t': 'Lint-free cloth'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.3.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...': 'a04_prep_adhesion'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.4.instruction.description
+  Field required [type=missing, input_value={'title': 'Bed Adhesion (...': 'Apply thin layer'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.4.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a05_preheat'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.5.instruction.description
+  Field required [type=missing, input_value={'title': 'Preheat for PL...: 'Menu: Preheat PLA'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.5.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...': 'a06_load_filament'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.6.instruction.description
+  Field required [type=missing, input_value={'title': 'Load Filament ... 'poi': 'poi_nozzle'}}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.6.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a07_bed_level'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.7.instruction.description
+  Field required [type=missing, input_value={'title': 'Level the Bed ...Menu: Level/Tram Bed'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.7.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...n': 'a08_insert_media'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.8.instruction.description
+  Field required [type=missing, input_value={'title': 'Insert Print F...text': 'G-code media'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.8.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...n': 'a09_select_print'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.9.instruction.description
+  Field required [type=missing, input_value={'title': 'Select File & ...r', 'poi': 'poi_bed'}}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.9.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...a10_first_layer_check'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.10.instruction.description
+  Field required [type=missing, input_value={'title': 'Check the Firs...ntrols: Pause / Stop'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.10.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...': 'a11_wait_complete'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.11.instruction.description
+  Field required [type=missing, input_value={'title': 'Print Completi... 'poi': 'poi_nozzle'}}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.11.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a12_cooldown'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.12.instruction.description
+  Field required [type=missing, input_value={'title': 'Cooldown Befor... 'Check temperatures'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.12.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...n': 'a13_remove_print'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.13.instruction.description
+  Field required [type=missing, input_value={'title': 'Remove the Pri...se scraper carefully'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.13.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a14_measure'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.14.instruction.description
+  Field required [type=missing, input_value={'title': 'Quality Check ... 'Record measurement'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.14.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...'a15_cleanup_shutdown'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.15.instruction.description
+  Field required [type=missing, input_value={'title': 'Cleanup & Shut...'Discard scraps here'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.15.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a16_complete'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.16.instruction.description
+  Field required [type=missing, input_value={'title': 'Training Compl...lect EXIT or RESTART'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.16.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'end'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+
+The above exception was the direct cause of the following exception:
+
+RetryError                                Traceback (most recent call last)
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\core\retry.py:188, in retry_sync(func, response_model, args, kwargs, context, max_retries, strict, mode, hooks)
+    187 response = None
+--> 188 for attempt in max_retries:
+    189     with attempt:
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\tenacity\__init__.py:445, in BaseRetrying.__iter__(self)
+    444 while True:
+--> 445     do = self.iter(retry_state=retry_state)
+    446     if isinstance(do, DoAttempt):
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\tenacity\__init__.py:378, in BaseRetrying.iter(self, retry_state)
+    377 for action in self.iter_state.actions:
+--> 378     result = action(retry_state)
+    379 return result
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\tenacity\__init__.py:421, in BaseRetrying._post_stop_check_actions.<locals>.exc_check(rs)
+    420     raise retry_exc.reraise()
+--> 421 raise retry_exc from fut.exception()
+
+RetryError: RetryError[<Future at 0x1da0c599480 state=finished raised ValidationError>]
+
+The above exception was the direct cause of the following exception:
+
+InstructorRetryException                  Traceback (most recent call last)
+Cell In[15], line 16
+     10 start_time = time.time()
+     12 # Extract structured data
+     13 # Old method, without access to raw response
+     14 # lab = client.create(
+     15 # New method, which gives us access to token usage
+---> 16 lab, completion = client.create_with_completion(
+     17     response_model=ARLEMScenario,
+     18     messages=[
+     19         {"role": "user", "content": prompt}
+     20     ],
+     21     max_retries=1
+     22 )
+     24 # end timer
+     25 end_time = time.time()
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\core\client.py:546, in Instructor.create_with_completion(self, messages, response_model, max_retries, validation_context, context, strict, hooks, **kwargs)
+    543 if hooks is not None:
+    544     combined_hooks = self.hooks + hooks
+--> 546 model = self.create_fn(
+    547     messages=messages,
+    548     response_model=response_model,
+    549     max_retries=max_retries,
+    550     validation_context=validation_context,
+    551     context=context,
+    552     strict=strict,
+    553     hooks=combined_hooks,
+    554     **kwargs,
+    555 )
+    556 return model, model._raw_response
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\core\patch.py:258, in patch.<locals>.new_create_sync(response_model, validation_context, context, max_retries, strict, hooks, *args, **kwargs)
+    255     if obj is not None:
+    256         return obj  # type: ignore[return-value]
+--> 258 response = retry_sync(
+    259     func=func,  # type: ignore
+    260     response_model=response_model,
+    261     context=context,
+    262     max_retries=max_retries,
+    263     args=args,
+    264     hooks=hooks,
+    265     strict=strict,
+    266     kwargs=new_kwargs,
+    267     mode=mode,
+    268 )
+    270 # Save to cache
+    271 if cache is not None and response_model is not None:
+
+File ~\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\instructor\core\retry.py:285, in retry_sync(func, response_model, args, kwargs, context, max_retries, strict, mode, hooks)
+    283 except RetryError as e:
+    284     logger.debug(f"Retry error: {e}")
+--> 285     raise InstructorRetryException(
+    286         e.last_attempt._exception,
+    287         last_completion=response,
+    288         n_attempts=attempt.retry_state.attempt_number,
+    289         #! deprecate messages soon
+    290         messages=extract_messages(
+    291             kwargs
+    292         ),  # Use the optimized function instead of nested lookups
+    293         create_kwargs=kwargs,
+    294         total_usage=total_usage,
+    295         failed_attempts=failed_attempts,
+    296     ) from e
+
+InstructorRetryException: <failed_attempts>
+
+<generation number="1">
+<exception>
+    35 validation errors for ARLEMScenario
+workplace
+  Value error, The Person 'ps_learner' references a missing detectable 'None'. [type=value_error, input_value={'id': 'wp_3dprint_lab_01...16_Toxic', 'scale': 1}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/value_error
+activity.actions.0.instruction.description
+  Field required [type=missing, input_value={'title': 'Welcome: FDM 3... 'Tap NEXT to begin.'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.0.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a01_ppe'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.1.instruction.description
+  Field required [type=missing, input_value={'title': 'Safety & PPE',...tion': 'PPE reminder'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.1.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a02_power_on'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.2.instruction.description
+  Field required [type=missing, input_value={'title': 'Power On & Hom...: 'Select: Auto Home'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.2.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a03_clean_bed'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.3.instruction.description
+  Field required [type=missing, input_value={'title': 'Clean the Prin...t': 'Lint-free cloth'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.3.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...': 'a04_prep_adhesion'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.4.instruction.description
+  Field required [type=missing, input_value={'title': 'Bed Adhesion (...': 'Apply thin layer'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.4.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a05_preheat'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.5.instruction.description
+  Field required [type=missing, input_value={'title': 'Preheat for PL...: 'Menu: Preheat PLA'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.5.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...': 'a06_load_filament'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.6.instruction.description
+  Field required [type=missing, input_value={'title': 'Load Filament ... 'poi': 'poi_nozzle'}}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.6.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a07_bed_level'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.7.instruction.description
+  Field required [type=missing, input_value={'title': 'Level the Bed ...Menu: Level/Tram Bed'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.7.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...n': 'a08_insert_media'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.8.instruction.description
+  Field required [type=missing, input_value={'title': 'Insert Print F...text': 'G-code media'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.8.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...n': 'a09_select_print'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.9.instruction.description
+  Field required [type=missing, input_value={'title': 'Select File & ...r', 'poi': 'poi_bed'}}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.9.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...a10_first_layer_check'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.10.instruction.description
+  Field required [type=missing, input_value={'title': 'Check the Firs...ntrols: Pause / Stop'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.10.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...': 'a11_wait_complete'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.11.instruction.description
+  Field required [type=missing, input_value={'title': 'Print Completi... 'poi': 'poi_nozzle'}}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.11.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a12_cooldown'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.12.instruction.description
+  Field required [type=missing, input_value={'title': 'Cooldown Befor... 'Check temperatures'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.12.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...n': 'a13_remove_print'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.13.instruction.description
+  Field required [type=missing, input_value={'title': 'Remove the Pri...se scraper carefully'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.13.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a14_measure'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.14.instruction.description
+  Field required [type=missing, input_value={'title': 'Quality Check ... 'Record measurement'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.14.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...'a15_cleanup_shutdown'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.15.instruction.description
+  Field required [type=missing, input_value={'title': 'Cleanup & Shut...'Discard scraps here'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.15.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a16_complete'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.16.instruction.description
+  Field required [type=missing, input_value={'title': 'Training Compl...lect EXIT or RESTART'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.16.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'end'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+</exception>
+<completion>
+    ChatCompletion(id='chatcmpl-D1EpJJabApsrCCSO7a3NTBYOTGunn', choices=[Choice(finish_reason='tool_calls', index=0, logprobs=None, message=ChatCompletionMessage(content=None, refusal=None, role='assistant', annotations=[], audio=None, function_call=None, tool_calls=[ChatCompletionMessageFunctionToolCall(id='call_5KPRa185scLVJQbEG8Oux0eQ', function=Function(arguments='{"workplace":{"id":"wp_3dprint_lab_01","name":"3D Printing Lab - FDM Printer Training Bay","origin":"det_lab_origin","places":[{"id":"pl_bay","name":"Printer Bay Work Area","detectable":"det_bay_anchor"},{"id":"pl_prep","name":"Prep Bench","detectable":"det_prep_anchor"},{"id":"pl_waste","name":"Waste & Scrap Bin Area","detectable":"det_waste_anchor"}],"things":[{"id":"th_printer","name":"FDM 3D Printer (Ender/Prusa-style)","detectable":"det_printer_marker","pois":[{"id":"poi_power","name":"Power Switch","position":{"x":0.18,"y":0.12,"z":0.02}},{"id":"poi_screen","name":"Control Screen / Knob","position":{"x":0.22,"y":0.18,"z":0.08}},{"id":"poi_bed","name":"Print Bed","position":{"x":0.0,"y":0.35,"z":0.0}},{"id":"poi_nozzle","name":"Nozzle / Hotend","position":{"x":0.0,"y":0.42,"z":0.18}},{"id":"poi_extruder","name":"Extruder Lever","position":{"x":-0.12,"y":0.52,"z":0.22}},{"id":"poi_sd","name":"SD/USB Port","position":{"x":0.24,"y":0.16,"z":0.06}}]},{"id":"th_filament_spool","name":"PLA Filament Spool","detectable":"det_filament_marker","pois":[{"id":"poi_spool","name":"Spool Hub","position":{"x":0.0,"y":0.1,"z":0.0}}]},{"id":"th_scraper","name":"Print Removal Scraper","detectable":"det_scraper_marker"},{"id":"th_sidecutters","name":"Flush Cutters (for filament)","detectable":"det_cutters_marker"},{"id":"th_ipa","name":"Isopropyl Alcohol Bottle","detectable":"det_ipa_marker"},{"id":"th_cloth","name":"Lint-free Cloth","detectable":"det_cloth_marker"},{"id":"th_glue","name":"Bed Adhesive (Glue Stick)","detectable":"det_glue_marker"},{"id":"th_usb","name":"USB Drive / SD Card (G-code)","detectable":"det_media_marker"},{"id":"th_caliper","name":"Digital Calipers","detectable":"det_caliper_marker"},{"id":"th_ppe_glasses","name":"Safety Glasses","detectable":"det_glasses_marker"},{"id":"th_ppe_gloves","name":"Heat-resistant Gloves","detectable":"det_gloves_marker"}],"persons":[{"id":"ps_learner","name":"Learner","persona":"learner","mbox":"mailto:learner@example.com"},{"id":"ps_instructor","name":"Instructor","persona":"instructor","mbox":"mailto:instructor@example.com"}],"devices":[{"id":"dv_hololens","type":"hololens","name":"HoloLens 2 - Learner Device","owner":"ps_learner","url":null},{"id":"dv_tablet","type":"tablet","name":"Training Tablet (Optional)","owner":"ps_instructor","url":null}],"detectables":[{"id":"det_lab_origin","type":"anchor","sensor":"mapping","url":"https://example.org/arlem/anchors/lab_origin.json"},{"id":"det_bay_anchor","type":"anchor","sensor":"mapping","url":"https://example.org/arlem/anchors/printer_bay.json"},{"id":"det_prep_anchor","type":"anchor","sensor":"mapping","url":"https://example.org/arlem/anchors/prep_bench.json"},{"id":"det_waste_anchor","type":"anchor","sensor":"mapping","url":"https://example.org/arlem/anchors/waste_area.json"},{"id":"det_printer_marker","type":"marker","sensor":"tracking","url":"https://example.org/arlem/markers/printer_marker.png"},{"id":"det_filament_marker","type":"marker","sensor":"tracking","url":"https://example.org/arlem/markers/filament_marker.png"},{"id":"det_scraper_marker","type":"marker","sensor":"tracking","url":"https://example.org/arlem/markers/scraper_marker.png"},{"id":"det_cutters_marker","type":"marker","sensor":"tracking","url":"https://example.org/arlem/markers/cutters_marker.png"},{"id":"det_ipa_marker","type":"marker","sensor":"tracking","url":"https://example.org/arlem/markers/ipa_marker.png"},{"id":"det_cloth_marker","type":"marker","sensor":"tracking","url":"https://example.org/arlem/markers/cloth_marker.png"},{"id":"det_glue_marker","type":"marker","sensor":"tracking","url":"https://example.org/arlem/markers/glue_marker.png"},{"id":"det_media_marker","type":"marker","sensor":"tracking","url":"https://example.org/arlem/markers/media_marker.png"},{"id":"det_caliper_marker","type":"marker","sensor":"tracking","url":"https://example.org/arlem/markers/caliper_marker.png"},{"id":"det_glasses_marker","type":"marker","sensor":"tracking","url":"https://example.org/arlem/markers/glasses_marker.png"},{"id":"det_gloves_marker","type":"marker","sensor":"tracking","url":"https://example.org/arlem/markers/gloves_marker.png"}],"primitives":[{"id":"label"},{"id":"image","x_size":18,"y_size":10},{"id":"video","x_size":24,"y_size":14},{"id":"audio","volume":75},{"id":"animation","x_size":20,"y_size":20,"z_size":20}],"predicates":[{"id":"pd_intro_label","type":"label","scale":1},{"id":"pd_safety_image","type":"image","url":"https://example.org/arlem/media/safety_ppe.png","scale":1},{"id":"pd_clean_bed_video","type":"video","url":"https://example.org/arlem/media/clean_bed.mp4","scale":1},{"id":"pd_load_filament_anim","type":"animation","url":"https://example.org/arlem/media/load_filament.glb","scale":1},{"id":"pd_level_bed_anim","type":"animation","url":"https://example.org/arlem/media/bed_leveling.glb","scale":1},{"id":"pd_select_file_image","type":"image","url":"https://example.org/arlem/media/select_gcode.png","scale":1},{"id":"pd_first_layer_video","type":"video","url":"https://example.org/arlem/media/first_layer_check.mp4","scale":1},{"id":"pd_remove_print_anim","type":"animation","url":"https://example.org/arlem/media/remove_print.glb","scale":1},{"id":"pd_measure_label","type":"label","scale":1},{"id":"pd_shutdown_label","type":"label","scale":1}],"warnings":[{"id":"wrn_hot_surface","type":"label","symbol":"W017_HotSurface","scale":1},{"id":"wrn_moving_parts","type":"label","symbol":"W024_MovingParts","scale":1},{"id":"wrn_fumes","type":"label","symbol":"W016_Toxic","scale":1}]},"activity":{"id":"act_3dprinter_ops_01","name":"Operate an FDM 3D Printer (PLA)","description":"XR-guided training for safely preparing, loading filament, leveling the bed, starting a PLA print, monitoring first layer, removing the part, and shutting down an FDM 3D printer.","language":"en","workplace":"wp_3dprint_lab_01","start":"a00_intro","actions":[{"id":"a00_intro","viewport":"actions","type":"actions","device":"dv_hololens","location":"pl_bay","predicate":"pd_intro_label","instruction":{"title":"Welcome: FDM 3D Printer Operation","body":"Goal: safely start and complete a PLA print.\\nYou will: wear PPE, prep bed, load filament, level bed, start a print, verify first layer, remove part, and shutdown.\\nSelect NEXT to begin.","augmentations":[{"predicate":"pd_intro_label","attachTo":{"thing":"th_printer","poi":"poi_screen"},"text":"Tap NEXT to begin."}]},"triggers":[{"id":"next","mode":"click","type":"action","viewport":"actions"},{"id":"next","mode":"voice","type":"action","viewport":"actions"}],"exit":[{"command":"goto","action":"a01_ppe"}]},{"id":"a01_ppe","viewport":"warnings","type":"warnings","device":"dv_hololens","location":"pl_prep","predicate":null,"instruction":{"title":"Safety & PPE","body":"Put on safety glasses. Use heat-resistant gloves when touching near the hotend/bed.\\nHazards: hot surfaces and moving parts.\\nWhen ready, confirm PPE is on.","augmentations":[{"warning":"wrn_hot_surface","attachTo":{"thing":"th_printer","poi":"poi_nozzle"}},{"warning":"wrn_moving_parts","attachTo":{"thing":"th_printer","poi":"poi_bed"}},{"predicate":"pd_safety_image","attachTo":{"place":"pl_prep"},"caption":"PPE reminder"}]},"triggers":[{"duration":2,"id":"th_ppe_glasses","mode":"detect","type":"tangible"},{"id":"confirm_ppe","mode":"click","type":"action","viewport":"warnings"}],"exit":[{"command":"goto","action":"a02_power_on"}]},{"id":"a02_power_on","viewport":"actions","type":"actions","device":"dv_hololens","location":"pl_bay","predicate":null,"instruction":{"title":"Power On & Home","body":"1) Turn on the printer.\\n2) On the screen, select Auto Home (or Home).\\nWait until axes finish moving.","augmentations":[{"type":"label","attachTo":{"thing":"th_printer","poi":"poi_power"},"text":"Power switch"},{"type":"label","attachTo":{"thing":"th_printer","poi":"poi_screen"},"text":"Select: Auto Home"}]},"triggers":[{"id":"powered_on","mode":"click","type":"action","viewport":"actions"},{"id":"homed","mode":"click","type":"action","viewport":"actions"}],"exit":[{"command":"goto","action":"a03_clean_bed"}]},{"id":"a03_clean_bed","viewport":"actions","type":"actions","device":"dv_hololens","location":"pl_prep","predicate":"pd_clean_bed_video","instruction":{"title":"Clean the Print Bed","body":"Clean improves first-layer adhesion.\\n1) Dampen cloth with isopropyl alcohol.\\n2) Wipe the bed surface until oils/dust are removed.\\n3) Let it dry (~10–20 seconds).","augmentations":[{"predicate":"pd_clean_bed_video","attachTo":{"thing":"th_printer","poi":"poi_bed"},"caption":"Wipe pattern demo"},{"type":"label","attachTo":{"thing":"th_ipa"},"text":"IPA"},{"type":"label","attachTo":{"thing":"th_cloth"},"text":"Lint-free cloth"}]},"triggers":[{"duration":2,"id":"th_ipa","mode":"detect","type":"tangible"},{"duration":2,"id":"th_cloth","mode":"detect","type":"tangible"},{"id":"bed_cleaned","mode":"click","type":"action","viewport":"actions"}],"exit":[{"command":"goto","action":"a04_prep_adhesion"}]},{"id":"a04_prep_adhesion","viewport":"actions","type":"actions","device":"dv_hololens","location":"pl_bay","predicate":null,"instruction":{"title":"Bed Adhesion (If Needed)","body":"If your printer uses a bare/glass bed, apply a thin, even layer of glue stick.\\nSkip if using a textured PEI sheet and adhesion is already good.","augmentations":[{"type":"label","attachTo":{"thing":"th_glue"},"text":"Optional: glue stick"},{"type":"label","attachTo":{"thing":"th_printer","poi":"poi_bed"},"text":"Apply thin layer"}]},"triggers":[{"id":"skip_or_done","mode":"click","type":"action","viewport":"actions"},{"id":"skip_or_done","mode":"voice","type":"action","viewport":"actions"}],"exit":[{"command":"goto","action":"a05_preheat"}]},{"id":"a05_preheat","viewport":"actions","type":"actions","device":"dv_hololens","location":"pl_bay","predicate":null,"instruction":{"title":"Preheat for PLA","body":"On the printer screen: Preheat PLA.\\nTypical targets: Nozzle 200°C, Bed 60°C (follow your filament label/printer profile).\\nWait until temperatures stabilize.","augmentations":[{"warning":"wrn_hot_surface","attachTo":{"thing":"th_printer","poi":"poi_nozzle"}},{"type":"label","attachTo":{"thing":"th_printer","poi":"poi_screen"},"text":"Menu: Preheat PLA"}]},"triggers":[{"id":"temps_reached","mode":"click","type":"action","viewport":"actions"}],"exit":[{"command":"goto","action":"a06_load_filament"}]},{"id":"a06_load_filament","viewport":"actions","type":"actions","device":"dv_hololens","location":"pl_prep","predicate":"pd_load_filament_anim","instruction":{"title":"Load Filament (PLA)","body":"1) Cut filament end at an angle.\\n2) Insert filament into extruder.\\n3) On screen: Load/Extrude until filament flows smoothly from nozzle.\\nUse gloves if needed near the hotend.","augmentations":[{"predicate":"pd_load_filament_anim","attachTo":{"thing":"th_printer","poi":"poi_extruder"},"caption":"Insert filament + extrude"},{"type":"label","attachTo":{"thing":"th_sidecutters"},"text":"Cut at angle"},{"warning":"wrn_hot_surface","attachTo":{"thing":"th_printer","poi":"poi_nozzle"}}]},"triggers":[{"duration":2,"id":"th_filament_spool","mode":"detect","type":"tangible"},{"duration":2,"id":"th_sidecutters","mode":"detect","type":"tangible"},{"id":"filament_flowing","mode":"click","type":"action","viewport":"actions"}],"exit":[{"command":"goto","action":"a07_bed_level"}]},{"id":"a07_bed_level","viewport":"actions","type":"actions","device":"dv_hololens","location":"pl_bay","predicate":"pd_level_bed_anim","instruction":{"title":"Level the Bed (Manual or Assisted)","body":"Correct nozzle gap is critical.\\nOption A (assisted): run Bed Leveling/Tramming wizard.\\nOption B (manual): move nozzle to each corner and adjust knobs so a paper just drags under the nozzle.\\nRe-check all corners and center.","augmentations":[{"predicate":"pd_level_bed_anim","attachTo":{"thing":"th_printer","poi":"poi_bed"},"caption":"Paper-drag gap target"},{"type":"label","attachTo":{"thing":"th_printer","poi":"poi_screen"},"text":"Menu: Level/Tram Bed"}]},"triggers":[{"id":"leveled","mode":"click","type":"action","viewport":"actions"},{"id":"leveled","mode":"voice","type":"action","viewport":"actions"}],"exit":[{"command":"goto","action":"a08_insert_media"}]},{"id":"a08_insert_media","viewport":"actions","type":"actions","device":"dv_hololens","location":"pl_bay","predicate":null,"instruction":{"title":"Insert Print File (G-code)","body":"Insert the USB/SD containing your sliced G-code file.\\nEnsure file matches this printer profile (nozzle size, bed size, material).","augmentations":[{"type":"label","attachTo":{"thing":"th_printer","poi":"poi_sd"},"text":"Insert media here"},{"type":"label","attachTo":{"thing":"th_usb"},"text":"G-code media"}]},"triggers":[{"duration":2,"id":"th_usb","mode":"detect","type":"tangible"},{"id":"media_inserted","mode":"click","type":"action","viewport":"actions"}],"exit":[{"command":"goto","action":"a09_select_print"}]},{"id":"a09_select_print","viewport":"actions","type":"actions","device":"dv_hololens","location":"pl_bay","predicate":"pd_select_file_image","instruction":{"title":"Select File & Start Print","body":"On the screen: Print from Media > choose the correct file > Start.\\nVerify nozzle/bed temperatures are appropriate for PLA.","augmentations":[{"predicate":"pd_select_file_image","attachTo":{"thing":"th_printer","poi":"poi_screen"},"caption":"Example menu path"},{"warning":"wrn_moving_parts","attachTo":{"thing":"th_printer","poi":"poi_bed"}}]},"triggers":[{"id":"print_started","mode":"click","type":"action","viewport":"actions"}],"exit":[{"command":"goto","action":"a10_first_layer_check"}]},{"id":"a10_first_layer_check","viewport":"reactions","type":"reactions","device":"dv_hololens","location":"pl_bay","predicate":"pd_first_layer_video","instruction":{"title":"Check the First Layer (First 1–3 Minutes)","body":"Watch the first layer.\\nGood: lines are slightly squished, continuous, and adhere.\\nBad signs:\\n- Not sticking: raise bed temp slightly, clean bed, add adhesion, or lower Z offset.\\n- Too squished: elephant skin/ridges: increase Z offset.\\nIf issues persist, pause/stop and correct before wasting filament.","augmentations":[{"predicate":"pd_first_layer_video","attachTo":{"thing":"th_printer","poi":"poi_bed"},"caption":"Good vs bad first layer"},{"type":"label","attachTo":{"thing":"th_printer","poi":"poi_screen"},"text":"Controls: Pause / Stop"}]},"triggers":[{"id":"first_layer_ok","mode":"click","type":"action","viewport":"reactions"},{"id":"first_layer_fix_done","mode":"click","type":"action","viewport":"reactions"}],"exit":[{"command":"goto","action":"a11_wait_complete"}]},{"id":"a11_wait_complete","viewport":"reactions","type":"reactions","device":"dv_hololens","location":"pl_bay","predicate":null,"instruction":{"title":"Print Completion","body":"Let the print finish.\\nDo not reach into the printer while it is moving.\\nWhen the printer indicates completion, confirm to proceed.","augmentations":[{"warning":"wrn_moving_parts","attachTo":{"thing":"th_printer","poi":"poi_bed"}},{"warning":"wrn_hot_surface","attachTo":{"thing":"th_printer","poi":"poi_nozzle"}}]},"triggers":[{"id":"print_complete","mode":"click","type":"action","viewport":"reactions"}],"exit":[{"command":"goto","action":"a12_cooldown"}]},{"id":"a12_cooldown","viewport":"warnings","type":"warnings","device":"dv_hololens","location":"pl_bay","predicate":null,"instruction":{"title":"Cooldown Before Removal","body":"Wait for safe temperatures before removing the print.\\nGuideline: bed < 35–40°C and nozzle < 50°C (or per lab policy).\\nConfirm once cooled.","augmentations":[{"warning":"wrn_hot_surface","attachTo":{"thing":"th_printer","poi":"poi_bed"}},{"type":"label","attachTo":{"thing":"th_printer","poi":"poi_screen"},"text":"Check temperatures"}]},"triggers":[{"id":"cooled","mode":"click","type":"action","viewport":"warnings"}],"exit":[{"command":"goto","action":"a13_remove_print"}]},{"id":"a13_remove_print","viewport":"actions","type":"actions","device":"dv_hololens","location":"pl_bay","predicate":"pd_remove_print_anim","instruction":{"title":"Remove the Print Safely","body":"1) If removable plate: take plate to bench and flex.\\n2) If fixed bed: use scraper at a low angle; push away from your body.\\nAvoid gouging the surface.\\nPlace scraps in the bin.","augmentations":[{"predicate":"pd_remove_print_anim","attachTo":{"thing":"th_printer","poi":"poi_bed"},"caption":"Safe scraper angle"},{"type":"label","attachTo":{"thing":"th_scraper"},"text":"Use scraper carefully"}]},"triggers":[{"duration":2,"id":"th_scraper","mode":"detect","type":"tangible"},{"id":"print_removed","mode":"click","type":"action","viewport":"actions"}],"exit":[{"command":"goto","action":"a14_measure"}]},{"id":"a14_measure","viewport":"reactions","type":"reactions","device":"dv_hololens","location":"pl_prep","predicate":"pd_measure_label","instruction":{"title":"Quality Check (Basic)","body":"Measure one key dimension with calipers and compare to expected value.\\nRecord result. If out of tolerance, note possible causes (shrinkage, steps/mm, first layer too squished).","augmentations":[{"type":"label","attachTo":{"thing":"th_caliper"},"text":"Measure here"},{"predicate":"pd_measure_label","attachTo":{"place":"pl_prep"},"text":"Record measurement"}]},"triggers":[{"duration":2,"id":"th_caliper","mode":"detect","type":"tangible"},{"id":"measured","mode":"click","type":"action","viewport":"reactions"}],"exit":[{"command":"goto","action":"a15_cleanup_shutdown"}]},{"id":"a15_cleanup_shutdown","viewport":"actions","type":"actions","device":"dv_hololens","location":"pl_bay","predicate":"pd_shutdown_label","instruction":{"title":"Cleanup & Shutdown","body":"1) Remove filament if required by lab policy (Unload).\\n2) Wipe bed once cool.\\n3) Power off printer.\\n4) Dispose of purge strings/scraps properly.","augmentations":[{"predicate":"pd_shutdown_label","attachTo":{"thing":"th_printer","poi":"poi_power"},"text":"Power OFF"},{"type":"label","attachTo":{"place":"pl_waste"},"text":"Discard scraps here"}]},"triggers":[{"id":"shutdown_complete","mode":"click","type":"action","viewport":"actions"},{"id":"shutdown_complete","mode":"voice","type":"action","viewport":"actions"}],"exit":[{"command":"goto","action":"a16_complete"}]},{"id":"a16_complete","viewport":"reactions","type":"reactions","device":"dv_hololens","location":"pl_bay","predicate":null,"instruction":{"title":"Training Complete","body":"You have completed the 3D printer operation workflow.\\nYou can repeat any step or exit the experience.","augmentations":[{"type":"label","attachTo":{"thing":"th_printer","poi":"poi_screen"},"text":"Select EXIT or RESTART"}]},"triggers":[{"id":"exit","mode":"click","type":"action","viewport":"reactions"},{"id":"restart","mode":"click","type":"action","viewport":"reactions"}],"exit":[{"command":"end"}]}]}}', name='ARLEMScenario'), type='function')]))], created=1769187693, model='gpt-5.2-2025-12-11', object='chat.completion', service_tier='default', system_fingerprint=None, usage=CompletionUsage(completion_tokens=5065, prompt_tokens=2803, total_tokens=7868, completion_tokens_details=CompletionTokensDetails(accepted_prediction_tokens=None, audio_tokens=0, reasoning_tokens=0, rejected_prediction_tokens=None), prompt_tokens_details=PromptTokensDetails(audio_tokens=0, cached_tokens=0)))
+</completion>
+</generation>
+
+</failed_attempts>
+
+<last_exception>
+    35 validation errors for ARLEMScenario
+workplace
+  Value error, The Person 'ps_learner' references a missing detectable 'None'. [type=value_error, input_value={'id': 'wp_3dprint_lab_01...16_Toxic', 'scale': 1}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/value_error
+activity.actions.0.instruction.description
+  Field required [type=missing, input_value={'title': 'Welcome: FDM 3... 'Tap NEXT to begin.'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.0.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a01_ppe'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.1.instruction.description
+  Field required [type=missing, input_value={'title': 'Safety & PPE',...tion': 'PPE reminder'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.1.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a02_power_on'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.2.instruction.description
+  Field required [type=missing, input_value={'title': 'Power On & Hom...: 'Select: Auto Home'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.2.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a03_clean_bed'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.3.instruction.description
+  Field required [type=missing, input_value={'title': 'Clean the Prin...t': 'Lint-free cloth'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.3.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...': 'a04_prep_adhesion'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.4.instruction.description
+  Field required [type=missing, input_value={'title': 'Bed Adhesion (...': 'Apply thin layer'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.4.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a05_preheat'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.5.instruction.description
+  Field required [type=missing, input_value={'title': 'Preheat for PL...: 'Menu: Preheat PLA'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.5.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...': 'a06_load_filament'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.6.instruction.description
+  Field required [type=missing, input_value={'title': 'Load Filament ... 'poi': 'poi_nozzle'}}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.6.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a07_bed_level'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.7.instruction.description
+  Field required [type=missing, input_value={'title': 'Level the Bed ...Menu: Level/Tram Bed'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.7.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...n': 'a08_insert_media'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.8.instruction.description
+  Field required [type=missing, input_value={'title': 'Insert Print F...text': 'G-code media'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.8.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...n': 'a09_select_print'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.9.instruction.description
+  Field required [type=missing, input_value={'title': 'Select File & ...r', 'poi': 'poi_bed'}}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.9.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...a10_first_layer_check'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.10.instruction.description
+  Field required [type=missing, input_value={'title': 'Check the Firs...ntrols: Pause / Stop'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.10.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...': 'a11_wait_complete'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.11.instruction.description
+  Field required [type=missing, input_value={'title': 'Print Completi... 'poi': 'poi_nozzle'}}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.11.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a12_cooldown'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.12.instruction.description
+  Field required [type=missing, input_value={'title': 'Cooldown Befor... 'Check temperatures'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.12.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...n': 'a13_remove_print'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.13.instruction.description
+  Field required [type=missing, input_value={'title': 'Remove the Pri...se scraper carefully'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.13.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a14_measure'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.14.instruction.description
+  Field required [type=missing, input_value={'title': 'Quality Check ... 'Record measurement'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.14.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'act...'a15_cleanup_shutdown'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.15.instruction.description
+  Field required [type=missing, input_value={'title': 'Cleanup & Shut...'Discard scraps here'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.15.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'goto', 'action': 'a16_complete'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+activity.actions.16.instruction.description
+  Field required [type=missing, input_value={'title': 'Training Compl...lect EXIT or RESTART'}]}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+activity.actions.16.exit
+  Input should be an object [type=model_type, input_value=[{'command': 'end'}], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.12/v/model_type
+</last_exception>
