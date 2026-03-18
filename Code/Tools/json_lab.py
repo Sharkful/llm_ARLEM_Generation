@@ -23,6 +23,7 @@ from enum import Enum
 from typing import Annotated, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 
 # ── Primitive Types ───────────────────────────────────────────────────
@@ -311,8 +312,8 @@ class DemoModule(BaseModel):
     (injected automatically at runtime).
     """
 
-    moduleType: Literal["demo"] = "demo"
-    prefab: Literal["demoPrefab"] = "demoPrefab"
+    moduleType: SkipJsonSchema[Literal["demo"]] = "demo"
+    prefab: SkipJsonSchema[Literal["demoPrefab"]] = "demoPrefab"
     moduleName: str = Field(
         description="Display name of this module"
     )
@@ -362,11 +363,9 @@ class DemoModule(BaseModel):
         return self
 
 
-# If more module types are added, create their models and add to this union:
-Module = Annotated[
-    Union[DemoModule],
-    Field(discriminator="moduleType"),
-]
+# Currently only DemoModule exists. If more module types are added,
+# restore the discriminated union on "moduleType".
+Module = DemoModule
 
 
 # ── Top-Level Lab ─────────────────────────────────────────────────────
@@ -379,7 +378,7 @@ class Lab(BaseModel):
     that the student progresses through.
     """
 
-    version: Literal["2.0"] = "2.0"
+    version: SkipJsonSchema[Literal["2.0"]] = "2.0"
     labId: str = Field(description="Unique identifier for this lab")
     author: str = Field(description="Lab author name")
     courseName: str = Field(description="Name of the course this lab belongs to")

@@ -55,16 +55,14 @@ MODELS = {
     "gpt-4.1-nano": ModelConfig("gpt-4.1-nano", Provider.OPENAI, "GPT-4.1 Nano"),
 
     # Anthropic
-    "claude-opus-4": ModelConfig("claude-opus-4", Provider.ANTHROPIC, "Claude Opus 4"),
-    "claude-sonnet-4": ModelConfig("claude-sonnet-4", Provider.ANTHROPIC, "Claude Sonnet 4"),
-    "claude-3.5-sonnet": ModelConfig("claude-3.5-sonnet", Provider.ANTHROPIC, "Claude 3.5 Sonnet"),
-    "claude-3.5-haiku": ModelConfig("claude-3.5-haiku", Provider.ANTHROPIC, "Claude 3.5 Haiku"),
-    "claude-3-haiku": ModelConfig("claude-3-haiku", Provider.ANTHROPIC, "Claude 3 Haiku"),
+    "claude-opus-4": ModelConfig("claude-opus-4-20250514", Provider.ANTHROPIC, "Claude Opus 4"),
+    "claude-sonnet-4": ModelConfig("claude-sonnet-4-20250514", Provider.ANTHROPIC, "Claude Sonnet 4"),
+    "claude-haiku-4.5": ModelConfig("claude-haiku-4-5-20251001", Provider.ANTHROPIC, "Claude Haiku 4.5"),
+    "claude-3-haiku": ModelConfig("claude-3-haiku-20240307", Provider.ANTHROPIC, "Claude 3 Haiku"),
 
     # Google
     "gemini-2.5-flash": ModelConfig("gemini-2.5-flash", Provider.GOOGLE, "Gemini 2.5 Flash"),
     "gemini-2.5-pro": ModelConfig("gemini-2.5-pro", Provider.GOOGLE, "Gemini 2.5 Pro"),
-    "gemini-2.0-flash": ModelConfig("gemini-2.0-flash", Provider.GOOGLE, "Gemini 2.0 Flash"),
     "gemini-1.5-pro": ModelConfig("gemini-1.5-pro", Provider.GOOGLE, "Gemini 1.5 Pro"),
     "gemini-1.5-flash": ModelConfig("gemini-1.5-flash", Provider.GOOGLE, "Gemini 1.5 Flash"),
 }
@@ -187,7 +185,7 @@ DEFAULT_TOPICS = [
 ]
 
 # Quick test: small set of fast/cheap models
-QUICK_BENCHMARK_MODELS = ["gpt-4o-mini", "claude-3-haiku", "gemini-2.0-flash"]
+QUICK_BENCHMARK_MODELS = ["gpt-4o-mini", "claude-haiku-4.5", "gemini-2.5-flash"]
 
 # Full benchmark: comprehensive model comparison
 FULL_BENCHMARK_MODELS = list(MODELS.keys())

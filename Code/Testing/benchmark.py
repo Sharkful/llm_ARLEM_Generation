@@ -60,32 +60,36 @@ from tracking import InstructorTracker, BenchmarkExporter
 
 # ── Client Factory ───────────────────────────────────────────────────
 
-def create_instructor_client(model_config: ModelConfig, max_retries: int = 3):
+def create_instructor_client(model_config: ModelConfig):
     """
-    Create an instructor-patched client for the given provider.
+    Create an instructor-patched client for the given provider
+    using ``instructor.from_provider("provider/model")``.
 
     For Gemini models, uses alternate Pydantic models without Union types
     (loaded via get_response_model with use_gemini_models=True).
     """
     import instructor
 
-    if model_config.provider == Provider.OPENAI:
-        from openai import OpenAI
-        return instructor.from_openai(OpenAI(), mode=instructor.Mode.TOOLS)
-
-    elif model_config.provider == Provider.ANTHROPIC:
-        import anthropic
-        return instructor.from_anthropic(anthropic.Anthropic())
-
-    elif model_config.provider == Provider.GOOGLE:
-        import google.generativeai as genai
-        return instructor.from_gemini(
-            client=genai.GenerativeModel(model_name=model_config.model_id),
-            use_async=False,
-        )
-
-    else:
+    provider_prefix = {
+        Provider.OPENAI: "openai",
+        Provider.ANTHROPIC: "anthropic",
+        Provider.GOOGLE: "google",
+    }
+    prefix = provider_prefix.get(model_config.provider)
+    if prefix is None:
         raise ValueError(f"Unknown provider: {model_config.provider}")
+
+    kwargs = {}
+    # from_provider expects GOOGLE_API_KEY but our .env uses GEMINI_API_KEY.
+    # Use GENAI_STRUCTURED_OUTPUTS mode so Pydantic enums validate correctly.
+    if model_config.provider == Provider.GOOGLE:
+        kwargs["api_key"] = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        kwargs["mode"] = instructor.Mode.GENAI_STRUCTURED_OUTPUTS
+
+    return instructor.from_provider(
+        f"{prefix}/{model_config.model_id}",
+        **kwargs,
+    )
 
 
 # ── Model Selection ──────────────────────────────────────────────────
@@ -141,8 +145,8 @@ def run_single_benchmark(
     is_gemini = model_config.provider == Provider.GOOGLE
     response_model = get_response_model(run_config.spec_type, use_gemini_models=is_gemini)
 
-    # Create instructor client
-    client = create_instructor_client(model_config, run_config.max_retries)
+    # Create instructor client (model is baked into the client via from_provider)
+    client = create_instructor_client(model_config)
 
     # Set up tracking
     tracker = InstructorTracker(
@@ -159,19 +163,16 @@ def run_single_benchmark(
         {"role": "user", "content": user_prompt},
     ]
 
-    # For Anthropic, system prompt goes separately
+    # Model is set on the client; create() just needs response_model + messages
     create_kwargs = dict(
         response_model=response_model,
         messages=messages,
         max_retries=run_config.max_retries,
     )
 
-    # Anthropic and Gemini don't use model in create() - it's set on the client
-    if model_config.provider == Provider.OPENAI:
-        create_kwargs["model"] = model_config.model_id
-    elif model_config.provider == Provider.ANTHROPIC:
-        create_kwargs["model"] = model_config.model_id
-        create_kwargs["max_tokens"] = 16384
+    # Anthropic requires an explicit max_tokens
+    if model_config.provider == Provider.ANTHROPIC:
+        create_kwargs["max_tokens"] = 8192
 
     # Execute generation
     print(f"\n  Generating with {model_config.display_name}...")
