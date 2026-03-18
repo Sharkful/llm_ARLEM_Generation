@@ -131,7 +131,7 @@ class Predicate(BaseModel):
     type: Literal["animation", "image", "video", "audio", "label"] = Field(..., description="what type of primitive, instance of Primitive.id, cannot be a value not defined in the workplace primitives list")
     scale: float = Field(1.0, gte=0.01, lte=1000.00, description="normalized scale factor applied to primitive on all axes")
     # Don't know if max_length str validator works with HttpUrl class
-    url: HttpUrl = Field(None, max_length=1000, description="Source URL for the file (GLB, fbx, MP4, PNG, etc.).")
+    url: HttpUrl = Field(None, max_length=1000, description="Source URL for the file (GLB, fbx, MP4, PNG, etc.). When generating new content, use a descriptive placeholder URL (e.g. 'https://assets.example.com/my_model.glb').")
 
 class Warning(BaseModel):
     """
@@ -669,8 +669,8 @@ class ARLEMScenario(BaseModel):
         for action in self.activity.actions:
             # Validate 'Enter' Flow
             if action.enter:
-                if action.enter.activate:
-                    validate_activate_list(action.enter.activate, action.id)
+                if action.enter.activates:
+                    validate_activate_list(action.enter.activates, action.id)
                 if action.enter.deactivate:
                     validate_deactivate_list(action.enter.deactivate, action.id)
                 if action.enter.messages:
@@ -678,8 +678,8 @@ class ARLEMScenario(BaseModel):
 
             # Validate 'Exit' Flow
             if action.exit:
-                if action.exit.activate:
-                    validate_activate_list(action.exit.activate, action.id)
+                if action.exit.activates:
+                    validate_activate_list(action.exit.activates, action.id)
                 if action.exit.deactivate:
                     validate_deactivate_list(action.exit.deactivate, action.id)
                 if action.exit.messages:
