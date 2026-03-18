@@ -22,7 +22,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Annotated, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ── Primitive Types ───────────────────────────────────────────────────
@@ -47,17 +47,6 @@ Color4 = Annotated[
 
 
 # ── Enums ─────────────────────────────────────────────────────────────
-
-class PrefabType(str, Enum):
-    """Available prefab types that can be instantiated in the scene."""
-
-    SUN = "SunPrefab"
-    MOVEABLE_SPHERE = "moveableSphere"
-    CLICKABLE_SPHERE = "clickableSphere"
-    TINY_SPHERE = "tinySphere"
-    TEXT = "textPrefab"
-    ROBOT_IDLE = "robotIdle"
-
 
 class ModuleType(str, Enum):
     """Types of activity modules."""
@@ -103,8 +92,8 @@ class SimpleOrbitComponent(BaseModel):
     """Orbits an object around a center point."""
 
     componentType: Literal["simpleOrbit"] = "simpleOrbit"
-    moonPosition: Vec3 = Field(
-        description="Initial orbital position as [x, y, z]"
+    initialPosition: Vec3 = Field(
+        description="Initial orbital position relative to the orbit center as [x, y, z]"
     )
     orbitalPeriod: float = Field(
         description="Time for one full orbit in seconds"
@@ -207,8 +196,14 @@ class SceneObject(BaseModel):
     Optional fields like texture, color, and components extend behavior.
     """
 
-    prefab: PrefabType = Field(
-        description="Which prefab to instantiate"
+    prefab: str = Field(
+        description=(
+            "Name of the prefab to instantiate. Known built-in prefabs: "
+            "'SunPrefab', 'moveableSphere', 'clickableSphere', 'tinySphere', "
+            "'textPrefab', 'robotIdle'. For new topics, invent a descriptive "
+            "prefab name that matches the subject matter (e.g. 'earthPrefab', "
+            "'dnaStrandPrefab', 'atomPrefab')."
+        )
     )
     name: str = Field(
         description="Unique identifier for this object within the module"
@@ -344,6 +339,27 @@ class DemoModule(BaseModel):
     clips: list[Clip] = Field(
         description="Ordered sequence of clips forming the module timeline"
     )
+
+    @model_validator(mode="after")
+    def validate_object_references(self) -> "DemoModule":
+        """Validate that all ObjectChange targets reference a defined SceneObject name,
+        and that SceneObject names are unique within the module."""
+        names = [obj.name for obj in self.objects]
+        seen: set[str] = set()
+        for name in names:
+            if name in seen:
+                raise ValueError(f"Duplicate SceneObject name '{name}' in module '{self.moduleName}'")
+            seen.add(name)
+
+        for clip in self.clips:
+            if clip.changes:
+                for change in clip.changes:
+                    if change.target not in seen:
+                        raise ValueError(
+                            f"Clip '{clip.clipName}' references unknown object '{change.target}'. "
+                            f"Valid names: {sorted(seen)}"
+                        )
+        return self
 
 
 # If more module types are added, create their models and add to this union:

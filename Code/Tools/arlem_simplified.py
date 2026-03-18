@@ -70,7 +70,7 @@ class Predicate(BaseModel):
     id: str = Field(..., max_length=100, description="Unique id for this instructional augmentation")
     type: Literal["animation", "image", "video", "audio", "label"] = Field(..., description="what type of primitive, instance of Primitive.id, cannot be a value not defined in the workplace primitives list")
     scale: float = Field(1.0, gte=0.01, lte=1000.00, description="normalized scale factor applied to primitive on all axes")
-    url: HttpUrl = Field(None, max_length=1000, description="Source URL for the file (GLB, fbx, MP4, PNG, etc.).")
+    url: HttpUrl = Field(None, max_length=1000, description="Source URL for the file (GLB, fbx, MP4, PNG, etc.). When generating new content, use a descriptive placeholder URL (e.g. 'https://assets.example.com/my_model.glb').")
 
 class Workplace(BaseModel):
     """
@@ -260,24 +260,20 @@ class Activity(BaseModel):
         
         # Check that each Action sub field is referencing other actions correctly
         for act_num, action in enumerate(self.actions):
-            # check activate augmentation of type 'action'
             en = action.enter
-            for idx, act in enumerate(en.activates):
+            if en is None:
+                continue
+            # check activate augmentation of type 'action'
+            for idx, act in enumerate(en.activates or []):
                 if act.type == 'action' and act.augmentation not in valid_action_ids:
                     raise ValueError(
                         f"Action {act_num} referenced an invalid action id in activate {idx}"
                     )
             # Check deactivate augmentations of type 'action'
-            for idx, deact in enumerate(en.deactivate):
+            for idx, deact in enumerate(en.deactivate or []):
                 if deact.type == 'action' and deact.augmentation not in valid_action_ids:
                     raise ValueError(
                         f"Action {act_num} referenced an invalid action id in deactivate {idx}"
-                    )
-            # Check messages with launch ids
-            for idx, msg in enumerate(en.messages):
-                if msg.launch and msg.launch not in valid_action_ids:
-                    raise ValueError(
-                        f"Action {act_num} referenced an invalid action id in message {idx}"
                     )
         return self
 
@@ -297,24 +293,8 @@ class ARLEMScenario(BaseModel):
     # Validate Action fields that reference elements of the workplace
     @model_validator(mode='after')
     def validate_scenario(self):
-        # get valid ids fro mworkplace
-        valid_place_ids = {p.id for p in self.workplace.places}
-        valid_predicate_ids = {p.id for p in self.workplace.predicates}
+        # (Simplified Action has no location or predicate fields; no per-action checks needed here)
 
-        # Iterate through actions list
-        for action in self.activity.actions:
-            # Check values
-            if action.location and action.location not in valid_place_ids:
-                raise ValueError(
-                    f"Action '{action.id}' refers to location '{action.location}', "
-                    f"but that ID does not exist in the Workplace places."
-                )
-            if action.predicate and action.predicate not in valid_predicate_ids:
-                raise ValueError(
-                    f"Action '{action.id}' uses predicate '{action.predicate}', "
-                    f"which is not defined in the Workplace."
-                )
-        
         # Validate workplace id
         if self.activity.workplace != self.workplace.id:
             # Silently fix
@@ -440,15 +420,15 @@ class ARLEMScenario(BaseModel):
         for action in self.activity.actions:
             # Validate 'Enter' Flow
             if action.enter:
-                if action.enter.activate:
-                    validate_activate_list(action.enter.activate, action.id)
+                if action.enter.activates:
+                    validate_activate_list(action.enter.activates, action.id)
                 if action.enter.deactivate:
                     validate_deactivate_list(action.enter.deactivate, action.id)
 
             # Validate 'Exit' Flow
             if action.exit:
-                if action.exit.activate:
-                    validate_activate_list(action.exit.activate, action.id)
+                if action.exit.activates:
+                    validate_activate_list(action.exit.activates, action.id)
                 if action.exit.deactivate:
                     validate_deactivate_list(action.exit.deactivate, action.id)
 
