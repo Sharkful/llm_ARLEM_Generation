@@ -81,7 +81,7 @@ Benchmark runs:
 
 ### Key Models
 
-**`Code/Tools/pydantic_json_lab_claude.py`** — Lab JSON models (Claude/OpenAI):
+**`Code/Tools/json_lab.py`** — Lab JSON models (Claude/OpenAI):
 - `Lab` → `DemoModule` → `Clip` → `SceneObject` → components
 - Components use discriminated unions on `componentType` field
 - `ObjectChange` uses sparse delta format (only changed fields per clip)
@@ -90,8 +90,6 @@ Benchmark runs:
 - `ARLEMScenario` contains a `Workplace` (static environment) + `Activity` (logic/workflow)
 - Cross-validation: `ARLEMScenario.validate_activity_flows()` checks activity actions against workplace resources
 - `Tangible` subtypes (Thing/Place/Person) use discriminated unions on `type` field
-
-**`Code/Tools/pydantic_json_lab_gemini.py`** / **`arlem_simplified.py`** — Gemini-compatible variants with no Union/discriminated-union types (required because Gemini does not support Union types). These are loaded automatically by the benchmark runner when the provider is Google. **The user must supply these files** — `benchmark.py` falls back with a warning if they are missing.
 
 ### Benchmark System (`Code/Testing/`)
 
@@ -138,7 +136,7 @@ result = client.chat.completions.create(
 
 Provider-specific instructor patches: `instructor.from_openai()`, `instructor.from_anthropic()`, `instructor.from_gemini(use_async=False)`.
 
-**Gemini limitation**: Gemini does not support Union types or discriminated unions. When benchmarking Gemini models, `benchmark.py` automatically switches to `pydantic_json_lab_gemini.py` / `arlem_simplified.py`. These alternate model files must be provided by the user and placed in `Code/Tools/`.
+**Gemini limitation**: Gemini does not support Union types or discriminated unions. When benchmarking Gemini models, `benchmark.py` automatically switches to `json_lab_gemini.py` / `arlem_full_gemini.py` / `arlem_simplified_gemini.py`.
 
 ## Code Patterns
 

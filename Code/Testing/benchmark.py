@@ -95,46 +95,36 @@ def get_response_model(spec_type: SpecType, use_gemini_models: bool = False):
     Return the appropriate Pydantic response model class.
 
     Args:
-        spec_type: Which spec to generate (JSON_LAB or ARLEM)
+        spec_type: Which spec to generate (JSON_LAB, ARLEM, or ARLEM_SIMPLIFIED)
         use_gemini_models: If True, import from Gemini-compatible models
                            that avoid Union/discriminated-union types.
-                           User will supply these alternate model files.
+
+    Gemini-compatible files (no Union / discriminated-union types):
+        json_lab_gemini.py            → JSON_LAB
+        arlem_full_gemini.py          → ARLEM
+        arlem_simplified_gemini.py    → ARLEM_SIMPLIFIED
     """
     if use_gemini_models:
-        # Gemini-compatible models (no Union types)
-        # These files are expected to be provided by the user at:
-        #   Code/Tools/pydantic_json_lab_gemini.py  (for JSON_LAB)
-        #   Code/Tools/arlem_simplified.py          (for ARLEM)
         if spec_type == SpecType.JSON_LAB:
-            try:
-                from pydantic_json_lab_gemini import Lab as GeminiLab
-                return GeminiLab
-            except ImportError:
-                print(
-                    "WARNING: pydantic_json_lab_gemini.py not found. "
-                    "Falling back to standard models. Gemini may fail on Union types."
-                )
-                from pydantic_json_lab_claude import Lab
-                return Lab
-        else:
-            try:
-                from arlem_simplified import ARLEMScenario as SimplifiedARLEM
-                return SimplifiedARLEM
-            except ImportError:
-                print(
-                    "WARNING: arlem_simplified.py not found. "
-                    "Falling back to full ARLEM. Gemini may fail on Union types."
-                )
-                from arlem_full import ARLEMScenario
-                return ARLEMScenario
+            from json_lab_gemini import Lab as GeminiLab
+            return GeminiLab
+        elif spec_type == SpecType.ARLEM:
+            from arlem_full_gemini import ARLEMScenario as GeminiFullARLEM
+            return GeminiFullARLEM
+        else:  # ARLEM_SIMPLIFIED
+            from arlem_simplified_gemini import ARLEMScenario as GeminiSimpleARLEM
+            return GeminiSimpleARLEM
     else:
         # Standard models (OpenAI / Anthropic)
         if spec_type == SpecType.JSON_LAB:
-            from pydantic_json_lab_claude import Lab
+            from json_lab import Lab
             return Lab
-        else:
+        elif spec_type == SpecType.ARLEM:
             from arlem_full import ARLEMScenario
             return ARLEMScenario
+        else:  # ARLEM_SIMPLIFIED
+            from arlem_simplified import ARLEMScenario as SimpleARLEM
+            return SimpleARLEM
 
 
 # ── Single Run ───────────────────────────────────────────────────────
@@ -413,7 +403,7 @@ def parse_args():
     parser.add_argument(
         "--spec", "-s",
         type=str,
-        choices=["json_lab", "arlem"],
+        choices=["json_lab", "arlem", "arlem_simple"],
         default="json_lab",
         help="Specification type to generate (default: json_lab)",
     )

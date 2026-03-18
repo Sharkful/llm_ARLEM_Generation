@@ -20,8 +20,9 @@ class Provider(str, Enum):
 
 class SpecType(str, Enum):
     """Which Pydantic specification to generate against."""
-    JSON_LAB = "json_lab"   # Lab (pydantic_json_lab_claude.py) - single demo module
-    ARLEM = "arlem"         # ARLEMScenario (arlem_full.py) - workplace + activity
+    JSON_LAB = "json_lab"              # Lab (json_lab.py) - single demo module
+    ARLEM = "arlem"                    # ARLEMScenario (arlem_full.py) - workplace + activity
+    ARLEM_SIMPLIFIED = "arlem_simple"  # ARLEMScenario (arlem_simplified.py) - stripped-down ARLEM
 
 
 # ── Model Registry ───────────────────────────────────────────────────
