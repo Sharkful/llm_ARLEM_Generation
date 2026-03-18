@@ -38,6 +38,23 @@ python "Code/Data Processing/convert_lab_json_claude.py"
 
 # Run Jupyter notebooks
 jupyter notebook "Code/Examples/ARLEM_Test.ipynb"
+
+# Benchmark a single model (from project root)
+python "Code/Testing/benchmark.py" --model gpt-4o-mini
+
+# Benchmark multiple models on a custom topic
+python "Code/Testing/benchmark.py" --model gpt-4o-mini claude-3-haiku gemini-2.0-flash \
+    --topic "Human Heart Anatomy"
+
+# Benchmark with ARLEM spec instead of JSON Lab
+python "Code/Testing/benchmark.py" --model claude-sonnet-4 --spec arlem
+
+# Run a pre-defined suite (quick = cheap models, full = all models)
+python "Code/Testing/benchmark.py" --suite quick
+python "Code/Testing/benchmark.py" --suite full
+
+# List all registered models
+python "Code/Testing/benchmark.py" --list-models
 ```
 
 There is no test runner or linter configured. Validation is done via Pydantic model instantiation and Jupyter notebooks.
@@ -52,6 +69,14 @@ Raw JSON (Artifacts/Data/Raw/)
   → Pydantic validation (Code/Tools/)
   → LLM via instructor library
   → Optimized JSON (Artifacts/Data/Processed/)
+
+Benchmark runs:
+  benchmark_config.py (model registry + prompts)
+  → benchmark.py (runner + client factory)
+  → instructor + tracking/ (token/retry tracking)
+  → Lab/ARLEM generation
+  → lab_metrics.py (structural analysis)
+  → Artifacts/Data/Benchmark/ (output + metrics JSON)
 ```
 
 ### Key Models
@@ -66,7 +91,27 @@ Raw JSON (Artifacts/Data/Raw/)
 - Cross-validation: `ARLEMScenario.validate_activity_flows()` checks activity actions against workplace resources
 - `Tangible` subtypes (Thing/Place/Person) use discriminated unions on `type` field
 
-**`Code/Tools/pydantic_json_lab_gemini.py`** / **`arlem_simplified.py`** — Provider-specific or simplified variants.
+**`Code/Tools/pydantic_json_lab_gemini.py`** / **`arlem_simplified.py`** — Gemini-compatible variants with no Union/discriminated-union types (required because Gemini does not support Union types). These are loaded automatically by the benchmark runner when the provider is Google. **The user must supply these files** — `benchmark.py` falls back with a warning if they are missing.
+
+### Benchmark System (`Code/Testing/`)
+
+**`benchmark.py`** — CLI runner. Creates instructor clients per provider, wraps them with `InstructorTracker`, generates a lab, analyzes output, saves results.
+
+**`benchmark_config.py`** — Model registry (`MODELS` dict), prompt templates, `BenchmarkRunConfig` dataclass. Add new models here. JSON Lab prompt enforces exactly **1 DemoModule** with a clip sequence. ARLEM prompt targets a full Workplace + Activity.
+
+**`lab_metrics.py`** — Post-generation structural analysis:
+- `analyze_json_lab()` — counts objects, clips, components, text labels, object changes, prefab diversity
+- `analyze_arlem()` — counts things, places, actions, activates/deactivates, triggers, POIs
+
+**`tracking/`** — Token/retry tracking module (copied from `feature/instructor-tracking`):
+- `InstructorTracker` / `TrackedClient` — wraps instructor clients, hooks into completion events
+- `PricingCalculator` / `DEFAULT_PRICING` — cost calculation; update `tracking/pricing.py` when adding new models
+- `BenchmarkExporter` — export to JSON, CSV, or Markdown
+
+Benchmark outputs go to `Artifacts/Data/Benchmark/`:
+- `{model}_{spec}_{timestamp}_output.json` — the generated Lab or ARLEM JSON
+- `{model}_{spec}_{timestamp}_metrics.json` — full tracking record
+- `suite_results_{timestamp}.json` — combined results across all suite runs
 
 ### Data Processing Transformations (`Code/Data Processing/`)
 
@@ -91,7 +136,9 @@ result = client.chat.completions.create(
 )
 ```
 
-Provider-specific instructor patches: `instructor.from_openai()`, `instructor.from_anthropic()`, `instructor.from_google(use_async=False)`.
+Provider-specific instructor patches: `instructor.from_openai()`, `instructor.from_anthropic()`, `instructor.from_gemini(use_async=False)`.
+
+**Gemini limitation**: Gemini does not support Union types or discriminated unions. When benchmarking Gemini models, `benchmark.py` automatically switches to `pydantic_json_lab_gemini.py` / `arlem_simplified.py`. These alternate model files must be provided by the user and placed in `Code/Tools/`.
 
 ## Code Patterns
 
