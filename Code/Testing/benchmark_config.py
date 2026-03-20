@@ -62,9 +62,8 @@ MODELS = {
 
     # Google
     "gemini-2.5-flash": ModelConfig("gemini-2.5-flash", Provider.GOOGLE, "Gemini 2.5 Flash"),
+    "gemini-2.5-flash-lite": ModelConfig("gemini-2.5-flash-lite", Provider.GOOGLE, "Gemini 2.5 Flash Lite"),
     "gemini-2.5-pro": ModelConfig("gemini-2.5-pro", Provider.GOOGLE, "Gemini 2.5 Pro"),
-    "gemini-1.5-pro": ModelConfig("gemini-1.5-pro", Provider.GOOGLE, "Gemini 1.5 Pro"),
-    "gemini-1.5-flash": ModelConfig("gemini-1.5-flash", Provider.GOOGLE, "Gemini 1.5 Flash"),
 }
 
 

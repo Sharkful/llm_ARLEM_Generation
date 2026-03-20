@@ -50,7 +50,7 @@ class TokenUsage:
         """
         Factory to extract usage from various provider response formats.
 
-        Handles OpenAI, Anthropic, and other providers that expose usage data.
+        Handles OpenAI, Anthropic, and Google Gemini (google.genai) responses.
         """
         if completion is None:
             return cls()
@@ -59,6 +59,24 @@ class TokenUsage:
         if hasattr(completion, '_raw_response'):
             completion = completion._raw_response
 
+        # --- Google Gemini (google.genai) responses ---
+        # Gemini uses .usage_metadata with *_token_count fields instead of .usage
+        if hasattr(completion, 'usage_metadata') and completion.usage_metadata is not None:
+            um = completion.usage_metadata
+            prompt = getattr(um, 'prompt_token_count', 0) or 0
+            candidates = getattr(um, 'candidates_token_count', 0) or 0
+            total = getattr(um, 'total_token_count', 0) or 0
+            cached = getattr(um, 'cached_content_token_count', 0) or 0
+            thinking = getattr(um, 'thoughts_token_count', 0) or 0
+            return cls(
+                prompt_tokens=prompt,
+                completion_tokens=candidates,
+                total_tokens=total,
+                cached_tokens=cached,
+                reasoning_tokens=thinking,
+            )
+
+        # --- OpenAI / Anthropic responses (use .usage) ---
         if not hasattr(completion, 'usage') or completion.usage is None:
             return cls()
 
