@@ -48,19 +48,30 @@ class ModelConfig:
 # Pre-defined model configs for quick benchmarking
 MODELS = {
     # OpenAI
-    "gpt-4o": ModelConfig("gpt-4o", Provider.OPENAI, "GPT-4o"),
+    # Gpt-5.4 add
+    # gpt-5.4 mini add
+    # gpt-5.4 nano add
+    # gpt-5.1 add
+    # gpt-5 mini add
+    # gpt-5 nano add
     "gpt-4o-mini": ModelConfig("gpt-4o-mini", Provider.OPENAI, "GPT-4o Mini"),
-    "gpt-4.1": ModelConfig("gpt-4.1", Provider.OPENAI, "GPT-4.1"),
-    "gpt-4.1-mini": ModelConfig("gpt-4.1-mini", Provider.OPENAI, "GPT-4.1 Mini"),
-    "gpt-4.1-nano": ModelConfig("gpt-4.1-nano", Provider.OPENAI, "GPT-4.1 Nano"),
+    # "gpt-4.1": ModelConfig("gpt-4.1", Provider.OPENAI, "GPT-4.1"), REmove
+    # "gpt-4.1-mini": ModelConfig("gpt-4.1-mini", Provider.OPENAI, "GPT-4.1 Mini"), REmove 
+    # "gpt-4.1-nano": ModelConfig("gpt-4.1-nano", Provider.OPENAI, "GPT-4.1 Nano"), Remove
 
     # Anthropic
-    "claude-opus-4": ModelConfig("claude-opus-4-20250514", Provider.ANTHROPIC, "Claude Opus 4"),
-    "claude-sonnet-4": ModelConfig("claude-sonnet-4-20250514", Provider.ANTHROPIC, "Claude Sonnet 4"),
+    # Opus 4.6 add 
+    # Sonnet 4.6
+    # Remove : "claude-opus-4": ModelConfig("claude-opus-4-20250514", Provider.ANTHROPIC, "Claude Opus 4"),
+    # Remove : "claude-sonnet-4": ModelConfig("claude-sonnet-4-20250514", Provider.ANTHROPIC, "Claude Sonnet 4"),
     "claude-haiku-4.5": ModelConfig("claude-haiku-4-5-20251001", Provider.ANTHROPIC, "Claude Haiku 4.5"),
+    # Deprecates on April 20th
     "claude-3-haiku": ModelConfig("claude-3-haiku-20240307", Provider.ANTHROPIC, "Claude 3 Haiku"),
 
     # Google
+    # Gemini 3.1 pro (_`gemini-3.1-pro-preview`_) Add
+    # Gemini 3.1 Flash-Lite (_`gemini-3.1-flash-lite-preview`_) add
+    # Gemini 3 Flash (_`gemini-3.1-flash-image-preview`_) add
     "gemini-2.5-flash": ModelConfig("gemini-2.5-flash", Provider.GOOGLE, "Gemini 2.5 Flash"),
     "gemini-2.5-flash-lite": ModelConfig("gemini-2.5-flash-lite", Provider.GOOGLE, "Gemini 2.5 Flash Lite"),
     "gemini-2.5-pro": ModelConfig("gemini-2.5-pro", Provider.GOOGLE, "Gemini 2.5 Pro"),
