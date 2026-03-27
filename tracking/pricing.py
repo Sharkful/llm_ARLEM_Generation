@@ -10,46 +10,59 @@ from typing import Dict, Optional
 from .metrics import TokenUsage
 
 
-# Default pricing per 1M tokens (as of early 2025)
+# Default pricing per 1M tokens.
+# NOTE: Prices marked (est.) are estimates — verify against provider pricing pages.
 DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
-    # OpenAI models
-    "gpt-5-nano": {"input": 0.05, "output": 0.40},
-    "gpt-5-mini": {"input": 0.15, "output": 0.60},
-    "gpt-5": {"input": 2.50, "output": 10.00},
-    "gpt-4.1": {"input": 2.00, "output": 8.00},
-    "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
-    "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
-    "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
+    # ── OpenAI ────────────────────────────────────────────────────────────
+    "gpt-5.4":       {"input": 3.00,  "output": 15.00},   # (est.)
+    "gpt-5.4-mini":  {"input": 0.30,  "output":  1.20},   # (est.)
+    "gpt-5.4-nano":  {"input": 0.08,  "output":  0.30},   # (est.)
+    "gpt-5.1":       {"input": 2.50,  "output": 10.00},   # (est.)
+    "gpt-5-mini":    {"input": 0.15,  "output":  0.60},
+    "gpt-5-nano":    {"input": 0.05,  "output":  0.40},
+    "gpt-5":         {"input": 2.50,  "output": 10.00},
+    "gpt-4.1":       {"input": 2.00,  "output":  8.00},
+    "gpt-4.1-mini":  {"input": 0.40,  "output":  1.60},
+    "gpt-4.1-nano":  {"input": 0.10,  "output":  0.40},
+    "gpt-4o":        {"input": 2.50,  "output": 10.00},
+    "gpt-4o-mini":   {"input": 0.15,  "output":  0.60},
+    "gpt-4-turbo":   {"input": 10.00, "output": 30.00},
+    "gpt-3.5-turbo": {"input": 0.50,  "output":  1.50},
 
-    # Anthropic models
-    "claude-opus-4-6": {"input": 15.00, "output": 75.00},
-    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
-    "claude-opus-4": {"input": 15.00, "output": 75.00},
-    "claude-sonnet-4": {"input": 3.00, "output": 15.00},
-    "claude-3-opus": {"input": 15.00, "output": 75.00},
-    "claude-3.5-sonnet": {"input": 3.00, "output": 15.00},
-    "claude-3-sonnet": {"input": 3.00, "output": 15.00},
-    "claude-3-haiku": {"input": 0.25, "output": 1.25},
-    "claude-3.5-haiku": {"input": 0.80, "output": 4.00},
+    # ── Anthropic ─────────────────────────────────────────────────────────
+    "claude-opus-4-6":          {"input": 15.00, "output": 75.00},
+    "claude-sonnet-4-6":        {"input":  3.00, "output": 15.00},
+    # Haiku 4.5 — keyed by its full versioned model ID used in API calls
+    "claude-haiku-4-5-20251001": {"input":  0.80, "output":  4.00},
+    "claude-3-haiku-20240307":   {"input":  0.25, "output":  1.25},
+    # Legacy / alternate keys
+    "claude-opus-4":      {"input": 15.00, "output": 75.00},
+    "claude-sonnet-4":    {"input":  3.00, "output": 15.00},
+    "claude-3-opus":      {"input": 15.00, "output": 75.00},
+    "claude-3.5-sonnet":  {"input":  3.00, "output": 15.00},
+    "claude-3-sonnet":    {"input":  3.00, "output": 15.00},
+    "claude-3-haiku":     {"input":  0.25, "output":  1.25},
+    "claude-3.5-haiku":   {"input":  0.80, "output":  4.00},
 
-    # Google models
-    "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
-    "gemini-2.5-flash": {"input": 0.15, "output": 0.60},
-    "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+    # ── Google Gemini ─────────────────────────────────────────────────────
+    "gemini-3.1-pro-preview":        {"input": 2.50,  "output": 15.00},  # (est.)
+    "gemini-3.1-flash-lite-preview":  {"input": 0.05,  "output":  0.20},  # (est.)
+    "gemini-3.1-flash-image-preview": {"input": 0.15,  "output":  0.60},  # (est.)
+    "gemini-2.5-pro":        {"input": 1.25,  "output": 10.00},
+    "gemini-2.5-flash":      {"input": 0.15,  "output":  0.60},
+    "gemini-2.5-flash-lite": {"input": 0.075, "output":  0.30},  # (est.)
+    "gemini-2.0-flash":      {"input": 0.10,  "output":  0.40},
+    "gemini-1.5-pro":        {"input": 1.25,  "output":  5.00},
+    "gemini-1.5-flash":      {"input": 0.075, "output":  0.30},
 
-    # Mistral models
-    "mistral-large": {"input": 2.00, "output": 6.00},
+    # ── Mistral ───────────────────────────────────────────────────────────
+    "mistral-large":  {"input": 2.00, "output": 6.00},
     "mistral-medium": {"input": 2.70, "output": 8.10},
-    "mistral-small": {"input": 0.20, "output": 0.60},
+    "mistral-small":  {"input": 0.20, "output": 0.60},
 
-    # Other models
+    # ── Other ─────────────────────────────────────────────────────────────
     "llama-3.1-70b": {"input": 0.88, "output": 0.88},
-    "llama-3.1-8b": {"input": 0.10, "output": 0.10},
+    "llama-3.1-8b":  {"input": 0.10, "output": 0.10},
 }
 
 

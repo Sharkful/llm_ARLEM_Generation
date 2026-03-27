@@ -68,6 +68,17 @@ class TokenUsage:
             total = getattr(um, 'total_token_count', 0) or 0
             cached = getattr(um, 'cached_content_token_count', 0) or 0
             thinking = getattr(um, 'thoughts_token_count', 0) or 0
+
+            # When using instructor's GENAI_STRUCTURED_OUTPUTS mode, the Pydantic
+            # response schema is passed as a native API parameter (response_schema).
+            # Gemini only counts the text prompt in prompt_token_count, but the
+            # schema tokens ARE billed and appear in total_token_count.
+            # Correct: effective_prompt = total - candidates - thinking_tokens
+            if total > 0:
+                effective_prompt = total - candidates - thinking
+                if effective_prompt > prompt:
+                    prompt = effective_prompt
+
             return cls(
                 prompt_tokens=prompt,
                 completion_tokens=candidates,
