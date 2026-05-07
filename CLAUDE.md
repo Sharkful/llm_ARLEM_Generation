@@ -34,10 +34,15 @@ ANTHROPIC_API_KEY=...
 
 ```bash
 # Data conversion (legacy JSON → v2.0 schema)
-python "Code/Data Processing/convert_lab_json_claude.py"
+python "Code/Data Processing/convert_lab_json.py"
 
 # Run Jupyter notebooks
 jupyter notebook "Code/Examples/ARLEM_Test.ipynb"
+
+# Generate a single JSON Lab for AR headset use (saves to Artifacts/Data/Generated Labs/)
+python "Code/Testing/generate_lab.py" --model claude-sonnet-4.6 --topic "Photosynthesis"
+python "Code/Testing/generate_lab.py" --model gpt-4o-mini --topic "DNA Replication" --name dna_lab
+python "Code/Testing/generate_lab.py" --list-models
 
 # Benchmark a single model (from project root)
 python "Code/Testing/benchmark.py" --model gpt-4o-mini
@@ -64,11 +69,13 @@ There is no test runner or linter configured. Validation is done via Pydantic mo
 ### Data Flow
 
 ```
-Raw JSON (Artifacts/Data/Raw/)
-  → Conversion scripts (Code/Data Processing/)
-  → Pydantic validation (Code/Tools/)
-  → LLM via instructor library
-  → Optimized JSON (Artifacts/Data/Processed/)
+Original moon lab reference data:
+  Artifacts/Data/Original Moon Lab/Raw/       ← raw Unity transmission JSON
+  Artifacts/Data/Original Moon Lab/Processed/ ← manually optimized versions
+
+Lab generation:
+  generate_lab.py → instructor → json_lab.py (Pydantic)
+  → Artifacts/Data/Generated Labs/  ← clean output JSON for headset
 
 Benchmark runs:
   benchmark_config.py (model registry + prompts)
@@ -77,6 +84,7 @@ Benchmark runs:
   → Lab/ARLEM generation
   → lab_metrics.py (structural analysis)
   → Artifacts/Data/Benchmark/ (output + metrics JSON)
+  → Artifacts/Data/Errors/     ← instructor error logs
 ```
 
 ### Key Models
@@ -126,15 +134,15 @@ The conversion scripts apply these transformations to raw lab JSON:
 Uses the `instructor` library to enforce Pydantic schemas on LLM responses:
 ```python
 import instructor
-client = instructor.from_anthropic(anthropic.Anthropic())
-result = client.chat.completions.create(
-    model="claude-opus-4-6",
+client = instructor.from_provider("anthropic/claude-opus-4-6")
+result = client.create(
     response_model=Lab,
-    messages=[...]
+    messages=[...],
+    max_tokens=8192,  # required for Anthropic
 )
 ```
 
-Provider-specific instructor patches: `instructor.from_openai()`, `instructor.from_anthropic()`, `instructor.from_gemini(use_async=False)`.
+Use `instructor.from_provider("provider/model-id")` — this is the unified API. Anthropic always requires `max_tokens`.
 
 **Gemini limitation**: Gemini does not support Union types or discriminated unions. When benchmarking Gemini models, `benchmark.py` automatically switches to `json_lab_gemini.py` / `arlem_full_gemini.py` / `arlem_simplified_gemini.py`.
 
