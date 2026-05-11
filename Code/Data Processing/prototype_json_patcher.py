@@ -251,6 +251,38 @@ BRB_BUTTON_NAMES = [
     "brbPreviousClip",
 ]
 
+# Anchor scene objects that the brb buttons parent to. The brb templates use
+# parentName "sectionLabel" / "taskLabel", so without these the buttons float
+# at world origin and the demo callbacks don't resolve. The moduleName /
+# clipName fields are filled in at injection time.
+#
+# sectionLabel shows the module title; taskLabel shows the current clip title
+# and is updated per clip via an injected objectChange. Both are textPrefab
+# objects parented to "[CURRENT_LAB]" — exact shape lifted from
+# Full_Lab_Transmission.json.
+ANCHOR_OBJECT_TEMPLATES = [
+    {
+        "type": "Prefabs/textPrefab",
+        "tmp": '{"textField": "{moduleName}", "color": [255, 255, 255, 255], "fontSize": 1.0, "wrapText": false}',
+        "position": {"x": 0.0, "y": 0.75, "z": 2.5},
+        "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+        "scale": {"x": 0.6, "y": 0.6, "z": 0.6},
+        "enabled": True,
+        "parentName": "[CURRENT_LAB]",
+        "name": "sectionLabel",
+    },
+    {
+        "type": "Prefabs/textPrefab",
+        "tmp": '{"textField": "{firstClipName}", "color": [255, 255, 255, 255], "fontSize": 1.0, "wrapText": false}',
+        "position": {"x": 0.0, "y": 0.6, "z": 2.5},
+        "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+        "scale": {"x": 0.6, "y": 0.6, "z": 0.6},
+        "enabled": True,
+        "parentName": "[CURRENT_LAB]",
+        "name": "taskLabel",
+    },
+]
+
 
 def _zero_vec():
     return {"x": 0.0, "y": 0.0, "z": 0.0}
@@ -305,10 +337,14 @@ def revert_scene_object(obj):
     """Inverse of convert_scene_object: new SceneObject → old object dict."""
     result = {}
 
-    # prefab → type (re-add Prefabs/ prefix if missing)
-    prefab = obj.get("prefab", "")
+    # prefab → type (re-add Prefabs/ prefix if missing). The old format
+    # requires `type` to be a non-empty string; fall back to PH_PREFAB so
+    # the headset doesn't hit a null-instantiation error.
+    prefab = obj.get("prefab") or ""
     if prefab:
         result["type"] = prefab if prefab.startswith("Prefabs/") else f"Prefabs/{prefab}"
+    else:
+        result["type"] = PH_PREFAB
 
     if "name" in obj:
         result["name"] = obj["name"]
@@ -430,20 +466,74 @@ def _default_brb_change(name):
     }
 
 
+def _anchor_change(name, text):
+    """An objectChange that updates the TMP text on an anchor label."""
+    return {
+        "name": name,
+        "parentObject": "[CURRENT_LAB]",
+        "activationConditions": 0,
+        "reactiveObject": False,
+        "enable": True,
+        "position": _zero_vec(),
+        "newPosition": False,
+        "eulerAngles": _zero_vec(),
+        "newEulerAngles": False,
+        "scale": _zero_vec(),
+        "newScale": False,
+        "tmp": json.dumps({
+            "textField": text,
+            "color": [255, 255, 255, 255],
+            "fontSize": 1.0,
+            "wrapText": False,
+        }),
+    }
+
+
 def inject_nav_buttons(module):
     """
-    Append the brb nav buttons (objects + per-clip objectChanges) to a
-    reverted module dict so the AR headset can navigate clips/modules.
+    Inject the anchor labels (sectionLabel, taskLabel) and brb nav buttons
+    into a reverted module dict so the AR headset can render the module
+    title, per-clip task captions, and the navigation buttons.
 
     Mutates in place. All buttons stay visible across every clip — the
-    simplest behavior for prototype testing.
+    simplest behavior for prototype testing. Skips any anchor or brb object
+    that already exists by name (idempotent).
     """
     module.setdefault("objects", [])
-    for tpl in BRB_OBJECT_TEMPLATES:
-        module["objects"].append(deepcopy(tpl))
+    module.setdefault("clips", [])
 
-    for clip in module.get("clips", []):
+    existing_names = {o.get("name") for o in module["objects"]}
+
+    module_name = module.get("moduleName", "")
+    clips = module["clips"]
+    first_clip_name = clips[0].get("clipName", "") if clips else ""
+
+    # 1. Anchor labels: sectionLabel (module title) + taskLabel (clip caption).
+    for tpl in ANCHOR_OBJECT_TEMPLATES:
+        if tpl["name"] in existing_names:
+            continue
+        obj = deepcopy(tpl)
+        obj["tmp"] = (
+            obj["tmp"]
+            .replace("{moduleName}", module_name)
+            .replace("{firstClipName}", first_clip_name)
+        )
+        module["objects"].append(obj)
+        existing_names.add(obj["name"])
+
+    # 2. brb nav buttons.
+    for tpl in BRB_OBJECT_TEMPLATES:
+        if tpl["name"] in existing_names:
+            continue
+        module["objects"].append(deepcopy(tpl))
+        existing_names.add(tpl["name"])
+
+    # 3. Per-clip changes: keep all 4 brb buttons visible, and update
+    # taskLabel's TMP text to the current clip's clipName.
+    for clip in module["clips"]:
         clip.setdefault("objectChanges", [])
+        clip_name = clip.get("clipName", "")
+        clip["objectChanges"].append(_anchor_change("taskLabel", clip_name))
         for name in BRB_BUTTON_NAMES:
             clip["objectChanges"].append(_default_brb_change(name))
 
@@ -487,16 +577,21 @@ def revert_module(mod):
     return result
 
 
-def revert_lab(data):
+def revert_lab(data, inject=True):
     """
     Inverse of convert_lab: new v2.0 lab dict → old Transmission dict.
-    Each module is reverted, nav buttons injected, then re-stringified into
-    ActivityModules per the old schema.
+    Each module is reverted (and nav buttons + anchors optionally injected),
+    then re-stringified into ActivityModules per the old schema.
+
+    Set inject=False when round-trip-validating against the moon lab — the
+    optimized moon lab already round-trips its original anchors, so injecting
+    would double-add them and pollute the diff.
     """
     modules = []
     for mod in data.get("modules", []):
         reverted = revert_module(mod)
-        inject_nav_buttons(reverted)
+        if inject:
+            inject_nav_buttons(reverted)
         modules.append(json.dumps(reverted))
 
     return {
@@ -517,6 +612,294 @@ def is_new_format(raw):
     if not isinstance(raw, dict):
         return False
     return "modules" in raw or "labId" in raw or raw.get("version") == "2.0"
+
+
+# ---------------------------------------------------------------------------
+# ── ROUND-TRIP VALIDATION (moon lab → revert → compare with raw) ────────────
+# ---------------------------------------------------------------------------
+#
+# Sanity check that `revert_lab(optimized_moon_lab)` reproduces the raw moon
+# lab. Diffs that are an unavoidable consequence of the forward converter's
+# strips are whitelisted; anything else is a real bug in the revert path.
+
+DEFAULT_VALIDATE_OPTIMIZED = "Artifacts/Data/Original Moon Lab/Processed/Optomized_moon_lab_final.json"
+DEFAULT_VALIDATE_RAW = "Artifacts/Data/Original Moon Lab/Raw/Full_Lab_Transmission.json"
+
+import re
+
+# Fields the forward converter strips that the patcher cannot recover from
+# new-format data alone — these aren't revert bugs.
+_FORWARD_STRIPPED_MODULE_FIELDS = {
+    "specificName", "jsonFileName", "authorInstitution",
+}
+_FORWARD_STRIPPED_CLIP_FIELDS = {
+    "timeToEnd",
+}
+# Keys inside a tmp JSON string that the forward converter drops.
+_FORWARD_STRIPPED_TMP_KEYS = {"parentObject"}
+
+# Top-level path prefixes for fields the forward converter doesn't preserve.
+# `NumModules` is whitelisted because the raw moon lab has a data error
+# ("1" despite 8 ActivityModules) — our re-derived value is more correct.
+_EXPECTED_LOSS_PREFIXES = (
+    "Assets",
+    "Objectives",
+    "NumModules",
+)
+
+_RE_MODULE_FIELD = re.compile(r"^ActivityModules\[\d+\]\.([^.\[]+)$")
+_RE_CLIP_FIELD = re.compile(r"^ActivityModules\[\d+\]\.clips\[\d+\]\.([^.\[]+)$")
+_RE_OC_FIELD = re.compile(r"^ActivityModules\[\d+\]\.clips\[\d+\]\.objectChanges\[[^\]]+\]\.([^.\[]+)$")
+# objectChange fields the forward converter strips.
+_FORWARD_STRIPPED_OC_FIELDS = {"activationConditions"}
+
+# Names whose entries the forward converter strips entirely (see
+# EXCLUDED_OBJECT_NAMES in convert_lab_json.py). Mismatches involving these
+# aren't revert bugs.
+_FORWARD_STRIPPED_OC_NAMES = {
+    "brbNextClip", "brbNextClipLabel",
+    "brbNextModule", "brbNextModuleLabel",
+    "brbPreviousClip", "brbPreviousClipLabel",
+    "brbPreviousModule", "brbPreviousModuleLabel",
+    "MainInstructions",
+}
+
+# Old-format field aliases the new schema collapses. Both sides of each pair
+# mean the same thing to the headset. `euleriAngles` is a typo in the raw
+# moon lab that the forward converter normalizes to `eulerAngles`.
+_FIELD_ALIASES = {
+    "parentName": "parent",
+    "rotation": "eulerAngles",
+    "euleriAngles": "eulerAngles",
+}
+
+# Fields whose default value is dropped by the forward converter. When
+# `produced` is missing a key and `expected` has the default, they match.
+_FIELD_DEFAULTS = {
+    "active": True,
+    "material": "",
+    "tag": "",
+    "textureByURL": "",
+    "transmittable": False,
+    "componentsToAdd": [],
+}
+
+
+def _normalize_keys(d):
+    """Rename alias keys to a canonical name so both sides compare equal."""
+    return {_FIELD_ALIASES.get(k, k): v for k, v in d.items()}
+
+
+def _matches_default(key, value):
+    if key in _FIELD_DEFAULTS and value == _FIELD_DEFAULTS[key]:
+        return True
+    # `instructions` and `educationalObjectives` can be [], [""], or absent
+    # — all mean "no instructions". The forward converter at line 305-306
+    # drops [""] but the patcher emits whatever's in the new format ([] or
+    # nothing). Treat all three as equivalent.
+    if key in ("instructions", "educationalObjectives") and value in ([], [""]):
+        return True
+    return False
+
+
+def _is_noop_change(change):
+    """An objectChange is a no-op manifest entry if it has no new*: True flags
+    and no tmp / component / color override."""
+    if not isinstance(change, dict):
+        return False
+    if any(change.get(f) for f in ("newPosition", "newEulerAngles", "newScale")):
+        return False
+    if change.get("tmp") or change.get("componentsToAdd"):
+        return False
+    if "color" in change or "childColor" in change or "childName" in change:
+        return False
+    return True
+
+
+def _is_expected_loss(path):
+    if any(path.startswith(p) for p in _EXPECTED_LOSS_PREFIXES):
+        return True
+    m = _RE_MODULE_FIELD.match(path)
+    if m and m.group(1) in _FORWARD_STRIPPED_MODULE_FIELDS:
+        return True
+    m = _RE_CLIP_FIELD.match(path)
+    if m and m.group(1) in _FORWARD_STRIPPED_CLIP_FIELDS:
+        return True
+    m = _RE_OC_FIELD.match(path)
+    if m and m.group(1) in _FORWARD_STRIPPED_OC_FIELDS:
+        return True
+    return False
+
+
+def _tmp_strings_equivalent(a, b):
+    """
+    Two tmp JSON strings are equivalent if their parsed payloads differ only
+    by keys the forward converter strips (e.g. parentObject).
+    """
+    if not (isinstance(a, str) and isinstance(b, str)):
+        return False
+    try:
+        pa, pb = json.loads(a), json.loads(b)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    for k in _FORWARD_STRIPPED_TMP_KEYS:
+        pa.pop(k, None)
+        pb.pop(k, None)
+    return pa == pb
+
+
+def _named_list_diff(produced, expected, path, diffs, skip_names):
+    """
+    Name-aware diff for object / objectChange lists. Reports extra/missing
+    entries semantically by `name` field; skips entries whose name is in
+    skip_names (forward-converter-stripped entries).
+    """
+    by_name_p = {c.get("name"): c for c in produced if isinstance(c, dict)}
+    by_name_e = {c.get("name"): c for c in expected if isinstance(c, dict)}
+    produced_real = {n: v for n, v in by_name_p.items() if n not in skip_names}
+    expected_real = {n: v for n, v in by_name_e.items() if n not in skip_names}
+
+    for name in sorted(set(expected_real) | set(produced_real), key=lambda x: x or ""):
+        sub_path = f"{path}[name={name!r}]"
+        if name not in produced_real:
+            # No-op manifest entries get stripped by the forward converter
+            # (convert_clip drops len(change) <= 1 changes after sparse-delta
+            # conversion). Treat them as equivalent to missing here.
+            if _is_noop_change(expected_real[name]):
+                continue
+            diffs.append((sub_path, "<missing>", _short(expected_real[name])))
+        elif name not in expected_real:
+            diffs.append((sub_path, _short(produced_real[name]), "<missing>"))
+        else:
+            _diff(produced_real[name], expected_real[name], sub_path, diffs)
+
+
+def _diff(produced, expected, path, diffs):
+    """Recursive structural diff. Order-insensitive, alias-aware."""
+    if path.endswith(".tmp") and _tmp_strings_equivalent(produced, expected):
+        return
+
+    # [""] ≡ [] for instructions/educationalObjectives (the forward
+    # converter strips [""] but both mean "no content").
+    if path.endswith(".instructions") or path.endswith(".educationalObjectives"):
+        if produced in ([], [""]) and expected in ([], [""]):
+            return
+
+    if type(produced) is not type(expected):
+        if not (isinstance(produced, (int, float)) and isinstance(expected, (int, float))):
+            diffs.append((path, f"type {type(produced).__name__}", f"type {type(expected).__name__}"))
+            return
+
+    if isinstance(produced, dict):
+        p = _normalize_keys(produced)
+        e = _normalize_keys(expected)
+        for k in sorted(set(p) | set(e)):
+            sub_path = f"{path}.{k}"
+            if k not in p:
+                if _is_expected_loss(sub_path) or _matches_default(k, e[k]):
+                    continue
+                diffs.append((sub_path, "<missing>", _short(e[k])))
+            elif k not in e:
+                if _matches_default(k, p[k]):
+                    continue
+                diffs.append((sub_path, _short(p[k]), "<missing>"))
+            else:
+                _diff(p[k], e[k], sub_path, diffs)
+        return
+
+    if isinstance(produced, list):
+        if path.endswith(".objectChanges") or path.endswith(".objects"):
+            _named_list_diff(produced, expected, path, diffs, _FORWARD_STRIPPED_OC_NAMES)
+            return
+        if len(produced) != len(expected):
+            diffs.append((path, f"len={len(produced)}", f"len={len(expected)}"))
+        for i in range(min(len(produced), len(expected))):
+            _diff(produced[i], expected[i], f"{path}[{i}]", diffs)
+        return
+
+    if produced != expected:
+        diffs.append((path, _short(produced), _short(expected)))
+
+
+def _short(v):
+    """Compact repr of a value for diff display."""
+    s = repr(v) if not isinstance(v, str) else f"'{v}'"
+    return s if len(s) <= 60 else s[:57] + "..."
+
+
+def _parse_module_strings(lab_dict):
+    """Return a copy of the lab with ActivityModules parsed from JSON strings."""
+    out = deepcopy(lab_dict)
+    parsed = []
+    for entry in out.get("ActivityModules", []):
+        if isinstance(entry, str):
+            try:
+                parsed.append(json.loads(entry))
+            except json.JSONDecodeError:
+                parsed.append(entry)
+        else:
+            parsed.append(entry)
+    out["ActivityModules"] = parsed
+    return out
+
+
+def validate_roundtrip(optimized_path, raw_path):
+    """
+    Revert the optimized moon lab and compare against the raw transmission.
+    Print a categorized diff. Return 0 if no unexpected diffs, 1 otherwise.
+    """
+    print(f"\n  Optimized (new format) : {optimized_path}")
+    print(f"  Raw       (old format) : {raw_path}\n")
+
+    with open(optimized_path, "r", encoding="utf-8") as f:
+        optimized = json.load(f)
+    with open(raw_path, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+
+    # Revert without injecting brb/anchors — the optimized moon lab already
+    # round-trips its own objects.
+    produced = revert_lab(optimized, inject=False)
+
+    # Parse ActivityModules into dicts so JSON whitespace doesn't pollute.
+    produced_parsed = _parse_module_strings(produced)
+    raw_parsed = _parse_module_strings(raw)
+
+    diffs = []
+    _diff(produced_parsed, raw_parsed, "", diffs)
+
+    # Trim the leading "." each path picks up from the top-level call.
+    diffs = [(p.lstrip("."), a, b) for (p, a, b) in diffs]
+
+    expected = [d for d in diffs if _is_expected_loss(d[0])]
+    unexpected = [d for d in diffs if not _is_expected_loss(d[0])]
+
+    print("=" * 65)
+    print(f"  ROUND-TRIP VALIDATION:  {len(unexpected)} unexpected diff(s), "
+          f"{len(expected)} expected loss(es)")
+    print("=" * 65)
+
+    if expected:
+        print("\n  Expected losses (forward converter strips these):")
+        for path, a, b in expected[:10]:
+            print(f"    • {path}")
+            print(f"        produced: {a}")
+            print(f"        expected: {b}")
+        if len(expected) > 10:
+            print(f"    ... and {len(expected) - 10} more")
+
+    if unexpected:
+        print("\n  ⚠️  Unexpected diffs (real revert bugs):")
+        for path, a, b in unexpected[:20]:
+            print(f"    • {path}")
+            print(f"        produced: {a}")
+            print(f"        expected: {b}")
+        if len(unexpected) > 20:
+            print(f"    ... and {len(unexpected) - 20} more")
+        print()
+        return 1
+
+    print("\n  ✅  No unexpected diffs — revert is faithful for the moon lab.\n")
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -773,12 +1156,17 @@ def main():
 
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
         print(__doc__)
-        print("\nUsage: python3 lab_placeholder_patcher.py [--index] <input.json> [output.json]")
+        print("\nUsage: python3 prototype_json_patcher.py [--index | --validate-roundtrip] <input.json> [output.json]")
         sys.exit(0)
 
     if sys.argv[1] == "--index":
         print_moon_lab_index()
         sys.exit(0)
+
+    if sys.argv[1] == "--validate-roundtrip":
+        optimized = sys.argv[2] if len(sys.argv) >= 3 else DEFAULT_VALIDATE_OPTIMIZED
+        raw = sys.argv[3] if len(sys.argv) >= 4 else DEFAULT_VALIDATE_RAW
+        sys.exit(validate_roundtrip(optimized, raw))
 
     input_path = sys.argv[1]
 
