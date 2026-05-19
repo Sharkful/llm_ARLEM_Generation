@@ -18,6 +18,15 @@ chmod +x setup_unix.sh
 ./setup_unix.sh
 ```
 
+Windows (Conda):
+```
+git clone ...
+cd llm_ARLEM_Generation
+conda create -n ar-experiments  python=3.11
+conda activate ar-experiments              
+pip install -r requirements.txt            
+```
+
 ## 2. Manual Installation
 
 If you prefer to do it manually:
