@@ -87,12 +87,28 @@
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
     let rawLab = null;
+    // Expose rawLab read-only on window so the headless CLI can poll for it.
+    Object.defineProperty(window, 'rawLab', { get: () => rawLab });
+
     let scene, camera, renderer, controls;
     let rootGroup, roomGroup;
     let objectMap = new Map();
-    // Incremented each time renderSelected() runs; async GLB callbacks check this to
+    // Incremented each time buildScene() runs; async GLB callbacks check this to
     // avoid mutating groups that belong to a scene that has already been cleared.
     let _renderId = 0;
+
+    // GLB load tracker — lets _waitForGlbs() know when all async loads have settled.
+    let _glbPending = 0;
+    let _glbResolvers = [];
+
+    function _flushGlbWaiters() {
+      if (_glbPending === 0) _glbResolvers.splice(0).forEach(r => r());
+    }
+
+    function _waitForGlbs() {
+      if (_glbPending === 0) return Promise.resolve();
+      return new Promise(r => _glbResolvers.push(r));
+    }
 
     // GLB model cache: prefabName → { scene: THREE.Group, maxDim: number }
     const glbCache = new Map();
@@ -131,10 +147,12 @@
       if (glbCache.has(name)) {
         const entry = glbCache.get(name);
         if (!entry) return Promise.resolve(null);
-        const copy = entry.scene.clone();
-        copy.scale.setScalar(1 / entry.maxDim);
-        return Promise.resolve(copy);
+        // Re-use the raw scene directly — cloning breaks SkinnedMesh scale inheritance.
+        // buildScene() clears rootGroup first so the scene is always detached when reused.
+        entry.scene.scale.setScalar(1 / entry.maxDim);
+        return Promise.resolve(entry.scene);
       }
+      _glbPending++;
       return new Promise(resolve => {
         _glbLoader.load(
           `assets/models/${name}.glb`,
@@ -142,13 +160,15 @@
             const raw = gltf.scene;
             const maxDim = _measureAndCenter(raw);
             glbCache.set(name, { scene: raw, maxDim });
-            // Use raw directly (no clone) — clone() breaks SkinnedMesh scale inheritance.
+            // Use raw directly — clone() breaks SkinnedMesh scale inheritance.
             raw.scale.setScalar(1 / maxDim);
             console.log(`[GLB] ${name} maxDim=${maxDim.toFixed(4)} scale=${raw.scale.x.toFixed(4)}`);
+            _glbPending--;
+            _flushGlbWaiters();
             resolve(raw);
           },
           undefined,
-          () => { glbCache.set(name, null); resolve(null); }
+          () => { glbCache.set(name, null); _glbPending--; _flushGlbWaiters(); resolve(null); }
         );
       });
     }
@@ -218,6 +238,39 @@
 
     // Expose internals to browser console for debugging.
     window._dbg = { get scene() { return scene; }, get rootGroup() { return rootGroup; }, get objectMap() { return objectMap; }, get glbCache() { return glbCache; }, get renderId() { return _renderId; } };
+
+    // Allow the headless CLI to inject a different lab JSON without file I/O.
+    window._setRawLab = function(lab) {
+      rawLab = lab;
+      populateModules();
+      buildScene();
+      applyClip();
+    };
+
+    // Headless capture entry point for screenshot_cli.py (Playwright).
+    // params: { moduleIndex, clipIndex, camera?: { position:[x,y,z], target:[x,y,z] } }
+    // Returns a base64-encoded PNG string (no data: prefix).
+    window._arlemCapture = async function(params) {
+      moduleSelect.value = params.moduleIndex;
+      populateClips();
+      buildScene();
+      clipSelect.value = params.clipIndex ?? -1;
+      applyClip();
+      if (params.camera) {
+        const p = params.camera.position || [4, 3, 7];
+        const t = params.camera.target   || [0, 0.4, 1.5];
+        camera.position.set(p[0], p[1], p[2]);
+        controls.target.set(t[0], t[1], t[2]);
+        controls.update();
+      }
+      // Yield one macrotask tick so all loadGlb() calls have had a chance to
+      // increment _glbPending before we check whether the queue is empty.
+      await new Promise(r => setTimeout(r, 0));
+      await _waitForGlbs();
+      await new Promise(r => setTimeout(r, 0));
+      renderer.render(scene, camera);
+      return renderer.domElement.toDataURL('image/png').split(',')[1];
+    };
 
     // Try to auto-load the included sample when served through a local web server.
     fetch('moon_lab_with_buttons.json').then(r => r.ok ? r.json() : null).then(j => {
@@ -338,50 +391,63 @@
       const m = rawLab.modules[Number(moduleSelect.value)];
       const clipIndex = Number(clipSelect.value);
 
-      if (clipIndex < 0) {
-        // Base layout: restore every object to its original transform.
-        for (const [, entry] of objectMap) {
-          applyTransform(entry.group, entry.baseData);
-        }
-        updateInfo();
-        return;
-      }
-
-      const clip = m.clips && m.clips[clipIndex];
-      if (!clip) return;
-
-      // First restore all objects to base, then apply only the changed ones.
-      // This ensures objects not mentioned in a clip return to their base state.
+      // Reset every object to its base state.
       for (const [, entry] of objectMap) {
         applyTransform(entry.group, entry.baseData);
+        if ('enabled' in entry.baseData) entry.group.visible = entry.baseData.enabled !== false;
+        applyColorToGroup(entry.group, entry.baseData.color);
       }
 
-      for (const change of (clip.changes || [])) {
-        const entry = objectMap.get(change.target);
-        if (!entry) continue;
-        if (change.position) {
-          entry.group.position.set(...mapPosition(change.position));
-        }
-        if (change.eulerAngles) {
-          const e = change.eulerAngles;
-          entry.group.rotation.order = 'ZXY';
-          entry.group.rotation.set(
-            THREE.MathUtils.degToRad(e[0] ?? 0),
-            THREE.MathUtils.degToRad(e[1] ?? 0),
-            THREE.MathUtils.degToRad(e[2] ?? 0)
-          );
-        }
-        if (change.scale) {
-          const s = change.scale;
-          entry.group.scale.set(s[0] ?? 1, s[1] ?? 1, s[2] ?? 1);
-        }
-        // Text component changes: update existing sprite in place.
-        if (change.components) {
-          updateTextInGroup(entry.group, change.components);
+      if (clipIndex < 0) { updateInfo(); return; }
+
+      // Apply clips 0 through clipIndex in sequence so accumulated state is correct.
+      // Each clip only carries the fields that changed, so later clips win on conflicts.
+      for (let i = 0; i <= clipIndex; i++) {
+        const clip = m.clips && m.clips[i];
+        if (!clip) continue;
+        for (const change of (clip.changes || [])) {
+          const entry = objectMap.get(change.target);
+          if (!entry) continue;
+          if (change.position) {
+            entry.group.position.set(...mapPosition(change.position));
+          }
+          if (change.eulerAngles) {
+            const e = change.eulerAngles;
+            entry.group.rotation.order = 'ZXY';
+            entry.group.rotation.set(
+              THREE.MathUtils.degToRad(e[0] ?? 0),
+              THREE.MathUtils.degToRad(e[1] ?? 0),
+              THREE.MathUtils.degToRad(e[2] ?? 0)
+            );
+          }
+          if (change.scale) {
+            const s = change.scale;
+            entry.group.scale.set(s[0] ?? 1, s[1] ?? 1, s[2] ?? 1);
+          }
+          if ('enabled' in change) {
+            entry.group.visible = change.enabled !== false;
+          }
+          if (change.color) {
+            applyColorToGroup(entry.group, change.color);
+          }
+          if (change.components) {
+            updateTextInGroup(entry.group, change.components);
+          }
         }
       }
 
       updateInfo();
+    }
+
+    function applyColorToGroup(group, color) {
+      if (!color) return;
+      const hex = colorToHex(color);
+      if (hex === null) return;
+      group.traverse(node => {
+        if (node.isMesh && node.material && !node._isLabel) {
+          node.material.color.setHex(hex);
+        }
+      });
     }
 
     function updateTextInGroup(group, componentChanges) {
@@ -679,7 +745,9 @@
       tex.offset.set(1, 0);
       const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.BackSide });
       // Plane is 4 x 1 local units: canvas 1024x256 (4:1) matches this aspect ratio.
-      return new THREE.Mesh(new THREE.PlaneGeometry(4, 1), mat);
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(4, 1), mat);
+      mesh._isLabel = true;
+      return mesh;
     }
 
     function getText(obj) {
