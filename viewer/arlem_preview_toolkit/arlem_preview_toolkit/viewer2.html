@@ -19,8 +19,12 @@
       background: #222; color: white; border: 1px solid #555; border-radius: 8px; padding: 7px;
     }
     #ui button { cursor: pointer; background: #2b4468; }
+    #ui button.nav { flex: 0 0 auto; width: 32px; padding: 7px 4px; }
     #ui .row { display:flex; gap: 8px; align-items:center; margin-top: 8px; }
     #ui .row > * { flex: 1; }
+    #ui .nav-row { display:flex; gap: 4px; align-items:center; margin-top: 4px; }
+    #ui .nav-row select { flex: 1; margin-top: 0; }
+    #ui .nav-row button { flex: 0 0 auto; width: 32px; padding: 7px 4px; margin-top: 0; cursor: pointer; background: #2b4468; border: 1px solid #555; border-radius: 8px; color: white; }
     #ui .check { display:flex; gap:8px; align-items:center; font-size: 12px; margin-top: 8px; }
     #ui .check input { width: auto; }
     #info { font-size: 12px; opacity: .82; margin-top: 8px; line-height: 1.35; white-space: pre-wrap; max-height: 140px; overflow:auto; }
@@ -39,10 +43,18 @@
     <input id="fileInput" type="file" accept=".json,application/json" />
 
     <label>Module</label>
-    <select id="moduleSelect"></select>
+    <div class="nav-row">
+      <button id="prevModule" title="Previous module">&#8249;</button>
+      <select id="moduleSelect"></select>
+      <button id="nextModule" title="Next module">&#8250;</button>
+    </div>
 
     <label>Clip / snapshot</label>
-    <select id="clipSelect"></select>
+    <div class="nav-row">
+      <button id="prevClip" title="Previous clip">&#8249;</button>
+      <select id="clipSelect"></select>
+      <button id="nextClip" title="Next clip">&#8250;</button>
+    </div>
 
     <div class="row">
       <button id="resetCam">Reset camera</button>
@@ -82,7 +94,7 @@
     // avoid mutating groups that belong to a scene that has already been cleared.
     let _renderId = 0;
 
-    // GLB model cache: prefabName → THREE.Group (original, never added to scene directly)
+    // GLB model cache: prefabName → { scene: THREE.Group, maxDim: number }
     const glbCache = new Map();
     const _glbLoader = new GLTFLoader();
 
@@ -90,43 +102,50 @@
     // We skip GLB loading for these so textures and colors from the JSON are preserved.
     const GLB_SKIP_TYPES = new Set(['sphere', 'sun', 'tinysphere', 'cube', 'plane', 'text']);
 
-    function _normalizeGlbInPlace(scene) {
-      // Fit the GLB into a unit cube centered at the origin.
-      // The outer group carries the JSON transform (position/scale/rotation),
-      // so the GLB just needs to be a consistent 1-unit size at the origin.
+    function _measureAndCenter(scene) {
+      // Temporarily add to a throwaway scene so matrixWorld is valid.
+      const tmp = new THREE.Scene();
+      tmp.add(scene);
       scene.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(scene);
-      if (box.isEmpty()) return;
+      tmp.remove(scene);
+
+      if (box.isEmpty()) return 1;
       const size = new THREE.Vector3();
       box.getSize(size);
-      const maxDim = Math.max(size.x, size.y, size.z);
-      if (maxDim === 0) return;
-      scene.scale.multiplyScalar(1 / maxDim);
-      scene.updateMatrixWorld(true);
-      const box2 = new THREE.Box3().setFromObject(scene);
+      const maxDim = Math.max(size.x, size.y, size.z) || 1;
+
+      // Place the base (min Y) at the origin so the model's feet are at y=0.
+      // This matches Unity's convention where a prefab origin is at the base/feet.
+      // XZ is centered. After normalization the model stands 1 unit tall with feet at 0.
       const center = new THREE.Vector3();
-      box2.getCenter(center);
-      scene.position.x -= center.x;
-      scene.position.y -= center.y;
-      scene.position.z -= center.z;
+      box.getCenter(center);
+      scene.position.x -= center.x / maxDim;
+      scene.position.y -= box.min.y / maxDim;
+      scene.position.z -= center.z / maxDim;
+
+      return maxDim;
     }
 
     function loadGlb(name) {
       if (glbCache.has(name)) {
-        const raw = glbCache.get(name);
-        if (!raw) return Promise.resolve(null);
-        const copy = raw.clone();
-        _normalizeGlbInPlace(copy);
+        const entry = glbCache.get(name);
+        if (!entry) return Promise.resolve(null);
+        const copy = entry.scene.clone();
+        copy.scale.setScalar(1 / entry.maxDim);
         return Promise.resolve(copy);
       }
       return new Promise(resolve => {
         _glbLoader.load(
           `assets/models/${name}.glb`,
           gltf => {
-            glbCache.set(name, gltf.scene);   // store raw, un-normalized original
-            const copy = gltf.scene.clone();
-            _normalizeGlbInPlace(copy);
-            resolve(copy);
+            const raw = gltf.scene;
+            const maxDim = _measureAndCenter(raw);
+            glbCache.set(name, { scene: raw, maxDim });
+            // Use raw directly (no clone) — clone() breaks SkinnedMesh scale inheritance.
+            raw.scale.setScalar(1 / maxDim);
+            console.log(`[GLB] ${name} maxDim=${maxDim.toFixed(4)} scale=${raw.scale.x.toFixed(4)}`);
+            resolve(raw);
           },
           undefined,
           () => { glbCache.set(name, null); resolve(null); }
@@ -160,23 +179,49 @@
       const text = await file.text();
       rawLab = JSON.parse(text);
       populateModules();
-      renderSelected();
+      buildScene();
+      applyClip();
     });
 
-    moduleSelect.addEventListener('change', () => { populateClips(); renderSelected(); });
-    clipSelect.addEventListener('change', renderSelected);
-    document.getElementById('showRoom').addEventListener('change', renderSelected);
-    document.getElementById('showLabels').addEventListener('change', renderSelected);
-    document.getElementById('flipZ').addEventListener('change', renderSelected);
+    moduleSelect.addEventListener('change', () => { populateClips(); buildScene(); applyClip(); });
+    clipSelect.addEventListener('change', applyClip);
+    document.getElementById('showRoom').addEventListener('change', () => { buildScene(); applyClip(); });
+    document.getElementById('showLabels').addEventListener('change', () => { buildScene(); applyClip(); });
+    document.getElementById('flipZ').addEventListener('change', () => { buildScene(); applyClip(); });
     document.getElementById('resetCam').addEventListener('click', resetCamera);
     document.getElementById('screenshot').addEventListener('click', saveScreenshot);
+
+    document.getElementById('prevModule').addEventListener('click', () => {
+      if (moduleSelect.selectedIndex > 0) {
+        moduleSelect.selectedIndex--;
+        populateClips(); buildScene(); applyClip();
+      }
+    });
+    document.getElementById('nextModule').addEventListener('click', () => {
+      if (moduleSelect.selectedIndex < moduleSelect.options.length - 1) {
+        moduleSelect.selectedIndex++;
+        populateClips(); buildScene(); applyClip();
+      }
+    });
+    document.getElementById('prevClip').addEventListener('click', () => {
+      if (clipSelect.selectedIndex > 0) {
+        clipSelect.selectedIndex--;
+        applyClip();
+      }
+    });
+    document.getElementById('nextClip').addEventListener('click', () => {
+      if (clipSelect.selectedIndex < clipSelect.options.length - 1) {
+        clipSelect.selectedIndex++;
+        applyClip();
+      }
+    });
 
     // Expose internals to browser console for debugging.
     window._dbg = { get scene() { return scene; }, get rootGroup() { return rootGroup; }, get objectMap() { return objectMap; }, get glbCache() { return glbCache; }, get renderId() { return _renderId; } };
 
     // Try to auto-load the included sample when served through a local web server.
-    fetch('Optomized_moon_lab_final.json').then(r => r.ok ? r.json() : null).then(j => {
-      if (j && !rawLab) { rawLab = j; populateModules(); renderSelected(); }
+    fetch('moon_lab_with_buttons.json').then(r => r.ok ? r.json() : null).then(j => {
+      if (j && !rawLab) { rawLab = j; populateModules(); buildScene(); applyClip(); }
     }).catch(() => {});
 
     function initThree() {
@@ -238,9 +283,11 @@
       });
     }
 
-    function renderSelected() {
+    function buildScene() {
+      // Full teardown + rebuild. Called on module change, checkbox changes, or initial load.
+      // GLBs load async and persist until the next buildScene() call.
       if (!rawLab) return;
-      _renderId++;           // invalidate any in-flight async GLB callbacks
+      _renderId++;
       rootGroup.clear();
       objectMap = new Map();
 
@@ -248,18 +295,13 @@
 
       const m = rawLab.modules[Number(moduleSelect.value)];
       const objects = deepClone(m.objects || []);
-      const clipIndex = Number(clipSelect.value);
-      console.log('[renderSelected] module:', m.moduleName, 'object names:', objects.map(o => o.name));
 
-      if (clipIndex >= 0 && m.clips && m.clips[clipIndex]) {
-        applyClipChanges(objects, m.clips[clipIndex]);
-      }
-
-      // Create placeholder groups first so parent-child references work.
+      // Create groups first so parent-child references work.
       for (const obj of objects) {
         const group = new THREE.Group();
         group.name = obj.name || obj.prefab || 'object';
-        objectMap.set(group.name, { group, data: obj });
+        // Store immutable base data so applyClip() can restore base layout.
+        objectMap.set(group.name, { group, baseData: deepClone(obj) });
       }
 
       // Attach groups to parents.
@@ -273,7 +315,7 @@
         }
       }
 
-      // Fill groups with geometry/text and apply transforms.
+      // Apply base transforms and add geometry/labels.
       for (const obj of objects) {
         const entry = objectMap.get(obj.name);
         applyTransform(entry.group, obj);
@@ -284,7 +326,83 @@
       }
 
       addAxesHelper();
+      updateInfo();
+    }
 
+    function applyClip() {
+      // Update transforms on existing groups without tearing down the scene.
+      // Three.js parent-child propagation then automatically carries children
+      // (e.g. Robot) with their parents (e.g. Moon).
+      if (!rawLab || objectMap.size === 0) return;
+
+      const m = rawLab.modules[Number(moduleSelect.value)];
+      const clipIndex = Number(clipSelect.value);
+
+      if (clipIndex < 0) {
+        // Base layout: restore every object to its original transform.
+        for (const [, entry] of objectMap) {
+          applyTransform(entry.group, entry.baseData);
+        }
+        updateInfo();
+        return;
+      }
+
+      const clip = m.clips && m.clips[clipIndex];
+      if (!clip) return;
+
+      // First restore all objects to base, then apply only the changed ones.
+      // This ensures objects not mentioned in a clip return to their base state.
+      for (const [, entry] of objectMap) {
+        applyTransform(entry.group, entry.baseData);
+      }
+
+      for (const change of (clip.changes || [])) {
+        const entry = objectMap.get(change.target);
+        if (!entry) continue;
+        if (change.position) {
+          entry.group.position.set(...mapPosition(change.position));
+        }
+        if (change.eulerAngles) {
+          const e = change.eulerAngles;
+          entry.group.rotation.order = 'ZXY';
+          entry.group.rotation.set(
+            THREE.MathUtils.degToRad(e[0] ?? 0),
+            THREE.MathUtils.degToRad(e[1] ?? 0),
+            THREE.MathUtils.degToRad(e[2] ?? 0)
+          );
+        }
+        if (change.scale) {
+          const s = change.scale;
+          entry.group.scale.set(s[0] ?? 1, s[1] ?? 1, s[2] ?? 1);
+        }
+        // Text component changes: update existing sprite in place.
+        if (change.components) {
+          updateTextInGroup(entry.group, change.components);
+        }
+      }
+
+      updateInfo();
+    }
+
+    function updateTextInGroup(group, componentChanges) {
+      const textChange = componentChanges.find(c => c.componentType === 'textMeshPro');
+      if (!textChange) return;
+      // Find existing text mesh (PlaneGeometry used for text sprites) and replace it.
+      const existing = group.children.find(c => c.geometry && c.geometry.type === 'PlaneGeometry');
+      if (!existing) return;
+      const color = textChange.color ? rgbaToCss(textChange.color) : 'white';
+      const fontSize = textChange.fontSize ? 18 * textChange.fontSize : 18;
+      const newSprite = makeTextSprite(textChange.text || '', color, fontSize);
+      newSprite.scale.copy(existing.scale);
+      newSprite.position.copy(existing.position);
+      group.remove(existing);
+      group.add(newSprite);
+    }
+
+    function updateInfo() {
+      if (!rawLab) return;
+      const m = rawLab.modules[Number(moduleSelect.value)];
+      const clipIndex = Number(clipSelect.value);
       info.textContent =
         `Lab: ${rawLab.labId || '(unnamed)'}\n` +
         `Module: ${m.moduleName || '(untitled)'}\n` +
@@ -292,22 +410,6 @@
         `Clips: ${(m.clips || []).length}\n` +
         `Selected: ${clipIndex >= 0 ? (m.clips[clipIndex].clipName || 'clip') : 'base layout'}\n` +
         `Textures expected in: assets/textures/<texture>.png|jpg`;
-    }
-
-    function applyClipChanges(objects, clip) {
-      const byName = new Map(objects.map(o => [o.name, o]));
-      for (const change of (clip.changes || [])) {
-        const target = byName.get(change.target);
-        if (!target) continue;
-        for (const k of Object.keys(change)) {
-          if (k === 'target') continue;
-          if (k === 'components') {
-            target.components = mergeComponents(target.components || [], change.components || []);
-          } else {
-            target[k] = deepClone(change[k]);
-          }
-        }
-      }
     }
 
     function mergeComponents(base, changes) {
@@ -324,18 +426,14 @@
       const p = obj.position || [0,0,0];
       const s = obj.scale || [1,1,1];
       const e = obj.eulerAngles || [0,0,0];
-      if ((obj.name || '').toLowerCase().includes('robot')) {
-        console.log('[Robot] obj:', JSON.stringify(obj));
-        console.log('[Robot] parent chain:', group.parent?.name, '->', group.parent?.parent?.name);
-        console.log('[Robot] pos:', p, 'scale:', s, 'euler:', e);
-      }
       group.position.set(...mapPosition(p));
       group.scale.set(s[0] ?? 1, s[1] ?? 1, s[2] ?? 1);
-      // Unity applies Euler rotations in ZXY order; Three.js defaults to XYZ.
-      // Set order to 'ZXY' so the angles from the JSON produce the same result as Unity.
       group.rotation.order = 'ZXY';
+      // Unity humanoid GLBs (Armature-based) need a +90° X correction because
+      // Three.js SkinnedMesh doesn't inherit the Armature's 0.01 scale the same way Unity does.
+      const xOffset = group._armatureCorrection ? 90 : 0;
       group.rotation.set(
-        THREE.MathUtils.degToRad(e[0] ?? 0),
+        THREE.MathUtils.degToRad((e[0] ?? 0) + xOffset),
         THREE.MathUtils.degToRad(e[1] ?? 0),
         THREE.MathUtils.degToRad(e[2] ?? 0)
       );
@@ -353,7 +451,10 @@
         const text = getText(obj) || obj.name || '';
         const color = getColor(obj) || [255,255,255,255];
         const sprite = makeTextSprite(text, rgbaToCss(color), getFontSize(obj));
-        sprite.scale.set(1.0, 1.0, 1.0);
+        // PlaneGeometry is 4x1 local units (matches 1024x256 canvas aspect 4:1).
+        // Set scale to 0.25x so the plane occupies 1x0.25 local units,
+        // fitting inside a Unity 1-unit square at whatever JSON scale applies.
+        sprite.scale.set(0.25, 0.25, 1.0);
         group.add(sprite);
         return;
       }
@@ -376,9 +477,17 @@
           if (!model || _renderId !== capturedRenderId) return;
           const toRemove = group.children.filter(c => c._isPlaceholder);
           toRemove.forEach(c => group.remove(c));
-          // Wrap the normalized GLB in a unit-scale container so that
-          // the outer group's JSON transform (position/scale/rotation) is
-          // applied cleanly on top of the normalization.
+
+          // Detect Unity humanoid GLB: has an Armature node at scale 0.01.
+          // Mark the group so applyTransform() always applies the +90° X correction,
+          // whether called from buildScene() or applyClip().
+          let hasArmature = false;
+          model.traverse(n => { if (n.name === 'Armature') hasArmature = true; });
+          if (hasArmature) {
+            group._armatureCorrection = true;
+            applyTransform(group, obj);  // re-apply now that flag is set
+          }
+
           const wrapper = new THREE.Group();
           wrapper._isGlb = true;
           wrapper.add(model);
