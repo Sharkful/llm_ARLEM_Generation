@@ -1,0 +1,786 @@
+# AR TTS Generation System: Flask App Design Plan
+
+## Purpose
+
+This document describes the intended architecture and implementation plan for an AR lab narration and TTS generation system. It is written for a coding agent and for human review. It should guide development without over-specifying implementation details.
+
+The system will support generation of narration audio for AR lab experiences. In the larger application, the same generation process will eventually create scene structure, clip activities, 3D objects, interaction logic, and narration metadata together. For the current phase, the focus is on narration and audio generation while preserving a design that can expand into the full AR authoring pipeline.
+
+The core output of this subsystem is a set of audio files, usually MP3 files, generated from structured narration JSON.
+
+## High-Level Flow
+
+The intended flow is:
+
+1. User provides a high-level lab or scene description.
+2. The application calls an LLM through `instructor` to generate a lightweight scene narration brief.
+3. The application calls an LLM through `instructor` to generate a structured narration script.
+4. The narration script is saved as an authoring artifact.
+5. The application generates TTS audio from the narration script.
+6. The generated audio files are saved to the configured output directory.
+7. Metadata, token usage, cost estimates, generation settings, and logs are saved separately.
+8. The user may review and regenerate selected audio clips, or the entire process may run in full-auto mode without review.
+
+The system should support both:
+
+- **Review mode**, where a human can inspect and edit generated artifacts before audio generation.
+- **Full-auto mode**, where the system proceeds from user description to final audio files without human intervention.
+
+Full-auto mode is important for batch workflows, demos, testing, and future integration with a larger AR scene-generation pipeline.
+
+## Major Design Principles
+
+### 1. Use Flask rather than Streamlit
+
+A Flask app is preferred because the project is likely to grow beyond a simple prototype. Flask provides a cleaner path toward:
+
+- persistent project state,
+- custom routing,
+- file management,
+- API endpoints,
+- multi-stage workflows,
+- integration with future AR scene-generation tools,
+- review interfaces,
+- authentication if needed later,
+- background or queued processing if needed later.
+
+The initial UI can remain simple. The choice of Flask is primarily about extensibility.
+
+### 2. Keep authoring artifacts clean
+
+The key authored or LLM-generated files should remain readable and portable. They should not be cluttered with operational metadata.
+
+Important authoring artifacts include:
+
+- the original user request or lab description,
+- the scene narration brief JSON,
+- the narration script JSON.
+
+Operational data should be written elsewhere. This includes:
+
+- generation logs,
+- token usage,
+- estimated costs,
+- actual costs if available,
+- audio file paths,
+- clip hashes,
+- stale/valid status,
+- model names,
+- timestamps,
+- review status,
+- validation warnings.
+
+This separation makes the system easier to debug, easier to version, and easier for humans to review.
+
+### 3. Do not over-invest in reviewing the scene brief yet
+
+For the current stage, the user does not need a formal review step for the lightweight scene narration brief. In the future, the full AR app will generate scene activities, clip logic, 3D objects, and narration together. Reviewing only the objectives, scene description, or clip meanings in isolation is not likely to be useful once those other elements exist.
+
+Therefore, the scene brief should be treated as an intermediate artifact, not as a primary review target.
+
+It should still be saved, because it is useful for:
+
+- debugging,
+- reproducibility,
+- comparing generation runs,
+- regenerating narration,
+- understanding how the narration script was produced.
+
+### 4. Narration script review should be optional
+
+The narration script is a meaningful authoring artifact and can be reviewed by a human. However, the system should not require review.
+
+The application should support two paths:
+
+- **Review path:** generate narration script, allow human edits, then generate audio.
+- **No-review path:** generate narration script and proceed directly to audio generation.
+
+This distinction should be a configuration or run-mode choice, not a separate architecture.
+
+### 5. Full-auto mode is a first-class requirement
+
+The system should include a no-review path from the beginning. It should not be bolted on later.
+
+Full-auto mode should:
+
+- accept a user/lab description,
+- generate the scene narration brief,
+- generate the narration script,
+- validate the script,
+- generate all audio files,
+- write all artifacts and manifests,
+- produce a run summary,
+- report any warnings or failed clips.
+
+If errors occur, full-auto mode should fail gracefully and preserve partial outputs where useful.
+
+### 6. Keep filenames generated by convention
+
+The narration JSON should not require filenames. Audio filenames should be generated by the application.
+
+Recommended convention:
+
+- one output directory per lab or generation project,
+- all audio files for a lab in the same directory,
+- no module subdirectories,
+- filenames based on module number and clip number,
+- optional safe slug from the clip title when available.
+
+The exact convention can be handled by the implementation, but the design assumption is that filenames are generated, not authored.
+
+### 7. Track token use and costs explicitly
+
+Token tracking and cost tracking should be part of the design from the first implementation phase.
+
+The system should track costs for:
+
+- scene brief generation,
+- narration script generation,
+- any regeneration calls,
+- TTS audio generation,
+- validation or rewriting calls if added later.
+
+The cost system should record:
+
+- provider,
+- model,
+- input tokens,
+- output tokens,
+- cached tokens if available,
+- audio characters or audio tokens if applicable,
+- number of TTS calls,
+- estimated cost,
+- timestamp,
+- run identifier,
+- associated artifact or clip.
+
+The design should allow price tables to be updated without changing the rest of the application.
+
+### 8. Build for iteration and regeneration
+
+The app should assume that narration and audio will be regenerated repeatedly.
+
+The system should eventually support:
+
+- regenerate all audio,
+- regenerate stale audio only,
+- regenerate selected module,
+- regenerate selected clip,
+- regenerate narration script from the scene brief,
+- regenerate narration for selected portions only,
+- preserve accepted clips when possible.
+
+The first version does not need all of these, but the artifact and manifest design should not block them.
+
+## Core Artifacts
+
+### 1. User description
+
+The original user prompt or lab description should be saved. This is the root input for the generation process.
+
+Motivation:
+
+- reproducibility,
+- debugging,
+- comparison across generations,
+- human review of original intent.
+
+### 2. Scene narration brief JSON
+
+This is the lightweight intermediate JSON containing scene context, objectives, modules, and clip-level meaning/change descriptions.
+
+It is not final narration. It is a planning artifact used to generate narration.
+
+Motivation:
+
+- separates instructional intent from final spoken text,
+- gives the narration-generating LLM structured context,
+- can later be aligned with AR scene objects and clip activities.
+
+### 3. Narration script JSON
+
+This is the structured TTS narration script. It includes modules, clips, spoken segments, pause segments, and optional voice/style suggestions.
+
+Motivation:
+
+- primary human-readable authoring artifact for audio generation,
+- stable input to TTS generation,
+- allows clip-by-clip review and editing,
+- supports deterministic filename generation and audio manifests.
+
+### 4. Project manifest
+
+The project manifest should record project-level configuration and state.
+
+Likely contents include:
+
+- project identifier,
+- project title if available,
+- creation timestamp,
+- source description file path,
+- scene brief path,
+- narration script path,
+- output audio directory,
+- default TTS model,
+- default voice,
+- filename convention,
+- current workflow mode,
+- current generation status.
+
+Motivation:
+
+- keeps configuration separate from authoring artifacts,
+- gives the app a stable project state file,
+- supports reopening and continuing work later.
+
+### 5. Audio manifest
+
+The audio manifest should map narration clips to generated audio files.
+
+Likely contents include:
+
+- module index,
+- clip index,
+- clip title if available,
+- generated filename,
+- output path,
+- TTS model,
+- voice,
+- style settings used,
+- source text hash,
+- actual duration if measured,
+- generation timestamp,
+- generation status,
+- stale/valid status,
+- accepted/rejected status if review is enabled.
+
+Motivation:
+
+- allows selective regeneration,
+- prevents stale audio from being mistaken as current,
+- supports review and acceptance workflows,
+- supports debugging and reproducibility.
+
+### 6. Generation log
+
+The generation log should record important events and calls.
+
+Likely contents include:
+
+- LLM calls,
+- TTS calls,
+- validation events,
+- warnings,
+- errors,
+- retries,
+- user edits if tracked,
+- run mode,
+- timestamps.
+
+Motivation:
+
+- helps diagnose failures,
+- supports reproducibility,
+- provides transparency for cost and model behavior.
+
+### 7. Cost and usage report
+
+This may be a separate file or part of the generation log. It should be easy to inspect independently.
+
+Motivation:
+
+- makes batch costs visible,
+- supports budgeting,
+- helps compare models and strategies,
+- makes failed or repeated runs auditable.
+
+## Review and Editing Strategy
+
+### Review should be modular
+
+The app should eventually allow review at several levels, but these should be optional and phased.
+
+Potential review levels:
+
+- user description,
+- scene brief,
+- narration script,
+- generated audio,
+- manifest and warnings.
+
+For the near-term implementation, prioritize:
+
+1. narration script review,
+2. audio review,
+3. regeneration controls.
+
+Scene brief review should not be a required step at this stage.
+
+### Narration review
+
+The narration review UI should let users inspect and edit:
+
+- module structure,
+- clip order,
+- clip titles,
+- spoken text,
+- pause lengths,
+- voice overrides if included,
+- style suggestions if included.
+
+The user should not need to edit raw JSON unless desired. A raw JSON view can be useful for debugging but should not be the only review interface.
+
+### Audio review
+
+The audio review UI should allow:
+
+- playback by clip,
+- display of the source narration text,
+- display of the generated filename,
+- display of generation status,
+- regenerate clip,
+- accept clip,
+- reject or mark for revision.
+
+The first implementation may only need clip playback and regenerate-all/regenerate-selected behavior.
+
+## Full-Auto Mode
+
+Full-auto mode should run without human approval between stages.
+
+The mode should still save all intermediate artifacts:
+
+- user description,
+- scene brief,
+- narration script,
+- project manifest,
+- audio manifest,
+- generation log,
+- cost report.
+
+Full-auto mode should still validate artifacts before proceeding. Validation warnings should be recorded, but the system may proceed unless an error is severe.
+
+A full-auto run should end with a summary:
+
+- number of modules,
+- number of clips,
+- number of generated audio files,
+- number of warnings,
+- number of failures,
+- output directory,
+- estimated cost,
+- models used.
+
+Full-auto mode should be deterministic enough that a run can be inspected afterward.
+
+## Validation and Warning Strategy
+
+Validation should occur before audio generation.
+
+The goal is not to reject every imperfect script. The goal is to catch errors that will break generation or produce poor results.
+
+Likely validation checks:
+
+- missing modules,
+- modules with no clips,
+- clips with no spoken text,
+- pause segments missing seconds,
+- pause lengths too long or too short,
+- very long spoken segments,
+- unsupported or unavailable voice names,
+- unsafe output paths,
+- filename collisions,
+- duplicate generated filenames,
+- invalid JSON structure,
+- missing required fields,
+- unsupported schema version.
+
+Useful warnings:
+
+- technical notation likely to be spoken poorly,
+- abbreviations that may need expansion,
+- unusually long clip,
+- inconsistent voice use,
+- missing clip titles,
+- narration that appears too terse,
+- narration that appears too long.
+
+Warnings should be saved to a validation report or generation log.
+
+## Voice Handling
+
+Voice names should not be hard-coded into the Pydantic schema as enumerations.
+
+The application should load available voices from one of the following:
+
+- provider API if available,
+- local configuration,
+- cached voice list,
+- manually updated settings file.
+
+Motivation:
+
+- available voices may change,
+- different providers may be used later,
+- voice validation should be dynamic,
+- authoring schemas should remain stable.
+
+The app should support:
+
+- default project voice,
+- optional clip-level voice override,
+- validation against available voices,
+- graceful handling of unavailable voices.
+
+## Style Handling
+
+Style guidance should be treated as natural-language suggestions, not as enumerated values.
+
+Motivation:
+
+- style needs are contextual,
+- LLMs are good at generating natural-language delivery guidance,
+- TTS providers may support different instruction formats,
+- rigid enumerations are likely to become limiting.
+
+Examples of style guidance might include:
+
+- clear lecture for first-year students,
+- warm but concise explanation,
+- slow down slightly around the equation,
+- sound curious and encouraging,
+- emphasize the contrast between stable and unstable learning rates.
+
+The generation layer can translate style suggestions into provider-specific TTS instructions.
+
+## TTS Generation Strategy
+
+The system should support clip-based audio output.
+
+There are two possible internal approaches:
+
+1. Generate one TTS call per spoken segment and assemble the clip with inserted pauses.
+2. Generate one TTS call per whole clip and rely on the model to handle pauses naturally.
+
+For this project, segment-based generation is attractive because:
+
+- explicit pause lengths can be inserted accurately,
+- individual segments can be regenerated,
+- long clips can be managed more safely,
+- segment-level failures are easier to isolate.
+
+However, segment-based generation may produce less natural continuity across sentence boundaries. The implementation should be designed so this decision can be revisited later.
+
+The initial system can choose one approach, but the manifests should record enough information to support future changes.
+
+## Audio Post-Processing
+
+The audio generation pipeline may need post-processing.
+
+Potential post-processing steps:
+
+- trim leading and trailing silence,
+- insert explicit pauses,
+- normalize loudness,
+- concatenate segment audio into clip files,
+- convert to MP3,
+- optionally retain intermediate WAV files,
+- measure final clip duration.
+
+The first version does not need advanced audio processing, but the system should not assume raw TTS output is always final.
+
+## Staleness and Regeneration
+
+The system should track whether generated audio is current relative to the narration script and generation settings.
+
+A clip should be considered stale if any of the following change:
+
+- spoken text,
+- pause lengths,
+- voice,
+- style instructions,
+- TTS model,
+- relevant generation settings.
+
+The system should use a hash or equivalent mechanism to compare current clip input against the manifest record.
+
+Regeneration options should eventually include:
+
+- regenerate all,
+- regenerate stale only,
+- regenerate selected clip,
+- regenerate selected module.
+
+The first version may only support regenerate all and regenerate selected clip.
+
+## Token and Cost Tracking
+
+Token and cost tracking should be designed as a first-class feature.
+
+The system should track usage for each LLM and TTS call.
+
+For LLM calls, track:
+
+- model,
+- provider,
+- purpose of call,
+- input tokens,
+- output tokens,
+- cached tokens if available,
+- estimated cost,
+- associated artifact,
+- timestamp.
+
+For TTS calls, track:
+
+- provider,
+- model,
+- voice,
+- characters or tokens submitted,
+- number of calls,
+- estimated cost,
+- associated module and clip,
+- timestamp.
+
+The design should allow prices to be updated from configuration rather than hard-coded.
+
+The cost report should make it easy to answer:
+
+- What did this generation run cost?
+- Which stage cost the most?
+- How much did regeneration add?
+- What model and voice settings were used?
+- How many clips were generated?
+
+## Testing Strategy
+
+Testing should cover the pipeline in phases.
+
+### Phase 1 tests: schema and artifact tests
+
+Test goals:
+
+- valid scene brief passes validation,
+- invalid scene brief fails with useful error,
+- valid narration script passes validation,
+- invalid narration script fails with useful error,
+- extra unexpected fields are rejected,
+- pause fields are validated,
+- clips without speech are rejected,
+- optional fields behave as expected.
+
+### Phase 2 tests: filename and manifest tests
+
+Test goals:
+
+- filenames are generated consistently,
+- unsafe titles are converted to safe slugs,
+- filename collisions are detected or resolved,
+- all clips map to manifest entries,
+- output paths are correct,
+- all files for a lab are placed in one directory.
+
+### Phase 3 tests: LLM generation tests
+
+Test goals:
+
+- LLM output conforms to the Pydantic models through `instructor`,
+- malformed LLM output is corrected or rejected,
+- generated artifacts are saved,
+- no-review mode proceeds automatically,
+- review mode pauses at the expected stage.
+
+Use mock LLM responses for most automated tests. Live API tests should be limited and optional because they cost money and may be nondeterministic.
+
+### Phase 4 tests: TTS generation tests
+
+Test goals:
+
+- TTS calls are made with expected text,
+- pause segments are handled correctly,
+- clips are generated in the right order,
+- MP3 files are written,
+- failures are logged,
+- partial generation can be recovered or inspected.
+
+Use mock TTS responses for most automated tests. Include a small optional live TTS test.
+
+### Phase 5 tests: staleness and regeneration tests
+
+Test goals:
+
+- changed narration marks audio as stale,
+- changed voice marks audio as stale,
+- changed pause length marks audio as stale,
+- unchanged clips are not regenerated in stale-only mode,
+- selected clip regeneration updates the manifest correctly.
+
+### Phase 6 tests: cost tracking tests
+
+Test goals:
+
+- token usage is captured for LLM calls,
+- TTS usage is captured,
+- per-stage costs are calculated,
+- total run cost is calculated,
+- price table updates affect future estimates,
+- failed calls are logged appropriately.
+
+### Phase 7 tests: Flask workflow tests
+
+Test goals:
+
+- project can be created,
+- artifacts can be viewed,
+- narration can be edited in review mode,
+- full-auto mode completes without review,
+- generated files can be listed,
+- audio can be previewed,
+- selected clips can be regenerated,
+- errors are shown in a useful way.
+
+## Phased Implementation Plan
+
+### Phase 1: Core models and artifact layout
+
+Implement the Pydantic models for:
+
+- scene narration brief,
+- narration script,
+- runtime configuration,
+- project manifest,
+- audio manifest,
+- cost/usage records.
+
+Define the project directory structure and artifact naming conventions.
+
+The goal of this phase is to establish stable data contracts.
+
+### Phase 2: Flask project shell
+
+Create the basic Flask application with project creation and artifact browsing.
+
+Minimum useful features:
+
+- create a new project from a user description,
+- save the source description,
+- display project status,
+- display artifact paths,
+- configure output directory and generation mode.
+
+No sophisticated UI is required at this stage.
+
+### Phase 3: LLM generation pipeline
+
+Add LLM calls through `instructor` to generate:
+
+- scene narration brief,
+- narration script.
+
+The system should save both artifacts and log token usage.
+
+Both review mode and full-auto mode should be supported at the workflow level, even if the review UI is minimal.
+
+### Phase 4: Narration review and editing
+
+Add a simple way to inspect and edit the narration script.
+
+Priority should be on clip-level review:
+
+- module list,
+- clip list,
+- spoken text,
+- pause lengths,
+- save edits,
+- validate after edits.
+
+Raw JSON editing can be provided as a fallback, but should not be the only long-term interface.
+
+### Phase 5: TTS generation
+
+Add TTS generation from the narration script.
+
+Minimum features:
+
+- generate audio for all clips,
+- save MP3 files,
+- write audio manifest,
+- track usage and cost,
+- log errors,
+- produce a run summary.
+
+The system should work in full-auto mode by this phase.
+
+### Phase 6: Audio review and regeneration
+
+Add audio playback and regeneration controls.
+
+Minimum features:
+
+- list generated clips,
+- play audio per clip,
+- show source text,
+- regenerate selected clip,
+- regenerate all.
+
+Later additions:
+
+- accept/reject status,
+- stale-only regeneration,
+- module-level regeneration.
+
+### Phase 7: Staleness detection and cost reports
+
+Add robust staleness detection based on clip inputs and generation settings.
+
+Add cost summaries at project and run level.
+
+This phase should make the system useful for repeated generation and refinement.
+
+### Phase 8: Integration preparation for full AR generation
+
+Prepare the narration subsystem to integrate with a larger AR generation workflow.
+
+This includes ensuring that:
+
+- scene brief artifacts can later be connected to AR scene objects,
+- clip ordering aligns with future activity timelines,
+- manifests can reference future scene assets,
+- the narration pipeline can be called programmatically,
+- full-auto mode can be invoked from another application component.
+
+## Open Design Questions
+
+The coding agent should make reasonable implementation choices, but these issues should remain visible:
+
+1. Should TTS be generated per spoken segment or per clip?
+2. Should intermediate segment audio be retained?
+3. How much audio post-processing is needed for acceptable AR playback?
+4. Should project files be stored as flat files only, or eventually backed by a database?
+5. How should the app handle concurrent projects or multiple users?
+6. How much of the review UI should be form-based versus JSON-based?
+7. How should pronunciation corrections and glossary support be added later?
+8. Should cost tracking be approximate, exact where possible, or both?
+9. How should failed partial runs be resumed?
+10. What metadata will the future AR scene-generation system need to share with narration generation?
+
+## Recommended Initial Scope
+
+For the first working version, build the smallest complete loop:
+
+1. Create project from user description.
+2. Generate scene brief JSON.
+3. Generate narration script JSON.
+4. Save all artifacts.
+5. Generate audio files.
+6. Save audio manifest.
+7. Track usage and cost.
+8. Display generated files and allow playback.
+9. Support full-auto mode.
+10. Allow regeneration of all audio.
+
+After that, add selected clip regeneration, review/editing improvements, staleness detection, and richer cost reports.
+
+## Summary
+
+The system should be designed around clean authoring artifacts, optional human review, and full-auto generation. The Flask app should provide a flexible foundation for later integration with a full AR authoring system. The most important architectural choices are to keep narration artifacts separate from operational metadata, track costs and usage from the beginning, and build regeneration into the workflow rather than treating audio generation as a one-time export.
