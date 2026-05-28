@@ -44,22 +44,32 @@ python "Code/Testing/generate_lab.py" --model claude-sonnet-4.6 --topic "Photosy
 python "Code/Testing/generate_lab.py" --model gpt-4o-mini --topic "DNA Replication" --name dna_lab
 python "Code/Testing/generate_lab.py" --list-models
 
-# Benchmark a single model (from project root)
+# Benchmark with a free-form topic (legacy path, single prompt template)
 python "Code/Testing/benchmark.py" --model gpt-4o-mini
-
-# Benchmark multiple models on a custom topic
 python "Code/Testing/benchmark.py" --model gpt-4o-mini claude-3-haiku gemini-2.0-flash \
     --topic "Human Heart Anatomy"
 
-# Benchmark with ARLEM spec instead of JSON Lab
+# Benchmark with a YAML lab description at a specificity level (L1-L4)
+python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L2
+python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab vsepr_molecular_geometry --level L4
+
+# Switch output structure for L2-L4 (L1 ignores this)
+#   single-module (default) - one DemoModule, many clips
+#   multi-module            - Lab with one DemoModule per scene
+#   module-only             - bare DemoModule, no Lab wrapper
+python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon \
+    --level L3 --structure multi-module
+
+# Benchmark with ARLEM spec (legacy --topic path only; YAML path not yet wired for ARLEM)
 python "Code/Testing/benchmark.py" --model claude-sonnet-4 --spec arlem
 
 # Run a pre-defined suite (quick = cheap models, full = all models)
 python "Code/Testing/benchmark.py" --suite quick
 python "Code/Testing/benchmark.py" --suite full
 
-# List all registered models
+# List registered models / available lab YAMLs
 python "Code/Testing/benchmark.py" --list-models
+python "Code/Testing/benchmark.py" --list-labs
 ```
 
 There is no test runner or linter configured. Validation is done via Pydantic model instantiation and Jupyter notebooks.
@@ -78,13 +88,17 @@ Lab generation:
   → Artifacts/Data/Generated Labs/  ← clean output JSON for headset
 
 Benchmark runs:
-  benchmark_config.py (model registry + prompts)
+  Artifacts/Lab Descriptions/*.yaml   ← topic source-of-truth (six fields)
+  → prompt_builder.py (loads YAML, builds L1-L4 prompt + picks response model)
+  → benchmark_config.py (model registry + legacy prompt templates + BenchmarkRunConfig)
   → benchmark.py (runner + client factory)
   → instructor + tracking/ (token/retry tracking)
-  → Lab/ARLEM generation
+  → Lab / DemoModule / LabOutline generation
   → lab_metrics.py (structural analysis)
   → Artifacts/Data/Benchmark/ (output + metrics JSON)
-  → Artifacts/Data/Errors/     ← instructor error logs
+  → Artifacts/Data/Benchmark/prompts/ (deduped prompt artifacts, one per
+                                       lab × level × spec × structure tuple)
+  → Artifacts/Data/Errors/   ← instructor error logs
 ```
 
 ### Key Models
@@ -93,6 +107,13 @@ Benchmark runs:
 - `Lab` → `DemoModule` → `Clip` → `SceneObject` → components
 - Components use discriminated unions on `componentType` field
 - `ObjectChange` uses sparse delta format (only changed fields per clip)
+- `DemoModule` is also a valid top-level response model (used by the
+  `--structure module-only` mode of the prompt builder)
+
+**`Code/Tools/lab_outline.py`** — Minimal response model for L1 outline prompts:
+- `LabOutline` → `OutlineScene` (scene_name, brief_purpose, key_visuals, student_actions)
+- No discriminated unions or prefab refs — works on every provider including Gemini
+- Intentionally permissive; will be refined as L1 failure modes surface
 
 **`Code/Tools/arlem_full.py`** — Full ARLEM specification:
 - `ARLEMScenario` contains a `Workplace` (static environment) + `Activity` (logic/workflow)
@@ -101,12 +122,24 @@ Benchmark runs:
 
 ### Benchmark System (`Code/Testing/`)
 
-**`benchmark.py`** — CLI runner. Creates instructor clients per provider, wraps them with `InstructorTracker`, generates a lab, analyzes output, saves results.
+**`benchmark.py`** — CLI runner. Creates instructor clients per provider, wraps them with `InstructorTracker`, generates a lab, analyzes output, saves results. Supports two prompt-construction paths:
+- Legacy: `--topic "..."` uses the templates in `benchmark_config.py`
+- YAML-driven: `--lab <topic_name> --level {L1,L2,L3,L4}` delegates to `prompt_builder.build_prompt()` and also picks the response model
 
-**`benchmark_config.py`** — Model registry (`MODELS` dict), prompt templates, `BenchmarkRunConfig` dataclass. Add new models here. JSON Lab prompt enforces exactly **1 DemoModule** with a clip sequence. ARLEM prompt targets a full Workplace + Activity.
+**`benchmark_config.py`** — Model registry (`MODELS` dict), legacy prompt templates, `BenchmarkRunConfig` dataclass. Add new models here. `BenchmarkRunConfig` carries optional `lab_name`, `level`, and `structure` fields for the YAML-driven path; when both `lab_name` and `level` are set, the benchmark runner bypasses `get_prompt()` and calls `build_prompt()` instead. Defaults: `min_objects=4`, `min_clips=5`.
+
+**`prompt_builder.py`** — Loads a `<topic>_lab.yaml` from `Artifacts/Lab Descriptions/` into a `LabDescription` dataclass (plain dataclass, not Pydantic — input layer doesn't cross a system boundary). Strips `*` authoring flags and `[REVIEW: ...]` markers silently at load time. `build_prompt(lab, level, spec_type, structure=..., use_gemini_models=...)` returns `(prompt_string, response_model_class)`. Levels:
+- **L1** — field/course/description → `LabOutline` (rough outline; not a full spec)
+- **L2** — same input as L1 → full spec
+- **L3** — L2 + `learning_objectives` → full spec
+- **L4** — L3 + `detailed_script` → full spec
+
+`--structure` (L2–L4 only) selects the output shape: `single-module` (default, current behavior), `multi-module` (one DemoModule per scene), or `module-only` (bare `DemoModule`, no `Lab` wrapper). ARLEM is parameterized but currently raises `NotImplementedError` — adding it later is one row in the dispatch table.
+
+Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `Artifacts/Data/Benchmark/prompts/`. Every metrics record carries `lab_name`, `level`, `structure`, and `prompt_file` for traceability. Pass `--no-save-prompts` for large sweeps or `--overwrite-prompts` after a wrapper-template tweak.
 
 **`lab_metrics.py`** — Post-generation structural analysis:
-- `analyze_json_lab()` — counts objects, clips, components, text labels, object changes, prefab diversity
+- `analyze_json_lab()` — counts objects, clips, components, text labels, object changes, prefab diversity. Shaped for the full `Lab` schema; reports zeros for `LabOutline` outputs (L1 runs)
 - `analyze_arlem()` — counts things, places, actions, activates/deactivates, triggers, POIs
 
 **`tracking/`** — Token/retry tracking module (copied from `feature/instructor-tracking`):
@@ -115,9 +148,10 @@ Benchmark runs:
 - `BenchmarkExporter` — export to JSON, CSV, or Markdown
 
 Benchmark outputs go to `Artifacts/Data/Benchmark/`:
-- `{model}_{spec}_{timestamp}_output.json` — the generated Lab or ARLEM JSON
-- `{model}_{spec}_{timestamp}_metrics.json` — full tracking record
+- `{model}_{spec}_{timestamp}_output.json` — the generated Lab / DemoModule / LabOutline / ARLEM JSON
+- `{model}_{spec}_{timestamp}_metrics.json` — full tracking record (includes `prompt_file` reference for YAML-driven runs)
 - `suite_results_{timestamp}.json` — combined results across all suite runs
+- `prompts/{lab}_{level}_{spec}[_{structure}].txt` — assembled user prompt, written once per unique tuple
 
 ### Data Processing Transformations (`Code/Data Processing/`)
 
