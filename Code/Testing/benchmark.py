@@ -53,6 +53,13 @@ from benchmark_config import (
     SYSTEM_PROMPT,
     SpecType,
 )
+from prompt_builder import (
+    LabDescription,
+    Level,
+    Structure,
+    build_prompt,
+    discover_labs,
+)
 from lab_metrics import analyze_json_lab, analyze_arlem
 
 from tracking import InstructorTracker, BenchmarkExporter
@@ -136,6 +143,9 @@ def get_response_model(spec_type: SpecType, use_gemini_models: bool = False):
 def run_single_benchmark(
     model_config: ModelConfig,
     run_config: BenchmarkRunConfig,
+    *,
+    save_prompts: bool = True,
+    overwrite_prompts: bool = False,
 ) -> dict:
     """
     Execute a single benchmark run: one model × one topic × one spec.
@@ -143,7 +153,33 @@ def run_single_benchmark(
     Returns a dict with all metrics, the generated output, and lab analysis.
     """
     is_gemini = model_config.provider == Provider.GOOGLE
-    response_model = get_response_model(run_config.spec_type, use_gemini_models=is_gemini)
+
+    # Build prompt + response model. YAML-driven path takes precedence.
+    prompt_file_rel: Optional[str] = None
+    if run_config.lab_name and run_config.level:
+        labs = discover_labs()
+        if run_config.lab_name not in labs:
+            raise ValueError(
+                f"Unknown lab '{run_config.lab_name}'. "
+                f"Available: {sorted(labs.keys())}"
+            )
+        lab = LabDescription.from_yaml(labs[run_config.lab_name])
+        user_prompt, response_model = build_prompt(
+            lab,
+            run_config.level,
+            run_config.spec_type.value,
+            structure=run_config.structure,
+            use_gemini_models=is_gemini,
+            min_objects=run_config.min_objects,
+            min_clips=run_config.min_clips,
+        )
+        if save_prompts:
+            prompt_file_rel = _save_prompt_artifact(
+                run_config, user_prompt, overwrite=overwrite_prompts
+            )
+    else:
+        response_model = get_response_model(run_config.spec_type, use_gemini_models=is_gemini)
+        user_prompt = run_config.get_prompt()
 
     # Create instructor client (model is baked into the client via from_provider)
     client = create_instructor_client(model_config)
@@ -157,7 +193,6 @@ def run_single_benchmark(
     tracked_client = tracker.wrap(client)
 
     # Build messages
-    user_prompt = run_config.get_prompt()
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt},
@@ -176,7 +211,13 @@ def run_single_benchmark(
 
     # Execute generation
     print(f"\n  Generating with {model_config.display_name}...")
-    print(f"  Spec: {run_config.spec_type.value} | Topic: {run_config.topic[:50]}...")
+    if run_config.lab_name and run_config.level:
+        print(
+            f"  Spec: {run_config.spec_type.value} | Lab: {run_config.lab_name} "
+            f"| Level: {run_config.level.value} | Structure: {run_config.structure.value}"
+        )
+    else:
+        print(f"  Spec: {run_config.spec_type.value} | Topic: {run_config.topic[:50]}...")
 
     start_time = time.time()
     result = None
@@ -214,6 +255,13 @@ def run_single_benchmark(
         "display_name": model_config.display_name,
         "spec_type": run_config.spec_type.value,
         "topic": run_config.topic,
+        "lab_name": run_config.lab_name,
+        "level": run_config.level.value if run_config.level else None,
+        "structure": (
+            run_config.structure.value
+            if run_config.lab_name and run_config.level else None
+        ),
+        "prompt_file": prompt_file_rel,
         "success": result is not None,
         "error": generation_error,
         "wall_time_seconds": round(wall_time_s, 2),
@@ -233,6 +281,34 @@ def run_single_benchmark(
 
 
 # ── Output Saving ────────────────────────────────────────────────────
+
+def _save_prompt_artifact(
+    run_config: BenchmarkRunConfig,
+    user_prompt: str,
+    *,
+    overwrite: bool = False,
+) -> str:
+    """Write the assembled prompt to Artifacts/Data/Benchmark/prompts/, deduped.
+
+    The same prompt is shared across all models for a given
+    (lab, level, spec, structure) tuple, so we write it once and let
+    every run's metrics record reference the same file by relative path.
+
+    Returns the prompt file path relative to PROJECT_ROOT.
+    """
+    prompts_dir = PROJECT_ROOT / run_config.output_dir / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+
+    parts = [run_config.lab_name, run_config.level.value, run_config.spec_type.value]
+    if run_config.level != Level.L1:
+        parts.append(run_config.structure.value)
+    fname = "_".join(parts) + ".txt"
+
+    path = prompts_dir / fname
+    if overwrite or not path.exists():
+        path.write_text(user_prompt, encoding="utf-8")
+    return str(path.relative_to(PROJECT_ROOT))
+
 
 def _save_output(
     model_config: ModelConfig,
@@ -295,6 +371,12 @@ def run_benchmark_suite(
     spec_type: SpecType = SpecType.JSON_LAB,
     max_retries: int = 3,
     save_output: bool = True,
+    *,
+    lab_name: Optional[str] = None,
+    level: Optional[Level] = None,
+    structure: Structure = Structure.SINGLE_MODULE,
+    save_prompts: bool = True,
+    overwrite_prompts: bool = False,
 ) -> list[dict]:
     """
     Run benchmarks across multiple models and topics.
@@ -308,6 +390,8 @@ def run_benchmark_suite(
     print(f"\n{'=' * 70}")
     print(f"BENCHMARK SUITE: {len(model_ids)} models × {len(topics)} topics = {total_runs} runs")
     print(f"Spec: {spec_type.value}")
+    if lab_name and level:
+        print(f"Lab: {lab_name} | Level: {level.value} | Structure: {structure.value}")
     print(f"{'=' * 70}")
 
     for topic in topics:
@@ -323,12 +407,20 @@ def run_benchmark_suite(
             run_config = BenchmarkRunConfig(
                 spec_type=spec_type,
                 topic=topic,
+                lab_name=lab_name,
+                level=level,
+                structure=structure,
                 max_retries=max_retries,
                 save_output=save_output,
             )
 
             try:
-                record = run_single_benchmark(model_config, run_config)
+                record = run_single_benchmark(
+                    model_config,
+                    run_config,
+                    save_prompts=save_prompts,
+                    overwrite_prompts=overwrite_prompts,
+                )
                 results.append(record)
             except Exception as e:
                 print(f"  FATAL ERROR: {type(e).__name__}: {e}")
@@ -430,6 +522,41 @@ def parse_args():
         action="store_true",
         help="List available model IDs and exit",
     )
+    parser.add_argument(
+        "--lab",
+        type=str,
+        default=None,
+        help="topic_name of a lab YAML in Artifacts/Lab Descriptions/",
+    )
+    parser.add_argument(
+        "--level",
+        type=str,
+        choices=["L1", "L2", "L3", "L4"],
+        default=None,
+        help="Specificity level for the YAML-driven prompt (requires --lab)",
+    )
+    parser.add_argument(
+        "--structure",
+        type=str,
+        choices=["single-module", "multi-module", "module-only"],
+        default="single-module",
+        help="Output structure for L2-L4 (ignored for L1)",
+    )
+    parser.add_argument(
+        "--list-labs",
+        action="store_true",
+        help="List available lab YAMLs and exit",
+    )
+    parser.add_argument(
+        "--no-save-prompts",
+        action="store_true",
+        help="Skip writing the prompt artifact alongside benchmark outputs",
+    )
+    parser.add_argument(
+        "--overwrite-prompts",
+        action="store_true",
+        help="Rewrite the prompt artifact file even if it already exists",
+    )
 
     return parser.parse_args()
 
@@ -443,8 +570,29 @@ def main():
             print(f"  {model_id:<25} {config.provider.value:<12} {config.display_name}")
         return
 
+    if args.list_labs:
+        labs = discover_labs()
+        if not labs:
+            print(f"\nNo lab YAMLs found in Artifacts/Lab Descriptions/")
+        else:
+            print("\nAvailable labs:")
+            for topic_name, path in labs.items():
+                print(f"  {topic_name:<40} {path.relative_to(PROJECT_ROOT)}")
+        return
+
+    if args.lab and not args.level:
+        print("Error: --lab requires --level (L1, L2, L3, or L4).")
+        sys.exit(1)
+    if args.level and not args.lab:
+        print("Error: --level requires --lab.")
+        sys.exit(1)
+
     spec_type = SpecType(args.spec)
     save_output = not args.no_save
+    lab_name = args.lab
+    level = Level(args.level) if args.level else None
+    structure = Structure(args.structure)
+    save_prompts = not args.no_save_prompts
 
     if args.suite:
         # Run pre-defined suite
@@ -459,6 +607,11 @@ def main():
             spec_type=spec_type,
             max_retries=args.max_retries,
             save_output=save_output,
+            lab_name=lab_name,
+            level=level,
+            structure=structure,
+            save_prompts=save_prompts,
+            overwrite_prompts=args.overwrite_prompts,
         )
     elif args.model:
         # Run specific models
@@ -469,9 +622,14 @@ def main():
             spec_type=spec_type,
             max_retries=args.max_retries,
             save_output=save_output,
+            lab_name=lab_name,
+            level=level,
+            structure=structure,
+            save_prompts=save_prompts,
+            overwrite_prompts=args.overwrite_prompts,
         )
     else:
-        print("Error: Specify --model or --suite. Use --list-models to see options.")
+        print("Error: Specify --model or --suite. Use --list-models or --list-labs to see options.")
         sys.exit(1)
 
 

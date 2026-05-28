@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
+from prompt_builder import Level, Structure
+
 
 # ── Enums ────────────────────────────────────────────────────────────
 
@@ -148,9 +150,15 @@ class BenchmarkRunConfig:
     spec_type: SpecType = SpecType.JSON_LAB
     topic: str = "The Solar System - Relative sizes and orbits of planets"
 
+    # YAML-driven prompt construction (L1-L4). When both are set, the
+    # legacy `topic`-based template is bypassed in favor of the prompt builder.
+    lab_name: Optional[str] = None
+    level: Optional[Level] = None
+    structure: Structure = Structure.SINGLE_MODULE
+
     # Generation parameters
-    min_objects: int = 5       # JSON Lab: minimum scene objects
-    min_clips: int = 6         # JSON Lab: minimum clips
+    min_objects: int = 4       # JSON Lab: minimum scene objects
+    min_clips: int = 5         # JSON Lab: minimum clips
     min_things: int = 3        # ARLEM: minimum workplace things
     min_places: int = 2        # ARLEM: minimum workplace places
     min_actions: int = 5       # ARLEM: minimum activity actions
@@ -163,7 +171,13 @@ class BenchmarkRunConfig:
     output_dir: str = "Artifacts/Data/Benchmark"
 
     def get_prompt(self) -> str:
-        """Build the user prompt from the template and config values."""
+        """Build the user prompt from the template and config values.
+
+        For YAML-driven runs (lab_name + level set), callers should use
+        `prompt_builder.build_prompt` directly — it also returns the
+        response model and dispatches the Gemini variant. This method
+        only handles the legacy free-form --topic path.
+        """
         if self.spec_type == SpecType.JSON_LAB:
             return JSON_LAB_PROMPT_TEMPLATE.format(
                 topic=self.topic,
