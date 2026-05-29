@@ -20,6 +20,13 @@ class Provider(str, Enum):
     GOOGLE = "google"
 
 
+class ModelSize(str, Enum):
+    """Rough capability/cost tier, used by the --small/medium/large-models flags."""
+    SMALL = "small"
+    MEDIUM = "medium"
+    LARGE = "large"
+
+
 class SpecType(str, Enum):
     """Which Pydantic specification to generate against."""
     JSON_LAB = "json_lab"              # Lab (json_lab.py) - single demo module
@@ -35,6 +42,7 @@ class ModelConfig:
     model_id: str
     provider: Provider
     display_name: str
+    size: ModelSize = ModelSize.MEDIUM
     max_retries: int = 3
     # Per-1M-token pricing (overrides DEFAULT_PRICING if set)
     input_price: Optional[float] = None
@@ -50,28 +58,33 @@ class ModelConfig:
 # Pre-defined model configs for quick benchmarking
 MODELS = {
     # ── OpenAI ────────────────────────────────────────────────────────────
-    "gpt-5.4":      ModelConfig("gpt-5.4",      Provider.OPENAI, "GPT-5.4"),
-    "gpt-5.4-mini": ModelConfig("gpt-5.4-mini", Provider.OPENAI, "GPT-5.4 Mini"),
-    "gpt-5.4-nano": ModelConfig("gpt-5.4-nano", Provider.OPENAI, "GPT-5.4 Nano"),
-    "gpt-5.1":      ModelConfig("gpt-5.1",      Provider.OPENAI, "GPT-5.1"),
-    "gpt-5-mini":   ModelConfig("gpt-5-mini",   Provider.OPENAI, "GPT-5 Mini"),
-    "gpt-5-nano":   ModelConfig("gpt-5-nano",   Provider.OPENAI, "GPT-5 Nano"),
-    "gpt-4o-mini":  ModelConfig("gpt-4o-mini",  Provider.OPENAI, "GPT-4o Mini"),
+    "gpt-5.5":      ModelConfig("gpt-5.5",      Provider.OPENAI, "GPT-5.5",      ModelSize.LARGE),
+    "gpt-5.4-mini": ModelConfig("gpt-5.4-mini", Provider.OPENAI, "GPT-5.4 Mini", ModelSize.SMALL),
+    "gpt-5.4-nano": ModelConfig("gpt-5.4-nano", Provider.OPENAI, "GPT-5.4 Nano", ModelSize.SMALL),
+    "gpt-5-mini":   ModelConfig("gpt-5-mini",   Provider.OPENAI, "GPT-5 Mini",   ModelSize.SMALL),
+    "gpt-5-nano":   ModelConfig("gpt-5-nano",   Provider.OPENAI, "GPT-5 Nano",   ModelSize.SMALL),
+    "gpt-4o-mini":  ModelConfig("gpt-4o-mini",  Provider.OPENAI, "GPT-4o Mini",  ModelSize.SMALL),
 
     # ── Anthropic ─────────────────────────────────────────────────────────
-    "claude-opus-4.6":   ModelConfig("claude-opus-4-6",          Provider.ANTHROPIC, "Claude Opus 4.6"),
-    "claude-sonnet-4.6": ModelConfig("claude-sonnet-4-6",        Provider.ANTHROPIC, "Claude Sonnet 4.6"),
-    "claude-haiku-4.5":  ModelConfig("claude-haiku-4-5-20251001", Provider.ANTHROPIC, "Claude Haiku 4.5"),
-    "claude-3-haiku":    ModelConfig("claude-3-haiku-20240307",   Provider.ANTHROPIC, "Claude 3 Haiku (dep. Apr 2026)"),
+    "claude-opus-4.8":   ModelConfig("claude-opus-4-8",          Provider.ANTHROPIC, "Claude Opus 4.8",   ModelSize.LARGE),
+    "claude-sonnet-4.6": ModelConfig("claude-sonnet-4-6",        Provider.ANTHROPIC, "Claude Sonnet 4.6", ModelSize.MEDIUM),
+    "claude-haiku-4.5":  ModelConfig("claude-haiku-4-5-20251001", Provider.ANTHROPIC, "Claude Haiku 4.5",  ModelSize.SMALL),
+    "claude-3-haiku":    ModelConfig("claude-3-haiku-20240307",   Provider.ANTHROPIC, "Claude 3 Haiku (dep. Apr 2026)", ModelSize.SMALL),
 
     # ── Google Gemini ─────────────────────────────────────────────────────
-    "gemini-3.1-pro":        ModelConfig("gemini-3.1-pro-preview",        Provider.GOOGLE, "Gemini 3.1 Pro"),
-    "gemini-3.1-flash-lite": ModelConfig("gemini-3.1-flash-lite-preview", Provider.GOOGLE, "Gemini 3.1 Flash Lite"),
-    "gemini-3-flash":        ModelConfig("gemini-3.1-flash-image-preview", Provider.GOOGLE, "Gemini 3 Flash"),
-    "gemini-2.5-pro":        ModelConfig("gemini-2.5-pro",        Provider.GOOGLE, "Gemini 2.5 Pro"),
-    "gemini-2.5-flash":      ModelConfig("gemini-2.5-flash",      Provider.GOOGLE, "Gemini 2.5 Flash"),
-    "gemini-2.5-flash-lite": ModelConfig("gemini-2.5-flash-lite", Provider.GOOGLE, "Gemini 2.5 Flash Lite"),
+    "gemini-3.1-pro":        ModelConfig("gemini-3.1-pro-preview",        Provider.GOOGLE, "Gemini 3.1 Pro",        ModelSize.LARGE),
+    "gemini-3.1-flash-lite": ModelConfig("gemini-3.1-flash-lite-preview", Provider.GOOGLE, "Gemini 3.1 Flash Lite", ModelSize.SMALL),
+    "gemini-3.5-flash":      ModelConfig("gemini-3.5-flash",      Provider.GOOGLE, "Gemini 3.5 Flash",      ModelSize.MEDIUM),
+    "gemini-2.5-pro":        ModelConfig("gemini-2.5-pro",        Provider.GOOGLE, "Gemini 2.5 Pro",        ModelSize.LARGE),
+    "gemini-2.5-flash":      ModelConfig("gemini-2.5-flash",      Provider.GOOGLE, "Gemini 2.5 Flash",      ModelSize.MEDIUM),
+    "gemini-2.5-flash-lite": ModelConfig("gemini-2.5-flash-lite", Provider.GOOGLE, "Gemini 2.5 Flash Lite", ModelSize.SMALL),
 }
+
+
+def models_by_size(*sizes: ModelSize) -> list[str]:
+    """Return model_ids whose tier is in `sizes`, preserving MODELS order."""
+    wanted = set(sizes)
+    return [mid for mid, cfg in MODELS.items() if cfg.size in wanted]
 
 
 # ── Prompt Templates ─────────────────────────────────────────────────

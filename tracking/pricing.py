@@ -10,31 +10,34 @@ from typing import Dict, Optional
 from .metrics import TokenUsage
 
 
-# Default pricing per 1M tokens.
-# NOTE: Prices marked (est.) are estimates — verify against provider pricing pages.
+# Default pricing per 1M tokens (USD), base/standard tier (no caching/batch).
+# Entries marked "verified 2026-05" were checked against the official provider
+# pricing pages (platform.claude.com, developers.openai.com, ai.google.dev).
+# Entries marked "UNVERIFIED"/"legacy" were NOT on the current pricing page
+# (superseded or deprecated); the stored value is retained — treat with caution.
 DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     # ── OpenAI ────────────────────────────────────────────────────────────
-    "gpt-5.4":       {"input": 3.00,  "output": 15.00},   # (est.)
-    "gpt-5.4-mini":  {"input": 0.30,  "output":  1.20},   # (est.)
-    "gpt-5.4-nano":  {"input": 0.08,  "output":  0.30},   # (est.)
-    "gpt-5.1":       {"input": 2.50,  "output": 10.00},   # (est.)
-    "gpt-5-mini":    {"input": 0.15,  "output":  0.60},
-    "gpt-5-nano":    {"input": 0.05,  "output":  0.40},
+    "gpt-5.5":       {"input": 5.00,  "output": 30.00},   # verified 2026-05 (current flagship)
+    "gpt-5.4":       {"input": 2.50,  "output": 15.00},   # verified 2026-05 (prev flagship; mini/nano still current)
+    "gpt-5.4-mini":  {"input": 0.75,  "output":  4.50},   # verified 2026-05
+    "gpt-5.4-nano":  {"input": 0.20,  "output":  1.25},   # verified 2026-05
+    "gpt-5-mini":    {"input": 0.15,  "output":  0.60},   # UNVERIFIED — not on current page
+    "gpt-5-nano":    {"input": 0.05,  "output":  0.40},   # UNVERIFIED — not on current page
     "gpt-5":         {"input": 2.50,  "output": 10.00},
     "gpt-4.1":       {"input": 2.00,  "output":  8.00},
     "gpt-4.1-mini":  {"input": 0.40,  "output":  1.60},
     "gpt-4.1-nano":  {"input": 0.10,  "output":  0.40},
     "gpt-4o":        {"input": 2.50,  "output": 10.00},
-    "gpt-4o-mini":   {"input": 0.15,  "output":  0.60},
+    "gpt-4o-mini":   {"input": 0.15,  "output":  0.60},   # legacy — not on current page; value unchanged
     "gpt-4-turbo":   {"input": 10.00, "output": 30.00},
     "gpt-3.5-turbo": {"input": 0.50,  "output":  1.50},
 
     # ── Anthropic ─────────────────────────────────────────────────────────
-    "claude-opus-4-6":          {"input": 15.00, "output": 75.00},
-    "claude-sonnet-4-6":        {"input":  3.00, "output": 15.00},
+    "claude-opus-4-8":          {"input":  5.00, "output": 25.00},   # verified 2026-05 (current flagship Opus)
+    "claude-sonnet-4-6":        {"input":  3.00, "output": 15.00},   # verified 2026-05
     # Haiku 4.5 — keyed by its full versioned model ID used in API calls
-    "claude-haiku-4-5-20251001": {"input":  0.80, "output":  4.00},
-    "claude-3-haiku-20240307":   {"input":  0.25, "output":  1.25},
+    "claude-haiku-4-5-20251001": {"input":  1.00, "output":  5.00},   # verified 2026-05 (was 0.80/4 — old Haiku-3.5 pricing)
+    "claude-3-haiku-20240307":   {"input":  0.25, "output":  1.25},   # legacy/deprecated — not on current page
     # Legacy / alternate keys
     "claude-opus-4":      {"input": 15.00, "output": 75.00},
     "claude-sonnet-4":    {"input":  3.00, "output": 15.00},
@@ -45,12 +48,12 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     "claude-3.5-haiku":   {"input":  0.80, "output":  4.00},
 
     # ── Google Gemini ─────────────────────────────────────────────────────
-    "gemini-3.1-pro-preview":        {"input": 2.50,  "output": 15.00},  # (est.)
-    "gemini-3.1-flash-lite-preview":  {"input": 0.05,  "output":  0.20},  # (est.)
-    "gemini-3.1-flash-image-preview": {"input": 0.15,  "output":  0.60},  # (est.)
-    "gemini-2.5-pro":        {"input": 1.25,  "output": 10.00},
-    "gemini-2.5-flash":      {"input": 0.15,  "output":  0.60},
-    "gemini-2.5-flash-lite": {"input": 0.075, "output":  0.30},  # (est.)
+    "gemini-3.1-pro-preview":        {"input": 2.00,  "output": 12.00},  # verified 2026-05 (<=200k tier)
+    "gemini-3.1-flash-lite-preview":  {"input": 0.25,  "output":  1.50},  # verified 2026-05
+    "gemini-3.5-flash":      {"input": 1.50,  "output":  9.00},  # verified 2026-05 (current text flash)
+    "gemini-2.5-pro":        {"input": 1.25,  "output": 10.00},  # verified 2026-05 (<=200k tier)
+    "gemini-2.5-flash":      {"input": 0.30,  "output":  2.50},  # verified 2026-05 (was 0.15/0.60)
+    "gemini-2.5-flash-lite": {"input": 0.10,  "output":  0.40},  # verified 2026-05
     "gemini-2.0-flash":      {"input": 0.10,  "output":  0.40},
     "gemini-1.5-pro":        {"input": 1.25,  "output":  5.00},
     "gemini-1.5-flash":      {"input": 0.075, "output":  0.30},

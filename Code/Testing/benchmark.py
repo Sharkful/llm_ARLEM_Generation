@@ -48,10 +48,12 @@ from benchmark_config import (
     FULL_BENCHMARK_MODELS,
     MODELS,
     ModelConfig,
+    ModelSize,
     Provider,
     QUICK_BENCHMARK_MODELS,
     SYSTEM_PROMPT,
     SpecType,
+    models_by_size,
 )
 from prompt_builder import (
     LabDescription,
@@ -367,34 +369,56 @@ def _print_run_summary(record: dict):
 
 def run_benchmark_suite(
     model_ids: list[str],
-    topics: list[str],
+    *,
+    topics: Optional[list[str]] = None,
+    lab_names: Optional[list[str]] = None,
+    levels: Optional[list[Level]] = None,
     spec_type: SpecType = SpecType.JSON_LAB,
     max_retries: int = 3,
     save_output: bool = True,
-    *,
-    lab_name: Optional[str] = None,
-    level: Optional[Level] = None,
     structure: Structure = Structure.SINGLE_MODULE,
     save_prompts: bool = True,
     overwrite_prompts: bool = False,
 ) -> list[dict]:
     """
-    Run benchmarks across multiple models and topics.
+    Run benchmarks across multiple models and work items.
+
+    A work item is one (lab_name, level, topic) triple. The YAML-driven path
+    (lab_names × levels cross-product) takes precedence; otherwise each topic
+    string becomes a work item for the legacy free-form path.
 
     Returns list of all result records.
     """
+    # Build the ordered work-item list: (lab_name, level, topic)
+    work_items: list[tuple[Optional[str], Optional[Level], Optional[str]]] = []
+    yaml_path = bool(lab_names and levels)
+    if yaml_path:
+        for lab_name in lab_names:
+            for level in levels:
+                work_items.append((lab_name, level, None))
+    else:
+        for topic in (topics or [DEFAULT_TOPICS[0]]):
+            work_items.append((None, None, topic))
+
     results = []
-    total_runs = len(model_ids) * len(topics)
+    total_runs = len(model_ids) * len(work_items)
     run_num = 0
 
     print(f"\n{'=' * 70}")
-    print(f"BENCHMARK SUITE: {len(model_ids)} models × {len(topics)} topics = {total_runs} runs")
+    if yaml_path:
+        print(
+            f"BENCHMARK SUITE: {len(model_ids)} models × {len(lab_names)} labs "
+            f"× {len(levels)} levels = {total_runs} runs"
+        )
+        print(f"Labs: {', '.join(lab_names)}")
+        print(f"Levels: {', '.join(lvl.value for lvl in levels)}")
+        print(f"Structure: {structure.value}")
+    else:
+        print(f"BENCHMARK SUITE: {len(model_ids)} models × {len(work_items)} topics = {total_runs} runs")
     print(f"Spec: {spec_type.value}")
-    if lab_name and level:
-        print(f"Lab: {lab_name} | Level: {level.value} | Structure: {structure.value}")
     print(f"{'=' * 70}")
 
-    for topic in topics:
+    for lab_name, level, topic in work_items:
         for model_id in model_ids:
             run_num += 1
             print(f"\n--- Run {run_num}/{total_runs} ---")
@@ -404,15 +428,19 @@ def run_benchmark_suite(
                 continue
 
             model_config = MODELS[model_id]
-            run_config = BenchmarkRunConfig(
+            rc_kwargs = dict(
                 spec_type=spec_type,
-                topic=topic,
                 lab_name=lab_name,
                 level=level,
                 structure=structure,
                 max_retries=max_retries,
                 save_output=save_output,
             )
+            # Only override the dataclass default topic on the legacy path,
+            # so YAML runs keep BenchmarkRunConfig's default topic string.
+            if topic is not None:
+                rc_kwargs["topic"] = topic
+            run_config = BenchmarkRunConfig(**rc_kwargs)
 
             try:
                 record = run_single_benchmark(
@@ -426,6 +454,8 @@ def run_benchmark_suite(
                 print(f"  FATAL ERROR: {type(e).__name__}: {e}")
                 results.append({
                     "model": model_id,
+                    "lab_name": lab_name,
+                    "level": level.value if level else None,
                     "topic": topic,
                     "success": False,
                     "error": f"Fatal: {e}",
@@ -488,6 +518,26 @@ def parse_args():
         help="Model ID(s) to benchmark (e.g., gpt-4o-mini claude-3-haiku)",
     )
     parser.add_argument(
+        "--small-models",
+        action="store_true",
+        help="Include all SMALL-tier models (combinable with other tiers / --model)",
+    )
+    parser.add_argument(
+        "--medium-models",
+        action="store_true",
+        help="Include all MEDIUM-tier models",
+    )
+    parser.add_argument(
+        "--large-models",
+        action="store_true",
+        help="Include all LARGE-tier models",
+    )
+    parser.add_argument(
+        "--all-models",
+        action="store_true",
+        help="Include every registered model (all three tiers)",
+    )
+    parser.add_argument(
         "--topic", "-t",
         type=str,
         default=None,
@@ -536,6 +586,16 @@ def parse_args():
         help="Specificity level for the YAML-driven prompt (requires --lab)",
     )
     parser.add_argument(
+        "--all-labs",
+        action="store_true",
+        help="Iterate over ALL discovered lab YAMLs (excludes the Example/ subfolder)",
+    )
+    parser.add_argument(
+        "--all-levels",
+        action="store_true",
+        help="Iterate over all specificity levels L1-L4",
+    )
+    parser.add_argument(
         "--structure",
         type=str,
         choices=["single-module", "multi-module", "module-only"],
@@ -566,8 +626,12 @@ def main():
 
     if args.list_models:
         print("\nAvailable models:")
+        print(f"  {'model':<25} {'tier':<8} {'provider':<12} name")
         for model_id, config in MODELS.items():
-            print(f"  {model_id:<25} {config.provider.value:<12} {config.display_name}")
+            print(
+                f"  {model_id:<25} {config.size.value:<8} "
+                f"{config.provider.value:<12} {config.display_name}"
+            )
         return
 
     if args.list_labs:
@@ -580,57 +644,116 @@ def main():
                 print(f"  {topic_name:<40} {path.relative_to(PROJECT_ROOT)}")
         return
 
-    if args.lab and not args.level:
-        print("Error: --lab requires --level (L1, L2, L3, or L4).")
-        sys.exit(1)
-    if args.level and not args.lab:
-        print("Error: --level requires --lab.")
-        sys.exit(1)
-
     spec_type = SpecType(args.spec)
     save_output = not args.no_save
-    lab_name = args.lab
-    level = Level(args.level) if args.level else None
     structure = Structure(args.structure)
     save_prompts = not args.no_save_prompts
 
+    # ── Resolve model selection (tier flags ∪ explicit --model) ──────────
+    tier_sizes: list[ModelSize] = []
+    if args.all_models:
+        tier_sizes = [ModelSize.SMALL, ModelSize.MEDIUM, ModelSize.LARGE]
+    else:
+        if args.small_models:
+            tier_sizes.append(ModelSize.SMALL)
+        if args.medium_models:
+            tier_sizes.append(ModelSize.MEDIUM)
+        if args.large_models:
+            tier_sizes.append(ModelSize.LARGE)
+
+    resolved_models: list[str] = []
+    if tier_sizes:
+        resolved_models.extend(models_by_size(*tier_sizes))
+    if args.model:
+        resolved_models.extend(args.model)
+    # De-dupe, preserving order
+    seen: set[str] = set()
+    resolved_models = [m for m in resolved_models if not (m in seen or seen.add(m))]
+
+    # ── Resolve labs and levels ──────────────────────────────────────────
+    if args.all_labs:
+        lab_names = sorted(discover_labs().keys())
+        if not lab_names:
+            print("Error: --all-labs found no lab YAMLs in Artifacts/Lab Descriptions/.")
+            sys.exit(1)
+    elif args.lab:
+        lab_names = [args.lab]
+    else:
+        lab_names = None
+
+    if args.all_levels:
+        levels = [Level.L1, Level.L2, Level.L3, Level.L4]
+    elif args.level:
+        levels = [Level(args.level)]
+    else:
+        levels = None
+
+    # ── Validation ───────────────────────────────────────────────────────
+    used_tier_flags = (
+        args.small_models or args.medium_models or args.large_models or args.all_models
+    )
     if args.suite:
-        # Run pre-defined suite
+        if used_tier_flags or args.model:
+            print("Error: --suite cannot be combined with --model or the tier flags.")
+            sys.exit(1)
+        if args.all_labs or args.all_levels:
+            print("Error: --suite cannot be combined with --all-labs or --all-levels "
+                  "(use --suite with a single --lab/--level if needed).")
+            sys.exit(1)
+    else:
+        # Lab/level coherence on the non-suite path
+        if args.all_labs and not levels:
+            print("Error: --all-labs requires --level or --all-levels.")
+            sys.exit(1)
+        if args.all_levels and not lab_names:
+            print("Error: --all-levels requires --lab or --all-labs.")
+            sys.exit(1)
+        if args.lab and not levels:
+            print("Error: --lab requires --level or --all-levels.")
+            sys.exit(1)
+        if args.level and not lab_names:
+            print("Error: --level requires --lab or --all-labs.")
+            sys.exit(1)
+        if not resolved_models:
+            print("Error: Specify --model, a tier flag (--small/medium/large/all-models), "
+                  "or --suite. Use --list-models or --list-labs to see options.")
+            sys.exit(1)
+
+    # ── Dispatch ─────────────────────────────────────────────────────────
+    if args.suite:
         model_ids = (
             QUICK_BENCHMARK_MODELS if args.suite == "quick"
             else FULL_BENCHMARK_MODELS
         )
-        topics = [args.topic] if args.topic else DEFAULT_TOPICS
+    else:
+        model_ids = resolved_models
+
+    common = dict(
+        spec_type=spec_type,
+        max_retries=args.max_retries,
+        save_output=save_output,
+        structure=structure,
+        save_prompts=save_prompts,
+        overwrite_prompts=args.overwrite_prompts,
+    )
+
+    if lab_names and levels:
+        run_benchmark_suite(
+            model_ids=model_ids,
+            lab_names=lab_names,
+            levels=levels,
+            **common,
+        )
+    else:
+        if args.suite:
+            topics = [args.topic] if args.topic else DEFAULT_TOPICS
+        else:
+            topics = [args.topic or DEFAULT_TOPICS[0]]
         run_benchmark_suite(
             model_ids=model_ids,
             topics=topics,
-            spec_type=spec_type,
-            max_retries=args.max_retries,
-            save_output=save_output,
-            lab_name=lab_name,
-            level=level,
-            structure=structure,
-            save_prompts=save_prompts,
-            overwrite_prompts=args.overwrite_prompts,
+            **common,
         )
-    elif args.model:
-        # Run specific models
-        topics = [args.topic or DEFAULT_TOPICS[0]]
-        run_benchmark_suite(
-            model_ids=args.model,
-            topics=topics,
-            spec_type=spec_type,
-            max_retries=args.max_retries,
-            save_output=save_output,
-            lab_name=lab_name,
-            level=level,
-            structure=structure,
-            save_prompts=save_prompts,
-            overwrite_prompts=args.overwrite_prompts,
-        )
-    else:
-        print("Error: Specify --model or --suite. Use --list-models or --list-labs to see options.")
-        sys.exit(1)
 
 
 if __name__ == "__main__":
