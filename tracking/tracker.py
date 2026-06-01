@@ -435,7 +435,7 @@ class InstructorTracker:
             error_record = ErrorRecord(
                 error_type=error_type,
                 exception_class=type(error).__name__,
-                message=str(error)[:500],  # Truncate long messages
+                message=str(error),
                 timestamp=datetime.now(),
                 attempt_number=attempt_num,
                 raw_exception=error if self.store_raw_responses else None,

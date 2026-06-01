@@ -194,6 +194,11 @@ def run_single_benchmark(
     )
     tracked_client = tracker.wrap(client)
 
+    # Shared base name for output / metrics / errors artifacts
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_model = model_config.model_id.replace("/", "_").replace(".", "-")
+    base_name = f"{safe_model}_{run_config.spec_type.value}_{ts}"
+
     # Build messages
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -249,6 +254,11 @@ def run_single_benchmark(
     # Collect tracking metrics
     tracker_summary = tracker.summary()
 
+    # Save any retry / terminal errors next to the metrics file
+    errors_file_rel: Optional[str] = None
+    if run_config.save_output:
+        errors_file_rel = _save_errors_file(tracker, base_name, generation_error)
+
     # Build result record
     record = {
         "timestamp": datetime.now().isoformat(),
@@ -264,6 +274,7 @@ def run_single_benchmark(
             if run_config.lab_name and run_config.level else None
         ),
         "prompt_file": prompt_file_rel,
+        "errors_file": errors_file_rel,
         "success": result is not None,
         "error": generation_error,
         "wall_time_seconds": round(wall_time_s, 2),
@@ -273,7 +284,7 @@ def run_single_benchmark(
 
     # Save generated output
     if run_config.save_output and output_json is not None:
-        output_path = _save_output(model_config, run_config, output_json, record)
+        output_path = _save_output(run_config, output_json, record, base_name)
         record["output_path"] = str(output_path)
 
     # Print summary
@@ -313,19 +324,14 @@ def _save_prompt_artifact(
 
 
 def _save_output(
-    model_config: ModelConfig,
     run_config: BenchmarkRunConfig,
     output_json: dict,
     record: dict,
+    base_name: str,
 ) -> Path:
     """Save generated JSON and metrics to the benchmark output directory."""
     output_dir = PROJECT_ROOT / run_config.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Filename: {model}_{spec}_{timestamp}
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_model = model_config.model_id.replace("/", "_").replace(".", "-")
-    base_name = f"{safe_model}_{run_config.spec_type.value}_{ts}"
 
     # Save the generated lab JSON
     lab_path = output_dir / f"{base_name}_output.json"
@@ -337,6 +343,46 @@ def _save_output(
 
     print(f"  Saved: {lab_path.relative_to(PROJECT_ROOT)}")
     return lab_path
+
+
+def _save_errors_file(
+    tracker: InstructorTracker,
+    base_name: str,
+    generation_error: Optional[str],
+) -> Optional[str]:
+    """Write all per-attempt validation/API errors for the most recent call to a
+    sibling artifact under ``Artifacts/Data/Errors/{base_name}_errors.txt``.
+
+    Multiple errors from the same run are appended to one file with a banner
+    delimiter so it's easy to see where one error ends and the next begins.
+    Returns the relative path (POSIX-style) or ``None`` if nothing was written.
+    """
+    call = tracker.get_last_call_metrics()
+    attempt_errors = list(call.errors) if call else []
+
+    if not attempt_errors and not generation_error:
+        return None
+
+    errors_dir = PROJECT_ROOT / "Artifacts" / "Data" / "Errors"
+    errors_dir.mkdir(parents=True, exist_ok=True)
+    path = errors_dir / f"{base_name}_errors.txt"
+
+    sections: list[str] = []
+    for err in attempt_errors:
+        banner = (
+            f"========== Attempt {err.attempt_number} — "
+            f"{err.exception_class} @ {err.timestamp.isoformat()} =========="
+        )
+        sections.append(f"{banner}\n{err.message}")
+
+    if generation_error:
+        banner = (
+            f"========== Terminal failure @ {datetime.now().isoformat()} =========="
+        )
+        sections.append(f"{banner}\n{generation_error}")
+
+    path.write_text("\n\n".join(sections) + "\n", encoding="utf-8")
+    return path.relative_to(PROJECT_ROOT).as_posix()
 
 
 def _print_run_summary(record: dict):
@@ -352,6 +398,8 @@ def _print_run_summary(record: dict):
     print(f"  Tokens: {tokens['prompt']:,} in / {tokens['completion']:,} out / {tokens['total']:,} total")
     print(f"  Cost: {cost['formatted']} | Wall time: {record['wall_time_seconds']}s")
     print(f"  Retries: {retries['total']} (parse errors: {tracking['errors']['parse_errors']})")
+    if record.get("errors_file"):
+        print(f"  Errors saved: {record['errors_file']}")
 
     if lab:
         # Print key lab metrics
