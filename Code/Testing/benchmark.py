@@ -101,6 +101,42 @@ def create_instructor_client(model_config: ModelConfig):
     )
 
 
+# ── Gemini Schema-Token Estimation ───────────────────────────────────
+
+# Gemini omits the response-schema tokens from usage_metadata.prompt_token_count
+# (it only counts the text prompt), but bills them as input. We recover them by
+# tokenizing the OpenAPI-3.0 schema google-genai actually sends, using Gemini's
+# own count_tokens. Cached per (model, schema) so a sweep makes one call, not N.
+_SCHEMA_TOKEN_CACHE: dict[tuple[str, str], int] = {}
+
+
+def estimate_gemini_schema_tokens(client, model_id: str, response_model) -> Optional[int]:
+    """Return the token count of the response schema as Gemini receives it.
+
+    Tokenizes the processed OpenAPI-3.0 schema (via google-genai's internal
+    ``t_schema``) with Gemini's own ``count_tokens``. Returns ``None`` (and warns)
+    if genai internals shift, so a benchmark sweep degrades gracefully rather than
+    crashing.
+    """
+    key = (model_id, response_model.__name__)
+    if key in _SCHEMA_TOKEN_CACHE:
+        return _SCHEMA_TOKEN_CACHE[key]
+    try:
+        from google.genai import _transformers
+
+        genai_client = client.client  # underlying genai.Client
+        schema = _transformers.t_schema(genai_client._api_client, response_model)
+        schema_json = schema.model_dump_json(exclude_none=True, by_alias=True)
+        tokens = genai_client.models.count_tokens(
+            model=model_id, contents=schema_json
+        ).total_tokens
+        _SCHEMA_TOKEN_CACHE[key] = tokens
+        return tokens
+    except Exception as e:
+        print(f"  WARN: Gemini schema-token estimate failed: {type(e).__name__}: {e}")
+        return None
+
+
 # ── Model Selection ──────────────────────────────────────────────────
 
 def get_response_model(spec_type: SpecType, use_gemini_models: bool = False):
@@ -259,6 +295,27 @@ def run_single_benchmark(
     if run_config.save_output:
         errors_file_rel = _save_errors_file(tracker, base_name, generation_error)
 
+    # Recover Gemini's unreported response-schema input tokens (billed but absent
+    # from usage_metadata). Raw counts stay untouched; we add explicit estimates.
+    schema_per_call: Optional[int] = None
+    schema_attempts: Optional[int] = None
+    schema_tokens_total: Optional[int] = None
+    prompt_tokens_adjusted: Optional[int] = None
+    cost_adjusted: Optional[float] = None
+    if is_gemini:
+        schema_per_call = estimate_gemini_schema_tokens(
+            client, model_config.model_id, response_model
+        )
+        if schema_per_call is not None:
+            last_call = tracker.get_last_call_metrics()
+            schema_attempts = (last_call.total_attempts if last_call else 0) or 1
+            schema_tokens_total = schema_per_call * schema_attempts
+            prompt_tokens_adjusted = (
+                tracker_summary["tokens"]["prompt"] + schema_tokens_total
+            )
+            extra_cost = schema_tokens_total * tracker.pricing.input_price / 1_000_000
+            cost_adjusted = tracker.get_total_cost() + extra_cost
+
     # Build result record
     record = {
         "timestamp": datetime.now().isoformat(),
@@ -275,6 +332,11 @@ def run_single_benchmark(
         ),
         "prompt_file": prompt_file_rel,
         "errors_file": errors_file_rel,
+        "gemini_schema_tokens_per_call": schema_per_call,
+        "gemini_schema_attempts": schema_attempts,
+        "gemini_schema_tokens_total": schema_tokens_total,
+        "prompt_tokens_adjusted": prompt_tokens_adjusted,
+        "cost_adjusted_usd": cost_adjusted,
         "success": result is not None,
         "error": generation_error,
         "wall_time_seconds": round(wall_time_s, 2),
@@ -398,6 +460,12 @@ def _print_run_summary(record: dict):
     print(f"  Tokens: {tokens['prompt']:,} in / {tokens['completion']:,} out / {tokens['total']:,} total")
     print(f"  Cost: {cost['formatted']} | Wall time: {record['wall_time_seconds']}s")
     print(f"  Retries: {retries['total']} (parse errors: {tracking['errors']['parse_errors']})")
+    if record.get("gemini_schema_tokens_total") is not None:
+        print(
+            f"  +Schema tokens (est): {record['gemini_schema_tokens_per_call']:,} "
+            f"x{record['gemini_schema_attempts']} attempts "
+            f"-> adj. cost ${record['cost_adjusted_usd']:.6f}"
+        )
     if record.get("errors_file"):
         print(f"  Errors saved: {record['errors_file']}")
 
