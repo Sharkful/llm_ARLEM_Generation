@@ -19,10 +19,12 @@ Usage with Instructor:
 
 from __future__ import annotations
 
+from datetime import date
 from enum import Enum
 from typing import Annotated, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 
 # ── Primitive Types ───────────────────────────────────────────────────
@@ -68,8 +70,11 @@ class TextMeshProComponent(BaseModel):
     color: Optional[Color4] = Field(
         default=None, description="Text color in RGBA"
     )
-    fontSize: Optional[Union[int, float]] = Field(
-        default=None, description="Font size in world-space units"
+    fontSize: Optional[int] = Field(
+        ge=20,
+        le=80,
+        default=30,
+        description="Font size. 72pt font is 1 Unity Unit Tall. Default value is 30. Headers and titles can be larger, long descriptive text may be smaller."
     )
     wrapText: Optional[bool] = Field(
         default=None, description="Whether to wrap text"
@@ -170,6 +175,21 @@ class PointerReceiverComponent(BaseModel):
     matchWallWhileDragging: bool = Field(default=False)
     invertForward: bool = Field(default=False)
 
+class NewScript(BaseModel):
+    """A name and description for a new C# Monobehavior component that should implement functionality not covered in the other components"""
+
+    componentType: Literal["newscript"] = "newscript"
+    scriptName: str = Field(
+        min_length=5,
+        pattern=r'^\w+$',
+        description="string name of the script file and the C# class it contains. should be all lowercase, alphanumeric, and without leading digits, minimum length 5"
+    )
+    sciptDescription: str = Field(
+        min_length=20,
+        description="""A description of what the component script does. It should note all required inputs, either references to other objects, or numeric values that can be set in the inspector.
+        It should not its outputs, what it effects."""
+    )
+
 
 # Discriminated union of all component types.
 # Instructor uses this to resolve the correct subtype from componentType.
@@ -181,6 +201,7 @@ Component = Annotated[
         CheckAngleComponent,
         RigidBodyComponent,
         PointerReceiverComponent,
+        NewScript
     ],
     Field(discriminator="componentType"),
 ]
@@ -228,14 +249,21 @@ class SceneObject(BaseModel):
     )
     texture: Optional[str] = Field(
         default=None,
-        description="Texture resource name to apply (e.g. '2k_earth_daymap', '2k_moon')",
+        description=
+            """Texture resource filename to apply to this prefab.
+            currently available textures: "2k_earth_daymap", "2k_moon", "2k_sun", "balldimpled"
+            If you need a new texture that is not yet available, create a descriptive name for the file (e.g. 'Italian_Loaf_texture', 'Siamese_Cat_Texture')""",
     )
     color: Optional[Color4] = Field(
-        default=None, description="Object color in RGBA"
+        default=None, description="Object color in RGBA, can set this instead of a texture, or to tint a texture."
     )
     components: Optional[list[Component]] = Field(
         default=None,
-        description="Behavioral components attached to this object",
+        description=
+            """C# monobehavior components that alter behavior. Currently available components are in this schema, and include:
+            TextMeshProComponent, SimpleRotationComponent, SimpleOrbitComponent, CheckAngleComponent, RigidBodyComponent, PointerReceiverComponent, NewScript
+            NewScript is only to be used if you need new functionality that the other scripts cannot provide. You can add multiple components if needed.
+            When creating a NewScript, keep the scope simple. When possible split complex behavior into multiple smaller NewScripts that can be reused"""
     )
 
 
@@ -288,7 +316,10 @@ class Clip(BaseModel):
     )
     audioClip: Optional[str] = Field(
         default=None,
-        description="Audio resource name to play during this clip",
+        description=
+            """Audio resource name to play during this clip, typically for narrating information or instruction.
+            Should be a descriptive name of what the content of the clip is, ie: "lab_introduction", or "topic_5_recap".
+            Note there should be no file extension. If there is no need for audio this clip, leave as None"""
     )
     autoAdvance: bool = Field(
         default=False,
@@ -297,6 +328,14 @@ class Clip(BaseModel):
     changes: Optional[list[ObjectChange]] = Field(
         default=None,
         description="Sparse updates to apply to scene objects at the start of this clip",
+    )
+    changeMeaning: str = Field(
+        min_length=30,
+        description="A brief description of what changed in the scene from the last clip, and what its purpose was"
+    )
+    narration: Optional[str] = Field(
+        default=None,
+        description="plain text of what information is narrated during this clip. Can be None if there is no narration."
     )
 
 
@@ -311,21 +350,17 @@ class DemoModule(BaseModel):
     (injected automatically at runtime).
     """
 
-    moduleType: Literal["demo"] = "demo"
-    prefab: Literal["demoPrefab"] = "demoPrefab"
+    moduleType: SkipJsonSchema[Literal["demo"]] = "demo"
+    prefab: SkipJsonSchema[Literal["demoPrefab"]] = "demoPrefab"
     moduleName: str = Field(
         description="Display name of this module"
     )
     description: str = Field(
         description="Short summary of what this module covers"
     )
-    author: str = Field(description="Module author name")
-    institution: Optional[str] = Field(
-        default=None, description="Author's institution"
-    )
-    dateCreated: Optional[str] = Field(
-        default=None, description="Creation date"
-    )
+    author: SkipJsonSchema[str] = "A Robot"
+    institution: SkipJsonSchema[str] = "MTSU"
+    dateCreated: SkipJsonSchema[str] = str(date.today())
     educationalObjectives: list[str] = Field(
         description="Learning objectives for this module"
     )
@@ -362,11 +397,9 @@ class DemoModule(BaseModel):
         return self
 
 
-# If more module types are added, create their models and add to this union:
-Module = Annotated[
-    Union[DemoModule],
-    Field(discriminator="moduleType"),
-]
+# Currently only DemoModule exists. If more module types are added,
+# restore the discriminated union on "moduleType".
+Module = DemoModule
 
 
 # ── Top-Level Lab ─────────────────────────────────────────────────────
@@ -379,9 +412,10 @@ class Lab(BaseModel):
     that the student progresses through.
     """
 
-    version: Literal["2.0"] = "2.0"
+    version: SkipJsonSchema[Literal["2.0"]] = "2.0"
     labId: str = Field(description="Unique identifier for this lab")
-    author: str = Field(description="Lab author name")
+    author: SkipJsonSchema[str] = "A Robot"
+    institution: SkipJsonSchema[str] = "MTSU"
     courseName: str = Field(description="Name of the course this lab belongs to")
     estimatedLength: Optional[str] = Field(
         default=None, description="Estimated time to complete (e.g. '30 minutes')"
