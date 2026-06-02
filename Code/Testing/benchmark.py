@@ -492,7 +492,7 @@ def run_benchmark_suite(
     spec_type: SpecType = SpecType.JSON_LAB,
     max_retries: int = 3,
     save_output: bool = True,
-    structure: Structure = Structure.SINGLE_MODULE,
+    structure: Structure = Structure.MULTI_MODULE,
     save_prompts: bool = True,
     overwrite_prompts: bool = False,
 ) -> list[dict]:
@@ -715,8 +715,8 @@ def parse_args():
         "--structure",
         type=str,
         choices=["single-module", "multi-module", "module-only"],
-        default="single-module",
-        help="Output structure for L2-L4 (ignored for L1)",
+        default="multi-module",
+        help="Output structure for L2-L4 (default: multi-module; ignored for L1)",
     )
     parser.add_argument(
         "--list-labs",

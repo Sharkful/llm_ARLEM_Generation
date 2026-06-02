@@ -173,7 +173,7 @@ class BenchmarkRunConfig:
     # legacy `topic`-based template is bypassed in favor of the prompt builder.
     lab_name: Optional[str] = None
     level: Optional[Level] = None
-    structure: Structure = Structure.SINGLE_MODULE
+    structure: Structure = Structure.MULTI_MODULE
 
     # Generation parameters
     min_objects: int = 4       # JSON Lab: minimum scene objects
