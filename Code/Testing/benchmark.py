@@ -9,7 +9,7 @@ Usage:
     python benchmark.py --model gpt-4o-mini
 
     # Multiple models, custom topic
-    python benchmark.py --model gpt-4o-mini claude-3-haiku gemini-2.0-flash \
+    python benchmark.py --model gpt-4o-mini claude-haiku-4.5 gemini-2.5-flash \
         --topic "Volcanic Eruption Mechanics"
 
     # ARLEM spec instead of JSON Lab
@@ -654,7 +654,7 @@ def parse_args():
     parser.add_argument(
         "--model", "-m",
         nargs="+",
-        help="Model ID(s) to benchmark (e.g., gpt-4o-mini claude-3-haiku)",
+        help="Model ID(s) to benchmark (e.g., gpt-4o-mini claude-haiku-4.5)",
     )
     parser.add_argument(
         "--small-models",

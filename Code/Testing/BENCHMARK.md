@@ -184,7 +184,6 @@ Snapshot of the registry (`MODELS` in `benchmark_config.py`). Run
 | `claude-opus-4.8` | large | Anthropic |
 | `claude-sonnet-4.6` | medium | Anthropic |
 | `claude-haiku-4.5` | small | Anthropic |
-| `claude-3-haiku` | small | Anthropic (deprecated Apr 2026) |
 | `gemini-3.1-pro` | large | Google |
 | `gemini-3.1-flash-lite` | small | Google |
 | `gemini-3.5-flash` | medium | Google |

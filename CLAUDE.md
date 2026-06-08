@@ -46,7 +46,7 @@ python "Code/Testing/generate_lab.py" --list-models
 
 # Benchmark with a free-form topic (legacy path, single prompt template)
 python "Code/Testing/benchmark.py" --model gpt-4o-mini
-python "Code/Testing/benchmark.py" --model gpt-4o-mini claude-3-haiku gemini-2.0-flash \
+python "Code/Testing/benchmark.py" --model gpt-4o-mini claude-haiku-4.5 gemini-2.5-flash \
     --topic "Human Heart Anatomy"
 
 # Benchmark with a YAML lab description at a specificity level (L1-L4)
