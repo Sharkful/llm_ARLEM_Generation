@@ -88,6 +88,25 @@ def create_instructor_client(model_config: ModelConfig):
     if prefix is None:
         raise ValueError(f"Unknown provider: {model_config.provider}")
 
+    # Anthropic: build the client ourselves with an explicit timeout. A non-default
+    # timeout makes client.timeout != DEFAULT_TIMEOUT, which disables the SDK's
+    # non-streaming guard (it otherwise raises "Streaming is required..." once
+    # max_tokens > ~21,333). This lets us request full labs (~22.5K tokens) without
+    # switching to streaming, leaving instructor's I/O, hooks, and tracking unchanged.
+    if model_config.provider == Provider.ANTHROPIC:
+        import anthropic
+        import httpx
+
+        client = anthropic.Anthropic(  # reads ANTHROPIC_API_KEY from env (load_dotenv'd)
+            timeout=httpx.Timeout(900.0, connect=5.0),
+        )
+        return instructor.from_anthropic(
+            client,
+            model=model_config.model_id,           # baked into create() like from_provider does
+            mode=instructor.Mode.ANTHROPIC_TOOLS,  # explicit; matches from_provider default
+            max_tokens=32000,                      # default; per-request value still overrides
+        )
+
     kwargs = {}
     # from_provider expects GOOGLE_API_KEY but our .env uses GEMINI_API_KEY.
     # Use GENAI_STRUCTURED_OUTPUTS mode so Pydantic enums validate correctly.
@@ -248,9 +267,13 @@ def run_single_benchmark(
         max_retries=run_config.max_retries,
     )
 
-    # Anthropic requires an explicit max_tokens
+    # Anthropic requires an explicit max_tokens. 8192 truncated full L2-L4 labs
+    # (IncompleteOutputException); a rich lab runs ~18-22K completion tokens, so we
+    # cap at 32000 (~45% head-room). Exceeding the SDK's ~21,333 non-streaming
+    # threshold is allowed here because create_instructor_client() builds the
+    # Anthropic client with an explicit timeout, which disables that guard.
     if model_config.provider == Provider.ANTHROPIC:
-        create_kwargs["max_tokens"] = 8192
+        create_kwargs["max_tokens"] = 32000
 
     # Execute generation
     print(f"\n  Generating with {model_config.display_name}...")

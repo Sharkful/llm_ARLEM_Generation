@@ -23,7 +23,7 @@ from datetime import date
 from enum import Enum
 from typing import Annotated, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 
@@ -57,15 +57,30 @@ class ModuleType(str, Enum):
 
 
 # ── Components ────────────────────────────────────────────────────────
-# Each component is a separate model with a Literal discriminator so
-# that Pydantic (and Instructor) can resolve the correct type from
-# the "componentType" field. Add new component types here as needed.
+# Each component is a separate model with a Literal discriminator. Two
+# discriminator fields are kept in lockstep, one per consumer:
+#
+#   type           - LLM-facing. Literal matches the Python class name exactly
+#                    (e.g. "TextMeshProComponent"), the naming the model expects.
+#                    The discriminated union resolves on THIS field. Excluded
+#                    from serialization (exclude=True), so it never reaches the
+#                    headset.
+#   componentType  - Headset-facing. Literal is the Unity component identifier
+#                    (e.g. "textMeshPro") that the device deserializer and the
+#                    original-lab reference data use. Hidden from the LLM schema
+#                    (SkipJsonSchema) and auto-filled from its default, so the
+#                    model never sees or sets it.
+#
+# Net effect: the model reads/writes `type` with class-name values; serialized
+# output carries only `componentType` with the canonical Unity value.
+# Add new component types here as needed (keep both literals in sync).
 
 
 class TextMeshProComponent(BaseModel):
     """Renders 3D text via TextMeshPro."""
 
-    componentType: Literal["textMeshPro"] = "textMeshPro"
+    type: Literal["TextMeshProComponent"] = Field("TextMeshProComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["textMeshPro"]] = "textMeshPro"
     text: str = Field(description="The displayed text content")
     color: Optional[Color4] = Field(
         default=None, description="Text color in RGBA"
@@ -84,7 +99,8 @@ class TextMeshProComponent(BaseModel):
 class SimpleRotationComponent(BaseModel):
     """Continuously rotates an object around its Y axis."""
 
-    componentType: Literal["simpleRotation"] = "simpleRotation"
+    type: Literal["SimpleRotationComponent"] = Field("SimpleRotationComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["simpleRotation"]] = "simpleRotation"
     timeRate: float = Field(
         default=1.0, description="Speed multiplier for the rotation"
     )
@@ -96,7 +112,8 @@ class SimpleRotationComponent(BaseModel):
 class SimpleOrbitComponent(BaseModel):
     """Orbits an object around a center point."""
 
-    componentType: Literal["simpleOrbit"] = "simpleOrbit"
+    type: Literal["SimpleOrbitComponent"] = Field("SimpleOrbitComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["simpleOrbit"]] = "simpleOrbit"
     initialPosition: Vec3 = Field(
         description="Initial orbital position relative to the orbit center as [x, y, z]"
     )
@@ -118,7 +135,8 @@ class SimpleOrbitComponent(BaseModel):
 class CheckAngleComponent(BaseModel):
     """Checks if an object is oriented at a target angle and triggers a callback on success."""
 
-    componentType: Literal["checkAngle"] = "checkAngle"
+    type: Literal["CheckAngleComponent"] = Field("CheckAngleComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["checkAngle"]] = "checkAngle"
     azmTarget: int = Field(
         description="Target azimuth angle in degrees (0-360)"
     )
@@ -143,7 +161,8 @@ class CheckAngleComponent(BaseModel):
 class RigidBodyComponent(BaseModel):
     """Configures Unity physics on the object."""
 
-    componentType: Literal["rigidBody"] = "rigidBody"
+    type: Literal["RigidBodyComponent"] = Field("RigidBodyComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["rigidBody"]] = "rigidBody"
     mass: float = Field(default=1.0)
     drag: float = Field(default=0.0)
     angularDrag: float = Field(default=0.0)
@@ -163,7 +182,8 @@ class RigidBodyComponent(BaseModel):
 class PointerReceiverComponent(BaseModel):
     """Makes an object interactable via VR pointer/controller."""
 
-    componentType: Literal["pointerReceiver"] = "pointerReceiver"
+    type: Literal["PointerReceiverComponent"] = Field("PointerReceiverComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["pointerReceiver"]] = "pointerReceiver"
     draggable: bool = Field(
         default=False, description="Whether the user can grab and move this object"
     )
@@ -175,10 +195,11 @@ class PointerReceiverComponent(BaseModel):
     matchWallWhileDragging: bool = Field(default=False)
     invertForward: bool = Field(default=False)
 
-class NewScript(BaseModel):
+class NewComponent(BaseModel):
     """A name and description for a new C# Monobehavior component that should implement functionality not covered in the other components"""
 
-    componentType: Literal["newscript"] = "newscript"
+    type: Literal["NewComponent"] = Field("NewComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["newscript"]] = "newscript"
     scriptName: str = Field(
         min_length=5,
         pattern=r'^\w+$',
@@ -192,7 +213,8 @@ class NewScript(BaseModel):
 
 
 # Discriminated union of all component types.
-# Instructor uses this to resolve the correct subtype from componentType.
+# Instructor resolves the correct subtype from the LLM-facing `type` field
+# (class-name values); `componentType` is hidden from the model.
 Component = Annotated[
     Union[
         TextMeshProComponent,
@@ -201,9 +223,9 @@ Component = Annotated[
         CheckAngleComponent,
         RigidBodyComponent,
         PointerReceiverComponent,
-        NewScript
+        NewComponent
     ],
-    Field(discriminator="componentType"),
+    Field(discriminator="type"),
 ]
 
 
@@ -261,9 +283,9 @@ class SceneObject(BaseModel):
         default=None,
         description=
             """C# monobehavior components that alter behavior. Currently available components are in this schema, and include:
-            TextMeshProComponent, SimpleRotationComponent, SimpleOrbitComponent, CheckAngleComponent, RigidBodyComponent, PointerReceiverComponent, NewScript
-            NewScript is only to be used if you need new functionality that the other scripts cannot provide. You can add multiple components if needed.
-            When creating a NewScript, keep the scope simple. When possible split complex behavior into multiple smaller NewScripts that can be reused"""
+            TextMeshProComponent, SimpleRotationComponent, SimpleOrbitComponent, CheckAngleComponent, RigidBodyComponent, PointerReceiverComponent, NewComponent
+            NewComponent is only to be used if you need new functionality that the other components cannot provide. You can add multiple components if needed.
+            When creating a NewComponent, keep the scope simple. When possible split complex behavior into multiple smaller NewComponents that can be reused"""
     )
 
 
@@ -278,7 +300,8 @@ class ObjectChange(BaseModel):
     """
 
     target: str = Field(
-        description="Name of the object to modify (must match a SceneObject.name)"
+        validation_alias=AliasChoices("target", "name"),
+        description="Name of the object to modify (must match the name of an existing SceneObject)",
     )
     position: Optional[Vec3] = Field(
         default=None, description="New local position [x, y, z]"
