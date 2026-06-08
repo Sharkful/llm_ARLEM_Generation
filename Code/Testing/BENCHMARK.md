@@ -205,7 +205,10 @@ metrics.
 ## Output files
 
 Everything lands under `Artifacts/Data/Benchmark/` unless `--no-save` is set.
-Base name is `{model}_{spec}_{timestamp}` (dots in the model ID become dashes).
+Base name is `{model}_{spec}[_{level}]_{timestamp}` (dots in the model ID become
+dashes; `{level}` — L1-L4 — is included on the YAML-driven path so runs that differ
+only by level are distinguishable by filename). The `{base}_output.json`,
+`{base}_metrics.json`, and `../Errors/{base}_errors.txt` files all share this base.
 
 | File | Contents |
 | --- | --- |

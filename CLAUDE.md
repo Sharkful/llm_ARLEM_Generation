@@ -148,8 +148,8 @@ Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `A
 - `BenchmarkExporter` — export to JSON, CSV, or Markdown
 
 Benchmark outputs go to `Artifacts/Data/Benchmark/`:
-- `{model}_{spec}_{timestamp}_output.json` — the generated Lab / DemoModule / LabOutline / ARLEM JSON
-- `{model}_{spec}_{timestamp}_metrics.json` — full tracking record (includes `prompt_file` reference for YAML-driven runs)
+- `{model}_{spec}[_{level}]_{timestamp}_output.json` — the generated Lab / DemoModule / LabOutline / ARLEM JSON (`{level}` is present on the YAML-driven L1-L4 path)
+- `{model}_{spec}[_{level}]_{timestamp}_metrics.json` — full tracking record (includes `prompt_file` reference for YAML-driven runs)
 - `suite_results_{timestamp}.json` — combined results across all suite runs
 - `prompts/{lab}_{level}_{spec}[_{structure}].txt` — assembled user prompt, written once per unique tuple
 

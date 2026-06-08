@@ -249,10 +249,16 @@ def run_single_benchmark(
     )
     tracked_client = tracker.wrap(client)
 
-    # Shared base name for output / metrics / errors artifacts
+    # Shared base name for output / metrics / errors artifacts. Include the
+    # specificity level (L1-L4) on the YAML-driven path so runs that differ only
+    # by level are distinguishable by filename, not just timestamp.
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_model = model_config.model_id.replace("/", "_").replace(".", "-")
-    base_name = f"{safe_model}_{run_config.spec_type.value}_{ts}"
+    name_parts = [safe_model, run_config.spec_type.value]
+    if run_config.level is not None:
+        name_parts.append(run_config.level.value)
+    name_parts.append(ts)
+    base_name = "_".join(name_parts)
 
     # Build messages
     messages = [
@@ -622,17 +628,18 @@ def _print_suite_summary(results: list[dict]):
     print(f"\n{'=' * 70}")
     print("SUITE SUMMARY")
     print(f"{'=' * 70}")
-    print(f"{'Model':<25} {'Structure':<14} {'Status':<8} {'Tokens':>8} {'Cost':>10} {'Time':>7} {'Retries':>8}")
-    print("-" * 86)
+    print(f"{'Model':<25} {'Level':<6} {'Structure':<14} {'Status':<8} {'Tokens':>8} {'Cost':>10} {'Time':>7} {'Retries':>8}")
+    print("-" * 93)
 
     for r in results:
         if "tracking" not in r:
-            print(f"{r.get('model', '?'):<25} {(r.get('structure') or '-'):<14} {'FATAL':<8}")
+            print(f"{r.get('model', '?'):<25} {(r.get('level') or '-'):<6} {(r.get('structure') or '-'):<14} {'FATAL':<8}")
             continue
 
         t = r["tracking"]
         print(
             f"{r['display_name']:<25} "
+            f"{(r.get('level') or '-'):<6} "
             f"{(r.get('structure') or '-'):<14} "
             f"{'OK' if r['success'] else 'FAIL':<8} "
             f"{t['tokens']['total']:>8,} "
