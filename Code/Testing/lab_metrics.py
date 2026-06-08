@@ -16,29 +16,39 @@ def analyze_json_lab(lab_json: dict) -> dict:
     """
     metrics = {}
 
-    # Top-level
-    metrics["lab_id"] = lab_json.get("labId", "")
-    metrics["num_objectives"] = len(lab_json.get("objectives", []))
-    metrics["num_modules"] = len(lab_json.get("modules", []))
+    # Normalize the module list. A Lab wrapper (single- or multi-module) carries a
+    # "modules" key; a "module-only" output is a bare DemoModule dump with no wrapper
+    # (top-level moduleType/objects/clips). Treat the bare module as a one-element list
+    # so the rest of the analysis is identical across all three structures.
+    if "modules" in lab_json:
+        modules = lab_json.get("modules", [])
+        metrics["lab_id"] = lab_json.get("labId", "")
+        metrics["num_objectives"] = len(lab_json.get("objectives", []))
+    else:
+        is_module = lab_json.get("moduleType") == "demo" or "clips" in lab_json
+        modules = [lab_json] if is_module else []  # L1 LabOutline -> [] (stays all-zero)
+        metrics["lab_id"] = ""
+        metrics["num_objectives"] = 0
+    metrics["num_modules"] = len(modules)
 
-    # Aggregate across modules (typically just 1 demo module)
+    # Aggregate across modules (1 for single/module-only, N for multi-module)
     total_objects = 0
     total_clips = 0
     total_components = 0
     total_changes = 0
     total_text_labels = 0
+    total_edu_objectives = 0
     object_names = set()
 
-    for module in lab_json.get("modules", []):
+    for module in modules:
         objects = module.get("objects", [])
         clips = module.get("clips", [])
         total_objects += len(objects)
         total_clips += len(clips)
+        total_edu_objectives += len(module.get("educationalObjectives", []))
 
-        metrics["module_type"] = module.get("moduleType", "")
-        metrics["num_educational_objectives"] = len(
-            module.get("educationalObjectives", [])
-        )
+        # module_type is uniform ("demo"); take it from the first module
+        metrics.setdefault("module_type", module.get("moduleType", ""))
 
         # Object analysis
         for obj in objects:
@@ -60,15 +70,16 @@ def analyze_json_lab(lab_json: dict) -> dict:
     metrics["num_components"] = total_components
     metrics["num_object_changes"] = total_changes
     metrics["num_text_labels"] = total_text_labels
+    metrics["num_educational_objectives"] = total_edu_objectives
     metrics["unique_object_names"] = sorted(object_names)
 
     # Component type breakdown
-    comp_types = _count_component_types(lab_json)
+    comp_types = _count_component_types(modules)
     metrics["component_types"] = comp_types
 
     # Prefab diversity
     prefabs = set()
-    for module in lab_json.get("modules", []):
+    for module in modules:
         for obj in module.get("objects", []):
             prefabs.add(obj.get("prefab", ""))
     metrics["unique_prefabs"] = sorted(prefabs)
@@ -77,10 +88,10 @@ def analyze_json_lab(lab_json: dict) -> dict:
     return metrics
 
 
-def _count_component_types(lab_json: dict) -> dict[str, int]:
-    """Count occurrences of each component type across all objects."""
+def _count_component_types(modules: list[dict]) -> dict[str, int]:
+    """Count occurrences of each component type across all objects in the modules."""
     counts: dict[str, int] = {}
-    for module in lab_json.get("modules", []):
+    for module in modules:
         for obj in module.get("objects", []):
             for comp in obj.get("components", []):
                 ct = comp.get("componentType", "unknown")

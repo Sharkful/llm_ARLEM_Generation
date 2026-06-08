@@ -492,7 +492,7 @@ def run_benchmark_suite(
     spec_type: SpecType = SpecType.JSON_LAB,
     max_retries: int = 3,
     save_output: bool = True,
-    structure: Structure = Structure.SINGLE_MODULE,
+    structure: Structure = Structure.MULTI_MODULE,
     save_prompts: bool = True,
     overwrite_prompts: bool = False,
 ) -> list[dict]:
@@ -599,18 +599,18 @@ def _print_suite_summary(results: list[dict]):
     print(f"\n{'=' * 70}")
     print("SUITE SUMMARY")
     print(f"{'=' * 70}")
-    print(f"{'Model':<25} {'Spec':<10} {'Status':<8} {'Tokens':>8} {'Cost':>10} {'Time':>7} {'Retries':>8}")
-    print("-" * 80)
+    print(f"{'Model':<25} {'Structure':<14} {'Status':<8} {'Tokens':>8} {'Cost':>10} {'Time':>7} {'Retries':>8}")
+    print("-" * 86)
 
     for r in results:
         if "tracking" not in r:
-            print(f"{r.get('model', '?'):<25} {'?':<10} {'FATAL':<8}")
+            print(f"{r.get('model', '?'):<25} {(r.get('structure') or '-'):<14} {'FATAL':<8}")
             continue
 
         t = r["tracking"]
         print(
             f"{r['display_name']:<25} "
-            f"{r['spec_type']:<10} "
+            f"{(r.get('structure') or '-'):<14} "
             f"{'OK' if r['success'] else 'FAIL':<8} "
             f"{t['tokens']['total']:>8,} "
             f"{t['cost']['formatted']:>10} "
@@ -715,8 +715,8 @@ def parse_args():
         "--structure",
         type=str,
         choices=["single-module", "multi-module", "module-only"],
-        default="single-module",
-        help="Output structure for L2-L4 (ignored for L1)",
+        default="multi-module",
+        help="Output structure for L2-L4 (default: multi-module; ignored for L1)",
     )
     parser.add_argument(
         "--list-labs",

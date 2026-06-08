@@ -104,26 +104,32 @@ Your designs should:
 - Reference plausible prefab names and textures for the subject matter
 """
 
-# ── JSON Lab Prompt (single DemoModule with clips) ───────────────────
+# ── JSON Lab Prompt (multi-module: one demo module per sub-topic) ────
 
 JSON_LAB_PROMPT_TEMPLATE = """\
 Create a complete AR lab experience about: {topic}
 
 Requirements:
-- The lab MUST contain exactly 1 module: a "demo" type module (bridge/demonstration)
-- The module should guide the student through the topic using a sequence of clips
-- Include at least {min_objects} 3D scene objects that are relevant to the topic
-- Create at least {min_clips} clips that form a logical educational narrative
+- Create a Lab containing MULTIPLE "demo" type modules — one per major sub-topic
+  or conceptual stage of the topic (aim for one module per distinct idea the
+  learner must grasp, typically 3-6 modules).
+- Modules should appear in a logical teaching order that builds understanding
+  incrementally.
+- Each module owns its own scene objects and runs through its own sequence of
+  clips covering that sub-topic.
+- Across the whole lab, include at least {min_objects} total 3D scene objects and
+  at least {min_clips} total clips, distributed across the modules.
 - Each clip should use sparse object changes to animate/update the scene
 - Objects should have realistic positions (within a ~3m workspace centered on the user)
 - Scales should be appropriate for a tabletop AR experience (objects typically 0.02-0.5 units)
-- Include educational objectives for both the lab and the module
+- Include educational objectives for the lab as a whole and for each module
 - Use descriptive prefab names (e.g., 'heartPrefab', 'moleculePrefab') for the topic
 - Reference plausible texture names where appropriate
 - Add behavioral components (rotation, orbit, text labels) where they enhance learning
 
-The lab should feel like a guided walkthrough where a narrator explains the topic \
-while 3D objects appear, move, and change to illustrate key concepts.
+The lab should feel like a sequence of guided scenes, each its own module, where a \
+narrator explains the topic while 3D objects appear, move, and change to illustrate \
+key concepts.
 """
 
 # ── ARLEM Prompt (Workplace + Activity) ──────────────────────────────
@@ -167,7 +173,7 @@ class BenchmarkRunConfig:
     # legacy `topic`-based template is bypassed in favor of the prompt builder.
     lab_name: Optional[str] = None
     level: Optional[Level] = None
-    structure: Structure = Structure.SINGLE_MODULE
+    structure: Structure = Structure.MULTI_MODULE
 
     # Generation parameters
     min_objects: int = 4       # JSON Lab: minimum scene objects

@@ -222,7 +222,7 @@ def build_prompt(
     level: Level,
     spec_type: str,
     *,
-    structure: Structure = Structure.SINGLE_MODULE,
+    structure: Structure = Structure.MULTI_MODULE,
     use_gemini_models: bool = False,
     min_objects: int = 4,
     min_clips: int = 5,

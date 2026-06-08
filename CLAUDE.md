@@ -54,8 +54,8 @@ python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_
 python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab vsepr_molecular_geometry --level L4
 
 # Switch output structure for L2-L4 (L1 ignores this)
-#   single-module (default) - one DemoModule, many clips
-#   multi-module            - Lab with one DemoModule per scene
+#   single-module           - one DemoModule, many clips
+#   multi-module (default)  - Lab with one DemoModule per scene
 #   module-only             - bare DemoModule, no Lab wrapper
 python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon \
     --level L3 --structure multi-module
@@ -134,7 +134,7 @@ Benchmark runs:
 - **L3** — L2 + `learning_objectives` → full spec
 - **L4** — L3 + `detailed_script` → full spec
 
-`--structure` (L2–L4 only) selects the output shape: `single-module` (default, current behavior), `multi-module` (one DemoModule per scene), or `module-only` (bare `DemoModule`, no `Lab` wrapper). ARLEM is parameterized but currently raises `NotImplementedError` — adding it later is one row in the dispatch table.
+`--structure` (L2–L4 only) selects the output shape: `multi-module` (default, one DemoModule per scene), `single-module` (one DemoModule, many clips), or `module-only` (bare `DemoModule`, no `Lab` wrapper). ARLEM is parameterized but currently raises `NotImplementedError` — adding it later is one row in the dispatch table.
 
 Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `Artifacts/Data/Benchmark/prompts/`. Every metrics record carries `lab_name`, `level`, `structure`, and `prompt_file` for traceability. Pass `--no-save-prompts` for large sweeps or `--overwrite-prompts` after a wrapper-template tweak.
 
