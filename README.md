@@ -35,3 +35,20 @@ OPENAI_API_KEY=your_key_here
 GEMINI_API_KEY=your_key_here
 ANTHROPIC_API_KEY=your_key_here
 ```
+
+## 4. Benchmarking LLM Lab Generation
+
+The main entry point for evaluating models is the benchmark runner at
+[Code/Testing/benchmark.py](Code/Testing/benchmark.py). It builds a prompt for a
+lab topic, calls a model to generate a validated AR lab spec, and records
+tokens, cost, retries, and structural metrics.
+
+```powershell
+# From the project root, with the venv active:
+python "Code/Testing/benchmark.py" --list-models
+python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L2
+```
+
+For the full command-line reference — every flag, the L1–L4 levels, structure
+and spec modes, the model registry, and where output is written — see
+[Code/Testing/BENCHMARK.md](Code/Testing/BENCHMARK.md).
