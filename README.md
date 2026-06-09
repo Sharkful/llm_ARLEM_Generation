@@ -52,3 +52,8 @@ python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_
 For the full command-line reference — every flag, the L1–L4 levels, structure
 and spec modes, the model registry, and where output is written — see
 [Code/Testing/BENCHMARK.md](Code/Testing/BENCHMARK.md).
+
+To collate one or more sweeps into a shareable summary report (an executed
+notebook + HTML, one section per lab topic with before/after comparisons), use
+[Code/Testing/build_summary_report.py](Code/Testing/build_summary_report.py) —
+see [Code/Testing/SUMMARY_REPORT.md](Code/Testing/SUMMARY_REPORT.md).
