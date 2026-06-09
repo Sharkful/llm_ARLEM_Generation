@@ -40,10 +40,13 @@ def fail_mode(err: str) -> str:
     e = err.lower()
     if "incomplete" in e or "max_tokens length" in e:
         return "truncation (max_tokens)"
-    if "404" in e or "not_found" in e:
-        return "404 model-not-found"
+    # Check schema validation before the 404 signature: discriminated-union
+    # failures contain "union_tag_not_found", whose "not_found" must NOT be read
+    # as a model-not-found 404. Use the specific 404 signature, not a substring.
     if "validation error" in e:
         return "schema validation"
+    if "not_found_error" in e or "error code: 404" in e:
+        return "404 model-not-found"
     return "other"
 
 
