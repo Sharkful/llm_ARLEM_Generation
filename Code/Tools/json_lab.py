@@ -23,14 +23,56 @@ from datetime import date
 from enum import Enum
 from typing import Annotated, Literal, Optional, Union
 
-from pydantic import AliasChoices, BaseModel, Field, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    BeforeValidator,
+    Field,
+    field_validator,
+    model_validator,
+)
 from pydantic.json_schema import SkipJsonSchema
 
 
 # ── Primitive Types ───────────────────────────────────────────────────
 
+def _coerce_number_list(v):
+    """Normalize an LLM-emitted numeric vector before list parsing.
+
+    Handles two failure modes seen in the sweeps:
+      * a whole vector crammed into one comma-joined string
+        (``"-1.05,2.0,-1.4"`` -> ``[-1.05, 2.0, -1.4]``), and
+      * individual coordinates emitted as numeric strings
+        (``"-0.82"`` -> ``-0.82``), which Pydantic's smart ``Union[int, float]``
+        rejects rather than coerces.
+
+    Anything it can't parse is passed through untouched so the normal list
+    validator still raises a clean error."""
+    if isinstance(v, str):
+        v = v.split(",")
+    elif (
+        isinstance(v, (list, tuple))
+        and len(v) == 1
+        and isinstance(v[0], str)
+        and "," in v[0]
+    ):
+        v = v[0].split(",")
+    if isinstance(v, (list, tuple)):
+        out = []
+        for x in v:
+            if isinstance(x, str):
+                try:
+                    x = float(x.strip())
+                except ValueError:
+                    pass
+            out.append(x)
+        return out
+    return v
+
+
 Vec3 = Annotated[
     list[Union[int, float]],
+    BeforeValidator(_coerce_number_list),
     Field(
         min_length=3,
         max_length=3,
@@ -40,6 +82,7 @@ Vec3 = Annotated[
 
 Color4 = Annotated[
     list[Union[int, float]],
+    BeforeValidator(_coerce_number_list),
     Field(
         min_length=4,
         max_length=4,
@@ -89,11 +132,27 @@ class TextMeshProComponent(BaseModel):
         ge=20,
         le=80,
         default=30,
-        description="Font size. 72pt font is 1 Unity Unit Tall. Default value is 30. Headers and titles can be larger, long descriptive text may be smaller."
+        description="72pt font is 1m tall in the lab. The default value is 30. The value chosen must be an integer greater than 20 and less than 80"
     )
     wrapText: Optional[bool] = Field(
         default=None, description="Whether to wrap text"
     )
+
+    @field_validator("fontSize", mode="before")
+    @classmethod
+    def _coerce_fontsize(cls, v):
+        """Cosmetic field: silently round float/numeric input to int and clamp
+        into [20, 80] rather than forcing an instructor retry. Non-numeric input
+        is passed through untouched so the standard int validator emits a clean
+        error. See sweep 2-3 error analysis: fontSize was the #2 retry driver,
+        and the range is arbitrary enough that a quiet clamp beats a paid retry."""
+        if v is None:
+            return v
+        try:
+            v = round(float(v))
+        except (TypeError, ValueError):
+            return v
+        return max(20, min(80, v))
 
 
 class SimpleRotationComponent(BaseModel):
@@ -105,7 +164,12 @@ class SimpleRotationComponent(BaseModel):
         default=1.0, description="Speed multiplier for the rotation"
     )
     rotationTime: Union[int, float] = Field(
-        description="Duration of one full rotation in seconds"
+        description=(
+            "Duration of one full 360 rotation, in SECONDS (a time, not a "
+            "rotational speed). Larger = slower. e.g. 8 means the object "
+            "completes one rotation every 8 seconds. Do not provide a speed "
+            "in degrees/second or an angular-velocity vector here."
+        )
     )
 
 
@@ -118,7 +182,12 @@ class SimpleOrbitComponent(BaseModel):
         description="Initial orbital position relative to the orbit center as [x, y, z]"
     )
     orbitalPeriod: float = Field(
-        description="Time for one full orbit in seconds"
+        # Models name this `period` (values [20, 65, ...]) and `periodSeconds`
+        # ([12, 30, 90, ...]) as often as `orbitalPeriod` — same concept, same
+        # seconds unit, so accept them. (NB: `startAngle`/`speed` are NOT aliased
+        # — those are a different, angle/speed-based mental model, not a period.)
+        validation_alias=AliasChoices("orbitalPeriod", "period", "periodSeconds"),
+        description="Time for one full orbit in seconds",
     )
     timeRate: float = Field(
         default=1.0, description="Speed multiplier for the orbit"
@@ -205,10 +274,10 @@ class NewComponent(BaseModel):
         pattern=r'^\w+$',
         description="string name of the script file and the C# class it contains. should be all lowercase, alphanumeric, and without leading digits, minimum length 5"
     )
-    sciptDescription: str = Field(
+    scriptDescription: str = Field(
         min_length=20,
         description="""A description of what the component script does. It should note all required inputs, either references to other objects, or numeric values that can be set in the inspector.
-        It should not its outputs, what it effects."""
+        The description should also note the outputs and effects of the script."""
     )
 
 
@@ -300,7 +369,11 @@ class ObjectChange(BaseModel):
     """
 
     target: str = Field(
-        validation_alias=AliasChoices("target", "name"),
+        # Models reliably name this key differently — across the sweeps the
+        # identifier showed up as `object` (101×) and `objectName` (99×) as
+        # often as `target`/`name`. Accept all four rather than burn a retry
+        # on key-naming drift (the deltas themselves are already correct).
+        validation_alias=AliasChoices("target", "name", "object", "objectName"),
         description="Name of the object to modify (must match the name of an existing SceneObject)",
     )
     position: Optional[Vec3] = Field(
