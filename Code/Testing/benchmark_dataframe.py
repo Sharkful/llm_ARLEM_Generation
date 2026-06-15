@@ -167,7 +167,7 @@ def load_runs(
             ``success`` / ``had_usage`` columns to slice the result.
     """
     raw = [json.loads(p.read_text(encoding="utf-8"))
-           for p in sorted(benchmark_dir.glob("*_metrics.json"))]
+           for p in sorted((benchmark_dir / "Metrics").glob("*_metrics.json"))]
     if include_failures:
         for p in sorted(benchmark_dir.glob("suite_results_*.json")):
             raw.extend(json.loads(p.read_text(encoding="utf-8")))

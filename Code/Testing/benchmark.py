@@ -420,16 +420,24 @@ def _save_output(
     record: dict,
     base_name: str,
 ) -> Path:
-    """Save generated JSON and metrics to the benchmark output directory."""
-    output_dir = PROJECT_ROOT / run_config.output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
+    """Save generated JSON and metrics to the benchmark output directory.
+
+    Outputs and metrics live in sibling ``Outputs/`` and ``Metrics/``
+    subfolders of the benchmark dir; ``suite_results_*.json`` and ``prompts/``
+    stay at the root.
+    """
+    base_dir = PROJECT_ROOT / run_config.output_dir
+    outputs_dir = base_dir / "Outputs"
+    metrics_dir = base_dir / "Metrics"
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+    metrics_dir.mkdir(parents=True, exist_ok=True)
 
     # Save the generated lab JSON
-    lab_path = output_dir / f"{base_name}_output.json"
+    lab_path = outputs_dir / f"{base_name}_output.json"
     lab_path.write_text(json.dumps(output_json, indent=2), encoding="utf-8")
 
     # Save the metrics record
-    metrics_path = output_dir / f"{base_name}_metrics.json"
+    metrics_path = metrics_dir / f"{base_name}_metrics.json"
     metrics_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
 
     print(f"  Saved: {lab_path.relative_to(PROJECT_ROOT)}")

@@ -211,15 +211,16 @@ the "streaming required" guard.
 Everything lands under `Artifacts/Data/Benchmark/` unless `--no-save` is set.
 Base name is `{model}_{spec}[_{level}]_{timestamp}` (dots in the model ID become
 dashes; `{level}` — L1-L4 — is included on the YAML-driven path so runs that differ
-only by level are distinguishable by filename). The `{base}_output.json`,
-`{base}_metrics.json`, and `../Errors/{base}_errors.txt` files all share this base.
+only by level are distinguishable by filename). The `Outputs/{base}_output.json`,
+`Metrics/{base}_metrics.json`, and `../Errors/{base}_errors.txt` files all share this base.
 
 | File | Contents |
 | --- | --- |
-| `{base}_output.json` | The generated `Lab` / `DemoModule` / `LabOutline` / ARLEM JSON. |
-| `{base}_metrics.json` | Full record: tokens, cost, retries, wall time, `lab_metrics`, and references to the prompt / errors files. |
-| `suite_results_{timestamp}.json` | Combined records for the whole invocation. |
+| `Outputs/{base}_output.json` | The generated `Lab` / `DemoModule` / `LabOutline` / ARLEM JSON. |
+| `Metrics/{base}_metrics.json` | Full record: tokens, cost, retries, wall time, `lab_metrics`, and references to the prompt / errors files. |
+| `suite_results_{timestamp}.json` | Combined records for the whole invocation (at the Benchmark root). |
 | `prompts/{lab}_{level}_{spec}[_{structure}].txt` | The assembled user prompt. |
+| `Reports/` | Generated notebooks/HTML/CSV from the report builders. |
 | `../Errors/{base}_errors.txt` | Per-attempt validation / API errors for that run (under `Artifacts/Data/Errors/`). |
 
 **Prompt dedup**: prompts are keyed by the `(lab, level, spec, structure)`
@@ -274,6 +275,7 @@ python "Code/Testing/benchmark.py" --all-models --all-levels --lab heart_anatomy
 python "Code/Testing/benchmark.py" --all-models --all-levels --lab apparent_retrograde_motion
 ```
 
-Each command writes its own `suite_results_{timestamp}.json`; the per-run
-`_output.json` / `_metrics.json` files accumulate in the shared
-`Artifacts/Data/Benchmark/` folder.
+Each command writes its own `suite_results_{timestamp}.json` at the
+`Artifacts/Data/Benchmark/` root; the per-run `_output.json` / `_metrics.json`
+files accumulate in the shared `Benchmark/Outputs/` and `Benchmark/Metrics/`
+subfolders.

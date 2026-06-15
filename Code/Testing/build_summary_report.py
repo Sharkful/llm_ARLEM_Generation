@@ -21,7 +21,7 @@ from nbformat.v4 import new_notebook, new_markdown_cell, new_code_cell
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 BENCH = ROOT / "Artifacts" / "Data" / "Benchmark"
-OUT_DIR = ROOT / "Artifacts" / "Reports"
+OUT_DIR = BENCH / "Reports"
 
 # (topic_key, pretty title, phase label, suite_results filename)
 SWEEPS = [

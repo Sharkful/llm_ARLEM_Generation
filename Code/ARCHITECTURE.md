@@ -43,9 +43,9 @@ YAML lab desc ──► prompt_builder ──► (prompt, response_model)
 | `Code/Data Processing/` | Legacy Unity-JSON → v2.0 converters (`convert_lab_json.py`, `prototype_json_patcher.py`). Separate concern from benchmarking. |
 | `tracking/` | **At repo root, not under Code/.** Token/retry/cost tracking, copied from a feature branch. |
 | `Artifacts/Lab Descriptions/` | `*_lab.yaml` topic source-of-truth (six fields). `Example/` subfolder is excluded by `--all-labs`. |
-| `Artifacts/Data/Benchmark/` | All run outputs + metrics + `prompts/` + `suite_results_*.json`. |
+| `Artifacts/Data/Benchmark/` | Run artifacts: `Outputs/` (generated JSON), `Metrics/` (`*_metrics.json`), `prompts/`, `suite_results_*.json`, and `Reports/`. |
 | `Artifacts/Data/Errors/` | Per-run `_errors.txt` (per-attempt validation/API errors). |
-| `Artifacts/Reports/` | Generated notebooks/HTML/CSV from the report builders. |
+| `Artifacts/Data/Benchmark/Reports/` | Generated notebooks/HTML/CSV from the report builders. |
 
 ---
 
@@ -234,8 +234,8 @@ a model** or cost columns read zero.
 ## 8. Output files & metrics record
 
 Per successful run, base name `{model}_{spec}[_{level}]_{timestamp}` (dots → dashes):
-- `{base}_output.json` — the generated `Lab`/`DemoModule`/`LabOutline`/ARLEM JSON.
-- `{base}_metrics.json` — the full record: identity, `tracking` block (§7),
+- `Outputs/{base}_output.json` — the generated `Lab`/`DemoModule`/`LabOutline`/ARLEM JSON.
+- `Metrics/{base}_metrics.json` — the full record: identity, `tracking` block (§7),
   `lab_metrics` block (`lab_metrics.analyze_*`), Gemini adjustment fields,
   `prompt_file`/`errors_file` references.
 - `prompts/{lab}_{level}_{spec}[_{structure}].txt` — deduped; one file per
@@ -258,7 +258,7 @@ figures via the `effective_*` columns. `fail_mode()` classifies terminal errors
 (truncation / schema-validation / 404 / other) — kept byte-identical to the copy
 in `build_summary_report` so both reports agree.
 
-Two report builders (both emit executed notebook + HTML into `Artifacts/Reports/`):
+Two report builders (both emit executed notebook + HTML into `Artifacts/Data/Benchmark/Reports/`):
 - `build_summary_report.py` — *which* providers/levels generated at all;
   per-lab-topic sections; Run 1 vs Run 2 fix comparison.
 - `build_statistics_report.py` — *what* they produced quantitatively

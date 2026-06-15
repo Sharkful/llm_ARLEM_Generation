@@ -4,7 +4,7 @@
 (`suite_results_*.json`) into a single, shareable report — one section per lab
 topic, plus a before/after comparison of the fixes applied between runs.
 
-It produces, under `Artifacts/Reports/`:
+It produces, under `Artifacts/Data/Benchmark/Reports/`:
 
 - **`benchmark_summary.ipynb`** — a fully *executed*, self-contained notebook. The
   per-run data is embedded inline, so it opens and re-runs without the source

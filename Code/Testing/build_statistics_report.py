@@ -25,7 +25,7 @@ import nbformat
 from nbformat.v4 import new_notebook, new_markdown_cell, new_code_cell
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-OUT_DIR = ROOT / "Artifacts" / "Reports"
+OUT_DIR = ROOT / "Artifacts" / "Data" / "Benchmark" / "Reports"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from benchmark_dataframe import load_runs  # noqa: E402

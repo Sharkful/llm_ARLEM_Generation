@@ -9,7 +9,7 @@ shape of each generated lab (modules, clips, objects, unique objects, components
 Two pieces:
 
 - **`Code/Testing/benchmark_dataframe.py`** — a reusable loader. `load_runs()`
-  flattens every `*_metrics.json` in `Artifacts/Data/Benchmark/` into one tidy
+  flattens every `*_metrics.json` in `Artifacts/Data/Benchmark/Metrics/` into one tidy
   pandas DataFrame (one row per run) with derived columns.
 - **`Code/Testing/build_statistics_report.py`** — builds the report from that
   DataFrame.
@@ -22,8 +22,8 @@ Run from the project root with the virtual environment active:
 python "Code/Testing/build_statistics_report.py"
 ```
 
-No arguments — it loads every run under `Artifacts/Data/Benchmark/`. It produces,
-under `Artifacts/Reports/`:
+No arguments — it loads every run under `Artifacts/Data/Benchmark/Metrics/`. It
+produces, under `Artifacts/Data/Benchmark/Reports/`:
 
 - **`benchmark_statistics.ipynb`** — a fully *executed*, self-contained notebook
   (per-run data embedded inline; re-runs without the source JSON).
@@ -110,5 +110,5 @@ rather than shipping a broken report.
 ## Regenerating after a new sweep
 
 Just re-run `build_statistics_report.py` — it picks up every `*_metrics.json`
-currently in `Artifacts/Data/Benchmark/`, so new runs are included automatically.
+currently in `Artifacts/Data/Benchmark/Metrics/`, so new runs are included automatically.
 The `.ipynb`, `.html`, and `.csv` are overwritten in place.
