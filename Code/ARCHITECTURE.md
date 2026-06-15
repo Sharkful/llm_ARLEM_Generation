@@ -115,7 +115,10 @@ Lab
 `DemoModule` is **also a valid top-level response model** — the
 `--structure module-only` mode returns a bare `DemoModule` with no `Lab` wrapper.
 `lab_metrics.analyze_json_lab` handles all three shapes (Lab-with-modules, bare
-module, L1 outline) transparently.
+module, L1 outline) transparently. `lab_metrics.analyze_assets` reuses the same
+shape-normalization to count **novel assets** — prefabs/textures the model
+invented (not in the moon-lab library) and that we'd have to author — plus audio
+volume; it's the source of truth for the known-asset lists.
 
 ### 4.3 Two patterns to know cold
 
@@ -253,8 +256,12 @@ successful runs**. Failed runs survive only inside `suite_results_*.json` arrays
 
 `benchmark_dataframe.load_runs()` flattens every `_metrics.json` into one tidy
 pandas row (nested `tracking`/`lab_metrics` → flat scalars + derived ratios like
-`clips_per_module`, `tokens_per_sec`). It prefers the Gemini-adjusted token/cost
-figures via the `effective_*` columns. `fail_mode()` classifies terminal errors
+`clips_per_module`, `tokens_per_sec`). For each run it also re-reads the paired
+`Outputs/_output.json` through `lab_metrics.analyze_assets` to add **novel-asset**
+columns (`novel_prefabs`/`novel_textures` + `*_refs` + `audio_per_clip`; the
+metrics files don't store these), and joins the model's `size` tier from the
+`MODELS` registry. It prefers the Gemini-adjusted token/cost figures via the
+`effective_*` columns. `fail_mode()` classifies terminal errors
 (truncation / schema-validation / 404 / other) — kept byte-identical to the copy
 in `build_summary_report` so both reports agree.
 

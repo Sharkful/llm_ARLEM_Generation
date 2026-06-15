@@ -41,8 +41,9 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "registered model × prompt-specificity level (L1–L4) across three lab "
         "topics. This is the companion to the success/failure summary "
         "(`benchmark_summary`) — here we look at **what the successful runs "
-        "actually produced**: tokens, cost, generation time, and the structural "
-        "shape of each generated lab.\n\n"
+        "actually produced**: tokens, cost, generation time, the structural "
+        "shape of each generated lab, and how many **novel assets** (prefabs, "
+        "textures, audio we don't yet have) each lab would require us to author.\n\n"
         "The table covers **both successes and failures**. Cost/token/speed and "
         "structural sections aggregate the **successful** runs; a dedicated "
         "*Failed runs* section breaks down what the failures cost (some burned "
@@ -168,6 +169,79 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "ct = FULL.pivot_table(index='provider', columns='level', "
         "values='num_clips', aggfunc='mean').round(1)\n"
         "display(ct)"
+    ))
+
+    # ── Novel assets ───────────────────────────────────────────────
+    cells.append(new_markdown_cell(
+        "## Novel assets (L2–L4)\n\n"
+        "Today the headset only has the **moon-lab** asset library "
+        "(textures `2k_earth_daymap`/`2k_moon`/`2k_sun`/`balldimpled`; prefabs "
+        "`SunPrefab`/`moveableSphere`/`clickableSphere`/`tinySphere`/`textPrefab`/"
+        "`robotIdle`). To build a lab on any other topic, a model must **invent** "
+        "asset names — prefabs/models and textures we don't have and would have to "
+        "author. `novel_textures` / `novel_prefabs` count the **distinct** invented "
+        "assets per lab (deduped across modules — a prefab reused three times is "
+        "one asset to build); the `*_refs` columns count how many object-instances "
+        "point at one.\n\n"
+        "**Audio is different:** there is no existing audio library at all, so "
+        "every `audioClip` is novel by definition. Reporting it as 'novel' would "
+        "always be 100%, so audio is shown as **volume/density** (`audio_per_clip`) "
+        "instead — effectively, what share of clips carry narration audio."
+    ))
+    cells.append(new_code_cell(
+        "def asset_agg(frame, by):\n"
+        "    \"\"\"Novel-asset aggregation (use on L2-L4 only).\"\"\"\n"
+        "    g = frame.groupby(by)\n"
+        "    out = pd.DataFrame({\n"
+        "        'runs': g.size(),\n"
+        "        'avg_novel_prefabs': g.novel_prefabs.mean().round(1),\n"
+        "        'avg_novel_textures': g.novel_textures.mean().round(1),\n"
+        "        'novel_prefabs_per_module': g.novel_prefabs_per_module.mean().round(2),\n"
+        "        'novel_prefabs_per_object': g.novel_prefabs_per_object.mean().round(2),\n"
+        "        'novel_textures_per_module': g.novel_textures_per_module.mean().round(2),\n"
+        "        'audio_per_clip': g.audio_per_clip.mean().round(2),\n"
+        "    })\n"
+        "    return out\n\n"
+        "print('By level:'); display(asset_agg(FULL, 'level').reindex(['L2','L3','L4']))\n"
+        "print('By provider:'); display(asset_agg(FULL, 'provider'))\n"
+        "print('By model size:'); display(asset_agg(FULL, 'size').reindex(['small','medium','large']))\n"
+        "print('By model:'); display(asset_agg(FULL, 'display_name').sort_values('avg_novel_prefabs', ascending=False))"
+    ))
+    cells.append(new_markdown_cell(
+        "### Novel prefabs by specificity level × provider\n\n"
+        "Does more prompt detail change how many assets the model invents, and "
+        "does that hold across providers? (A flat row would mean asset count is "
+        "driven by lab size, not prompt specificity.)"
+    ))
+    cells.append(new_code_cell(
+        "ct = FULL.pivot_table(index='provider', columns='level', "
+        "values='novel_prefabs', aggfunc='mean').round(1)\n"
+        "display(ct)\n"
+        "print('Per-module (size-normalized):')\n"
+        "display(FULL.pivot_table(index='provider', columns='level', "
+        "values='novel_prefabs_per_module', aggfunc='mean').round(2))"
+    ))
+    cells.append(new_code_cell(
+        "fig, axes = plt.subplots(1, 2, figsize=(14, 5))\n\n"
+        "# Novel prefabs & textures per module by model size\n"
+        "order = ['small', 'medium', 'large']\n"
+        "pm = FULL.groupby('size').novel_prefabs_per_module.mean().reindex(order)\n"
+        "tm = FULL.groupby('size').novel_textures_per_module.mean().reindex(order)\n"
+        "x = np.arange(len(order)); w = 0.38\n"
+        "axes[0].bar(x - w/2, pm.values, w, label='prefabs', color='#c84')\n"
+        "axes[0].bar(x + w/2, tm.values, w, label='textures', color='#48c')\n"
+        "axes[0].set_xticks(x); axes[0].set_xticklabels(order)\n"
+        "axes[0].set_title('Novel assets per module by model size')\n"
+        "axes[0].set_ylabel('avg per module'); axes[0].legend()\n\n"
+        "# Novel prefabs per lab by specificity level\n"
+        "lv = ['L2', 'L3', 'L4']\n"
+        "k = FULL.groupby('level').novel_prefabs.mean().reindex(lv)\n"
+        "axes[1].bar(lv, k.values, color='#4a7')\n"
+        "axes[1].set_title('Novel prefabs per lab by specificity level')\n"
+        "axes[1].set_ylabel('distinct invented prefabs')\n"
+        "for i, v in enumerate(k.values):\n"
+        "    axes[1].annotate(f'{v:.1f}', (i, v), ha='center', va='bottom')\n\n"
+        "plt.tight_layout(); plt.show()"
     ))
 
     # ── Failed runs ────────────────────────────────────────────────
@@ -296,7 +370,12 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "cost/token aggregates.\n"
         "- `num_components` is the count of components created per lab "
         "(\"new components made\"); the per-type breakdown lives in the source "
-        "metrics' `component_types` if a finer cut is needed."
+        "metrics' `component_types` if a finer cut is needed.\n"
+        "- Novel-asset counts are computed by re-reading each saved `*_output.json` "
+        "at load time (no re-running of the sweep); membership in the known moon-lab "
+        "library is case-insensitive. The invented asset *names* aren't in the CSV "
+        "but are available per-lab via `lab_metrics.analyze_assets(output_json)` "
+        "(`novel_prefab_names` / `novel_texture_names`) for qualitative review."
     ))
 
     nb.cells = cells

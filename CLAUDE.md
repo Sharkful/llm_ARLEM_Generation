@@ -140,6 +140,7 @@ Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `A
 
 **`lab_metrics.py`** — Post-generation structural analysis:
 - `analyze_json_lab()` — counts objects, clips, components, text labels, object changes, prefab diversity. Shaped for the full `Lab` schema; reports zeros for `LabOutline` outputs (L1 runs)
+- `analyze_assets()` — counts **novel assets** the model invented (prefabs/textures not in the moon-lab library, deduped per lab — what we'd have to author) plus audio volume. Holds the known-asset lists (`KNOWN_TEXTURES`/`KNOWN_PREFABS`), kept in sync with the `SceneObject.prefab`/`.texture` descriptions in `json_lab.py`; returns `novel_prefab_names`/`novel_texture_names` for qualitative review. Not stored in metrics files — computed at dataframe-load time from saved outputs. See `Code/Testing/STATISTICS_REPORT.md`
 - `analyze_arlem()` — counts things, places, actions, activates/deactivates, triggers, POIs
 
 **`tracking/`** — Token/retry tracking module (copied from `feature/instructor-tracking`):

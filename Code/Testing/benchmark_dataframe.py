@@ -23,8 +23,14 @@ from pathlib import Path
 
 import pandas as pd
 
+from benchmark_config import MODELS
+from lab_metrics import analyze_assets
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 BENCH = ROOT / "Artifacts" / "Data" / "Benchmark"
+
+# model_id (as recorded in the metrics file) -> rough capability/cost tier.
+SIZE_BY_MODEL = {cfg.model_id: cfg.size.value for cfg in MODELS.values()}
 
 # Per-run ``*_metrics.json`` files are written only for successful runs; failures
 # survive only in the per-sweep ``suite_results_*.json`` arrays (a clean superset:
@@ -73,6 +79,7 @@ def flatten_record(rec: dict) -> dict:
     retries = t.get("retries") or {}
     errs = t.get("errors") or {}
     lm = rec.get("lab_metrics") or {}
+    am = rec.get("asset_metrics") or {}
 
     prompt_tokens = toks.get("prompt", 0) or 0
     completion_tokens = toks.get("completion", 0) or 0
@@ -102,11 +109,18 @@ def flatten_record(rec: dict) -> dict:
     num_object_changes = lm.get("num_object_changes", 0) or 0
     num_unique_objects = len(lm.get("unique_object_names") or [])
 
+    # Novel-asset counts come from re-reading the saved output JSON (see
+    # load_runs); absent for failed runs and L1 outlines, which stay all-zero.
+    novel_textures = am.get("novel_textures", 0) or 0
+    novel_prefabs = am.get("novel_prefabs", 0) or 0
+    audio_refs = am.get("audio_refs", 0) or 0
+
     return {
         # ── identity ──────────────────────────────────────────────
         "model": rec.get("model"),
         "display_name": rec.get("display_name", rec.get("model")),
         "provider": rec.get("provider"),
+        "size": SIZE_BY_MODEL.get(rec.get("model")),
         "level": rec.get("level"),
         "structure": rec.get("structure"),
         "lab_name": rec.get("lab_name"),
@@ -142,12 +156,31 @@ def flatten_record(rec: dict) -> dict:
         "num_educational_objectives": lm.get("num_educational_objectives", 0) or 0,
         "num_unique_prefabs": lm.get("num_unique_prefabs", 0) or 0,
         "num_unique_objects": num_unique_objects,
+        # ── novel assets (0 for failed runs and L1 outlines) ──────
+        # Distinct assets the model invented (not in the moon-lab library) and
+        # that we'd have to author; *_refs count object-instances using one.
+        "novel_textures": novel_textures,
+        "novel_prefabs": novel_prefabs,
+        "novel_texture_refs": am.get("novel_texture_refs", 0) or 0,
+        "novel_prefab_refs": am.get("novel_prefab_refs", 0) or 0,
+        "texture_refs": am.get("texture_refs", 0) or 0,
+        "prefab_refs": am.get("prefab_refs", 0) or 0,
+        # Audio has no known library — volume/density, not novelty.
+        "audio_refs": audio_refs,
+        "audio_unique": am.get("audio_unique", 0) or 0,
         # ── derived ratios ────────────────────────────────────────
         "clips_per_module": _ratio(num_clips, num_modules),
         "objects_per_module": _ratio(num_objects, num_modules),
         "components_per_object": _ratio(num_components, num_objects),
         "changes_per_clip": _ratio(num_object_changes, num_clips),
         "tokens_per_sec": _ratio(completion_tokens, duration_ms / 1000.0),
+        # Novel assets normalized: prefabs/textures attach to objects (per-object
+        # and per-module are the honest denominators); audio attaches to clips.
+        "novel_prefabs_per_module": _ratio(novel_prefabs, num_modules),
+        "novel_textures_per_module": _ratio(novel_textures, num_modules),
+        "novel_prefabs_per_object": _ratio(novel_prefabs, num_objects),
+        "novel_textures_per_object": _ratio(novel_textures, num_objects),
+        "audio_per_clip": _ratio(audio_refs, num_clips),
     }
 
 
@@ -166,8 +199,18 @@ def load_runs(
             Default reads only the success-only ``*_metrics.json`` files. Use the
             ``success`` / ``had_usage`` columns to slice the result.
     """
-    raw = [json.loads(p.read_text(encoding="utf-8"))
-           for p in sorted((benchmark_dir / "Metrics").glob("*_metrics.json"))]
+    raw = []
+    out_dir = benchmark_dir / "Outputs"
+    for p in sorted((benchmark_dir / "Metrics").glob("*_metrics.json")):
+        rec = json.loads(p.read_text(encoding="utf-8"))
+        # Pair the run with its saved output JSON (same stem, _output suffix) and
+        # compute novel-asset counts — no LLM calls, just re-reading what we kept.
+        out_path = out_dir / (p.name[: -len("_metrics.json")] + "_output.json")
+        if out_path.exists():
+            rec["asset_metrics"] = analyze_assets(
+                json.loads(out_path.read_text(encoding="utf-8"))
+            )
+        raw.append(rec)
     if include_failures:
         for p in sorted(benchmark_dir.glob("suite_results_*.json")):
             raw.extend(json.loads(p.read_text(encoding="utf-8")))
