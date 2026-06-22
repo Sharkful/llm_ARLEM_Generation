@@ -191,9 +191,13 @@ Snapshot of the registry (`MODELS` in `benchmark_config.py`). Run
 | `gemini-2.5-flash` | medium | Google |
 | `gemini-2.5-flash-lite` | small | Google |
 
-**Gemini handling**: Gemini does not support Union / discriminated-union types.
-For any Google model the runner automatically swaps in the union-free Pydantic
-variants (`json_lab_gemini.py`, etc.). It also estimates Gemini's
+**Gemini handling**: Historically Gemini did not support Union / discriminated-union
+types, so for any Google model the runner automatically swaps in the union-free
+Pydantic variants (`json_lab_gemini.py`, etc.). ⚠️ **Under revalidation (2026-06):**
+Google added `anyOf` / full-JSON-Schema support for Gemini 2.5+ (Nov 2025), so this
+swap may no longer be required and the flat twins could eventually be retired — see
+[`threats_to_validity.md`](../../Artifacts/Data/Benchmark/Reports/threats_to_validity.md)
+§6. It also estimates Gemini's
 response-schema input tokens, which Google bills but omits from reported usage,
 and records them as `gemini_schema_tokens_*` / `cost_adjusted_usd` in the
 metrics.
