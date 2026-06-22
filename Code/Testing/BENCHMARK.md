@@ -198,6 +198,12 @@ response-schema input tokens, which Google bills but omits from reported usage,
 and records them as `gemini_schema_tokens_*` / `cost_adjusted_usd` in the
 metrics.
 
+> **Methodology note:** Gemini generates under a different structured-output
+> regime (`GENAI_STRUCTURED_OUTPUTS` constrained decoding on a flat schema) than
+> the OpenAI/Anthropic tool-call-and-retry path, so cross-provider results carry a
+> known confound. See
+> [`threats_to_validity.md`](../../Artifacts/Data/Benchmark/Reports/threats_to_validity.md).
+
 **Anthropic**: always called with an explicit `max_tokens` (required by the
 API). The runner uses `32000` — full L2–L4 labs run ~18–22K completion tokens
 and `8192` truncated them. To allow this above the SDK's ~21,333 non-streaming
