@@ -6,10 +6,22 @@ can be consumed by Google Gemini via Instructor.
 
 Changes from json_lab.py:
   - Vec3 / Color4: list[float] instead of list[Union[int, float]]
+    (the _coerce_number_list BeforeValidator is ported as-is)
   - Union[int, float] scalar fields → float
-  - 6 separate component models → single flat Component with componentType enum
+  - 7 separate component models → single flat Component with componentType enum
   - Module discriminated union → DemoModule used directly
   - Component fields from all types merged as Optional with componentType validator
+
+Intentionally NOT ported from json_lab.py (Gemini-specific reasons):
+  - The dual `type`/`componentType` discriminator split (json_lab.py): it exists
+    only to fix discriminated-union resolution on OpenAI/Anthropic. This flat
+    model has no union — the componentType enum already constrains the value and
+    serializes the Unity id the headset wants.
+  - validation_alias / AliasChoices (orbitalPeriod, ObjectChange.target): aliases
+    interact unpredictably with GENAI_STRUCTURED_OUTPUTS strict schema generation,
+    and Gemini's enum-constrained output is far less prone to key-naming drift.
+  - the word-character regex pattern on scriptName: Gemini's controlled-generation
+    schema subset does not support `pattern`; the rule is kept in the description.
 
 Usage with Instructor + Gemini:
     import instructor, google.generativeai as genai
@@ -24,18 +36,53 @@ Usage with Instructor + Gemini:
 
 from __future__ import annotations
 
+from datetime import date
 from enum import Enum
 from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 
 # ── Primitive Types ───────────────────────────────────────────────────
 # Gemini cannot handle Union[int, float]; use float only.
 
+def _coerce_number_list(v):
+    """Normalize an LLM-emitted numeric vector before list parsing.
+
+    Handles two failure modes seen in the sweeps:
+      * a whole vector crammed into one comma-joined string
+        (``"-1.05,2.0,-1.4"`` -> ``[-1.05, 2.0, -1.4]``), and
+      * individual coordinates emitted as numeric strings
+        (``"-0.82"`` -> ``-0.82``).
+
+    Anything it can't parse is passed through untouched so the normal list
+    validator still raises a clean error."""
+    if isinstance(v, str):
+        v = v.split(",")
+    elif (
+        isinstance(v, (list, tuple))
+        and len(v) == 1
+        and isinstance(v[0], str)
+        and "," in v[0]
+    ):
+        v = v[0].split(",")
+    if isinstance(v, (list, tuple)):
+        out = []
+        for x in v:
+            if isinstance(x, str):
+                try:
+                    x = float(x.strip())
+                except ValueError:
+                    pass
+            out.append(x)
+        return out
+    return v
+
+
 Vec3 = Annotated[
     list[float],
+    BeforeValidator(_coerce_number_list),
     Field(
         min_length=3,
         max_length=3,
@@ -45,6 +92,7 @@ Vec3 = Annotated[
 
 Color4 = Annotated[
     list[float],
+    BeforeValidator(_coerce_number_list),
     Field(
         min_length=4,
         max_length=4,
@@ -68,10 +116,11 @@ class ComponentType(str, Enum):
     CHECK_ANGLE = "checkAngle"
     RIGID_BODY = "rigidBody"
     POINTER_RECEIVER = "pointerReceiver"
+    NEWSCRIPT = "newscript"
 
 
 # ── Flat Component ───────────────────────────────────────────────────
-# Merges all 6 component types into a single model.
+# Merges all component types into a single model.
 # Only the fields relevant to the chosen componentType should be set;
 # all others should be left as None.
 
@@ -96,9 +145,11 @@ class Component(BaseModel):
         default=None,
         description="[textMeshPro] Text color in RGBA",
     )
-    fontSize: Optional[float] = Field(
+    fontSize: Optional[int] = Field(
         default=None,
-        description="[textMeshPro] Font size in world-space units",
+        ge=20,
+        le=80,
+        description="[textMeshPro] 72pt font is 1m tall in the lab. The default value is 30. The value chosen must be an integer greater than 20 and less than 80",
     )
     wrapText: Optional[bool] = Field(
         default=None,
@@ -112,7 +163,12 @@ class Component(BaseModel):
     )
     rotationTime: Optional[float] = Field(
         default=None,
-        description="[simpleRotation] Duration of one full rotation in seconds",
+        description=(
+            "[simpleRotation] Duration of one full 360 rotation, in SECONDS (a "
+            "time, not a rotational speed). Larger = slower. e.g. 8 means the "
+            "object completes one rotation every 8 seconds. Do not provide a "
+            "speed in degrees/second or an angular-velocity vector here."
+        ),
     )
 
     # ── SimpleOrbit fields ───────────────────────────────────────────
@@ -196,6 +252,36 @@ class Component(BaseModel):
     matchWallWhileDragging: Optional[bool] = Field(default=None, description="[pointerReceiver]")
     invertForward: Optional[bool] = Field(default=None, description="[pointerReceiver]")
 
+    # ── NewComponent (newscript) fields ──────────────────────────────
+    # newscript requests a brand-new C# MonoBehaviour for functionality the
+    # other components cannot provide.
+    scriptName: Optional[str] = Field(
+        default=None,
+        min_length=5,
+        description="[newscript] Name of the script file and the C# class it contains. Should be all lowercase, alphanumeric (no spaces or symbols), without leading digits, minimum length 5",
+    )
+    scriptDescription: Optional[str] = Field(
+        default=None,
+        min_length=20,
+        description="[newscript] A description of what the component script does. It should note all required inputs, either references to other objects, or numeric values that can be set in the inspector. The description should also note the outputs and effects of the script.",
+    )
+
+    @field_validator("fontSize", mode="before")
+    @classmethod
+    def _coerce_fontsize(cls, v):
+        """Cosmetic field: silently round float/numeric input to int and clamp
+        into [20, 80] rather than forcing an instructor retry. Non-numeric input
+        is passed through untouched so the standard int validator emits a clean
+        error. See sweep 2-3 error analysis: fontSize was the #2 retry driver,
+        and the range is arbitrary enough that a quiet clamp beats a paid retry."""
+        if v is None:
+            return v
+        try:
+            v = round(float(v))
+        except (TypeError, ValueError):
+            return v
+        return max(20, min(80, v))
+
 
 # ── Scene Objects ─────────────────────────────────────────────────────
 
@@ -239,14 +325,21 @@ class SceneObject(BaseModel):
     )
     texture: Optional[str] = Field(
         default=None,
-        description="Texture resource name to apply (e.g. '2k_earth_daymap', '2k_moon')",
+        description=
+            """Texture resource filename to apply to this prefab.
+            currently available textures: "2k_earth_daymap", "2k_moon", "2k_sun", "balldimpled"
+            If you need a new texture that is not yet available, create a descriptive name for the file (e.g. 'Italian_Loaf_texture', 'Siamese_Cat_Texture')""",
     )
     color: Optional[Color4] = Field(
-        default=None, description="Object color in RGBA"
+        default=None, description="Object color in RGBA, can set this instead of a texture, or to tint a texture."
     )
     components: Optional[list[Component]] = Field(
         default=None,
-        description="Behavioral components attached to this object",
+        description=
+            """C# monobehavior components that alter behavior. For each component set componentType to one of:
+            textMeshPro, simpleRotation, simpleOrbit, checkAngle, rigidBody, pointerReceiver, newscript.
+            Use 'newscript' only if you need new functionality the other components cannot provide (fill in scriptName and scriptDescription).
+            You can add multiple components if needed. When creating a newscript, keep the scope simple. When possible split complex behavior into multiple smaller newscripts that can be reused""",
     )
 
 
@@ -261,7 +354,7 @@ class ObjectChange(BaseModel):
     """
 
     target: str = Field(
-        description="Name of the object to modify (must match a SceneObject.name)"
+        description="Name of the object to modify (must match the name of an existing SceneObject)"
     )
     position: Optional[Vec3] = Field(
         default=None, description="New local position [x, y, z]"
@@ -299,7 +392,10 @@ class Clip(BaseModel):
     )
     audioClip: Optional[str] = Field(
         default=None,
-        description="Audio resource name to play during this clip",
+        description=
+            """Audio resource name to play during this clip, typically for narrating information or instruction.
+            Should be a descriptive name of what the content of the clip is, ie: "lab_introduction", or "topic_5_recap".
+            Note there should be no file extension. If there is no need for audio this clip, leave as None""",
     )
     autoAdvance: bool = Field(
         default=False,
@@ -308,6 +404,14 @@ class Clip(BaseModel):
     changes: Optional[list[ObjectChange]] = Field(
         default=None,
         description="Sparse updates to apply to scene objects at the start of this clip",
+    )
+    changeMeaning: str = Field(
+        min_length=30,
+        description="A brief description of what changed in the scene from the last clip, and what its purpose was"
+    )
+    narration: Optional[str] = Field(
+        default=None,
+        description="plain text of what information is narrated during this clip. Can be None if there is no narration."
     )
 
 
@@ -331,13 +435,9 @@ class DemoModule(BaseModel):
     description: str = Field(
         description="Short summary of what this module covers"
     )
-    author: str = Field(description="Module author name")
-    institution: Optional[str] = Field(
-        default=None, description="Author's institution"
-    )
-    dateCreated: Optional[str] = Field(
-        default=None, description="Creation date"
-    )
+    author: SkipJsonSchema[str] = "A Robot"
+    institution: SkipJsonSchema[str] = "MTSU"
+    dateCreated: SkipJsonSchema[str] = str(date.today())
     educationalObjectives: list[str] = Field(
         description="Learning objectives for this module"
     )
@@ -386,7 +486,8 @@ class Lab(BaseModel):
 
     version: SkipJsonSchema[Literal["2.0"]] = "2.0"
     labId: str = Field(description="Unique identifier for this lab")
-    author: str = Field(description="Lab author name")
+    author: SkipJsonSchema[str] = "A Robot"
+    institution: SkipJsonSchema[str] = "MTSU"
     courseName: str = Field(description="Name of the course this lab belongs to")
     estimatedLength: Optional[str] = Field(
         default=None, description="Estimated time to complete (e.g. '30 minutes')"
