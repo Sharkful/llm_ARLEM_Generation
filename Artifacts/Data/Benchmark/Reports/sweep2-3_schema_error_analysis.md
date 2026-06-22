@@ -71,11 +71,11 @@ Gemini barely appears.
 ## Two fixes worth making
 
 1. **Schema typo — `sciptDescription`.** The field is misspelled in the schema at
-   `Code/Tools/json_lab.py:208` ("scipt", missing the `r`). Models naturally emit
+   `Code/Schemas/json_lab.py:208` ("scipt", missing the `r`). Models naturally emit
    the correct `scriptDescription`, which Pydantic then rejects as a *missing*
    field. This is a schema bug inflating the error count, not a model failure.
 2. **`ObjectChange.target` is the #1 retry driver.** Required with no default at
-   `Code/Tools/json_lab.py:302` (it accepts a `name` alias via `AliasChoices`).
+   `Code/Schemas/json_lab.py:302` (it accepts a `name` alias via `AliasChoices`).
    Worth reinforcing in the prompt that every change entry must name its target.
 
 ## How to reproduce

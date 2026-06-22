@@ -99,7 +99,7 @@ re-reads each saved `Outputs/*_output.json` at load time (no LLM calls, no
 re-running of the sweep) and diffs every asset reference against that known set.
 The source of truth for the known lists lives in `analyze_assets` (kept in sync
 with the `SceneObject.prefab` / `.texture` field descriptions in
-`Code/Tools/json_lab.py`); membership is case-insensitive.
+`Code/Schemas/json_lab.py`); membership is case-insensitive.
 
 Asset reference points are bounded: prefab/texture come only from `SceneObject`
 (an `ObjectChange` delta has no prefab/texture field, so it can't introduce a new

@@ -38,7 +38,7 @@ YAML lab desc ──► prompt_builder ──► (prompt, response_model)
 
 | Path | Role |
 | --- | --- |
-| `Code/Tools/` | **Pydantic schemas only** — the response models. No I/O, no LLM calls. |
+| `Code/Schemas/` | **Pydantic schemas only** — the response models. No I/O, no LLM calls. |
 | `Code/Testing/` | The benchmark runner, prompt builder, metrics, report builders. |
 | `Code/Data Processing/` | Legacy Unity-JSON → v2.0 converters (`convert_lab_json.py`, `prototype_json_patcher.py`). Separate concern from benchmarking. |
 | `tracking/` | **At repo root, not under Code/.** Token/retry/cost tracking, copied from a feature branch. |
@@ -57,7 +57,7 @@ imports:
 ```python
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent   # repo root
 sys.path.insert(0, str(PROJECT_ROOT))                # makes `tracking` importable
-sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Tools"))  # makes `json_lab` etc. importable
+sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Schemas"))  # makes `json_lab` etc. importable
 ```
 
 Consequences:
@@ -85,7 +85,7 @@ because `SpecType` inherits from `str`.
 
 ---
 
-## 4. The response models (`Code/Tools/`)
+## 4. The response models (`Code/Schemas/`)
 
 ### 4.1 Three spec families, each with a Gemini twin
 

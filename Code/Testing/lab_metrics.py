@@ -14,7 +14,7 @@ from typing import Any
 # have to author to realize the generated lab. Kept lowercased; membership is
 # tested case-insensitively so trivial casing drift ("TextPrefab") is not
 # mis-counted as novel. Source of truth: the field descriptions in
-# Code/Tools/json_lab.py (SceneObject.prefab / .texture) — keep these in sync.
+# Code/Schemas/json_lab.py (SceneObject.prefab / .texture) — keep these in sync.
 KNOWN_TEXTURES = {"2k_earth_daymap", "2k_moon", "2k_sun", "balldimpled"}
 KNOWN_PREFABS = {
     "sunprefab", "moveablesphere", "clickablesphere", "tinysphere",

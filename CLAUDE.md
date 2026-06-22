@@ -103,19 +103,19 @@ Benchmark runs:
 
 ### Key Models
 
-**`Code/Tools/json_lab.py`** — Lab JSON models (Claude/OpenAI):
+**`Code/Schemas/json_lab.py`** — Lab JSON models (Claude/OpenAI):
 - `Lab` → `DemoModule` → `Clip` → `SceneObject` → components
 - Components use discriminated unions on `componentType` field
 - `ObjectChange` uses sparse delta format (only changed fields per clip)
 - `DemoModule` is also a valid top-level response model (used by the
   `--structure module-only` mode of the prompt builder)
 
-**`Code/Tools/lab_outline.py`** — Minimal response model for L1 outline prompts:
+**`Code/Schemas/lab_outline.py`** — Minimal response model for L1 outline prompts:
 - `LabOutline` → `OutlineScene` (scene_name, brief_purpose, key_visuals, student_actions)
 - No discriminated unions or prefab refs — works on every provider including Gemini
 - Intentionally permissive; will be refined as L1 failure modes surface
 
-**`Code/Tools/arlem_full.py`** — Full ARLEM specification:
+**`Code/Schemas/arlem_full.py`** — Full ARLEM specification:
 - `ARLEMScenario` contains a `Workplace` (static environment) + `Activity` (logic/workflow)
 - Cross-validation: `ARLEMScenario.validate_activity_flows()` checks activity actions against workplace resources
 - `Tangible` subtypes (Thing/Place/Person) use discriminated unions on `type` field

@@ -103,7 +103,7 @@ def build_notebook(records: list[dict]) -> nbformat.NotebookNode:
         "## Fixes applied between Run 1 (VSEPR) and Run 2 (Heart)\n\n"
         "Run 1 surfaced three systematic failure modes. The fixes:\n\n"
         "**1. Component discriminator — dual-field scheme** "
-        "(`Code/Tools/json_lab.py`). Models emitted `{\"type\": "
+        "(`Code/Schemas/json_lab.py`). Models emitted `{\"type\": "
         "\"TextMeshProComponent\"}` while the schema discriminated on "
         "`componentType: \"textMeshPro\"` — a field-name *and* value mismatch that "
         "caused thousands of `union_tag_not_found` errors. Components now carry two "

@@ -31,10 +31,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-# Add project root to path so we can import from Code/Tools and tracking/
+# Add project root to path so we can import from Code/Schemas and tracking/
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Tools"))
+sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Schemas"))
 
 from dotenv import load_dotenv
 
