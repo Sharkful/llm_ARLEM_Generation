@@ -69,13 +69,42 @@ from tracking import InstructorTracker, BenchmarkExporter
 
 # ── Client Factory ───────────────────────────────────────────────────
 
-def create_instructor_client(model_config: ModelConfig):
+def decode_mode_for(model_config: ModelConfig, spec_type: SpecType):
+    """Return the instructor decode Mode used for this provider × spec.
+
+    Single source of truth for the enforcement path, so the client factory, the
+    schema-token recovery, and the metrics record all agree.
+
+    All providers run *free-decode* (generate + validate/retry): OpenAI ``TOOLS``,
+    Anthropic ``ANTHROPIC_TOOLS``, and — for the JSON_LAB spec — Gemini
+    ``GENAI_TOOLS``. JSON_LAB now uses the unified, provider-agnostic ``json_lab``
+    schema (plain smart-union + const->enum), which Gemini accepts on GENAI_TOOLS,
+    putting it on the same free-generate footing as the others (removes the
+    decode-mode confound; see issue #26).
+
+    The ARLEM flat twins (``arlem_*_gemini.py``) still emit ``const`` tags, which
+    GENAI_TOOLS rejects, so they stay on the constrained ``GENAI_STRUCTURED_OUTPUTS``
+    path until they get the same treatment.
+    """
+    import instructor
+
+    if model_config.provider == Provider.ANTHROPIC:
+        return instructor.Mode.ANTHROPIC_TOOLS
+    if model_config.provider == Provider.GOOGLE:
+        if spec_type == SpecType.JSON_LAB:
+            return instructor.Mode.GENAI_TOOLS
+        return instructor.Mode.GENAI_STRUCTURED_OUTPUTS
+    return instructor.Mode.TOOLS  # OpenAI (from_provider default)
+
+
+def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
     """
     Create an instructor-patched client for the given provider
     using ``instructor.from_provider("provider/model")``.
 
-    For Gemini models, uses alternate Pydantic models without Union types
-    (loaded via get_response_model with use_gemini_models=True).
+    The Gemini decode mode depends on ``spec_type`` (see ``decode_mode_for``):
+    JSON_LAB rides the free-decode GENAI_TOOLS path with the unified schema;
+    ARLEM specs stay on constrained GENAI_STRUCTURED_OUTPUTS.
     """
     import instructor
 
@@ -109,10 +138,11 @@ def create_instructor_client(model_config: ModelConfig):
 
     kwargs = {}
     # from_provider expects GOOGLE_API_KEY but our .env uses GEMINI_API_KEY.
-    # Use GENAI_STRUCTURED_OUTPUTS mode so Pydantic enums validate correctly.
+    # Decode mode is spec-dependent (see decode_mode_for): JSON_LAB → free-decode
+    # GENAI_TOOLS on the unified schema; ARLEM → constrained GENAI_STRUCTURED_OUTPUTS.
     if model_config.provider == Provider.GOOGLE:
         kwargs["api_key"] = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-        kwargs["mode"] = instructor.Mode.GENAI_STRUCTURED_OUTPUTS
+        kwargs["mode"] = decode_mode_for(model_config, spec_type)
 
     return instructor.from_provider(
         f"{prefix}/{model_config.model_id}",
@@ -164,35 +194,32 @@ def get_response_model(spec_type: SpecType, use_gemini_models: bool = False):
 
     Args:
         spec_type: Which spec to generate (JSON_LAB, ARLEM, or ARLEM_SIMPLIFIED)
-        use_gemini_models: If True, import from Gemini-compatible models
-                           that avoid Union/discriminated-union types.
+        use_gemini_models: If True, import the Gemini-compatible ARLEM variants
+                           that avoid Union/discriminated-union types. Ignored for
+                           JSON_LAB, which now uses one provider-agnostic schema.
 
-    Gemini-compatible files (no Union / discriminated-union types):
-        json_lab_gemini.py            → JSON_LAB
-        arlem_full_gemini.py          → ARLEM
-        arlem_simplified_gemini.py    → ARLEM_SIMPLIFIED
+    JSON_LAB runs the unified ``json_lab.Lab`` on every provider (the flat
+    ``json_lab_gemini.py`` twin was retired). ARLEM still has Gemini-specific
+    union-free twins (``arlem_full_gemini.py`` / ``arlem_simplified_gemini.py``)
+    until they get the same const->enum + smart-union treatment.
     """
+    if spec_type == SpecType.JSON_LAB:
+        from json_lab import Lab
+        return Lab
     if use_gemini_models:
-        if spec_type == SpecType.JSON_LAB:
-            from json_lab_gemini import Lab as GeminiLab
-            return GeminiLab
-        elif spec_type == SpecType.ARLEM:
+        if spec_type == SpecType.ARLEM:
             from arlem_full_gemini import ARLEMScenario as GeminiFullARLEM
             return GeminiFullARLEM
-        else:  # ARLEM_SIMPLIFIED
-            from arlem_simplified_gemini import ARLEMScenario as GeminiSimpleARLEM
-            return GeminiSimpleARLEM
-    else:
-        # Standard models (OpenAI / Anthropic)
-        if spec_type == SpecType.JSON_LAB:
-            from json_lab import Lab
-            return Lab
-        elif spec_type == SpecType.ARLEM:
-            from arlem_full import ARLEMScenario
-            return ARLEMScenario
-        else:  # ARLEM_SIMPLIFIED
-            from arlem_simplified import ARLEMScenario as SimpleARLEM
-            return SimpleARLEM
+        # ARLEM_SIMPLIFIED
+        from arlem_simplified_gemini import ARLEMScenario as GeminiSimpleARLEM
+        return GeminiSimpleARLEM
+    # Standard ARLEM models (OpenAI / Anthropic)
+    if spec_type == SpecType.ARLEM:
+        from arlem_full import ARLEMScenario
+        return ARLEMScenario
+    # ARLEM_SIMPLIFIED
+    from arlem_simplified import ARLEMScenario as SimpleARLEM
+    return SimpleARLEM
 
 
 # ── Single Run ───────────────────────────────────────────────────────
@@ -226,7 +253,6 @@ def run_single_benchmark(
             run_config.level,
             run_config.spec_type.value,
             structure=run_config.structure,
-            use_gemini_models=is_gemini,
             min_objects=run_config.min_objects,
             min_clips=run_config.min_clips,
         )
@@ -238,8 +264,11 @@ def run_single_benchmark(
         response_model = get_response_model(run_config.spec_type, use_gemini_models=is_gemini)
         user_prompt = run_config.get_prompt()
 
-    # Create instructor client (model is baked into the client via from_provider)
-    client = create_instructor_client(model_config)
+    # Create instructor client (model is baked into the client via from_provider).
+    # decode_mode is the enforcement path actually used — recorded below and used
+    # to gate Gemini's response-schema token recovery.
+    decode_mode = decode_mode_for(model_config, run_config.spec_type)
+    client = create_instructor_client(model_config, run_config.spec_type)
 
     # Set up tracking
     tracker = InstructorTracker(
@@ -326,12 +355,17 @@ def run_single_benchmark(
 
     # Recover Gemini's unreported response-schema input tokens (billed but absent
     # from usage_metadata). Raw counts stay untouched; we add explicit estimates.
+    # Only GENAI_STRUCTURED_OUTPUTS sends an OpenAPI response_schema this way; the
+    # GENAI_TOOLS path (now used for JSON_LAB) sends the schema as a function
+    # declaration, processed differently — the t_schema estimate wouldn't reflect
+    # what's actually sent, so we skip it there rather than report a wrong number
+    # (function-declaration billing is a follow-up; see issue #26).
     schema_per_call: Optional[int] = None
     schema_attempts: Optional[int] = None
     schema_tokens_total: Optional[int] = None
     prompt_tokens_adjusted: Optional[int] = None
     cost_adjusted: Optional[float] = None
-    if is_gemini:
+    if is_gemini and decode_mode.name == "GENAI_STRUCTURED_OUTPUTS":
         schema_per_call = estimate_gemini_schema_tokens(
             client, model_config.model_id, response_model
         )
@@ -352,6 +386,7 @@ def run_single_benchmark(
         "provider": model_config.provider.value,
         "display_name": model_config.display_name,
         "spec_type": run_config.spec_type.value,
+        "decode_mode": decode_mode.value,  # instructor enforcement path actually used
         "topic": run_config.topic,
         "lab_name": run_config.lab_name,
         "level": run_config.level.value if run_config.level else None,

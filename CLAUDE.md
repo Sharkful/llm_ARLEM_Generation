@@ -179,7 +179,7 @@ result = client.create(
 
 Use `instructor.from_provider("provider/model-id")` — this is the unified API. Anthropic always requires `max_tokens`.
 
-**Gemini limitation**: Gemini does not support Union types or discriminated unions. When benchmarking Gemini models, `benchmark.py` automatically switches to `json_lab_gemini.py` / `arlem_full_gemini.py` / `arlem_simplified_gemini.py`.
+**Gemini limitation**: Gemini's function-calling schema validator rejects discriminated unions (`oneOf` + `discriminator`) and `const` tags. For **JSON Lab** this is now resolved on the model itself — `json_lab.py` uses a plain smart-union plus `ConstToEnumSchemaMixin` (`const`→`enum`), so one provider-agnostic schema runs on every provider via the free-decode `GENAI_TOOLS` path (the flat `json_lab_gemini.py` twin was retired; see issue #26). **ARLEM** still falls back to union-free twins (`arlem_full_gemini.py` / `arlem_simplified_gemini.py`) on the constrained `GENAI_STRUCTURED_OUTPUTS` path until they get the same treatment. `decode_mode_for()` in `benchmark.py` is the single source of truth for the per-run decode mode (recorded as `decode_mode` in metrics).
 
 ## Code Patterns
 
