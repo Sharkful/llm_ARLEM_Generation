@@ -100,14 +100,14 @@ class ModuleType(str, Enum):
 
 
 # ── Components ────────────────────────────────────────────────────────
-# Each component is a separate model with a Literal discriminator. Two
-# discriminator fields are kept in lockstep, one per consumer:
+# Each component is a separate model tagged by a Literal `type` field. Two
+# tag fields are kept in lockstep, one per consumer:
 #
 #   type           - LLM-facing. Literal matches the Python class name exactly
 #                    (e.g. "TextMeshProComponent"), the naming the model expects.
-#                    The discriminated union resolves on THIS field. Excluded
-#                    from serialization (exclude=True), so it never reaches the
-#                    headset.
+#                    Pydantic smart-union resolution selects the subtype on THIS
+#                    field (see the `Component` union below). Excluded from
+#                    serialization (exclude=True), so it never reaches the headset.
 #   componentType  - Headset-facing. Literal is the Unity component identifier
 #                    (e.g. "textMeshPro") that the device deserializer and the
 #                    original-lab reference data use. Hidden from the LLM schema
@@ -116,10 +116,49 @@ class ModuleType(str, Enum):
 #
 # Net effect: the model reads/writes `type` with class-name values; serialized
 # output carries only `componentType` with the canonical Unity value.
+# Each component subclasses ConstToEnumSchemaMixin (below) so its single-value
+# `type` Literal is emitted as a JSON-Schema enum, which Gemini requires.
 # Add new component types here as needed (keep both literals in sync).
 
 
-class TextMeshProComponent(BaseModel):
+class ConstToEnumSchemaMixin(BaseModel):
+    """Emit single-value ``Literal`` fields as JSON-Schema ``enum`` instead of ``const``.
+
+    This conversion exists to satisfy Gemini. Pydantic v2 renders a one-value
+    ``Literal`` (e.g. our ``type`` tag) as ``{"const": "X"}``. Google's
+    google-genai SDK builds function-calling tool schemas through a strict
+    ``types.Schema`` model that forbids the ``const`` keyword, so a ``const``
+    field makes Gemini's ``GENAI_TOOLS`` path reject the whole schema with
+    "Extra inputs are not permitted". The one-element form ``{"enum": ["X"]}``
+    is semantically identical and is what Gemini accepts.
+
+    Because OpenAI and Anthropic accept ``enum`` and ``const`` interchangeably,
+    doing the swap on the model itself (rather than per provider) is safe and
+    lets a single shared schema go to every provider unchanged. The hook below
+    is provider-agnostic: it runs whenever this model's JSON schema is built,
+    so all providers receive the ``enum`` form.
+    """
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema, handler):
+        # 1. Run Pydantic's normal schema generation. Returns this model's JSON
+        #    Schema dict exactly as it would be emitted by default, with the
+        #    single-value `type` Literal rendered as {"const": "<ClassName>"}.
+        schema = handler(core_schema)
+        # 2. Rewrite any single-value const on this model's own fields into the
+        #    equivalent one-element enum. For our components the only matching
+        #    field is the `type` tag; every other field is left untouched. The
+        #    value is read out of the existing `const`, never restated, so it
+        #    cannot drift from the `Literal`.
+        for prop in schema.get("properties", {}).values():
+            if "const" in prop:
+                prop["enum"] = [prop.pop("const")]
+        # 3. Return the modified schema. This fires once per model that inherits
+        #    the mixin, so each component is converted as `Lab` recurses into it.
+        return schema
+
+
+class TextMeshProComponent(ConstToEnumSchemaMixin):
     """Renders 3D text via TextMeshPro."""
 
     type: Literal["TextMeshProComponent"] = Field("TextMeshProComponent", exclude=True)
@@ -155,7 +194,7 @@ class TextMeshProComponent(BaseModel):
         return max(20, min(80, v))
 
 
-class SimpleRotationComponent(BaseModel):
+class SimpleRotationComponent(ConstToEnumSchemaMixin):
     """Continuously rotates an object around its Y axis."""
 
     type: Literal["SimpleRotationComponent"] = Field("SimpleRotationComponent", exclude=True)
@@ -173,7 +212,7 @@ class SimpleRotationComponent(BaseModel):
     )
 
 
-class SimpleOrbitComponent(BaseModel):
+class SimpleOrbitComponent(ConstToEnumSchemaMixin):
     """Orbits an object around a center point."""
 
     type: Literal["SimpleOrbitComponent"] = Field("SimpleOrbitComponent", exclude=True)
@@ -201,7 +240,7 @@ class SimpleOrbitComponent(BaseModel):
     )
 
 
-class CheckAngleComponent(BaseModel):
+class CheckAngleComponent(ConstToEnumSchemaMixin):
     """Checks if an object is oriented at a target angle and triggers a callback on success."""
 
     type: Literal["CheckAngleComponent"] = Field("CheckAngleComponent", exclude=True)
@@ -227,7 +266,7 @@ class CheckAngleComponent(BaseModel):
     )
 
 
-class RigidBodyComponent(BaseModel):
+class RigidBodyComponent(ConstToEnumSchemaMixin):
     """Configures Unity physics on the object."""
 
     type: Literal["RigidBodyComponent"] = Field("RigidBodyComponent", exclude=True)
@@ -248,7 +287,7 @@ class RigidBodyComponent(BaseModel):
     zRotationConstraint: bool = Field(default=False)
 
 
-class PointerReceiverComponent(BaseModel):
+class PointerReceiverComponent(ConstToEnumSchemaMixin):
     """Makes an object interactable via VR pointer/controller."""
 
     type: Literal["PointerReceiverComponent"] = Field("PointerReceiverComponent", exclude=True)
@@ -264,7 +303,7 @@ class PointerReceiverComponent(BaseModel):
     matchWallWhileDragging: bool = Field(default=False)
     invertForward: bool = Field(default=False)
 
-class NewComponent(BaseModel):
+class NewComponent(ConstToEnumSchemaMixin):
     """A name and description for a new C# Monobehavior component that should implement functionality not covered in the other components"""
 
     type: Literal["NewComponent"] = Field("NewComponent", exclude=True)
@@ -281,20 +320,21 @@ class NewComponent(BaseModel):
     )
 
 
-# Discriminated union of all component types.
-# Instructor resolves the correct subtype from the LLM-facing `type` field
-# (class-name values); `componentType` is hidden from the model.
-Component = Annotated[
-    Union[
-        TextMeshProComponent,
-        SimpleRotationComponent,
-        SimpleOrbitComponent,
-        CheckAngleComponent,
-        RigidBodyComponent,
-        PointerReceiverComponent,
-        NewComponent
-    ],
-    Field(discriminator="type"),
+# Plain (smart) union of all component types — no `discriminator=`.
+# Pydantic v2 smart-union resolution selects the subtype on the LLM-facing
+# `type` Literal (only the matching member validates), so this behaves like a
+# discriminated union for well-formed output without emitting the JSON-Schema
+# `oneOf` + `discriminator` that Gemini's schema translator rejects. Keeping it
+# discriminator-free lets one shared model run on OpenAI, Anthropic, and Gemini.
+# `componentType` stays hidden from the model.
+Component = Union[
+    TextMeshProComponent,
+    SimpleRotationComponent,
+    SimpleOrbitComponent,
+    CheckAngleComponent,
+    RigidBodyComponent,
+    PointerReceiverComponent,
+    NewComponent,
 ]
 
 
