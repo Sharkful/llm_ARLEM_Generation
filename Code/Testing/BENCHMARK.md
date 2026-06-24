@@ -191,21 +191,26 @@ Snapshot of the registry (`MODELS` in `benchmark_config.py`). Run
 | `gemini-2.5-flash` | medium | Google |
 | `gemini-2.5-flash-lite` | small | Google |
 
-**Gemini handling**: Historically Gemini did not support Union / discriminated-union
-types, so for any Google model the runner automatically swaps in the union-free
-Pydantic variants (`json_lab_gemini.py`, etc.). ⚠️ **Under revalidation (2026-06):**
-Google added `anyOf` / full-JSON-Schema support for Gemini 2.5+ (Nov 2025), so this
-swap may no longer be required and the flat twins could eventually be retired — see
-[`threats_to_validity.md`](../../Artifacts/Data/Benchmark/Reports/threats_to_validity.md)
-§6. It also estimates Gemini's
-response-schema input tokens, which Google bills but omits from reported usage,
-and records them as `gemini_schema_tokens_*` / `cost_adjusted_usd` in the
-metrics.
+**Gemini handling**: For the **JSON Lab** spec, Gemini now runs the *same*
+`json_lab.py` schema as OpenAI/Anthropic on the free-decode `GENAI_TOOLS` path —
+the flat `json_lab_gemini.py` twin was retired after `json_lab.py` was made
+provider-agnostic (plain smart-union + `const`→`enum` via `ConstToEnumSchemaMixin`).
+This puts all three providers on the same generate-and-retry footing (issue #26).
+The **ARLEM** specs still use union-free twins (`arlem_*_gemini.py`) on the
+constrained `GENAI_STRUCTURED_OUTPUTS` path until they get the same treatment.
+`decode_mode_for()` is the single source of truth for which path each run uses, and
+it's recorded as `decode_mode` in every metrics file.
 
-> **Methodology note:** Gemini generates under a different structured-output
-> regime (`GENAI_STRUCTURED_OUTPUTS` constrained decoding on a flat schema) than
-> the OpenAI/Anthropic tool-call-and-retry path, so cross-provider results carry a
-> known confound. See
+For the `GENAI_STRUCTURED_OUTPUTS` path the runner also estimates Gemini's
+response-schema input tokens, which Google bills but omits from reported usage, and
+records them as `gemini_schema_tokens_*` / `cost_adjusted_usd`. On `GENAI_TOOLS` the
+schema is sent as a function declaration (processed differently), so that estimate is
+skipped rather than reported wrong — function-declaration billing is a follow-up
+(issue #26).
+
+> **Methodology note:** For JSON Lab, Gemini, OpenAI, and Anthropic now run one
+> shared schema on free-decode (generate + validate/retry), removing the
+> decode-mode and flat-schema confounds. ARLEM still carries them. See
 > [`threats_to_validity.md`](../../Artifacts/Data/Benchmark/Reports/threats_to_validity.md).
 
 **Anthropic**: always called with an explicit `max_tokens` (required by the

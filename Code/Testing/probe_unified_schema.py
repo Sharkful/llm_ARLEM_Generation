@@ -80,7 +80,7 @@ def main() -> None:
     lab = LabDescription.from_yaml(labs[key])
     prompt, _model = build_prompt(
         lab, LEVEL, "json_lab", structure=Structure.MULTI_MODULE,
-        use_gemini_models=False, min_objects=4, min_clips=5,
+        min_objects=4, min_clips=5,
     )
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},

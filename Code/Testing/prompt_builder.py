@@ -223,7 +223,6 @@ def build_prompt(
     spec_type: str,
     *,
     structure: Structure = Structure.MULTI_MODULE,
-    use_gemini_models: bool = False,
     min_objects: int = 4,
     min_clips: int = 5,
 ) -> tuple[str, Type[BaseModel]]:
@@ -236,7 +235,6 @@ def build_prompt(
         spec_type: a SpecType value ("json_lab", "arlem", "arlem_simple").
             SpecType inherits from str, so callers can pass the enum directly.
         structure: output structure mode for L2-L4. Ignored for L1.
-        use_gemini_models: import Gemini-compatible variants if True.
         min_objects, min_clips: structural minima injected into the wrapper.
 
     Returns:
@@ -255,16 +253,20 @@ def build_prompt(
         prompt = OUTLINE_INSTRUCTION.format(lab_context=lab_context)
         return prompt, LabOutline
 
-    # L2-L4: pick wrapper and response model by structure
+    # L2-L4: pick wrapper and response model by structure. json_lab.Lab /
+    # DemoModule are now provider-agnostic (plain smart-union + const->enum via
+    # ConstToEnumSchemaMixin), so the same response model goes to every provider.
+    from json_lab import DemoModule, Lab
+
     if structure == Structure.SINGLE_MODULE:
         template = FULL_SPEC_SINGLE_MODULE_INSTRUCTION
-        response_model = _load_lab_model(use_gemini_models)
+        response_model = Lab
     elif structure == Structure.MULTI_MODULE:
         template = FULL_SPEC_MULTI_MODULE_INSTRUCTION
-        response_model = _load_lab_model(use_gemini_models)
+        response_model = Lab
     elif structure == Structure.MODULE_ONLY:
         template = FULL_SPEC_MODULE_ONLY_INSTRUCTION
-        response_model = _load_demo_module_model(use_gemini_models)
+        response_model = DemoModule
     else:
         raise ValueError(f"Unknown structure: {structure}")
 
@@ -274,19 +276,3 @@ def build_prompt(
         min_clips=min_clips,
     )
     return prompt, response_model
-
-
-def _load_lab_model(use_gemini_models: bool) -> Type[BaseModel]:
-    if use_gemini_models:
-        from json_lab_gemini import Lab as GeminiLab
-        return GeminiLab
-    from json_lab import Lab
-    return Lab
-
-
-def _load_demo_module_model(use_gemini_models: bool) -> Type[BaseModel]:
-    if use_gemini_models:
-        from json_lab_gemini import DemoModule as GeminiDemoModule
-        return GeminiDemoModule
-    from json_lab import DemoModule
-    return DemoModule

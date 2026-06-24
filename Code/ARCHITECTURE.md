@@ -87,18 +87,22 @@ because `SpecType` inherits from `str`.
 
 ## 4. The response models (`Code/Schemas/`)
 
-### 4.1 Three spec families, each with a Gemini twin
+### 4.1 Spec families and their Gemini twins
 
 | Spec | Standard model | Gemini-safe twin | Selected by |
 | --- | --- | --- | --- |
-| JSON Lab | `json_lab.py` → `Lab` | `json_lab_gemini.py` | `SpecType.JSON_LAB` (default) |
+| JSON Lab | `json_lab.py` → `Lab` | *(retired — `json_lab.py` runs on every provider)* | `SpecType.JSON_LAB` (default) |
 | ARLEM full | `arlem_full.py` → `ARLEMScenario` | `arlem_full_gemini.py` | `SpecType.ARLEM` |
 | ARLEM simplified | `arlem_simplified.py` | `arlem_simplified_gemini.py` | `SpecType.ARLEM_SIMPLIFIED` |
 | L1 outline | `lab_outline.py` → `LabOutline` | *(same file — already union-free)* | Level L1 only |
 
-**Why the twins exist:** Gemini does not support `Union` / discriminated-union
-types. The `*_gemini.py` files flatten those unions. The runner swaps in the twin
-automatically for any Google model — never hand-pick a Gemini file.
+**Why the ARLEM twins exist:** Gemini's function-calling schema validator rejected
+`Union` / discriminated-union types (and the `const` tags single-value `Literal`s
+emit). The `arlem_*_gemini.py` files flatten those unions; the runner swaps them in
+automatically for Google ARLEM runs. **JSON Lab no longer needs a twin** —
+`json_lab.py` was made provider-agnostic (plain smart-union + `const`→`enum` via
+`ConstToEnumSchemaMixin`), so one schema runs on every provider on the free-decode
+`GENAI_TOOLS` path (issue #26). The same treatment will retire the ARLEM twins later.
 
 ### 4.2 JSON Lab hierarchy
 
