@@ -33,42 +33,10 @@ from pydantic import (
 )
 from pydantic.json_schema import SkipJsonSchema
 
+from _schema_helpers import ConstToEnumSchemaMixin, _coerce_number_list
+
 
 # ── Primitive Types ───────────────────────────────────────────────────
-
-def _coerce_number_list(v):
-    """Normalize an LLM-emitted numeric vector before list parsing.
-
-    Handles two failure modes seen in the sweeps:
-      * a whole vector crammed into one comma-joined string
-        (``"-1.05,2.0,-1.4"`` -> ``[-1.05, 2.0, -1.4]``), and
-      * individual coordinates emitted as numeric strings
-        (``"-0.82"`` -> ``-0.82``), which Pydantic's smart ``Union[int, float]``
-        rejects rather than coerces.
-
-    Anything it can't parse is passed through untouched so the normal list
-    validator still raises a clean error."""
-    if isinstance(v, str):
-        v = v.split(",")
-    elif (
-        isinstance(v, (list, tuple))
-        and len(v) == 1
-        and isinstance(v[0], str)
-        and "," in v[0]
-    ):
-        v = v[0].split(",")
-    if isinstance(v, (list, tuple)):
-        out = []
-        for x in v:
-            if isinstance(x, str):
-                try:
-                    x = float(x.strip())
-                except ValueError:
-                    pass
-            out.append(x)
-        return out
-    return v
-
 
 Vec3 = Annotated[
     list[Union[int, float]],
@@ -116,46 +84,9 @@ class ModuleType(str, Enum):
 #
 # Net effect: the model reads/writes `type` with class-name values; serialized
 # output carries only `componentType` with the canonical Unity value.
-# Each component subclasses ConstToEnumSchemaMixin (below) so its single-value
-# `type` Literal is emitted as a JSON-Schema enum, which Gemini requires.
-# Add new component types here as needed (keep both literals in sync).
-
-
-class ConstToEnumSchemaMixin(BaseModel):
-    """Emit single-value ``Literal`` fields as JSON-Schema ``enum`` instead of ``const``.
-
-    This conversion exists to satisfy Gemini. Pydantic v2 renders a one-value
-    ``Literal`` (e.g. our ``type`` tag) as ``{"const": "X"}``. Google's
-    google-genai SDK builds function-calling tool schemas through a strict
-    ``types.Schema`` model that forbids the ``const`` keyword, so a ``const``
-    field makes Gemini's ``GENAI_TOOLS`` path reject the whole schema with
-    "Extra inputs are not permitted". The one-element form ``{"enum": ["X"]}``
-    is semantically identical and is what Gemini accepts.
-
-    Because OpenAI and Anthropic accept ``enum`` and ``const`` interchangeably,
-    doing the swap on the model itself (rather than per provider) is safe and
-    lets a single shared schema go to every provider unchanged. The hook below
-    is provider-agnostic: it runs whenever this model's JSON schema is built,
-    so all providers receive the ``enum`` form.
-    """
-
-    @classmethod
-    def __get_pydantic_json_schema__(cls, core_schema, handler):
-        # 1. Run Pydantic's normal schema generation. Returns this model's JSON
-        #    Schema dict exactly as it would be emitted by default, with the
-        #    single-value `type` Literal rendered as {"const": "<ClassName>"}.
-        schema = handler(core_schema)
-        # 2. Rewrite any single-value const on this model's own fields into the
-        #    equivalent one-element enum. For our components the only matching
-        #    field is the `type` tag; every other field is left untouched. The
-        #    value is read out of the existing `const`, never restated, so it
-        #    cannot drift from the `Literal`.
-        for prop in schema.get("properties", {}).values():
-            if "const" in prop:
-                prop["enum"] = [prop.pop("const")]
-        # 3. Return the modified schema. This fires once per model that inherits
-        #    the mixin, so each component is converted as `Lab` recurses into it.
-        return schema
+# Each component subclasses ConstToEnumSchemaMixin (imported from _schema_helpers)
+# so its single-value `type` Literal is emitted as a JSON-Schema enum, which Gemini
+# requires. Add new component types here as needed (keep both literals in sync).
 
 
 class TextMeshProComponent(ConstToEnumSchemaMixin):

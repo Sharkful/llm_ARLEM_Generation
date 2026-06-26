@@ -12,8 +12,12 @@ Usage:
     python benchmark.py --model gpt-4o-mini claude-haiku-4.5 gemini-2.5-flash \
         --topic "Volcanic Eruption Mechanics"
 
-    # ARLEM spec instead of JSON Lab
-    python benchmark.py --model claude-sonnet-4 --spec arlem
+    # ARLEM spec instead of JSON Lab (YAML-driven path, L1-L4)
+    python benchmark.py --model claude-haiku-4.5 --lab phases_of_the_moon --level L2 --spec arlem
+
+    # Sweep multiple output formats together (json_lab + ARLEM full + simplified)
+    python benchmark.py --model gpt-4o-mini --lab phases_of_the_moon --level L2 \
+        --spec json_lab arlem arlem_simple
 
     # Quick benchmark suite (all default topics × cheap models)
     python benchmark.py --suite quick
@@ -72,28 +76,24 @@ from tracking import InstructorTracker, BenchmarkExporter
 def decode_mode_for(model_config: ModelConfig, spec_type: SpecType):
     """Return the instructor decode Mode used for this provider × spec.
 
-    Single source of truth for the enforcement path, so the client factory, the
-    schema-token recovery, and the metrics record all agree.
+    Single source of truth for the enforcement path, so the client factory and the
+    metrics record agree.
 
-    All providers run *free-decode* (generate + validate/retry): OpenAI ``TOOLS``,
-    Anthropic ``ANTHROPIC_TOOLS``, and — for the JSON_LAB spec — Gemini
-    ``GENAI_TOOLS``. JSON_LAB now uses the unified, provider-agnostic ``json_lab``
-    schema (plain smart-union + const->enum), which Gemini accepts on GENAI_TOOLS,
-    putting it on the same free-generate footing as the others (removes the
-    decode-mode confound; see issue #26).
-
-    The ARLEM flat twins (``arlem_*_gemini.py``) still emit ``const`` tags, which
-    GENAI_TOOLS rejects, so they stay on the constrained ``GENAI_STRUCTURED_OUTPUTS``
-    path until they get the same treatment.
+    Every spec (JSON_LAB, ARLEM, ARLEM_SIMPLIFIED) now uses a unified,
+    provider-agnostic schema (plain smart-union + const->enum via
+    ConstToEnumSchemaMixin), so all providers run the same *free-decode* path
+    (generate + validate/retry): OpenAI ``TOOLS``, Anthropic ``ANTHROPIC_TOOLS``,
+    and Gemini ``GENAI_TOOLS``. The ARLEM Gemini twins and the constrained
+    ``GENAI_STRUCTURED_OUTPUTS`` path were retired once the ARLEM schemas accepted
+    the same const->enum treatment as json_lab (see issue #29). ``spec_type`` no
+    longer changes the mode; it is kept for interface stability.
     """
     import instructor
 
     if model_config.provider == Provider.ANTHROPIC:
         return instructor.Mode.ANTHROPIC_TOOLS
     if model_config.provider == Provider.GOOGLE:
-        if spec_type == SpecType.JSON_LAB:
-            return instructor.Mode.GENAI_TOOLS
-        return instructor.Mode.GENAI_STRUCTURED_OUTPUTS
+        return instructor.Mode.GENAI_TOOLS
     return instructor.Mode.TOOLS  # OpenAI (from_provider default)
 
 
@@ -102,9 +102,9 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
     Create an instructor-patched client for the given provider
     using ``instructor.from_provider("provider/model")``.
 
-    The Gemini decode mode depends on ``spec_type`` (see ``decode_mode_for``):
-    JSON_LAB rides the free-decode GENAI_TOOLS path with the unified schema;
-    ARLEM specs stay on constrained GENAI_STRUCTURED_OUTPUTS.
+    Every spec rides the free-decode path (see ``decode_mode_for``): Gemini uses
+    GENAI_TOOLS with the unified, provider-agnostic schema for JSON_LAB and ARLEM
+    alike.
     """
     import instructor
 
@@ -138,8 +138,7 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
 
     kwargs = {}
     # from_provider expects GOOGLE_API_KEY but our .env uses GEMINI_API_KEY.
-    # Decode mode is spec-dependent (see decode_mode_for): JSON_LAB → free-decode
-    # GENAI_TOOLS on the unified schema; ARLEM → constrained GENAI_STRUCTURED_OUTPUTS.
+    # All specs use free-decode GENAI_TOOLS on the unified schema (see decode_mode_for).
     if model_config.provider == Provider.GOOGLE:
         kwargs["api_key"] = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         kwargs["mode"] = decode_mode_for(model_config, spec_type)
@@ -150,76 +149,25 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
     )
 
 
-# ── Gemini Schema-Token Estimation ───────────────────────────────────
-
-# Gemini omits the response-schema tokens from usage_metadata.prompt_token_count
-# (it only counts the text prompt), but bills them as input. We recover them by
-# tokenizing the OpenAPI-3.0 schema google-genai actually sends, using Gemini's
-# own count_tokens. Cached per (model, schema) so a sweep makes one call, not N.
-_SCHEMA_TOKEN_CACHE: dict[tuple[str, str], int] = {}
-
-
-def estimate_gemini_schema_tokens(client, model_id: str, response_model) -> Optional[int]:
-    """Return the token count of the response schema as Gemini receives it.
-
-    Tokenizes the processed OpenAPI-3.0 schema (via google-genai's internal
-    ``t_schema``) with Gemini's own ``count_tokens``. Returns ``None`` (and warns)
-    if genai internals shift, so a benchmark sweep degrades gracefully rather than
-    crashing.
-    """
-    key = (model_id, response_model.__name__)
-    if key in _SCHEMA_TOKEN_CACHE:
-        return _SCHEMA_TOKEN_CACHE[key]
-    try:
-        from google.genai import _transformers
-
-        genai_client = client.client  # underlying genai.Client
-        schema = _transformers.t_schema(genai_client._api_client, response_model)
-        schema_json = schema.model_dump_json(exclude_none=True, by_alias=True)
-        tokens = genai_client.models.count_tokens(
-            model=model_id, contents=schema_json
-        ).total_tokens
-        _SCHEMA_TOKEN_CACHE[key] = tokens
-        return tokens
-    except Exception as e:
-        print(f"  WARN: Gemini schema-token estimate failed: {type(e).__name__}: {e}")
-        return None
-
-
 # ── Model Selection ──────────────────────────────────────────────────
 
-def get_response_model(spec_type: SpecType, use_gemini_models: bool = False):
+def get_response_model(spec_type: SpecType):
     """
-    Return the appropriate Pydantic response model class.
+    Return the Pydantic response model class for the spec.
 
-    Args:
-        spec_type: Which spec to generate (JSON_LAB, ARLEM, or ARLEM_SIMPLIFIED)
-        use_gemini_models: If True, import the Gemini-compatible ARLEM variants
-                           that avoid Union/discriminated-union types. Ignored for
-                           JSON_LAB, which now uses one provider-agnostic schema.
-
-    JSON_LAB runs the unified ``json_lab.Lab`` on every provider (the flat
-    ``json_lab_gemini.py`` twin was retired). ARLEM still has Gemini-specific
-    union-free twins (``arlem_full_gemini.py`` / ``arlem_simplified_gemini.py``)
-    until they get the same const->enum + smart-union treatment.
+    Every spec now uses one provider-agnostic schema (const->enum mixin; no
+    field-level discriminated unions), so the same model goes to every provider —
+    the Gemini twins (``json_lab_gemini.py``, ``arlem_*_gemini.py``) were retired.
     """
     if spec_type == SpecType.JSON_LAB:
         from json_lab import Lab
         return Lab
-    if use_gemini_models:
-        if spec_type == SpecType.ARLEM:
-            from arlem_full_gemini import ARLEMScenario as GeminiFullARLEM
-            return GeminiFullARLEM
-        # ARLEM_SIMPLIFIED
-        from arlem_simplified_gemini import ARLEMScenario as GeminiSimpleARLEM
-        return GeminiSimpleARLEM
-    # Standard ARLEM models (OpenAI / Anthropic)
     if spec_type == SpecType.ARLEM:
         from arlem_full import ARLEMScenario
         return ARLEMScenario
     # ARLEM_SIMPLIFIED
-    from arlem_simplified import ARLEMScenario as SimpleARLEM
-    return SimpleARLEM
+    from arlem_simplified import ARLEMScenario
+    return ARLEMScenario
 
 
 # ── Single Run ───────────────────────────────────────────────────────
@@ -236,8 +184,6 @@ def run_single_benchmark(
 
     Returns a dict with all metrics, the generated output, and lab analysis.
     """
-    is_gemini = model_config.provider == Provider.GOOGLE
-
     # Build prompt + response model. YAML-driven path takes precedence.
     prompt_file_rel: Optional[str] = None
     if run_config.lab_name and run_config.level:
@@ -255,13 +201,16 @@ def run_single_benchmark(
             structure=run_config.structure,
             min_objects=run_config.min_objects,
             min_clips=run_config.min_clips,
+            min_things=run_config.min_things,
+            min_places=run_config.min_places,
+            min_actions=run_config.min_actions,
         )
         if save_prompts:
             prompt_file_rel = _save_prompt_artifact(
                 run_config, user_prompt, overwrite=overwrite_prompts
             )
     else:
-        response_model = get_response_model(run_config.spec_type, use_gemini_models=is_gemini)
+        response_model = get_response_model(run_config.spec_type)
         user_prompt = run_config.get_prompt()
 
     # Create instructor client (model is baked into the client via from_provider).
@@ -353,32 +302,6 @@ def run_single_benchmark(
     if run_config.save_output:
         errors_file_rel = _save_errors_file(tracker, base_name, generation_error)
 
-    # Recover Gemini's unreported response-schema input tokens (billed but absent
-    # from usage_metadata). Raw counts stay untouched; we add explicit estimates.
-    # Only GENAI_STRUCTURED_OUTPUTS sends an OpenAPI response_schema this way; the
-    # GENAI_TOOLS path (now used for JSON_LAB) sends the schema as a function
-    # declaration, processed differently — the t_schema estimate wouldn't reflect
-    # what's actually sent, so we skip it there rather than report a wrong number
-    # (function-declaration billing is a follow-up; see issue #26).
-    schema_per_call: Optional[int] = None
-    schema_attempts: Optional[int] = None
-    schema_tokens_total: Optional[int] = None
-    prompt_tokens_adjusted: Optional[int] = None
-    cost_adjusted: Optional[float] = None
-    if is_gemini and decode_mode.name == "GENAI_STRUCTURED_OUTPUTS":
-        schema_per_call = estimate_gemini_schema_tokens(
-            client, model_config.model_id, response_model
-        )
-        if schema_per_call is not None:
-            last_call = tracker.get_last_call_metrics()
-            schema_attempts = (last_call.total_attempts if last_call else 0) or 1
-            schema_tokens_total = schema_per_call * schema_attempts
-            prompt_tokens_adjusted = (
-                tracker_summary["tokens"]["prompt"] + schema_tokens_total
-            )
-            extra_cost = schema_tokens_total * tracker.pricing.input_price / 1_000_000
-            cost_adjusted = tracker.get_total_cost() + extra_cost
-
     # Build result record
     record = {
         "timestamp": datetime.now().isoformat(),
@@ -390,17 +313,16 @@ def run_single_benchmark(
         "topic": run_config.topic,
         "lab_name": run_config.lab_name,
         "level": run_config.level.value if run_config.level else None,
+        # `structure` only shapes json_lab output; it is meaningless for ARLEM
+        # (single ARLEMScenario shape), so record None there to avoid misleading reports.
         "structure": (
             run_config.structure.value
-            if run_config.lab_name and run_config.level else None
+            if (run_config.lab_name and run_config.level
+                and run_config.spec_type == SpecType.JSON_LAB)
+            else None
         ),
         "prompt_file": prompt_file_rel,
         "errors_file": errors_file_rel,
-        "gemini_schema_tokens_per_call": schema_per_call,
-        "gemini_schema_attempts": schema_attempts,
-        "gemini_schema_tokens_total": schema_tokens_total,
-        "prompt_tokens_adjusted": prompt_tokens_adjusted,
-        "cost_adjusted_usd": cost_adjusted,
         "success": result is not None,
         "error": generation_error,
         "wall_time_seconds": round(wall_time_s, 2),
@@ -432,6 +354,7 @@ def _save_prompt_artifact(
     The same prompt is shared across all models for a given
     (lab, level, spec, structure) tuple, so we write it once and let
     every run's metrics record reference the same file by relative path.
+    ``structure`` only applies to json_lab L2-L4; ARLEM and L1 omit it.
 
     Returns the prompt file path relative to PROJECT_ROOT.
     """
@@ -439,7 +362,7 @@ def _save_prompt_artifact(
     prompts_dir.mkdir(parents=True, exist_ok=True)
 
     parts = [run_config.lab_name, run_config.level.value, run_config.spec_type.value]
-    if run_config.level != Level.L1:
+    if run_config.spec_type == SpecType.JSON_LAB and run_config.level != Level.L1:
         parts.append(run_config.structure.value)
     fname = "_".join(parts) + ".txt"
 
@@ -532,12 +455,6 @@ def _print_run_summary(record: dict):
     print(f"  Tokens: {tokens['prompt']:,} in / {tokens['completion']:,} out / {tokens['total']:,} total")
     print(f"  Cost: {cost['formatted']} | Wall time: {record['wall_time_seconds']}s")
     print(f"  Retries: {retries['total']} (parse errors: {tracking['errors']['parse_errors']})")
-    if record.get("gemini_schema_tokens_total") is not None:
-        print(
-            f"  +Schema tokens (est): {record['gemini_schema_tokens_per_call']:,} "
-            f"x{record['gemini_schema_attempts']} attempts "
-            f"-> adj. cost ${record['cost_adjusted_usd']:.6f}"
-        )
     if record.get("errors_file"):
         print(f"  Errors saved: {record['errors_file']}")
 
@@ -561,7 +478,7 @@ def run_benchmark_suite(
     topics: Optional[list[str]] = None,
     lab_names: Optional[list[str]] = None,
     levels: Optional[list[Level]] = None,
-    spec_type: SpecType = SpecType.JSON_LAB,
+    spec_types: Optional[list[SpecType]] = None,
     max_retries: int = 3,
     save_output: bool = True,
     structure: Structure = Structure.MULTI_MODULE,
@@ -571,42 +488,51 @@ def run_benchmark_suite(
     """
     Run benchmarks across multiple models and work items.
 
-    A work item is one (lab_name, level, topic) triple. The YAML-driven path
-    (lab_names × levels cross-product) takes precedence; otherwise each topic
-    string becomes a work item for the legacy free-form path.
+    A work item is one (lab_name, level, topic, spec_type) tuple. The YAML-driven
+    path (lab_names × levels cross-product) takes precedence; otherwise each topic
+    string becomes a work item for the legacy free-form path. Every work item is
+    produced for each requested spec_type, so a single sweep can cover json_lab,
+    arlem, and arlem_simple together.
 
     Returns list of all result records.
     """
-    # Build the ordered work-item list: (lab_name, level, topic)
-    work_items: list[tuple[Optional[str], Optional[Level], Optional[str]]] = []
+    spec_types = spec_types or [SpecType.JSON_LAB]
+
+    # Build the ordered work-item list: (lab_name, level, topic, spec_type)
+    work_items: list[tuple[Optional[str], Optional[Level], Optional[str], SpecType]] = []
     yaml_path = bool(lab_names and levels)
-    if yaml_path:
-        for lab_name in lab_names:
-            for level in levels:
-                work_items.append((lab_name, level, None))
-    else:
-        for topic in (topics or [DEFAULT_TOPICS[0]]):
-            work_items.append((None, None, topic))
+    for spec_type in spec_types:
+        if yaml_path:
+            for lab_name in lab_names:
+                for level in levels:
+                    work_items.append((lab_name, level, None, spec_type))
+        else:
+            for topic in (topics or [DEFAULT_TOPICS[0]]):
+                work_items.append((None, None, topic, spec_type))
 
     results = []
     total_runs = len(model_ids) * len(work_items)
     run_num = 0
 
+    specs_label = ", ".join(s.value for s in spec_types)
     print(f"\n{'=' * 70}")
     if yaml_path:
         print(
             f"BENCHMARK SUITE: {len(model_ids)} models × {len(lab_names)} labs "
-            f"× {len(levels)} levels = {total_runs} runs"
+            f"× {len(levels)} levels × {len(spec_types)} specs = {total_runs} runs"
         )
         print(f"Labs: {', '.join(lab_names)}")
         print(f"Levels: {', '.join(lvl.value for lvl in levels)}")
         print(f"Structure: {structure.value}")
     else:
-        print(f"BENCHMARK SUITE: {len(model_ids)} models × {len(work_items)} topics = {total_runs} runs")
-    print(f"Spec: {spec_type.value}")
+        print(
+            f"BENCHMARK SUITE: {len(model_ids)} models × {len(topics or [DEFAULT_TOPICS[0]])} "
+            f"topics × {len(spec_types)} specs = {total_runs} runs"
+        )
+    print(f"Specs: {specs_label}")
     print(f"{'=' * 70}")
 
-    for lab_name, level, topic in work_items:
+    for lab_name, level, topic, spec_type in work_items:
         for model_id in model_ids:
             run_num += 1
             print(f"\n--- Run {run_num}/{total_runs} ---")
@@ -642,6 +568,7 @@ def run_benchmark_suite(
                 print(f"  FATAL ERROR: {type(e).__name__}: {e}")
                 results.append({
                     "model": model_id,
+                    "spec_type": spec_type.value,
                     "lab_name": lab_name,
                     "level": level.value if level else None,
                     "topic": topic,
@@ -671,17 +598,18 @@ def _print_suite_summary(results: list[dict]):
     print(f"\n{'=' * 70}")
     print("SUITE SUMMARY")
     print(f"{'=' * 70}")
-    print(f"{'Model':<25} {'Level':<6} {'Structure':<14} {'Status':<8} {'Tokens':>8} {'Cost':>10} {'Time':>7} {'Retries':>8}")
-    print("-" * 93)
+    print(f"{'Model':<25} {'Spec':<12} {'Level':<6} {'Structure':<14} {'Status':<8} {'Tokens':>8} {'Cost':>10} {'Time':>7} {'Retries':>8}")
+    print("-" * 106)
 
     for r in results:
         if "tracking" not in r:
-            print(f"{r.get('model', '?'):<25} {(r.get('level') or '-'):<6} {(r.get('structure') or '-'):<14} {'FATAL':<8}")
+            print(f"{r.get('model', '?'):<25} {(r.get('spec_type') or '-'):<12} {(r.get('level') or '-'):<6} {(r.get('structure') or '-'):<14} {'FATAL':<8}")
             continue
 
         t = r["tracking"]
         print(
             f"{r['display_name']:<25} "
+            f"{(r.get('spec_type') or '-'):<12} "
             f"{(r.get('level') or '-'):<6} "
             f"{(r.get('structure') or '-'):<14} "
             f"{'OK' if r['success'] else 'FAIL':<8} "
@@ -734,10 +662,11 @@ def parse_args():
     )
     parser.add_argument(
         "--spec", "-s",
-        type=str,
+        nargs="+",
         choices=["json_lab", "arlem", "arlem_simple"],
-        default="json_lab",
-        help="Specification type to generate (default: json_lab)",
+        default=["json_lab"],
+        help="Specification type(s) to generate; pass 1, 2, or all 3 to sweep formats "
+             "(default: json_lab). Composes with lab/level sweeping.",
     )
     parser.add_argument(
         "--suite",
@@ -833,7 +762,12 @@ def main():
                 print(f"  {topic_name:<40} {path.relative_to(PROJECT_ROOT)}")
         return
 
-    spec_type = SpecType(args.spec)
+    # De-dupe specs, preserving CLI order.
+    _seen_specs: set[str] = set()
+    spec_types = [
+        SpecType(s) for s in args.spec
+        if not (s in _seen_specs or _seen_specs.add(s))
+    ]
     save_output = not args.no_save
     structure = Structure(args.structure)
     save_prompts = not args.no_save_prompts
@@ -918,7 +852,7 @@ def main():
         model_ids = resolved_models
 
     common = dict(
-        spec_type=spec_type,
+        spec_types=spec_types,
         max_retries=args.max_retries,
         save_output=save_output,
         structure=structure,

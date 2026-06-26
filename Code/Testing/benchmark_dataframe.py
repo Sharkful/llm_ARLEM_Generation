@@ -3,9 +3,14 @@ Load every benchmark run into one tidy pandas DataFrame.
 
 Each ``*_metrics.json`` in ``Artifacts/Data/Benchmark/`` is one run. This module
 flattens the nested ``tracking`` (tokens/cost/timing/retries) and ``lab_metrics``
-(modules/clips/objects/components/prefabs) blocks into a single flat row, adds a
-handful of derived ratios, and returns them as a DataFrame you can slice by model,
-provider, or specificity level.
+blocks into a single flat row, adds a handful of derived ratios, and returns them as
+a DataFrame you can slice by model, provider, specificity level, or ``spec_type``.
+
+``lab_metrics`` carries json_lab structural metrics (modules/clips/objects/components/
+prefabs) for json_lab runs and ARLEM structural metrics (things/places/actions/
+triggers/POIs) for arlem / arlem_simple runs; the row holds both column families, with
+0/NaN where a metric doesn't apply to that spec. Slice by ``spec_type`` before
+aggregating structural columns.
 
 Usage:
     from benchmark_dataframe import load_runs
@@ -86,28 +91,23 @@ def flatten_record(rec: dict) -> dict:
     total_tokens = toks.get("total", 0) or 0
     cost_usd = (t.get("cost") or {}).get("total_usd", 0.0) or 0.0
 
-    # Gemini bills the response-schema tokens as input but excludes them from the
-    # reported usage; prefer the adjusted figures when the runner recorded them.
-    # (see memory: project_gemini_schema_token_billing)
-    adj_prompt = rec.get("prompt_tokens_adjusted")
-    adj_cost = rec.get("cost_adjusted_usd")
-    effective_prompt = adj_prompt if adj_prompt is not None else prompt_tokens
-    effective_total = (
-        effective_prompt + completion_tokens
-        if adj_prompt is not None
-        else total_tokens
-    )
-    effective_cost = adj_cost if adj_cost is not None else cost_usd
+    # Every spec now runs free-decode, so the raw provider-reported tokens/cost are
+    # the real figures — no Gemini schema-token adjustment to apply (issue #29).
 
     duration_ms = timing.get("total_duration_ms", 0.0) or 0.0
     wall_s = rec.get("wall_time_seconds", 0.0) or 0.0
 
+    # ── json_lab structural metrics (0/NaN for ARLEM rows) ──
     num_modules = lm.get("num_modules", 0) or 0
     num_objects = lm.get("num_objects", 0) or 0
     num_clips = lm.get("num_clips", 0) or 0
     num_components = lm.get("num_components", 0) or 0
     num_object_changes = lm.get("num_object_changes", 0) or 0
     num_unique_objects = len(lm.get("unique_object_names") or [])
+
+    # ── ARLEM structural metrics (0 for json_lab rows). analyze_arlem() already
+    #    landed these in lab_metrics; trigger_modes is a dict, flattened to scalars. ──
+    trigger_modes = lm.get("trigger_modes") or {}
 
     # Novel-asset counts come from re-reading the saved output JSON (see
     # load_runs); absent for failed runs and L1 outlines, which stay all-zero.
@@ -137,9 +137,6 @@ def flatten_record(rec: dict) -> dict:
         "completion_tokens": completion_tokens,
         "total_tokens": total_tokens,
         "cost_usd": cost_usd,
-        "effective_prompt_tokens": effective_prompt,
-        "effective_total_tokens": effective_total,
-        "effective_cost_usd": effective_cost,
         "duration_ms": duration_ms,
         "wall_s": wall_s,
         "retries": retries.get("total", 0) or 0,
@@ -156,6 +153,30 @@ def flatten_record(rec: dict) -> dict:
         "num_educational_objectives": lm.get("num_educational_objectives", 0) or 0,
         "num_unique_prefabs": lm.get("num_unique_prefabs", 0) or 0,
         "num_unique_objects": num_unique_objects,
+        # ── ARLEM structural metrics (0 for json_lab rows / failed runs) ──
+        # Workplace resources
+        "num_things": lm.get("num_things", 0) or 0,
+        "num_places": lm.get("num_places", 0) or 0,
+        "num_persons": lm.get("num_persons", 0) or 0,
+        "num_sensors": lm.get("num_sensors", 0) or 0,
+        "num_devices": lm.get("num_devices", 0) or 0,
+        "num_apps": lm.get("num_apps", 0) or 0,
+        "num_detectables": lm.get("num_detectables", 0) or 0,
+        "num_primitives": lm.get("num_primitives", 0) or 0,
+        "num_predicates": lm.get("num_predicates", 0) or 0,
+        "num_warnings": lm.get("num_warnings", 0) or 0,
+        # Activity flow
+        "num_actions": lm.get("num_actions", 0) or 0,
+        "total_activates": lm.get("total_activates", 0) or 0,
+        "total_deactivates": lm.get("total_deactivates", 0) or 0,
+        "total_messages": lm.get("total_messages", 0) or 0,
+        "total_triggers": lm.get("total_triggers", 0) or 0,
+        "total_pois": lm.get("total_pois", 0) or 0,
+        # Trigger modes (dict -> scalars; full ARLEM uses all four, simplified click/detect)
+        "trigger_click": trigger_modes.get("click", 0) or 0,
+        "trigger_voice": trigger_modes.get("voice", 0) or 0,
+        "trigger_detect": trigger_modes.get("detect", 0) or 0,
+        "trigger_sensor": trigger_modes.get("sensor", 0) or 0,
         # ── novel assets (0 for failed runs and L1 outlines) ──────
         # Distinct assets the model invented (not in the moon-lab library) and
         # that we'd have to author; *_refs count object-instances using one.
@@ -205,8 +226,10 @@ def load_runs(
         rec = json.loads(p.read_text(encoding="utf-8"))
         # Pair the run with its saved output JSON (same stem, _output suffix) and
         # compute novel-asset counts — no LLM calls, just re-reading what we kept.
+        # Novel assets are a json_lab concept (prefabs/textures); ARLEM outputs have
+        # no such library, so we only run analyze_assets() on json_lab rows.
         out_path = out_dir / (p.name[: -len("_metrics.json")] + "_output.json")
-        if out_path.exists():
+        if out_path.exists() and rec.get("spec_type") == "json_lab":
             rec["asset_metrics"] = analyze_assets(
                 json.loads(out_path.read_text(encoding="utf-8"))
             )
@@ -220,9 +243,10 @@ def load_runs(
         return df
 
     # Defensive dedupe: one row per unique run (suite successes also have a
-    # standalone metrics file, so the union overlaps).
+    # standalone metrics file, so the union overlaps). spec_type is part of the key
+    # so two specs for the same (model, level, lab) at the same second don't collide.
     df = df.drop_duplicates(
-        subset=["model", "level", "structure", "lab_name", "timestamp"]
+        subset=["model", "spec_type", "level", "structure", "lab_name", "timestamp"]
     ).reset_index(drop=True)
 
     if levels_only:
@@ -236,6 +260,7 @@ if __name__ == "__main__":
     pd.set_option("display.width", 200)
     print(f"rows: {df.shape[0]}  cols: {df.shape[1]}")
     print(f"levels present: {sorted(df['level'].dropna().unique())}")
+    print(f"specs present: {sorted(df['spec_type'].dropna().unique())}")
     print(f"providers: {sorted(df['provider'].dropna().unique())}")
     print(f"models: {df['model'].nunique()}  labs: {sorted(df['lab_name'].dropna().unique())}")
     print(f"success: {int(df['success'].sum())}/{len(df)}")

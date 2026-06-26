@@ -5,9 +5,10 @@ Loads a lab-description YAML and assembles the prompt for one of four
 specificity levels (L1-L4), pairing it with the appropriate Pydantic
 response model for handoff to Instructor.
 
-L1 produces a rough outline (LabOutline). L2-L4 produce full lab specs;
-within those, --structure selects between a single multi-clip module,
-multiple per-scene modules, or a bare DemoModule with no Lab wrapper.
+L1 produces a rough outline (LabOutline) for every spec. L2-L4 produce full
+specs: for json_lab, --structure selects between a single multi-clip module,
+multiple per-scene modules, or a bare DemoModule with no Lab wrapper; for arlem
+and arlem_simple it produces an ARLEMScenario (--structure does not apply).
 
 Pure module: no LLM calls, no benchmark_config import (to avoid a circular
 dependency). The caller passes spec_type as a string value, which matches
@@ -198,6 +199,69 @@ Structural requirements:
 """
 
 
+# ── ARLEM instruction wrappers (Workplace + Activity) ────────────────
+# ARLEM has a single output shape (ARLEMScenario); the --structure modes above
+# do not apply. min_things / min_places / min_actions are the structural minima.
+
+ARLEM_FULL_INSTRUCTION = """\
+Create a complete ARLEM AR training scenario for the topic described below.
+
+Build an ARLEMScenario with two parts: a Workplace (the static environment) and an
+Activity (the step-by-step logic).
+
+Workplace requirements:
+- Define at least {min_things} things (tools, models, or materials the learner interacts with)
+  and at least {min_places} places (workstations, zones, or surfaces).
+- Include exactly 1 person (the learner) and at least 1 device (the AR headset).
+- Define detectables (markers or anchors) for spatial tracking. The workplace `origin` must
+  reference one detectable, and every thing/place/person must reference a distinct detectable.
+- List the primitives (supported media types: label, image, audio, video, animation) and create
+  predicates (reusable instructional augmentations) that the activity steps will display.
+- Any POI with id "default" must sit at the origin (zero offsets); rotation is allowed.
+
+Activity requirements:
+- Create at least {min_actions} sequential action steps with a clear pedagogical progression.
+- Each action has an instruction (title + description) and enter/exit flows that activate and
+  deactivate augmentations on workplace targets.
+- Advance between steps with triggers (mode "click", "voice", or "detect").
+- Every reference (activate/deactivate targets, augmentations, action location/device/predicate,
+  POIs) must resolve to something defined in the Workplace. The `start` field and any
+  action-to-action links must reference valid action ids. Language is the 2-letter ISO 639-1
+  code (e.g. "en").
+
+The scenario should read like a realistic hands-on AR training session where augmentations
+guide the learner through the topic.
+
+{lab_context}
+"""
+
+ARLEM_SIMPLE_INSTRUCTION = """\
+Create a simplified ARLEM AR scenario for the topic described below.
+
+Build an ARLEMScenario with a Workplace and a linear Activity. This is the REDUCED ARLEM
+surface: there are NO persons, devices, sensors, warnings, messages, or conditional logic, and
+triggers are limited to mode "click" and "detect".
+
+Workplace requirements:
+- Define at least {min_things} things and at least {min_places} places.
+- Define detectables (markers or anchors). The workplace `origin` must reference one detectable,
+  and every thing/place must reference a distinct detectable.
+- List the primitives (label, image, audio, video, animation) and create predicates (reusable
+  instructional augmentations) used by the activity steps.
+- Any POI with id "default" must sit at the origin (zero offsets); rotation is allowed.
+
+Activity requirements:
+- Create at least {min_actions} sequential action steps, each with an instruction (title +
+  description) and enter/exit flows that activate/deactivate augmentations on workplace targets.
+- Advance between steps with triggers of mode "click" or "detect".
+- Every reference (activate/deactivate targets, augmentations, POIs) must resolve to something
+  defined in the Workplace. The `start` field and action-to-action links must reference valid
+  action ids.
+
+{lab_context}
+"""
+
+
 # ── Context rendering ────────────────────────────────────────────────
 
 def _render_context(lab: LabDescription, level: Level) -> str:
@@ -225,6 +289,9 @@ def build_prompt(
     structure: Structure = Structure.MULTI_MODULE,
     min_objects: int = 4,
     min_clips: int = 5,
+    min_things: int = 3,
+    min_places: int = 2,
+    min_actions: int = 5,
 ) -> tuple[str, Type[BaseModel]]:
     """
     Build the prompt and pick the response model for a single run.
@@ -234,45 +301,65 @@ def build_prompt(
         level: L1 (outline) through L4 (full input).
         spec_type: a SpecType value ("json_lab", "arlem", "arlem_simple").
             SpecType inherits from str, so callers can pass the enum directly.
-        structure: output structure mode for L2-L4. Ignored for L1.
-        min_objects, min_clips: structural minima injected into the wrapper.
+        structure: output structure mode for json_lab L2-L4. Ignored for L1 and
+            for ARLEM (which has a single ARLEMScenario output shape).
+        min_objects, min_clips: json_lab structural minima injected into the wrapper.
+        min_things, min_places, min_actions: ARLEM structural minima.
 
     Returns:
         (prompt_string, response_model_class)
     """
-    if spec_type != "json_lab":
-        raise NotImplementedError(
-            f"prompt builder does not yet support spec_type={spec_type!r}; "
-            "only 'json_lab' is wired up."
-        )
-
     lab_context = _render_context(lab, level)
 
+    # L1 is a rough outline for EVERY spec: the same minimal, provider-safe
+    # LabOutline model (scenes/objectives), independent of the target spec.
     if level == Level.L1:
         from lab_outline import LabOutline
         prompt = OUTLINE_INSTRUCTION.format(lab_context=lab_context)
         return prompt, LabOutline
 
-    # L2-L4: pick wrapper and response model by structure. json_lab.Lab /
-    # DemoModule are now provider-agnostic (plain smart-union + const->enum via
-    # ConstToEnumSchemaMixin), so the same response model goes to every provider.
-    from json_lab import DemoModule, Lab
+    # L2-L4: dispatch on spec_type.
+    if spec_type == "json_lab":
+        # json_lab.Lab / DemoModule are provider-agnostic (plain smart-union +
+        # const->enum via ConstToEnumSchemaMixin), so the same response model goes
+        # to every provider. --structure selects the output shape.
+        from json_lab import DemoModule, Lab
 
-    if structure == Structure.SINGLE_MODULE:
-        template = FULL_SPEC_SINGLE_MODULE_INSTRUCTION
-        response_model = Lab
-    elif structure == Structure.MULTI_MODULE:
-        template = FULL_SPEC_MULTI_MODULE_INSTRUCTION
-        response_model = Lab
-    elif structure == Structure.MODULE_ONLY:
-        template = FULL_SPEC_MODULE_ONLY_INSTRUCTION
-        response_model = DemoModule
-    else:
-        raise ValueError(f"Unknown structure: {structure}")
+        if structure == Structure.SINGLE_MODULE:
+            template = FULL_SPEC_SINGLE_MODULE_INSTRUCTION
+            response_model = Lab
+        elif structure == Structure.MULTI_MODULE:
+            template = FULL_SPEC_MULTI_MODULE_INSTRUCTION
+            response_model = Lab
+        elif structure == Structure.MODULE_ONLY:
+            template = FULL_SPEC_MODULE_ONLY_INSTRUCTION
+            response_model = DemoModule
+        else:
+            raise ValueError(f"Unknown structure: {structure}")
 
-    prompt = template.format(
-        lab_context=lab_context,
-        min_objects=min_objects,
-        min_clips=min_clips,
-    )
-    return prompt, response_model
+        prompt = template.format(
+            lab_context=lab_context,
+            min_objects=min_objects,
+            min_clips=min_clips,
+        )
+        return prompt, response_model
+
+    if spec_type in ("arlem", "arlem_simple"):
+        # ARLEM is provider-agnostic too (const->enum mixin; no field-level unions).
+        # `structure` is ignored — ARLEMScenario is the only output shape.
+        if spec_type == "arlem":
+            from arlem_full import ARLEMScenario
+            template = ARLEM_FULL_INSTRUCTION
+        else:
+            from arlem_simplified import ARLEMScenario
+            template = ARLEM_SIMPLE_INSTRUCTION
+
+        prompt = template.format(
+            lab_context=lab_context,
+            min_things=min_things,
+            min_places=min_places,
+            min_actions=min_actions,
+        )
+        return prompt, ARLEMScenario
+
+    raise ValueError(f"Unknown spec_type: {spec_type!r}")

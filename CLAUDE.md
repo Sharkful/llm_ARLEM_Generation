@@ -60,8 +60,12 @@ python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab vsepr_molecular_geo
 python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon \
     --level L3 --structure multi-module
 
-# Benchmark with ARLEM spec (legacy --topic path only; YAML path not yet wired for ARLEM)
-python "Code/Testing/benchmark.py" --model claude-sonnet-4 --spec arlem
+# Benchmark ARLEM specs via the YAML path (L1-L4)
+python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L2 --spec arlem
+
+# Sweep multiple output formats together (--spec takes 1, 2, or all 3 formats)
+python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon --level L2 \
+    --spec json_lab arlem arlem_simple
 
 # Run a pre-defined suite (quick = cheap models, full = all models)
 python "Code/Testing/benchmark.py" --suite quick
@@ -128,13 +132,13 @@ Benchmark runs:
 
 **`benchmark_config.py`** — Model registry (`MODELS` dict), legacy prompt templates, `BenchmarkRunConfig` dataclass. Add new models here. `BenchmarkRunConfig` carries optional `lab_name`, `level`, and `structure` fields for the YAML-driven path; when both `lab_name` and `level` are set, the benchmark runner bypasses `get_prompt()` and calls `build_prompt()` instead. Defaults: `min_objects=4`, `min_clips=5`.
 
-**`prompt_builder.py`** — Loads a `<topic>_lab.yaml` from `Artifacts/Lab Descriptions/` into a `LabDescription` dataclass (plain dataclass, not Pydantic — input layer doesn't cross a system boundary). Strips `*` authoring flags and `[REVIEW: ...]` markers silently at load time. `build_prompt(lab, level, spec_type, structure=..., use_gemini_models=...)` returns `(prompt_string, response_model_class)`. Levels:
+**`prompt_builder.py`** — Loads a `<topic>_lab.yaml` from `Artifacts/Lab Descriptions/` into a `LabDescription` dataclass (plain dataclass, not Pydantic — input layer doesn't cross a system boundary). Strips `*` authoring flags and `[REVIEW: ...]` markers silently at load time. `build_prompt(lab, level, spec_type, structure=..., min_objects=..., min_clips=..., min_things=..., min_places=..., min_actions=...)` returns `(prompt_string, response_model_class)`. Levels:
 - **L1** — field/course/description → `LabOutline` (rough outline; not a full spec)
 - **L2** — same input as L1 → full spec
 - **L3** — L2 + `learning_objectives` → full spec
 - **L4** — L3 + `detailed_script` → full spec
 
-`--structure` (L2–L4 only) selects the output shape: `multi-module` (default, one DemoModule per scene), `single-module` (one DemoModule, many clips), or `module-only` (bare `DemoModule`, no `Lab` wrapper). ARLEM is parameterized but currently raises `NotImplementedError` — adding it later is one row in the dispatch table.
+`--structure` (json_lab L2–L4 only) selects the output shape: `multi-module` (default, one DemoModule per scene), `single-module` (one DemoModule, many clips), or `module-only` (bare `DemoModule`, no `Lab` wrapper). For **ARLEM** (`arlem` / `arlem_simple`) at L2–L4, `build_prompt` returns an `ARLEMScenario` and ignores `--structure` (ARLEM has a single output shape). L1 returns the spec-agnostic `LabOutline` for every spec.
 
 Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `Artifacts/Data/Benchmark/prompts/`. Every metrics record carries `lab_name`, `level`, `structure`, and `prompt_file` for traceability. Pass `--no-save-prompts` for large sweeps or `--overwrite-prompts` after a wrapper-template tweak.
 
@@ -179,7 +183,7 @@ result = client.create(
 
 Use `instructor.from_provider("provider/model-id")` — this is the unified API. Anthropic always requires `max_tokens`.
 
-**Gemini limitation**: Gemini's function-calling schema validator rejects discriminated unions (`oneOf` + `discriminator`) and `const` tags. For **JSON Lab** this is now resolved on the model itself — `json_lab.py` uses a plain smart-union plus `ConstToEnumSchemaMixin` (`const`→`enum`), so one provider-agnostic schema runs on every provider via the free-decode `GENAI_TOOLS` path (the flat `json_lab_gemini.py` twin was retired; see issue #26). **ARLEM** still falls back to union-free twins (`arlem_full_gemini.py` / `arlem_simplified_gemini.py`) on the constrained `GENAI_STRUCTURED_OUTPUTS` path until they get the same treatment. `decode_mode_for()` in `benchmark.py` is the single source of truth for the per-run decode mode (recorded as `decode_mode` in metrics).
+**Gemini limitation (resolved for all specs)**: Gemini's function-calling schema validator rejects discriminated unions (`oneOf` + `discriminator`) and `const` tags. This is now resolved on the models themselves for **every** spec — `json_lab.py`, `arlem_full.py`, and `arlem_simplified.py` all inherit `ConstToEnumSchemaMixin` (`const`→`enum`, shared from `Code/Schemas/_schema_helpers.py`) and carry no field-level discriminated unions, so one provider-agnostic schema per spec runs on every provider via the free-decode `GENAI_TOOLS` path. All Gemini twins (`json_lab_gemini.py`, `arlem_full_gemini.py`, `arlem_simplified_gemini.py`) were retired (issues #26, #29), along with the constrained `GENAI_STRUCTURED_OUTPUTS` path and its response-schema-token estimation. `decode_mode_for()` in `benchmark.py` is the single source of truth for the per-run decode mode (recorded as `decode_mode` in metrics). Shared schema helpers (`ConstToEnumSchemaMixin`, `clamp_number`, `_coerce_number_list`) live in `_schema_helpers.py`.
 
 ## Code Patterns
 

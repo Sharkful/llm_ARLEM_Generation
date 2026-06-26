@@ -65,9 +65,9 @@ Consequences:
   imports that only resolve because of those inserts. They will look "unresolved"
   to a static tool but work at runtime when entered through `benchmark.py` /
   `generate_lab.py` (both do the same surgery).
-- Gemini variants are imported lazily inside functions
-  (`get_response_model`, `prompt_builder._load_lab_model`) so the union-free
-  files load only when a Google model runs.
+- Response models are imported lazily inside functions (`get_response_model`,
+  `prompt_builder.build_prompt`) so a schema module loads only when used. There are
+  no longer per-provider variants — one schema serves every provider.
 
 **Module dependency arrows (within `Code/Testing/`):**
 
@@ -87,22 +87,25 @@ because `SpecType` inherits from `str`.
 
 ## 4. The response models (`Code/Schemas/`)
 
-### 4.1 Spec families and their Gemini twins
+### 4.1 Spec families (one provider-agnostic schema each)
 
-| Spec | Standard model | Gemini-safe twin | Selected by |
-| --- | --- | --- | --- |
-| JSON Lab | `json_lab.py` → `Lab` | *(retired — `json_lab.py` runs on every provider)* | `SpecType.JSON_LAB` (default) |
-| ARLEM full | `arlem_full.py` → `ARLEMScenario` | `arlem_full_gemini.py` | `SpecType.ARLEM` |
-| ARLEM simplified | `arlem_simplified.py` | `arlem_simplified_gemini.py` | `SpecType.ARLEM_SIMPLIFIED` |
-| L1 outline | `lab_outline.py` → `LabOutline` | *(same file — already union-free)* | Level L1 only |
+| Spec | Model | Selected by |
+| --- | --- | --- |
+| JSON Lab | `json_lab.py` → `Lab` | `SpecType.JSON_LAB` (default) |
+| ARLEM full | `arlem_full.py` → `ARLEMScenario` | `SpecType.ARLEM` |
+| ARLEM simplified | `arlem_simplified.py` → `ARLEMScenario` | `SpecType.ARLEM_SIMPLIFIED` |
+| L1 outline | `lab_outline.py` → `LabOutline` | Level L1 only (any spec) |
 
-**Why the ARLEM twins exist:** Gemini's function-calling schema validator rejected
-`Union` / discriminated-union types (and the `const` tags single-value `Literal`s
-emit). The `arlem_*_gemini.py` files flatten those unions; the runner swaps them in
-automatically for Google ARLEM runs. **JSON Lab no longer needs a twin** —
-`json_lab.py` was made provider-agnostic (plain smart-union + `const`→`enum` via
-`ConstToEnumSchemaMixin`), so one schema runs on every provider on the free-decode
-`GENAI_TOOLS` path (issue #26). The same treatment will retire the ARLEM twins later.
+**No more Gemini twins.** Gemini's function-calling schema validator used to reject
+`Union` / discriminated-union types and the `const` tags single-value `Literal`s emit,
+which once required flat `*_gemini.py` twins. Every schema is now provider-agnostic:
+single-value Literals emit as `enum` (`const`→`enum`) via the shared
+`ConstToEnumSchemaMixin` in `_schema_helpers.py`, and the ARLEM models never used
+field-level unions to begin with (the `Union` import appears only in validator
+type-hints). So one schema per spec runs on every provider on the free-decode
+`GENAI_TOOLS` path — the `json_lab_gemini.py` and `arlem_*_gemini.py` twins were all
+retired (issues #26, #29). Shared coercion helpers (`ConstToEnumSchemaMixin`,
+`clamp_number`, `_coerce_number_list`) live in `Code/Schemas/_schema_helpers.py`.
 
 ### 4.2 JSON Lab hierarchy
 
@@ -198,15 +201,13 @@ trips when `max_tokens > ~21,333`. The runner then requests `max_tokens=32000`
 **Gemini / Google:**
 - `.env` uses `GEMINI_API_KEY`, but `from_provider` expects `GOOGLE_API_KEY` —
   the runner reads either and passes it explicitly.
-- Mode is `GENAI_STRUCTURED_OUTPUTS` (so Pydantic enums validate).
-- Union-free model twins are swapped in (see §4.1).
-- **Schema-token billing quirk:** Gemini omits the response-schema tokens from
-  `usage_metadata.prompt_token_count` but *bills* them as input.
-  `estimate_gemini_schema_tokens` re-tokenizes the processed OpenAPI schema with
-  Gemini's own `count_tokens` (cached per model+schema) and the runner records
-  `gemini_schema_tokens_*`, `prompt_tokens_adjusted`, `cost_adjusted_usd`
-  alongside the raw counts. Downstream code should prefer the `*_adjusted` /
-  `effective_*` fields. (Error bound ~±3%.)
+- Mode is `GENAI_TOOLS` (free-decode: generate + validate/retry) for **every** spec,
+  on the unified provider-agnostic schema — the same footing as OpenAI/Anthropic.
+- The old constrained `GENAI_STRUCTURED_OUTPUTS` path and its response-schema-token
+  estimation (`estimate_gemini_schema_tokens`, the `gemini_schema_*` /
+  `*_adjusted` / `effective_*` fields) were **retired** with the ARLEM unification:
+  free-decode sends the schema as a function declaration, billed normally, so there
+  is nothing to recover (issue #29).
 
 **OpenAI:** plain `from_provider("openai/<id>")`, no special handling.
 

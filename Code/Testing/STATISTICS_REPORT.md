@@ -3,8 +3,9 @@
 Where [`build_summary_report.py`](SUMMARY_REPORT.md) answers *which* providers and
 levels generated at all, this report aggregates *what the successful runs
 produced*: token counts, generation cost, generation time, and the structural
-shape of each generated lab (modules, clips, objects, unique objects, components)
-— sliced by model, provider, and prompt-specificity level (L1–L4).
+shape of each generated spec — for **json_lab** (modules, clips, objects,
+components) and **ARLEM** (things, places, actions, triggers, POIs) — sliced by
+model, provider, `spec_type`, and prompt-specificity level (L1–L4).
 
 Two pieces:
 
@@ -46,8 +47,9 @@ df = load_runs(include_failures=True)    # also pull failed runs from suite_resu
 df = load_runs(levels_only=False)        # also include legacy --topic runs
 
 df[df.provider == "anthropic"].wall_s.mean()    # avg generation time, one provider
-df.groupby("level").num_clips.mean()            # avg clips per specificity level
-df.groupby("display_name").effective_cost_usd.mean()  # avg cost per run, per model
+df[df.spec_type == "json_lab"].groupby("level").num_clips.mean()  # avg clips/level (json_lab)
+df[df.spec_type == "arlem"].groupby("level").num_actions.mean()   # avg actions/level (ARLEM)
+df.groupby("display_name").cost_usd.mean()      # avg cost per run, per model (all specs)
 ```
 
 `python "Code/Testing/benchmark_dataframe.py"` prints a quick shape/columns dump.
@@ -55,21 +57,30 @@ df.groupby("display_name").effective_cost_usd.mean()  # avg cost per run, per mo
 ## Columns
 
 Each row is one run. Beyond identity columns (`model`, `display_name`, `provider`,
-`level`, `structure`, `lab_name`, `timestamp`, `success`, `fail_mode`):
+`spec_type`, `level`, `structure`, `lab_name`, `timestamp`, `success`, `fail_mode`):
 
 - **Cost / tokens / time** — `prompt_tokens`, `completion_tokens`, `total_tokens`,
-  `cost_usd`, `duration_ms`, `wall_s`, `retries`, plus the Gemini-adjusted
-  `effective_prompt_tokens` / `effective_total_tokens` / `effective_cost_usd`
-  (fold in the response-schema tokens Google bills as input but omits from
-  reported usage; equal to the raw figures for other providers).
+  `cost_usd`, `duration_ms`, `wall_s`, `retries`. Every spec runs free-decode, so
+  these raw provider-reported figures are the real ones — there is no Gemini
+  schema-token adjustment (the old `effective_*` columns were retired with the
+  ARLEM unification, issue #29).
 - **Status** — `success`, `fail_mode`
   (`truncation (max_tokens)` / `schema validation` / `404 model-not-found` /
   `other`), and `had_usage` (`total_tokens > 0`) — separates *billable* failures
   that burned real tokens/time from *no-op* failures (bad model id / config
   error) that never reached the model and carry no meaningful stats.
-- **Structural** — `num_modules`, `num_objects`, `num_clips`, `num_components`,
-  `num_object_changes`, `num_text_labels`, `num_unique_prefabs`,
-  `num_unique_objects`, `num_objectives`, `num_educational_objectives`.
+- **json_lab structural** (0 for ARLEM rows) — `num_modules`, `num_objects`,
+  `num_clips`, `num_components`, `num_object_changes`, `num_text_labels`,
+  `num_unique_prefabs`, `num_unique_objects`, `num_objectives`,
+  `num_educational_objectives`.
+- **ARLEM structural** (0 for json_lab rows) — workplace resources `num_things`,
+  `num_places`, `num_persons`, `num_sensors`, `num_devices`, `num_apps`,
+  `num_detectables`, `num_primitives`, `num_predicates`, `num_warnings`; activity
+  flow `num_actions`, `total_activates`, `total_deactivates`, `total_messages`,
+  `total_triggers`, `total_pois`; and trigger-mode scalars `trigger_click`,
+  `trigger_voice`, `trigger_detect`, `trigger_sensor`. A row holds both the
+  json_lab and ARLEM column families; slice by `spec_type` before aggregating
+  structural columns.
 - **Novel assets** — `novel_prefabs`, `novel_textures` (distinct assets the model
   *invented* — not in the moon-lab library — and that we'd have to author, deduped
   across the whole lab), `novel_prefab_refs` / `novel_texture_refs` (how many
@@ -136,15 +147,19 @@ not the one-row-per-run table.
 
 ## What's in the report
 
-- **Cost & tokens** — grouped by provider, level, and model.
+- **Cost & tokens** — grouped by provider, **spec_type**, level, and model.
 - **Generation speed** — wall-clock time and completion throughput by provider,
   level, and model.
-- **Structural output (L2–L4)** — modules, clips, clips-per-module, objects,
-  unique objects, and components, by level / provider / model, plus a
-  level × provider clips pivot.
-- **Novel assets (L2–L4)** — distinct invented prefabs/textures per lab and their
-  per-module / per-object density, by level / provider / **model size** / model,
-  plus a novel-prefabs level × provider pivot. Audio shown as `audio_per_clip`.
+- **json_lab structural output (L2–L4)** — modules, clips, clips-per-module,
+  objects, unique objects, and components (over `FULL_JSON`), by level / provider /
+  model, plus a level × provider clips pivot.
+- **ARLEM structural output (L2–L4)** — things, places, predicates, actions,
+  activates, triggers, and POIs (over `FULL_ARLEM`), by spec / level / provider /
+  model, plus a trigger-mode mix (full vs simplified).
+- **Novel assets (json_lab, L2–L4)** — distinct invented prefabs/textures per lab
+  and their per-module / per-object density, by level / provider / **model size** /
+  model, plus a novel-prefabs level × provider pivot. Audio shown as
+  `audio_per_clip`. (ARLEM has no asset library, so this section is json_lab-only.)
 - **Failed runs** — failure-mode breakdown (the "common errors"), billable vs
   no-op split, what the billable failures cost (by model and level), the no-op
   list, and total spend wasted on failures.
@@ -153,16 +168,21 @@ not the one-row-per-run table.
 
 ### Caveats
 
-- **L1 is outline-only.** L1 prompts produce a `LabOutline`, not a full `Lab`, so
-  modules/clips/objects/components are 0 at L1 by design. Structural sections
-  restrict to L2–L4.
+- **L1 is outline-only.** L1 prompts produce a `LabOutline` (the same model for
+  every spec), not a full spec, so all structural counts are 0 at L1 by design.
+  Structural sections restrict to L2–L4.
+- **Slice structural columns by `spec_type`.** Each row carries both the json_lab
+  and ARLEM structural column families, with 0 where a metric doesn't apply. The
+  report scopes json_lab shape to `FULL_JSON` and ARLEM shape to `FULL_ARLEM`; do
+  the same in ad-hoc analysis. `structure` is `None` for ARLEM rows (ARLEM has one
+  ARLEMScenario shape; `--structure` only applies to json_lab).
 - **Where failures come from.** A failed run does not write an individual metrics
   file — failures survive only in the `suite_results_*.json` sweeps, which the
   report loads via `include_failures=True`. The suite files are a clean superset
   (every success in a suite also has a standalone metrics file), so the union is
-  deduped on `(model, level, structure, lab_name, timestamp)`. The cost/token and
-  structural sections aggregate successes; the *Failed runs* section handles the
-  rest. For the success/failure-by-provider picture, see
+  deduped on `(model, spec_type, level, structure, lab_name, timestamp)`. The
+  cost/token and structural sections aggregate successes; the *Failed runs* section
+  handles the rest. For the success/failure-by-provider picture, see
   `build_summary_report.py`.
 
 ## Dependencies
