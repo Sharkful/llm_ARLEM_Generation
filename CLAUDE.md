@@ -49,22 +49,22 @@ python "Code/Testing/benchmark.py" --model gpt-4o-mini
 python "Code/Testing/benchmark.py" --model gpt-4o-mini claude-haiku-4.5 gemini-2.5-flash \
     --topic "Human Heart Anatomy"
 
-# Benchmark with a YAML lab description at a specificity level (L1-L4)
-python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L2
+# Benchmark with a YAML lab description at a specificity level (L1, L3, L4; L2 retired)
+python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L3
 python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab vsepr_molecular_geometry --level L4
 
-# Switch output structure for L2-L4 (L1 ignores this)
+# Switch output structure for L3-L4 (L1 ignores this)
 #   single-module           - one DemoModule, many clips
 #   multi-module (default)  - Lab with one DemoModule per scene
 #   module-only             - bare DemoModule, no Lab wrapper
 python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon \
     --level L3 --structure multi-module
 
-# Benchmark ARLEM specs via the YAML path (L1-L4)
-python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L2 --spec arlem
+# Benchmark ARLEM specs via the YAML path (L1, L3, L4)
+python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L3 --spec arlem
 
 # Sweep multiple output formats together (--spec takes 1, 2, or all 3 formats)
-python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon --level L2 \
+python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon --level L3 \
     --spec json_lab arlem arlem_simple
 
 # Run a pre-defined suite (quick = cheap models, full = all models)
@@ -93,7 +93,7 @@ Lab generation:
 
 Benchmark runs:
   Artifacts/Lab Descriptions/*.yaml   ← topic source-of-truth (six fields)
-  → prompt_builder.py (loads YAML, builds L1-L4 prompt + picks response model)
+  → prompt_builder.py (loads YAML, builds L1/L3/L4 prompt + picks response model)
   → benchmark_config.py (model registry + legacy prompt templates + BenchmarkRunConfig)
   → benchmark.py (runner + client factory)
   → instructor + tracking/ (token/retry tracking)
@@ -128,17 +128,18 @@ Benchmark runs:
 
 **`benchmark.py`** — CLI runner. Creates instructor clients per provider, wraps them with `InstructorTracker`, generates a lab, analyzes output, saves results. Supports two prompt-construction paths:
 - Legacy: `--topic "..."` uses the templates in `benchmark_config.py`
-- YAML-driven: `--lab <topic_name> --level {L1,L2,L3,L4}` delegates to `prompt_builder.build_prompt()` and also picks the response model
+- YAML-driven: `--lab <topic_name> --level {L1,L3,L4}` delegates to `prompt_builder.build_prompt()` and also picks the response model
 
 **`benchmark_config.py`** — Model registry (`MODELS` dict), legacy prompt templates, `BenchmarkRunConfig` dataclass. Add new models here. `BenchmarkRunConfig` carries optional `lab_name`, `level`, and `structure` fields for the YAML-driven path; when both `lab_name` and `level` are set, the benchmark runner bypasses `get_prompt()` and calls `build_prompt()` instead. Defaults: `min_objects=4`, `min_clips=5`.
 
 **`prompt_builder.py`** — Loads a `<topic>_lab.yaml` from `Artifacts/Lab Descriptions/` into a `LabDescription` dataclass (plain dataclass, not Pydantic — input layer doesn't cross a system boundary). Strips `*` authoring flags and `[REVIEW: ...]` markers silently at load time. `build_prompt(lab, level, spec_type, structure=..., min_objects=..., min_clips=..., min_things=..., min_places=..., min_actions=...)` returns `(prompt_string, response_model_class)`. Levels:
 - **L1** — field/course/description → `LabOutline` (rough outline; not a full spec)
-- **L2** — same input as L1 → full spec
-- **L3** — L2 + `learning_objectives` → full spec
+- **L3** — L1 input + `learning_objectives` → full spec
 - **L4** — L3 + `detailed_script` → full spec
 
-`--structure` (json_lab L2–L4 only) selects the output shape: `multi-module` (default, one DemoModule per scene), `single-module` (one DemoModule, many clips), or `module-only` (bare `DemoModule`, no `Lab` wrapper). For **ARLEM** (`arlem` / `arlem_simple`) at L2–L4, `build_prompt` returns an `ARLEMScenario` and ignores `--structure` (ARLEM has a single output shape). L1 returns the spec-agnostic `LabOutline` for every spec.
+**L2 retired (issue #31):** L2 was "full spec from the L1 input (no learning objectives)." Its structural metrics tracked L3 (same input + objectives) too closely to justify the run budget, so it was dropped. The gap at L2 is intentional — level numbers encode *input specificity*, not a contiguous ordinal (L4 = has the detailed script). Renumbering to a contiguous L1/L2/L3 is deferred to a possible later migration to avoid breaking comparability with the formative-run artifacts.
+
+`--structure` (json_lab L3–L4 only) selects the output shape: `multi-module` (default, one DemoModule per scene), `single-module` (one DemoModule, many clips), or `module-only` (bare `DemoModule`, no `Lab` wrapper). For **ARLEM** (`arlem` / `arlem_simple`) at L3–L4, `build_prompt` returns an `ARLEMScenario` and ignores `--structure` (ARLEM has a single output shape). L1 returns the spec-agnostic `LabOutline` for every spec.
 
 Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `Artifacts/Data/Benchmark/prompts/`. Every metrics record carries `lab_name`, `level`, `structure`, and `prompt_file` for traceability. Pass `--no-save-prompts` for large sweeps or `--overwrite-prompts` after a wrapper-template tweak.
 
@@ -153,7 +154,7 @@ Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `A
 - `BenchmarkExporter` — export to JSON, CSV, or Markdown
 
 Benchmark outputs go to `Artifacts/Data/Benchmark/`:
-- `{model}_{spec}[_{level}]_{timestamp}_output.json` — the generated Lab / DemoModule / LabOutline / ARLEM JSON (`{level}` is present on the YAML-driven L1-L4 path)
+- `{model}_{spec}[_{level}]_{timestamp}_output.json` — the generated Lab / DemoModule / LabOutline / ARLEM JSON (`{level}` is present on the YAML-driven L1/L3/L4 path)
 - `{model}_{spec}[_{level}]_{timestamp}_metrics.json` — full tracking record (includes `prompt_file` reference for YAML-driven runs)
 - `suite_results_{timestamp}.json` — combined results across all suite runs
 - `prompts/{lab}_{level}_{spec}[_{structure}].txt` — assembled user prompt, written once per unique tuple

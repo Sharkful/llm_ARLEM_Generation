@@ -170,17 +170,22 @@ This is the single most important branch in `benchmark.py` (`run_single_benchmar
 | Trigger | `run_config.lab_name` **and** `run_config.level` set | neither set |
 | Prompt from | `prompt_builder.build_prompt()` | templates in `benchmark_config.py` |
 | Response model | picked by `build_prompt` per level/structure | `get_response_model(spec_type)` |
-| Levels | L1–L4 | n/a (single template) |
+| Levels | L1, L3, L4 (L2 retired) | n/a (single template) |
 | ARLEM | not wired (`NotImplementedError`) | supported |
 
 **Levels** (how much of the YAML is fed in):
 - **L1** field/course/description → `LabOutline` (rough outline, *not* a full
   spec; structural metrics are legitimately all-zero).
-- **L2** same input → full spec.
-- **L3** L2 + `learning_objectives` → full spec.
+- **L3** L1 input + `learning_objectives` → full spec.
 - **L4** L3 + `detailed_script` → full spec.
 
-**Structure** (L2–L4 only; L1 ignores it): `multi-module` (default, one
+**L2 retired (issue #31):** was "full spec from the L1 input, no learning
+objectives." Its metrics tracked L3 too closely to be worth the run budget. The
+gap is intentional — levels encode input specificity, not a contiguous ordinal
+(L4 = has the script); renumbering is deferred to keep formative-run artifacts
+comparable.
+
+**Structure** (L3–L4 only; L1 ignores it): `multi-module` (default, one
 `DemoModule` per scene) / `single-module` (one module, many clips) /
 `module-only` (bare `DemoModule`).
 
@@ -195,7 +200,7 @@ Adding ARLEM to the YAML path is "one row in the dispatch table" in
 client *manually* with an explicit `httpx.Timeout`. This is deliberate — a
 non-default timeout disables the SDK's "streaming required" guard that otherwise
 trips when `max_tokens > ~21,333`. The runner then requests `max_tokens=32000`
-(full L2–L4 labs run ~18–22K completion tokens; the old 8192 truncated them with
+(full L3–L4 labs run ~18–22K completion tokens; the old 8192 truncated them with
 `IncompleteOutputException`). Mode is `ANTHROPIC_TOOLS`.
 
 **Gemini / Google:**

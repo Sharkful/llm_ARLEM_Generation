@@ -167,8 +167,8 @@ def build_notebook(records: list[dict]) -> nbformat.NotebookNode:
         "        'success': f\"{ok}/{n} ({ok/n:.0%})\",\n"
         "        'wall_min': round(float(sub.wall_s.sum())/60, 1),\n"
         "        'cost_usd': round(float(sub.cost_usd.sum()), 2),\n"
-        "        'avg_objects_L2-4': round(float(succ.num_objects.mean()), 1) if len(succ) else 0,\n"
-        "        'avg_clips_L2-4': round(float(succ.num_clips.mean()), 1) if len(succ) else 0,\n"
+        "        'avg_objects_L3-4': round(float(succ.num_objects.mean()), 1) if len(succ) else 0,\n"
+        "        'avg_clips_L3-4': round(float(succ.num_clips.mean()), 1) if len(succ) else 0,\n"
         "    }\n"
     ))
 

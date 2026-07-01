@@ -47,7 +47,7 @@ MODELS = [
 ]
 
 LAB_KEY = "heart_anatomy_and_blood_flow"
-LEVEL = Level.L2
+LEVEL = Level.L3
 MAX_RETRIES = 3
 
 

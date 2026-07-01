@@ -12,11 +12,11 @@ Usage:
     python benchmark.py --model gpt-4o-mini claude-haiku-4.5 gemini-2.5-flash \
         --topic "Volcanic Eruption Mechanics"
 
-    # ARLEM spec instead of JSON Lab (YAML-driven path, L1-L4)
-    python benchmark.py --model claude-haiku-4.5 --lab phases_of_the_moon --level L2 --spec arlem
+    # ARLEM spec instead of JSON Lab (YAML-driven path, L1/L3/L4)
+    python benchmark.py --model claude-haiku-4.5 --lab phases_of_the_moon --level L3 --spec arlem
 
     # Sweep multiple output formats together (json_lab + ARLEM full + simplified)
-    python benchmark.py --model gpt-4o-mini --lab phases_of_the_moon --level L2 \
+    python benchmark.py --model gpt-4o-mini --lab phases_of_the_moon --level L3 \
         --spec json_lab arlem arlem_simple
 
     # Quick benchmark suite (all default topics × cheap models)
@@ -251,7 +251,7 @@ def run_single_benchmark(
         max_retries=run_config.max_retries,
     )
 
-    # Anthropic requires an explicit max_tokens. 8192 truncated full L2-L4 labs
+    # Anthropic requires an explicit max_tokens. 8192 truncated full L3-L4 labs
     # (IncompleteOutputException); a rich lab runs ~18-22K completion tokens, so we
     # cap at 32000 (~45% head-room). Exceeding the SDK's ~21,333 non-streaming
     # threshold is allowed here because create_instructor_client() builds the
@@ -354,7 +354,7 @@ def _save_prompt_artifact(
     The same prompt is shared across all models for a given
     (lab, level, spec, structure) tuple, so we write it once and let
     every run's metrics record reference the same file by relative path.
-    ``structure`` only applies to json_lab L2-L4; ARLEM and L1 omit it.
+    ``structure`` only applies to json_lab L3-L4; ARLEM and L1 omit it.
 
     Returns the prompt file path relative to PROJECT_ROOT.
     """
@@ -699,7 +699,7 @@ def parse_args():
     parser.add_argument(
         "--level",
         type=str,
-        choices=["L1", "L2", "L3", "L4"],
+        choices=["L1", "L3", "L4"],
         default=None,
         help="Specificity level for the YAML-driven prompt (requires --lab)",
     )
@@ -711,14 +711,14 @@ def parse_args():
     parser.add_argument(
         "--all-levels",
         action="store_true",
-        help="Iterate over all specificity levels L1-L4",
+        help="Iterate over all specificity levels (L1, L3, L4; L2 retired)",
     )
     parser.add_argument(
         "--structure",
         type=str,
         choices=["single-module", "multi-module", "module-only"],
         default="multi-module",
-        help="Output structure for L2-L4 (default: multi-module; ignored for L1)",
+        help="Output structure for L3-L4 (default: multi-module; ignored for L1)",
     )
     parser.add_argument(
         "--list-labs",
@@ -805,7 +805,7 @@ def main():
         lab_names = None
 
     if args.all_levels:
-        levels = [Level.L1, Level.L2, Level.L3, Level.L4]
+        levels = [Level.L1, Level.L3, Level.L4]
     elif args.level:
         levels = [Level(args.level)]
     else:

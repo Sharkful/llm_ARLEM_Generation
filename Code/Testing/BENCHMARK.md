@@ -62,10 +62,10 @@ model **plus** Opus.
 | Flag | Behavior |
 | --- | --- |
 | `--lab <topic_name>` | A single lab YAML, identified by its `topic_name` (see `--list-labs`). |
-| `--level {L1,L2,L3,L4}` | A single specificity level. |
+| `--level {L1,L3,L4}` | A single specificity level (L2 retired — issue #31). |
 | `--all-labs` | Iterate every discovered lab YAML (excludes the `Example/` subfolder). |
-| `--all-levels` | Iterate all four levels `L1`–`L4`. |
-| `--structure {single-module,multi-module,module-only}` | Output shape for L2–L4. Default `multi-module`. Ignored for L1. |
+| `--all-levels` | Iterate all levels `L1`, `L3`, `L4` (L2 retired). |
+| `--structure {single-module,multi-module,module-only}` | Output shape for L3–L4. Default `multi-module`. Ignored for L1. |
 
 Coherence rules enforced at startup (non-suite path):
 
@@ -140,14 +140,20 @@ therefore which response model is used. Higher levels add more authored detail.
 | Level | Input fields used | Response model |
 | --- | --- | --- |
 | **L1** | field / course / description | `LabOutline` — a rough scene-by-scene outline, **not** a full spec |
-| **L2** | same input as L1 | full spec (`Lab` / `DemoModule`) |
-| **L3** | L2 + `learning_objectives` | full spec |
+| **L3** | L1 input + `learning_objectives` | full spec (`Lab` / `DemoModule`) |
 | **L4** | L3 + `detailed_script` | full spec |
 
 L1 outputs `LabOutline`, so its structural metrics (object/clip counts) report
 zeros — that's expected, not a failure.
 
-## Structure modes (L2–L4 only)
+**L2 retired (issue #31):** L2 was "full spec from the L1 input, without learning
+objectives." Its structural metrics tracked L3 (same input *plus* objectives) too
+closely to justify the run budget, so it was dropped. The gap at L2 is
+intentional — level numbers encode input specificity, not a contiguous ordinal
+(L4 = has the detailed script). Renumbering to contiguous L1/L2/L3 is deferred to
+a possible later migration to keep the formative-run artifacts comparable.
+
+## Structure modes (L3–L4 only)
 
 | Value | Output shape |
 | --- | --- |
@@ -212,7 +218,7 @@ normally, so the raw token/cost figures are the real ones.
 > [`threats_to_validity.md`](../../Artifacts/Data/Benchmark/Reports/threats_to_validity.md).
 
 **Anthropic**: always called with an explicit `max_tokens` (required by the
-API). The runner uses `32000` — full L2–L4 labs run ~18–22K completion tokens
+API). The runner uses `32000` — full L3–L4 labs run ~18–22K completion tokens
 and `8192` truncated them. To allow this above the SDK's ~21,333 non-streaming
 threshold, the Anthropic client is built with an explicit timeout, which disables
 the "streaming required" guard.
@@ -254,7 +260,7 @@ python "Code/Testing/benchmark.py" --list-models
 python "Code/Testing/benchmark.py" --list-labs
 
 # Single model, one lab, one level
-python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L2
+python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L3
 
 # One lab, every level, with a chosen structure
 python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab vsepr_molecular_geometry --all-levels --structure single-module
