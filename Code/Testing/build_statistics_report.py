@@ -51,7 +51,7 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "model and carry no stats).\n\n"
         "**Caveat on L1.** L1 prompts produce a rough `LabOutline`, not a full "
         "`Lab` — so modules/clips/objects/components are 0 for L1 by design. "
-        "Structural sections below therefore restrict to **L2–L4**."
+        "Structural sections below therefore restrict to **L3–L4**."
     ))
 
     # ── Data + helpers (records embedded inline → self-contained notebook) ──
@@ -68,9 +68,9 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "df = pd.DataFrame(RECORDS)            # ALL runs (successes + failures)\n"
         "OK = df[df.success].copy()           # successful runs only\n"
         "FAIL = df[~df.success].copy()        # failed runs\n\n"
-        "LEVELS = ['L1', 'L2', 'L3', 'L4']\n"
+        "LEVELS = ['L1', 'L3', 'L4']  # L2 retired (issue #31)\n"
         "PROVIDERS = ['openai', 'anthropic', 'google']\n"
-        "FULL = OK[OK.level != 'L1']  # L2-L4 successes (any spec)\n"
+        "FULL = OK[OK.level != 'L1']  # L3-L4 successes (any spec)\n"
         "# Structural columns differ by spec, so slice before aggregating shape.\n"
         "FULL_JSON = FULL[FULL.spec_type == 'json_lab']                       # json_lab shape\n"
         "FULL_ARLEM = FULL[FULL.spec_type.isin(['arlem', 'arlem_simple'])]    # ARLEM shape\n\n"
@@ -88,7 +88,7 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "    })\n"
         "    return out\n\n"
         "def struct_agg(frame, by):\n"
-        "    \"\"\"json_lab structural-shape aggregation (use on FULL_JSON, L2-L4).\"\"\"\n"
+        "    \"\"\"json_lab structural-shape aggregation (use on FULL_JSON, L3-L4).\"\"\"\n"
         "    g = frame.groupby(by)\n"
         "    out = pd.DataFrame({\n"
         "        'runs': g.size(),\n"
@@ -102,7 +102,7 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "    })\n"
         "    return out\n\n"
         "def arlem_agg(frame, by):\n"
-        "    \"\"\"ARLEM structural-shape aggregation (use on FULL_ARLEM, L2-L4).\"\"\"\n"
+        "    \"\"\"ARLEM structural-shape aggregation (use on FULL_ARLEM, L3-L4).\"\"\"\n"
         "    g = frame.groupby(by)\n"
         "    out = pd.DataFrame({\n"
         "        'runs': g.size(),\n"
@@ -169,13 +169,13 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
 
     # ── Structural output ──────────────────────────────────────────
     cells.append(new_markdown_cell(
-        "## json_lab structural output (L2–L4)\n\n"
+        "## json_lab structural output (L3–L4)\n\n"
         "Shape of the generated **json_lab** labs: modules per lab, clips per module, "
         "objects (and how many were distinct), and components created. Restricted to "
-        "`FULL_JSON` (json_lab, L2–L4); L1 outlines and ARLEM runs are excluded."
+        "`FULL_JSON` (json_lab, L3–L4); L1 outlines and ARLEM runs are excluded."
     ))
     cells.append(new_code_cell(
-        "print('By level:'); display(struct_agg(FULL_JSON, 'level').reindex(['L2','L3','L4']))\n"
+        "print('By level:'); display(struct_agg(FULL_JSON, 'level').reindex(['L3','L4']))\n"
         "print('By provider:'); display(struct_agg(FULL_JSON, 'provider'))\n"
         "print('By model:'); display(struct_agg(FULL_JSON, 'display_name').sort_values('avg_clips', ascending=False))"
     ))
@@ -191,26 +191,26 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "values='num_clips', aggfunc='mean').round(1)\n"
         "    display(ct)\n"
         "else:\n"
-        "    print('No json_lab L2-L4 runs in this sweep.')"
+        "    print('No json_lab L3-L4 runs in this sweep.')"
     ))
 
     # ── ARLEM structural output ────────────────────────────────────
     cells.append(new_markdown_cell(
-        "## ARLEM structural output (L2–L4)\n\n"
+        "## ARLEM structural output (L3–L4)\n\n"
         "Shape of the generated **ARLEM** scenarios (`arlem` full + `arlem_simple`): "
         "workplace things/places/predicates and activity actions / activates / "
-        "triggers / POIs. Restricted to `FULL_ARLEM` (L2–L4). json_lab's "
+        "triggers / POIs. Restricted to `FULL_ARLEM` (L3–L4). json_lab's "
         "modules/clips/objects don't apply here; ARLEM has a single ARLEMScenario "
         "shape (no `--structure`). The **By spec** cut contrasts full vs simplified."
     ))
     cells.append(new_code_cell(
         "if not FULL_ARLEM.empty:\n"
         "    print('By spec:'); display(arlem_agg(FULL_ARLEM, 'spec_type'))\n"
-        "    print('By level:'); display(arlem_agg(FULL_ARLEM, 'level').reindex(['L2','L3','L4']))\n"
+        "    print('By level:'); display(arlem_agg(FULL_ARLEM, 'level').reindex(['L3','L4']))\n"
         "    print('By provider:'); display(arlem_agg(FULL_ARLEM, 'provider'))\n"
         "    print('By model:'); display(arlem_agg(FULL_ARLEM, 'display_name').sort_values('avg_actions', ascending=False))\n"
         "else:\n"
-        "    print('No ARLEM L2-L4 runs in this sweep.')"
+        "    print('No ARLEM L3-L4 runs in this sweep.')"
     ))
     cells.append(new_markdown_cell(
         "### Trigger-mode mix (ARLEM)\n\n"
@@ -222,12 +222,12 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "if not FULL_ARLEM.empty:\n"
         "    display(FULL_ARLEM.groupby('spec_type')[trig_cols].mean().round(1))\n"
         "else:\n"
-        "    print('No ARLEM L2-L4 runs in this sweep.')"
+        "    print('No ARLEM L3-L4 runs in this sweep.')"
     ))
 
     # ── Novel assets ───────────────────────────────────────────────
     cells.append(new_markdown_cell(
-        "## Novel assets (json_lab, L2–L4)\n\n"
+        "## Novel assets (json_lab, L3–L4)\n\n"
         "Novel assets are a **json_lab** concept (invented prefab/texture names); "
         "ARLEM has no comparable asset library, so this section restricts to "
         "`FULL_JSON`.\n\n"
@@ -247,7 +247,7 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
     ))
     cells.append(new_code_cell(
         "def asset_agg(frame, by):\n"
-        "    \"\"\"Novel-asset aggregation (use on L2-L4 only).\"\"\"\n"
+        "    \"\"\"Novel-asset aggregation (use on L3-L4 only).\"\"\"\n"
         "    g = frame.groupby(by)\n"
         "    out = pd.DataFrame({\n"
         "        'runs': g.size(),\n"
@@ -259,7 +259,7 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "        'audio_per_clip': g.audio_per_clip.mean().round(2),\n"
         "    })\n"
         "    return out\n\n"
-        "print('By level:'); display(asset_agg(FULL_JSON, 'level').reindex(['L2','L3','L4']))\n"
+        "print('By level:'); display(asset_agg(FULL_JSON, 'level').reindex(['L3','L4']))\n"
         "print('By provider:'); display(asset_agg(FULL_JSON, 'provider'))\n"
         "print('By model size:'); display(asset_agg(FULL_JSON, 'size').reindex(['small','medium','large']))\n"
         "print('By model:'); display(asset_agg(FULL_JSON, 'display_name').sort_values('avg_novel_prefabs', ascending=False))"
@@ -279,7 +279,7 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "    display(FULL_JSON.pivot_table(index='provider', columns='level', "
         "values='novel_prefabs_per_module', aggfunc='mean').round(2))\n"
         "else:\n"
-        "    print('No json_lab L2-L4 runs in this sweep.')"
+        "    print('No json_lab L3-L4 runs in this sweep.')"
     ))
     cells.append(new_code_cell(
         "fig, axes = plt.subplots(1, 2, figsize=(14, 5))\n\n"
@@ -294,7 +294,7 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "axes[0].set_title('Novel assets per module by model size')\n"
         "axes[0].set_ylabel('avg per module'); axes[0].legend()\n\n"
         "# Novel prefabs per lab by specificity level (json_lab only)\n"
-        "lv = ['L2', 'L3', 'L4']\n"
+        "lv = ['L3', 'L4']\n"
         "k = FULL_JSON.groupby('level').novel_prefabs.mean().reindex(lv)\n"
         "axes[1].bar(lv, k.values, color='#4a7')\n"
         "axes[1].set_title('Novel prefabs per lab by specificity level')\n"
@@ -391,8 +391,8 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "axes[0, 0].barh(c.index, c.values, color='#4a7')\n"
         "axes[0, 0].set_title('Avg cost per run by model (USD)')\n"
         "axes[0, 0].set_xlabel('USD')\n\n"
-        "# 2. Avg clips by level (json_lab, L2-L4)\n"
-        "k = FULL_JSON.groupby('level').num_clips.mean().reindex(['L2','L3','L4'])\n"
+        "# 2. Avg clips by level (json_lab, L3-L4)\n"
+        "k = FULL_JSON.groupby('level').num_clips.mean().reindex(['L3','L4'])\n"
         "axes[0, 1].bar(k.index, k.values, color='#47a')\n"
         "axes[0, 1].set_title('Avg clips per json_lab by specificity level')\n"
         "axes[0, 1].set_ylabel('clips')\n"
@@ -406,7 +406,7 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "for i, v in enumerate(s.values):\n"
         "    axes[1, 0].annotate(f'{v:.0f}', (i, v), ha='center', va='bottom')\n\n"
         "# 4. Avg objects vs clips by level (json_lab)\n"
-        "lv = ['L2', 'L3', 'L4']\n"
+        "lv = ['L3', 'L4']\n"
         "objs = FULL_JSON.groupby('level').num_objects.mean().reindex(lv)\n"
         "clps = FULL_JSON.groupby('level').num_clips.mean().reindex(lv)\n"
         "x = np.arange(len(lv)); w = 0.38\n"
@@ -427,7 +427,7 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
         "(modules/clips/objects) uses `FULL_JSON`; ARLEM shape "
         "(things/places/actions/triggers/POIs) uses `FULL_ARLEM`. A row carries 0 "
         "for the columns that don't apply to its spec.\n"
-        "- Structural counts are over **successful** L2–L4 runs only; a model "
+        "- Structural counts are over **successful** L3–L4 runs only; a model "
         "that failed a level contributes no row there.\n"
         "- Failed-run stats use `had_usage` (`total_tokens > 0`) to separate "
         "billable failures from no-op ones; only billable failures enter the "

@@ -1,11 +1,11 @@
 """
 AR Lab Prompt Builder
 
-Loads a lab-description YAML and assembles the prompt for one of four
-specificity levels (L1-L4), pairing it with the appropriate Pydantic
-response model for handoff to Instructor.
+Loads a lab-description YAML and assembles the prompt for one of the
+specificity levels (L1, L3, L4; L2 retired — see issue #31), pairing it with
+the appropriate Pydantic response model for handoff to Instructor.
 
-L1 produces a rough outline (LabOutline) for every spec. L2-L4 produce full
+L1 produces a rough outline (LabOutline) for every spec. L3-L4 produce full
 specs: for json_lab, --structure selects between a single multi-clip module,
 multiple per-scene modules, or a bare DemoModule with no Lab wrapper; for arlem
 and arlem_simple it produces an ARLEMScenario (--structure does not apply).
@@ -46,7 +46,10 @@ _REVIEW_MARKER_RE = re.compile(r"\[REVIEW:[^\]]*\]")
 
 class Level(str, Enum):
     L1 = "L1"
-    L2 = "L2"
+    # L2 retired (issue #31): full spec without learning objectives. Its output
+    # tracked L3 (same input + objectives) too closely to be worth the run budget.
+    # The gap is intentional — level numbers encode input specificity, not a
+    # contiguous ordinal (L4 = has the detailed script).
     L3 = "L3"
     L4 = "L4"
 
@@ -301,7 +304,7 @@ def build_prompt(
         level: L1 (outline) through L4 (full input).
         spec_type: a SpecType value ("json_lab", "arlem", "arlem_simple").
             SpecType inherits from str, so callers can pass the enum directly.
-        structure: output structure mode for json_lab L2-L4. Ignored for L1 and
+        structure: output structure mode for json_lab L3-L4. Ignored for L1 and
             for ARLEM (which has a single ARLEMScenario output shape).
         min_objects, min_clips: json_lab structural minima injected into the wrapper.
         min_things, min_places, min_actions: ARLEM structural minima.
@@ -318,7 +321,7 @@ def build_prompt(
         prompt = OUTLINE_INSTRUCTION.format(lab_context=lab_context)
         return prompt, LabOutline
 
-    # L2-L4: dispatch on spec_type.
+    # L3-L4: dispatch on spec_type.
     if spec_type == "json_lab":
         # json_lab.Lab / DemoModule are provider-agnostic (plain smart-union +
         # const->enum via ConstToEnumSchemaMixin), so the same response model goes

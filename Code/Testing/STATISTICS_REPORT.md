@@ -150,13 +150,13 @@ not the one-row-per-run table.
 - **Cost & tokens** — grouped by provider, **spec_type**, level, and model.
 - **Generation speed** — wall-clock time and completion throughput by provider,
   level, and model.
-- **json_lab structural output (L2–L4)** — modules, clips, clips-per-module,
+- **json_lab structural output (L3–L4)** — modules, clips, clips-per-module,
   objects, unique objects, and components (over `FULL_JSON`), by level / provider /
   model, plus a level × provider clips pivot.
-- **ARLEM structural output (L2–L4)** — things, places, predicates, actions,
+- **ARLEM structural output (L3–L4)** — things, places, predicates, actions,
   activates, triggers, and POIs (over `FULL_ARLEM`), by spec / level / provider /
   model, plus a trigger-mode mix (full vs simplified).
-- **Novel assets (json_lab, L2–L4)** — distinct invented prefabs/textures per lab
+- **Novel assets (json_lab, L3–L4)** — distinct invented prefabs/textures per lab
   and their per-module / per-object density, by level / provider / **model size** /
   model, plus a novel-prefabs level × provider pivot. Audio shown as
   `audio_per_clip`. (ARLEM has no asset library, so this section is json_lab-only.)
@@ -170,7 +170,7 @@ not the one-row-per-run table.
 
 - **L1 is outline-only.** L1 prompts produce a `LabOutline` (the same model for
   every spec), not a full spec, so all structural counts are 0 at L1 by design.
-  Structural sections restrict to L2–L4.
+  Structural sections restrict to L3–L4.
 - **Slice structural columns by `spec_type`.** Each row carries both the json_lab
   and ARLEM structural column families, with 0 where a metric doesn't apply. The
   report scopes json_lab shape to `FULL_JSON` and ARLEM shape to `FULL_ARLEM`; do

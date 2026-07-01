@@ -41,7 +41,7 @@ ordering in the report.
 - **Fixes between Run 1 and Run 2** — a narrative section plus a bar chart of
   success rate by provider, pre-fix vs post-fix.
 - **One section per topic**, each with:
-  - topic stats (success rate, wall time, cost, avg objects/clips at L2–L4),
+  - topic stats (success rate, wall time, cost, avg objects/clips at L3–L4),
   - success by provider × level,
   - a per-model OK/✗ grid with the dominant failure mode,
   - a failure-mode breakdown.
