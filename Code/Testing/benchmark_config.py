@@ -69,7 +69,6 @@ MODELS = {
     "claude-opus-4.8":   ModelConfig("claude-opus-4-8",          Provider.ANTHROPIC, "Claude Opus 4.8",   ModelSize.LARGE),
     "claude-sonnet-4.6": ModelConfig("claude-sonnet-4-6",        Provider.ANTHROPIC, "Claude Sonnet 4.6", ModelSize.MEDIUM),
     "claude-haiku-4.5":  ModelConfig("claude-haiku-4-5-20251001", Provider.ANTHROPIC, "Claude Haiku 4.5",  ModelSize.SMALL),
-    "claude-3-haiku":    ModelConfig("claude-3-haiku-20240307",   Provider.ANTHROPIC, "Claude 3 Haiku (dep. Apr 2026)", ModelSize.SMALL),
 
     # ── Google Gemini ─────────────────────────────────────────────────────
     "gemini-3.1-pro":        ModelConfig("gemini-3.1-pro-preview",        Provider.GOOGLE, "Gemini 3.1 Pro",        ModelSize.LARGE),

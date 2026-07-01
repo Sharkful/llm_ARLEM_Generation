@@ -46,7 +46,7 @@ python "Code/Testing/generate_lab.py" --list-models
 
 # Benchmark with a free-form topic (legacy path, single prompt template)
 python "Code/Testing/benchmark.py" --model gpt-4o-mini
-python "Code/Testing/benchmark.py" --model gpt-4o-mini claude-3-haiku gemini-2.0-flash \
+python "Code/Testing/benchmark.py" --model gpt-4o-mini claude-haiku-4.5 gemini-2.5-flash \
     --topic "Human Heart Anatomy"
 
 # Benchmark with a YAML lab description at a specificity level (L1-L4)
@@ -60,8 +60,12 @@ python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab vsepr_molecular_geo
 python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon \
     --level L3 --structure multi-module
 
-# Benchmark with ARLEM spec (legacy --topic path only; YAML path not yet wired for ARLEM)
-python "Code/Testing/benchmark.py" --model claude-sonnet-4 --spec arlem
+# Benchmark ARLEM specs via the YAML path (L1-L4)
+python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L2 --spec arlem
+
+# Sweep multiple output formats together (--spec takes 1, 2, or all 3 formats)
+python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon --level L2 \
+    --spec json_lab arlem arlem_simple
 
 # Run a pre-defined suite (quick = cheap models, full = all models)
 python "Code/Testing/benchmark.py" --suite quick
@@ -103,19 +107,19 @@ Benchmark runs:
 
 ### Key Models
 
-**`Code/Tools/json_lab.py`** — Lab JSON models (Claude/OpenAI):
+**`Code/Schemas/json_lab.py`** — Lab JSON models (Claude/OpenAI):
 - `Lab` → `DemoModule` → `Clip` → `SceneObject` → components
 - Components use discriminated unions on `componentType` field
 - `ObjectChange` uses sparse delta format (only changed fields per clip)
 - `DemoModule` is also a valid top-level response model (used by the
   `--structure module-only` mode of the prompt builder)
 
-**`Code/Tools/lab_outline.py`** — Minimal response model for L1 outline prompts:
+**`Code/Schemas/lab_outline.py`** — Minimal response model for L1 outline prompts:
 - `LabOutline` → `OutlineScene` (scene_name, brief_purpose, key_visuals, student_actions)
 - No discriminated unions or prefab refs — works on every provider including Gemini
 - Intentionally permissive; will be refined as L1 failure modes surface
 
-**`Code/Tools/arlem_full.py`** — Full ARLEM specification:
+**`Code/Schemas/arlem_full.py`** — Full ARLEM specification:
 - `ARLEMScenario` contains a `Workplace` (static environment) + `Activity` (logic/workflow)
 - Cross-validation: `ARLEMScenario.validate_activity_flows()` checks activity actions against workplace resources
 - `Tangible` subtypes (Thing/Place/Person) use discriminated unions on `type` field
@@ -128,18 +132,19 @@ Benchmark runs:
 
 **`benchmark_config.py`** — Model registry (`MODELS` dict), legacy prompt templates, `BenchmarkRunConfig` dataclass. Add new models here. `BenchmarkRunConfig` carries optional `lab_name`, `level`, and `structure` fields for the YAML-driven path; when both `lab_name` and `level` are set, the benchmark runner bypasses `get_prompt()` and calls `build_prompt()` instead. Defaults: `min_objects=4`, `min_clips=5`.
 
-**`prompt_builder.py`** — Loads a `<topic>_lab.yaml` from `Artifacts/Lab Descriptions/` into a `LabDescription` dataclass (plain dataclass, not Pydantic — input layer doesn't cross a system boundary). Strips `*` authoring flags and `[REVIEW: ...]` markers silently at load time. `build_prompt(lab, level, spec_type, structure=..., use_gemini_models=...)` returns `(prompt_string, response_model_class)`. Levels:
+**`prompt_builder.py`** — Loads a `<topic>_lab.yaml` from `Artifacts/Lab Descriptions/` into a `LabDescription` dataclass (plain dataclass, not Pydantic — input layer doesn't cross a system boundary). Strips `*` authoring flags and `[REVIEW: ...]` markers silently at load time. `build_prompt(lab, level, spec_type, structure=..., min_objects=..., min_clips=..., min_things=..., min_places=..., min_actions=...)` returns `(prompt_string, response_model_class)`. Levels:
 - **L1** — field/course/description → `LabOutline` (rough outline; not a full spec)
 - **L2** — same input as L1 → full spec
 - **L3** — L2 + `learning_objectives` → full spec
 - **L4** — L3 + `detailed_script` → full spec
 
-`--structure` (L2–L4 only) selects the output shape: `multi-module` (default, one DemoModule per scene), `single-module` (one DemoModule, many clips), or `module-only` (bare `DemoModule`, no `Lab` wrapper). ARLEM is parameterized but currently raises `NotImplementedError` — adding it later is one row in the dispatch table.
+`--structure` (json_lab L2–L4 only) selects the output shape: `multi-module` (default, one DemoModule per scene), `single-module` (one DemoModule, many clips), or `module-only` (bare `DemoModule`, no `Lab` wrapper). For **ARLEM** (`arlem` / `arlem_simple`) at L2–L4, `build_prompt` returns an `ARLEMScenario` and ignores `--structure` (ARLEM has a single output shape). L1 returns the spec-agnostic `LabOutline` for every spec.
 
 Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `Artifacts/Data/Benchmark/prompts/`. Every metrics record carries `lab_name`, `level`, `structure`, and `prompt_file` for traceability. Pass `--no-save-prompts` for large sweeps or `--overwrite-prompts` after a wrapper-template tweak.
 
 **`lab_metrics.py`** — Post-generation structural analysis:
 - `analyze_json_lab()` — counts objects, clips, components, text labels, object changes, prefab diversity. Shaped for the full `Lab` schema; reports zeros for `LabOutline` outputs (L1 runs)
+- `analyze_assets()` — counts **novel assets** the model invented (prefabs/textures not in the moon-lab library, deduped per lab — what we'd have to author) plus audio volume. Holds the known-asset lists (`KNOWN_TEXTURES`/`KNOWN_PREFABS`), kept in sync with the `SceneObject.prefab`/`.texture` descriptions in `json_lab.py`; returns `novel_prefab_names`/`novel_texture_names` for qualitative review. Not stored in metrics files — computed at dataframe-load time from saved outputs. See `Code/Testing/STATISTICS_REPORT.md`
 - `analyze_arlem()` — counts things, places, actions, activates/deactivates, triggers, POIs
 
 **`tracking/`** — Token/retry tracking module (copied from `feature/instructor-tracking`):
@@ -148,8 +153,8 @@ Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `A
 - `BenchmarkExporter` — export to JSON, CSV, or Markdown
 
 Benchmark outputs go to `Artifacts/Data/Benchmark/`:
-- `{model}_{spec}_{timestamp}_output.json` — the generated Lab / DemoModule / LabOutline / ARLEM JSON
-- `{model}_{spec}_{timestamp}_metrics.json` — full tracking record (includes `prompt_file` reference for YAML-driven runs)
+- `{model}_{spec}[_{level}]_{timestamp}_output.json` — the generated Lab / DemoModule / LabOutline / ARLEM JSON (`{level}` is present on the YAML-driven L1-L4 path)
+- `{model}_{spec}[_{level}]_{timestamp}_metrics.json` — full tracking record (includes `prompt_file` reference for YAML-driven runs)
 - `suite_results_{timestamp}.json` — combined results across all suite runs
 - `prompts/{lab}_{level}_{spec}[_{structure}].txt` — assembled user prompt, written once per unique tuple
 
@@ -178,7 +183,7 @@ result = client.create(
 
 Use `instructor.from_provider("provider/model-id")` — this is the unified API. Anthropic always requires `max_tokens`.
 
-**Gemini limitation**: Gemini does not support Union types or discriminated unions. When benchmarking Gemini models, `benchmark.py` automatically switches to `json_lab_gemini.py` / `arlem_full_gemini.py` / `arlem_simplified_gemini.py`.
+**Gemini limitation (resolved for all specs)**: Gemini's function-calling schema validator rejects discriminated unions (`oneOf` + `discriminator`) and `const` tags. This is now resolved on the models themselves for **every** spec — `json_lab.py`, `arlem_full.py`, and `arlem_simplified.py` all inherit `ConstToEnumSchemaMixin` (`const`→`enum`, shared from `Code/Schemas/_schema_helpers.py`) and carry no field-level discriminated unions, so one provider-agnostic schema per spec runs on every provider via the free-decode `GENAI_TOOLS` path. All Gemini twins (`json_lab_gemini.py`, `arlem_full_gemini.py`, `arlem_simplified_gemini.py`) were retired (issues #26, #29), along with the constrained `GENAI_STRUCTURED_OUTPUTS` path and its response-schema-token estimation. `decode_mode_for()` in `benchmark.py` is the single source of truth for the per-run decode mode (recorded as `decode_mode` in metrics). Shared schema helpers (`ConstToEnumSchemaMixin`, `clamp_number`, `_coerce_number_list`) live in `_schema_helpers.py`.
 
 ## Code Patterns
 

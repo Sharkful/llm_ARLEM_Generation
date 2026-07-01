@@ -23,14 +23,24 @@ from datetime import date
 from enum import Enum
 from typing import Annotated, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    BeforeValidator,
+    Field,
+    field_validator,
+    model_validator,
+)
 from pydantic.json_schema import SkipJsonSchema
+
+from _schema_helpers import ConstToEnumSchemaMixin, _coerce_number_list
 
 
 # ── Primitive Types ───────────────────────────────────────────────────
 
 Vec3 = Annotated[
     list[Union[int, float]],
+    BeforeValidator(_coerce_number_list),
     Field(
         min_length=3,
         max_length=3,
@@ -40,6 +50,7 @@ Vec3 = Annotated[
 
 Color4 = Annotated[
     list[Union[int, float]],
+    BeforeValidator(_coerce_number_list),
     Field(
         min_length=4,
         max_length=4,
@@ -57,15 +68,32 @@ class ModuleType(str, Enum):
 
 
 # ── Components ────────────────────────────────────────────────────────
-# Each component is a separate model with a Literal discriminator so
-# that Pydantic (and Instructor) can resolve the correct type from
-# the "componentType" field. Add new component types here as needed.
+# Each component is a separate model tagged by a Literal `type` field. Two
+# tag fields are kept in lockstep, one per consumer:
+#
+#   type           - LLM-facing. Literal matches the Python class name exactly
+#                    (e.g. "TextMeshProComponent"), the naming the model expects.
+#                    Pydantic smart-union resolution selects the subtype on THIS
+#                    field (see the `Component` union below). Excluded from
+#                    serialization (exclude=True), so it never reaches the headset.
+#   componentType  - Headset-facing. Literal is the Unity component identifier
+#                    (e.g. "textMeshPro") that the device deserializer and the
+#                    original-lab reference data use. Hidden from the LLM schema
+#                    (SkipJsonSchema) and auto-filled from its default, so the
+#                    model never sees or sets it.
+#
+# Net effect: the model reads/writes `type` with class-name values; serialized
+# output carries only `componentType` with the canonical Unity value.
+# Each component subclasses ConstToEnumSchemaMixin (imported from _schema_helpers)
+# so its single-value `type` Literal is emitted as a JSON-Schema enum, which Gemini
+# requires. Add new component types here as needed (keep both literals in sync).
 
 
-class TextMeshProComponent(BaseModel):
+class TextMeshProComponent(ConstToEnumSchemaMixin):
     """Renders 3D text via TextMeshPro."""
 
-    componentType: Literal["textMeshPro"] = "textMeshPro"
+    type: Literal["TextMeshProComponent"] = Field("TextMeshProComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["textMeshPro"]] = "textMeshPro"
     text: str = Field(description="The displayed text content")
     color: Optional[Color4] = Field(
         default=None, description="Text color in RGBA"
@@ -74,34 +102,62 @@ class TextMeshProComponent(BaseModel):
         ge=20,
         le=80,
         default=30,
-        description="Font size. 72pt font is 1 Unity Unit Tall. Default value is 30. Headers and titles can be larger, long descriptive text may be smaller."
+        description="72pt font is 1m tall in the lab. The default value is 30. The value chosen must be an integer greater than 20 and less than 80"
     )
     wrapText: Optional[bool] = Field(
         default=None, description="Whether to wrap text"
     )
 
+    @field_validator("fontSize", mode="before")
+    @classmethod
+    def _coerce_fontsize(cls, v):
+        """Cosmetic field: silently round float/numeric input to int and clamp
+        into [20, 80] rather than forcing an instructor retry. Non-numeric input
+        is passed through untouched so the standard int validator emits a clean
+        error. See sweep 2-3 error analysis: fontSize was the #2 retry driver,
+        and the range is arbitrary enough that a quiet clamp beats a paid retry."""
+        if v is None:
+            return v
+        try:
+            v = round(float(v))
+        except (TypeError, ValueError):
+            return v
+        return max(20, min(80, v))
 
-class SimpleRotationComponent(BaseModel):
+
+class SimpleRotationComponent(ConstToEnumSchemaMixin):
     """Continuously rotates an object around its Y axis."""
 
-    componentType: Literal["simpleRotation"] = "simpleRotation"
+    type: Literal["SimpleRotationComponent"] = Field("SimpleRotationComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["simpleRotation"]] = "simpleRotation"
     timeRate: float = Field(
         default=1.0, description="Speed multiplier for the rotation"
     )
     rotationTime: Union[int, float] = Field(
-        description="Duration of one full rotation in seconds"
+        description=(
+            "Duration of one full 360 rotation, in SECONDS (a time, not a "
+            "rotational speed). Larger = slower. e.g. 8 means the object "
+            "completes one rotation every 8 seconds. Do not provide a speed "
+            "in degrees/second or an angular-velocity vector here."
+        )
     )
 
 
-class SimpleOrbitComponent(BaseModel):
+class SimpleOrbitComponent(ConstToEnumSchemaMixin):
     """Orbits an object around a center point."""
 
-    componentType: Literal["simpleOrbit"] = "simpleOrbit"
+    type: Literal["SimpleOrbitComponent"] = Field("SimpleOrbitComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["simpleOrbit"]] = "simpleOrbit"
     initialPosition: Vec3 = Field(
         description="Initial orbital position relative to the orbit center as [x, y, z]"
     )
     orbitalPeriod: float = Field(
-        description="Time for one full orbit in seconds"
+        # Models name this `period` (values [20, 65, ...]) and `periodSeconds`
+        # ([12, 30, 90, ...]) as often as `orbitalPeriod` — same concept, same
+        # seconds unit, so accept them. (NB: `startAngle`/`speed` are NOT aliased
+        # — those are a different, angle/speed-based mental model, not a period.)
+        validation_alias=AliasChoices("orbitalPeriod", "period", "periodSeconds"),
+        description="Time for one full orbit in seconds",
     )
     timeRate: float = Field(
         default=1.0, description="Speed multiplier for the orbit"
@@ -115,10 +171,11 @@ class SimpleOrbitComponent(BaseModel):
     )
 
 
-class CheckAngleComponent(BaseModel):
+class CheckAngleComponent(ConstToEnumSchemaMixin):
     """Checks if an object is oriented at a target angle and triggers a callback on success."""
 
-    componentType: Literal["checkAngle"] = "checkAngle"
+    type: Literal["CheckAngleComponent"] = Field("CheckAngleComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["checkAngle"]] = "checkAngle"
     azmTarget: int = Field(
         description="Target azimuth angle in degrees (0-360)"
     )
@@ -140,10 +197,11 @@ class CheckAngleComponent(BaseModel):
     )
 
 
-class RigidBodyComponent(BaseModel):
+class RigidBodyComponent(ConstToEnumSchemaMixin):
     """Configures Unity physics on the object."""
 
-    componentType: Literal["rigidBody"] = "rigidBody"
+    type: Literal["RigidBodyComponent"] = Field("RigidBodyComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["rigidBody"]] = "rigidBody"
     mass: float = Field(default=1.0)
     drag: float = Field(default=0.0)
     angularDrag: float = Field(default=0.0)
@@ -160,10 +218,11 @@ class RigidBodyComponent(BaseModel):
     zRotationConstraint: bool = Field(default=False)
 
 
-class PointerReceiverComponent(BaseModel):
+class PointerReceiverComponent(ConstToEnumSchemaMixin):
     """Makes an object interactable via VR pointer/controller."""
 
-    componentType: Literal["pointerReceiver"] = "pointerReceiver"
+    type: Literal["PointerReceiverComponent"] = Field("PointerReceiverComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["pointerReceiver"]] = "pointerReceiver"
     draggable: bool = Field(
         default=False, description="Whether the user can grab and move this object"
     )
@@ -175,35 +234,38 @@ class PointerReceiverComponent(BaseModel):
     matchWallWhileDragging: bool = Field(default=False)
     invertForward: bool = Field(default=False)
 
-class NewScript(BaseModel):
+class NewComponent(ConstToEnumSchemaMixin):
     """A name and description for a new C# Monobehavior component that should implement functionality not covered in the other components"""
 
-    componentType: Literal["newscript"] = "newscript"
+    type: Literal["NewComponent"] = Field("NewComponent", exclude=True)
+    componentType: SkipJsonSchema[Literal["newscript"]] = "newscript"
     scriptName: str = Field(
         min_length=5,
         pattern=r'^\w+$',
         description="string name of the script file and the C# class it contains. should be all lowercase, alphanumeric, and without leading digits, minimum length 5"
     )
-    sciptDescription: str = Field(
+    scriptDescription: str = Field(
         min_length=20,
         description="""A description of what the component script does. It should note all required inputs, either references to other objects, or numeric values that can be set in the inspector.
-        It should not its outputs, what it effects."""
+        The description should also note the outputs and effects of the script."""
     )
 
 
-# Discriminated union of all component types.
-# Instructor uses this to resolve the correct subtype from componentType.
-Component = Annotated[
-    Union[
-        TextMeshProComponent,
-        SimpleRotationComponent,
-        SimpleOrbitComponent,
-        CheckAngleComponent,
-        RigidBodyComponent,
-        PointerReceiverComponent,
-        NewScript
-    ],
-    Field(discriminator="componentType"),
+# Plain (smart) union of all component types — no `discriminator=`.
+# Pydantic v2 smart-union resolution selects the subtype on the LLM-facing
+# `type` Literal (only the matching member validates), so this behaves like a
+# discriminated union for well-formed output without emitting the JSON-Schema
+# `oneOf` + `discriminator` that Gemini's schema translator rejects. Keeping it
+# discriminator-free lets one shared model run on OpenAI, Anthropic, and Gemini.
+# `componentType` stays hidden from the model.
+Component = Union[
+    TextMeshProComponent,
+    SimpleRotationComponent,
+    SimpleOrbitComponent,
+    CheckAngleComponent,
+    RigidBodyComponent,
+    PointerReceiverComponent,
+    NewComponent,
 ]
 
 
@@ -261,9 +323,9 @@ class SceneObject(BaseModel):
         default=None,
         description=
             """C# monobehavior components that alter behavior. Currently available components are in this schema, and include:
-            TextMeshProComponent, SimpleRotationComponent, SimpleOrbitComponent, CheckAngleComponent, RigidBodyComponent, PointerReceiverComponent, NewScript
-            NewScript is only to be used if you need new functionality that the other scripts cannot provide. You can add multiple components if needed.
-            When creating a NewScript, keep the scope simple. When possible split complex behavior into multiple smaller NewScripts that can be reused"""
+            TextMeshProComponent, SimpleRotationComponent, SimpleOrbitComponent, CheckAngleComponent, RigidBodyComponent, PointerReceiverComponent, NewComponent
+            NewComponent is only to be used if you need new functionality that the other components cannot provide. You can add multiple components if needed.
+            When creating a NewComponent, keep the scope simple. When possible split complex behavior into multiple smaller NewComponents that can be reused"""
     )
 
 
@@ -278,7 +340,12 @@ class ObjectChange(BaseModel):
     """
 
     target: str = Field(
-        description="Name of the object to modify (must match a SceneObject.name)"
+        # Models reliably name this key differently — across the sweeps the
+        # identifier showed up as `object` (101×) and `objectName` (99×) as
+        # often as `target`/`name`. Accept all four rather than burn a retry
+        # on key-naming drift (the deltas themselves are already correct).
+        validation_alias=AliasChoices("target", "name", "object", "objectName"),
+        description="Name of the object to modify (must match the name of an existing SceneObject)",
     )
     position: Optional[Vec3] = Field(
         default=None, description="New local position [x, y, z]"

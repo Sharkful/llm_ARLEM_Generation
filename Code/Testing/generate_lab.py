@@ -28,7 +28,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Tools"))
+sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Schemas"))
 
 from dotenv import load_dotenv
 load_dotenv(PROJECT_ROOT / ".env")
@@ -56,7 +56,10 @@ def create_instructor_client(model_config):
     kwargs = {}
     if model_config.provider == Provider.GOOGLE:
         kwargs["api_key"] = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-        kwargs["mode"] = instructor.Mode.GENAI_STRUCTURED_OUTPUTS
+        # Free-decode GENAI_TOOLS on the unified json_lab schema, matching the
+        # other providers (the const->enum + smart-union changes let Gemini accept
+        # it on the function-calling path). See issue #26.
+        kwargs["mode"] = instructor.Mode.GENAI_TOOLS
 
     return instructor.from_provider(f"{prefix}/{model_config.model_id}", **kwargs)
 
@@ -72,12 +75,10 @@ def generate_lab(
         raise ValueError(f"Unknown model '{model_id}'. Run --list-models to see options.")
 
     model_config = MODELS[model_id]
-    is_gemini = model_config.provider == Provider.GOOGLE
 
-    if is_gemini:
-        from json_lab_gemini import Lab
-    else:
-        from json_lab import Lab
+    # One provider-agnostic schema for every model (the flat json_lab_gemini twin
+    # was retired; Gemini takes the unified union model on GENAI_TOOLS).
+    from json_lab import Lab
 
     client = create_instructor_client(model_config)
 

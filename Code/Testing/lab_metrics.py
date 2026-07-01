@@ -8,6 +8,115 @@ for benchmarking comparison across models.
 from typing import Any
 
 
+# ── Known (moon-lab) asset library ────────────────────────────────────
+# The only assets that actually exist on the headset today. Anything an LLM
+# references outside these sets is a *novel* asset it invented and that we would
+# have to author to realize the generated lab. Kept lowercased; membership is
+# tested case-insensitively so trivial casing drift ("TextPrefab") is not
+# mis-counted as novel. Source of truth: the field descriptions in
+# Code/Schemas/json_lab.py (SceneObject.prefab / .texture) — keep these in sync.
+KNOWN_TEXTURES = {"2k_earth_daymap", "2k_moon", "2k_sun", "balldimpled"}
+KNOWN_PREFABS = {
+    "sunprefab", "moveablesphere", "clickablesphere", "tinysphere",
+    "textprefab", "robotidle",
+    # System prefab auto-filled on every DemoModule (SkipJsonSchema default); it
+    # is not an LLM-invented asset, so it must never count as novel.
+    "demoprefab",
+}
+
+
+def _is_novel(name: str | None, known: set[str]) -> bool:
+    """True if `name` is a non-empty asset reference outside the known set."""
+    if not name or not name.strip():
+        return False
+    return name.strip().lower() not in known
+
+
+def _iter_components(module: dict):
+    """Yield every component dict in a module, from both initial objects and the
+    sparse clip deltas (audio can be introduced via CheckAngleComponent in either
+    place)."""
+    for obj in module.get("objects", []):
+        yield from obj.get("components") or []
+    for clip in module.get("clips", []):
+        for change in clip.get("changes") or []:
+            yield from change.get("components") or []
+
+
+def analyze_assets(lab_json: dict) -> dict:
+    """Count the assets a generated lab references, separating *novel* assets
+    (invented by the model — not in the moon-lab library) from reuse of known
+    ones, plus audio (no known audio library exists, so audio is reported as
+    volume/density, not novelty).
+
+    Walks the same module-normalized structure as ``analyze_json_lab`` so it works
+    across Lab / single-module / module-only outputs and returns all-zero for L1
+    ``LabOutline`` outputs. Asset reference points are bounded:
+      - prefab/texture: only ``SceneObject`` carries them (``ObjectChange`` cannot
+        introduce new visual assets — it has no prefab/texture field);
+      - audio: ``Clip.audioClip`` plus ``CheckAngleComponent.audioClipSuccess`` in
+        either an object's components or a clip delta's components.
+    Returns per-lab counts; novel names are deduped across the whole lab (a prefab
+    reused in three modules is one asset to build).
+    """
+    if "modules" in lab_json:
+        modules = lab_json.get("modules", [])
+    else:
+        is_module = lab_json.get("moduleType") == "demo" or "clips" in lab_json
+        modules = [lab_json] if is_module else []
+
+    novel_textures: set[str] = set()
+    novel_prefabs: set[str] = set()
+    audio_names: set[str] = set()
+    texture_refs = prefab_refs = audio_refs = 0
+    novel_texture_refs = novel_prefab_refs = 0
+
+    for module in modules:
+        for obj in module.get("objects", []):
+            prefab = obj.get("prefab")
+            if prefab and prefab.strip():
+                prefab_refs += 1
+                if _is_novel(prefab, KNOWN_PREFABS):
+                    novel_prefabs.add(prefab.strip())
+                    novel_prefab_refs += 1
+            texture = obj.get("texture")
+            if texture and texture.strip():
+                texture_refs += 1
+                if _is_novel(texture, KNOWN_TEXTURES):
+                    novel_textures.add(texture.strip())
+                    novel_texture_refs += 1
+
+        for clip in module.get("clips", []):
+            audio = clip.get("audioClip")
+            if audio and audio.strip():
+                audio_refs += 1
+                audio_names.add(audio.strip())
+
+        for comp in _iter_components(module):
+            audio = comp.get("audioClipSuccess")
+            if audio and audio.strip():
+                audio_refs += 1
+                audio_names.add(audio.strip())
+
+    return {
+        # Headline: distinct invented assets we'd have to author for this lab.
+        "novel_textures": len(novel_textures),
+        "novel_prefabs": len(novel_prefabs),
+        # Reuse intensity: object-instances that point at a novel asset.
+        "novel_texture_refs": novel_texture_refs,
+        "novel_prefab_refs": novel_prefab_refs,
+        # Denominators / context: total references regardless of novelty.
+        "texture_refs": texture_refs,
+        "prefab_refs": prefab_refs,
+        # Audio has no known library — report volume, not novelty.
+        "audio_refs": audio_refs,
+        "audio_unique": len(audio_names),
+        # Kept for qualitative spot-checking; not flattened into the CSV.
+        "novel_texture_names": sorted(novel_textures),
+        "novel_prefab_names": sorted(novel_prefabs),
+    }
+
+
 def analyze_json_lab(lab_json: dict) -> dict:
     """
     Analyze a generated JSON Lab (v2.0 spec) and return structural metrics.

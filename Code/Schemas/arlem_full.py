@@ -1,24 +1,36 @@
-from typing import List, Optional, Literal, Union, Set, Dict
-from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
+from typing import List, Optional, Literal, Union, Set, Dict, Annotated
+from pydantic import Field, field_validator, model_validator, BeforeValidator, AliasChoices
+
+from _schema_helpers import ConstToEnumSchemaMixin, clamp_number
+
+# Clamped scalar types: coerce numeric strings / int<->float and silently clamp
+# *subjective* bounded values (positions, rotations, sizes, scale, volume) rather than
+# forcing an instructor retry. Semantically-critical magnitudes (e.g. IfLogic result
+# counts) keep a hard ge/le and raise instead. See _schema_helpers.clamp_number.
+_OffsetCm = Annotated[float, BeforeValidator(clamp_number(-1000.0, 1000.0))]
+_AngleDeg = Annotated[float, BeforeValidator(clamp_number(0.0, 360.0))]
+_SizeCm = Annotated[float, BeforeValidator(clamp_number(0.01, 1000.0))]
+_Scale = Annotated[float, BeforeValidator(clamp_number(0.01, 1000.0))]
+_Volume = Annotated[int, BeforeValidator(clamp_number(0.0, 100.0, as_int=True))]
 
 # ==========================================
 # PART 1: WORKPLACE MODEL (The Environment)
 # ==========================================
 
-class POI(BaseModel):
+class POI(ConstToEnumSchemaMixin):
     """
     Defines a specific point of interest on a physical object relative to its origin.
     """
     # Constraint: ID is Alphanumeric, Character String (100) 
     id: str = Field(..., max_length=100, description="Unique identifier for this specific point.")
     # Constraint: magnitude < 1000.00
-    x_offset: float = Field(0.0, ge=-1000.00, le=1000.00, description="Offset on the x-axis in cm.")
-    y_offset: float = Field(0.0, ge=-1000.00, le=1000.00, description="Offset on the y-axis in cm.")
-    z_offset: float = Field(0.0, ge=-1000.00, le=1000.00, description="Offset on the z-axis in cm.")
+    x_offset: _OffsetCm = Field(0.0, ge=-1000.00, le=1000.00, description="Offset on the x-axis in cm.")
+    y_offset: _OffsetCm = Field(0.0, ge=-1000.00, le=1000.00, description="Offset on the y-axis in cm.")
+    z_offset: _OffsetCm = Field(0.0, ge=-1000.00, le=1000.00, description="Offset on the z-axis in cm.")
     # Constraint: angles 0-360.0
-    x_rotation: float = Field(0.0, ge=0.0, le=360.0, description="Pitch in Euler angles (degrees).")
-    y_rotation: float = Field(0.0, ge=0.0, le=360.0, description="Yaw in Euler angles (degrees).")
-    z_rotation: float = Field(0.0, ge=0.0, le=360.0, description="Roll in Euler angles (degrees).")
+    x_rotation: _AngleDeg = Field(0.0, ge=0.0, le=360.0, description="Pitch in Euler angles (degrees).")
+    y_rotation: _AngleDeg = Field(0.0, ge=0.0, le=360.0, description="Yaw in Euler angles (degrees).")
+    z_rotation: _AngleDeg = Field(0.0, ge=0.0, le=360.0, description="Roll in Euler angles (degrees).")
 
     @model_validator(mode='after')
     def validate_default_origin(self):
@@ -33,17 +45,16 @@ class POI(BaseModel):
                 )
         return self
 
-class Detectable(BaseModel):
+class Detectable(ConstToEnumSchemaMixin):
     """
     Configuration for the computer vision system to recognize objects.
     """
     id: str = Field(..., max_length=100, description="Unique identifier referenced by Things, Places, or Persons.")
     type: Literal["marker", "anchor"] = Field(..., description="tracking method, 'marker' is an image target, 'anchor' spatial anchor relative to workplace origin")
     sensor: Optional[Literal["tracking", "mapping"]] = Field("tracking", description="sensor subsystem to use, image tracking or spatial mapping).")
-    # Not sure if HttpUrl will work with the LLM filling it in
-    url: Optional[HttpUrl] = Field(None, max_length=2000, description="URL to an asset bundle defining the defining image marker or anchor data.")
+    url: Optional[str] = Field(None, max_length=2000, description="URL to an asset bundle defining the image marker or anchor data. When generating new content, use a descriptive placeholder URL (e.g. 'https://assets.example.com/marker.bundle').")
 
-class Tangible(BaseModel):
+class Tangible(ConstToEnumSchemaMixin):
     """
     place or thing in the workspace
     """
@@ -60,28 +71,28 @@ class Person(Tangible):
     mbox: Optional[str] = Field(None, max_length=254, description="Email or ID used for xAPI logging identification.")
     persona: Optional[str] = Field(None, max_length=1000, description="Role or group membership (e.g., 'learner', 'instructor').")
 
-class SensorData(BaseModel):
+class SensorData(ConstToEnumSchemaMixin):
     """
     Definition of a data stream variable.
     """
     key: str = Field(..., max_length=100, description="The variable identifier/topic in the data stream.")
     type: Optional[Literal["string", "float", "integer", "boolean"]] = Field("string", description="The data type of the variable")
 
-class Sensor(BaseModel):
+class Sensor(ConstToEnumSchemaMixin):
     """
     IoT sensor configuration for receiving external data.
     """
     id: str = Field(..., max_length=100, description="Unique identifier for the sensor.")
     url: str = Field(...,
-                     pattern=r"^[a-zA-Z0-9+.-]+:\/\/[a-zA-Z0-9.-]+(:[0-9]{1,5})?$",
+                     pattern=r"^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/.+$",
                      max_length=1000,
                      description="Connection URL, of the form 'protocol://host.domain[:port]'",
                      examples=["mqtt://test.mosquitto.org:1883"])
     username: Optional[str] = Field(None, max_length=100, description="Auth username for the sensor stream.")
     password: Optional[str] = Field(None, max_length=100, description="Auth password for the sensor stream.")
-    data: List[SensorData] = Field(default_factory=list, min_items=1, description="List of data variables to listen for.")
+    data: List[SensorData] = Field(default_factory=list, min_length=1, description="List of data variables to listen for.")
 
-class Device(BaseModel):
+class Device(ConstToEnumSchemaMixin):
     """
     Hardware available for the experience (e.g., HoloLens, Tablet).
     """
@@ -90,7 +101,7 @@ class Device(BaseModel):
     name: str = Field(..., max_length=1000, description="Human-readable name of the device.")
     owner: Optional[str] = Field(None, max_length=100, description="Person ID of the device owner.")
     url: Optional[str] = Field(...,
-                     pattern=r"^[a-zA-Z0-9+.-]+:\/\/[a-zA-Z0-9.-]+(:[0-9]{1,5})?$",
+                     pattern=r"^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/.+$",
                      max_length=1000,
                      description="Connection URL, of the form 'protocol://host.domain[:port]'",
                      examples=["mqtt://test.mosquitto.org:1883"])
@@ -98,7 +109,7 @@ class Device(BaseModel):
     username: Optional[str] = Field(None, max_length=100, description="Auth username")
     password: Optional[str] = Field(None, max_length=100, description="Auth password")
 
-class App(BaseModel):
+class App(ConstToEnumSchemaMixin):
     """
     External web apps or widgets.
     """
@@ -106,43 +117,42 @@ class App(BaseModel):
     type: Literal["widget", "app", "prefab"] = Field(..., description="Type of application: html widget, launch command, or app prefab")
     name: str = Field(..., max_length=100, description="Human-readable description")
     url: str = Field(...,
-                     pattern=r"^[a-zA-Z0-9+.-]+:\/\/[a-zA-Z0-9.-]+$",
+                     pattern=r"^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/.+$",
                      max_length=1000,
                      description="URL of the manifest file, launch command, or download link of app prefab",
                      examples=["mqtt://test.mosquitto.org:1883"])
 
-class Primitive(BaseModel):
+class Primitive(ConstToEnumSchemaMixin):
     """
     Definition of what augmentations are supported in this workspace: audio, video, models, animations, or text labels.
     Note, this does not correspond with specific instances, like an image, but defines if any kind of image display is supported
     """
     id: Literal["animation", "image", "video", "audio", "label"] = Field(..., description="Unique media type of the augmentation.")
     # Optional size fields for bounding boxes
-    x_size: Optional[float] = Field(None, gte=0.01, lte=1000.00, description="image or object size on X axis (cm)")
-    y_size: Optional[float] = Field(None, gte=0.01, lte=1000.00, description="image or object size on Y axis (cm)")
-    z_size: Optional[float] = Field(None, gte=0.01, lte=1000.00, description="image or object size on Z axis (cm)")
-    volume: Optional[int] = Field(None, gte=0, lte=100, description="Volume for audio primatives")
+    x_size: Optional[_SizeCm] = Field(None, ge=0.01, le=1000.00, description="image or object size on X axis (cm)")
+    y_size: Optional[_SizeCm] = Field(None, ge=0.01, le=1000.00, description="image or object size on Y axis (cm)")
+    z_size: Optional[_SizeCm] = Field(None, ge=0.01, le=1000.00, description="image or object size on Z axis (cm)")
+    volume: Optional[_Volume] = Field(None, ge=0, le=100, description="Volume for audio primatives")
 
-class Predicate(BaseModel):
+class Predicate(ConstToEnumSchemaMixin):
     """
     reusable instructional augmentations, like an image or animation, to be used in an activity
     """
     id: str = Field(..., max_length=100, description="Unique id for this instructional augmentation")
     type: Literal["animation", "image", "video", "audio", "label"] = Field(..., description="what type of primitive, instance of Primitive.id, cannot be a value not defined in the workplace primitives list")
-    scale: float = Field(1.0, gte=0.01, lte=1000.00, description="normalized scale factor applied to primitive on all axes")
-    # Don't know if max_length str validator works with HttpUrl class
-    url: HttpUrl = Field(None, max_length=1000, description="Source URL for the file (GLB, fbx, MP4, PNG, etc.). When generating new content, use a descriptive placeholder URL (e.g. 'https://assets.example.com/my_model.glb').")
+    scale: _Scale = Field(1.0, ge=0.01, le=1000.00, description="normalized scale factor applied to primitive on all axes")
+    url: Optional[str] = Field(None, max_length=1000, description="Source URL for the file (GLB, fbx, MP4, PNG, etc.). When generating new content, use a descriptive placeholder URL (e.g. 'https://assets.example.com/my_model.glb').")
 
-class Warning(BaseModel):
+class Warning(ConstToEnumSchemaMixin):
     """
     ISO 7010 Hazard signs.
     """
     id: str = Field(..., max_length=100, description="Unique id for this instructional augmentation")
     type: Literal["animation", "image", "video", "audio", "label"] = Field(..., description="what type of primitive, instance of Primitive.id, cannot be a value not defined in the workplace primitives list")
-    scale: float = Field(1.0, gte=0.01, lte=1000.00, description="normalized scale factor applied to primitive on all axes")
+    scale: _Scale = Field(1.0, ge=0.01, le=1000.00, description="normalized scale factor applied to primitive on all axes")
     symbol: str = Field(..., max_length=100, description="Name of the symbol prefab")
 
-class Workplace(BaseModel):
+class Workplace(ConstToEnumSchemaMixin):
     """
     The static environment definition containing all available resources.
     """
@@ -151,13 +161,13 @@ class Workplace(BaseModel):
     origin: str = Field(..., max_length=100, description="ID of the Detectable that serves as the World Origin")
     things: List[Tangible] = Field(default_factory=list, description="Physical tools, machines, or materials")
     places: List[Tangible] = Field(default_factory=list, description="Locations or zones in the workplace")
-    persons: List[Person] = Field(default_factory=list, min_items=1, description="Users involved in the scenario")
+    persons: List[Person] = Field(default_factory=list, min_length=1, description="Users involved in the scenario")
     sensors: Optional[List[Sensor]] = Field(default_factory=list, description="Connected IoT devices")
-    devices: List[Device] = Field(default_factory=list, min_items=1, description="AR hardware used for delivery")
+    devices: List[Device] = Field(default_factory=list, min_length=1, description="AR hardware used for delivery")
     apps: Optional[List[App]] = Field(default_factory=list, description="External widgets or apps")
-    detectables: List[Detectable] = Field(default_factory=list, min_items=1, description="Markers or Anchors used for tracking")
-    primitives: List[Primitive] = Field(default_factory=list, min_items=1, description="Supported media types for predicates")
-    predicates: List[Predicate] = Field(default_factory=list, min_items=1, description="A specific media primitive augmentation that corresponds to a verb or action")
+    detectables: List[Detectable] = Field(default_factory=list, min_length=1, description="Markers or Anchors used for tracking")
+    primitives: List[Primitive] = Field(default_factory=list, min_length=1, description="Supported media types for predicates")
+    predicates: List[Predicate] = Field(default_factory=list, min_length=1, description="A specific media primitive augmentation that corresponds to a verb or action")
     warnings: List[Warning] = Field(default_factory=list, description="Supported Warnings")
 
     @model_validator(mode='after')
@@ -212,22 +222,22 @@ class Workplace(BaseModel):
 # PART 2: ACTIVITY MODEL (The Logic)
 # ==========================================
 
-class Instruction(BaseModel):
+class Instruction(ConstToEnumSchemaMixin):
     """
     Text/Audio instructions displayed to the user.
     """
     title: str = Field(..., max_length=100, description="Short headline of the instruction")
     description: str = Field(..., max_length=5000, description="Narrative text describing what to do")
 
-class Activate(BaseModel):
+class Activate(ConstToEnumSchemaMixin):
     """
     Command to spawn an object or effect.
     """
     target: str = Field(..., max_length=100, description="ID of the Thing, Place, or Person to apply this to.")
-    type: Literal["primitive", "predicate", "warning", "action"] = Field(..., max_length=1000, description="Category of the object being activated.")
+    type: Literal["primitive", "predicate", "warning", "action"] = Field(..., description="Category of what is being activated: 'primitive' (a workplace primitive media type), 'predicate' (a reusable workplace augmentation), 'warning' (an ISO 7010 hazard sign), or 'action' (launch another action).")
     augmentation: str = Field(..., max_length=100, description="ID of the predicate, primitive, or warning from the workspace, or another action ID, of what should be played / displayed")
     poi: Optional[str] = Field(None, max_length=100, description="ID of the POI on the tangible target where the augmentation appears.")
-    url: Optional[HttpUrl] = Field(None, max_length=2000, description="for when type='primitive' and augmentation='image', 'video', 'audio', or 'animation' the url of the resource to display")
+    url: Optional[str] = Field(None, max_length=2000, description="for when type='primitive' and augmentation='image', 'video', 'audio', or 'animation' the url of the resource to display. Use a descriptive placeholder URL when generating new content.")
     text: Optional[str] = Field(None, description="Text to display when augmentation is type 'label'")
     state: Optional[str] = Field(None, max_length=100, description="Keyframe or state ID used only for augments that are animations.")
     viewport: Optional[Literal["actions", "reactions", "warnings"]] = Field(None, description="If set, attaches object to the screen/HUD instead of the world.")
@@ -241,12 +251,12 @@ class Activate(BaseModel):
 
     # not including sensor key label that shows IoT sensor data variable over stream. that is too much
 
-class Deactivate(BaseModel):
+class Deactivate(ConstToEnumSchemaMixin):
     """
     Command to remove an object or effect.
     """
     target: str = Field(..., max_length=100, description="ID of the target tangible to clear augmentations from, or '*' for all tangibles.")
-    type: Optional[Literal["primitive", "predicate", "warning", "action", "*"]] = Field(None, max_length=100, description="Type of element to remove, '*' for all")
+    type: Optional[Literal["primitive", "predicate", "warning", "action", "*"]] = Field(None, description="Type of element to remove: 'primitive', 'predicate', 'warning', 'action', or '*' for all types.")
     augmentation: Optional[str] = Field(None, max_length=100, description="Specific augmentation ID to remove, or '*' for all augmentations on tangible")
     # These may not be needed
     poi: Optional[str] = Field(None, max_length=100, description="POI from which to remove augmentations")
@@ -262,7 +272,7 @@ class Deactivate(BaseModel):
     # to see what tangibles are there, and then if you had a poi set, you had to check those tangibles for the poi
     # for now, the simple check is to simply review all tangibles available in the workspace.
 
-class Message(BaseModel):
+class Message(ConstToEnumSchemaMixin):
     """
     Communication between devices, users, or sensors.
     """
@@ -277,21 +287,22 @@ class Message(BaseModel):
     # Validate launch if there to see if it matches a valid action id, done at root level
 
 ### STILL NEEDS REVIEW
-class IfLogic(BaseModel):
+class IfLogic(ConstToEnumSchemaMixin):
     """
     Conditional logic based on xAPI statements (analytics).
     """
-    url: HttpUrl = Field(...,
+    url: str = Field(...,
+                         max_length=2000,
                          description="xAPI Query URL to check for statements matching the verb and action conditions",
                          examples=["http://example.com/xAPI/statements?verb=passed&activity=id"])
     then_action: str = Field(..., alias="then", max_length=100, description="Action ID to trigger if condition is met (query has one or more results)")
     else_action: str = Field(..., alias="else", max_length=100, description="Action ID to trigger if condition is NOT met (query has zero results)")
-    min_results: Optional[int] = Field(None, alias="min", gte=0, lte=65535, description="Minimum number of statements required.")
-    max_results: Optional[int] = Field(None, alias="max", gte=0, lte=65535, description="Maximum number of statements allowed.")
+    min_results: Optional[int] = Field(None, alias="min", ge=0, le=65535, description="Minimum number of statements required.")
+    max_results: Optional[int] = Field(None, alias="max", ge=0, le=65535, description="Maximum number of statements allowed.")
     # Need to validate then and else for valid action ids at the activity level
 
 ### STILL NEEDS REVIEW
-class Trigger(BaseModel):
+class Trigger(ConstToEnumSchemaMixin):
     """
     Specifies events that move the activity from enter to exit state.
     """
@@ -305,17 +316,21 @@ class Trigger(BaseModel):
     operator: Optional[Literal["equal", "exceed", "below", "between"]] = Field("equal", description="Comparison operator (for sensor mode).")
     # Need to validate that id matches a valid tangible, action, or sensor
 
-class ActionFlow(BaseModel):
+class ActionFlow(ConstToEnumSchemaMixin):
     """
     The set of commands executed when entering or exiting a step.
     """
     remove_self: bool = Field(False, alias="removeSelf", description="For Enter: True means Exit is immidiately executed, For Exit: True deactivates instructions and augmentations from current step")
     activates: Optional[List[Activate]] = Field(default_factory=list, description="List of items to display.")
-    deactivate: Optional[List[Deactivate]] = Field(default_factory=list, description="List of items to hide.")
+    deactivate: Optional[List[Deactivate]] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("deactivate", "deactivates"),
+        description="List of items to hide.",
+    )
     messages: Optional[List[Message]] = Field(default_factory=list, description="Messages to send.")
     if_logic: Optional[List[IfLogic]] = Field(default_factory=list, alias="if", description="Conditional logic checks.")
 
-class Action(BaseModel):
+class Action(ConstToEnumSchemaMixin):
     """
     A single step in the activity workflow.
     """
@@ -380,7 +395,7 @@ ISO_639_1_CODES: Set[str] = {
     "yo", "za", "zh", "zu"
 }
 
-class Activity(BaseModel):
+class Activity(ConstToEnumSchemaMixin):
     """
     The root object defining the logic flow of the AR experience.
     """
@@ -402,6 +417,8 @@ class Activity(BaseModel):
             raise ValueError(
                 f"'{lg}' is not a valid ISO 639-1 language code"
             )
+        # Return the normalized code; without this the field would be blanked to None.
+        return code
 
     # Need some way to validate the workplace reference. ARLEM says it should be a url, but could also be a local file
     # ??
@@ -466,7 +483,7 @@ class Activity(BaseModel):
 # PART 3: Container for Entire Scenario
 # ==========================================
 
-class ARLEMScenario(BaseModel):
+class ARLEMScenario(ConstToEnumSchemaMixin):
     """
     Container to hold both workplace and activity definitions
     allows cross validation of the activity with the workplace
