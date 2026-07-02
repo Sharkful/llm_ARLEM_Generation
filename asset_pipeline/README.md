@@ -17,17 +17,19 @@ Stage 0 (scaffolding, models, catalog read/write, seed catalog, multi-provider
 LLM client factory), Stage 1 (free-text description -> validated `AssetSpec`
 via `cli.py spec`), Stage 2 (classifier/resolver routing an `AssetSpec` to
 catalog_match / variant / composite / parametric / imported via
-`cli.py resolve`), and Stage 3 (OpenSCAD-based parametric generation with
+`cli.py resolve`), Stage 3 (OpenSCAD-based parametric generation with
 compile-failure repair and bounds-divergence checking via
-`cli.py generate-parametric`) are implemented. Catalog matching uses
+`cli.py generate-parametric`), and Stage 4 (Blender-based mesh
+normalization -- STL/OBJ/FBX/GLB -> pivoted, scaled, decimated-if-needed
+GLB, via `cli.py normalize-mesh`) are implemented. Catalog matching uses
 tag/token/fuzzy string matching only (no embeddings yet -- see
 `pipeline/catalog_matcher.py` docstring). Resolver output for `parametric`
-results still needs to be wired to Stage 3's generator and `imported`
-results still need Stage 6 (external intake, not yet built) -- both are
+and `imported` results still needs to be wired to Stages 3/4's generator
+and Stage 6 (external intake, not yet built) respectively -- both are
 currently always flagged for human review by `pipeline/resolver.py`. Later
-stages (mesh normalization/GLB export, materials, external intake,
-validation, preview rendering, the Flask review app, and sync) are not yet
-built -- see the implementation plan for what's next.
+stages (materials, external intake, validation, preview rendering, the
+Flask review app, and sync) are not yet built -- see the implementation
+plan for what's next.
 
 ## Setup
 
@@ -40,14 +42,24 @@ cp .env.example .env        # fill in whichever provider key(s) you use
 ```
 
 No external tool binaries (OpenSCAD, Blender) are required for Stage 0-2.
-Stage 3 (`generate-parametric`) needs OpenSCAD; a later mesh-normalization
-stage will need Blender. `config.py` auto-detects both from common install
-locations if installed, and never fails at import time if they're
-missing -- only the stages that actually shell out to them will error, and
-only when invoked. Install OpenSCAD from openscad.org (or `winget install
-OpenSCAD.OpenSCAD` / `brew install openscad`) if `generate-parametric`
-reports it can't find the binary; override the detected path with
-`ASSET_PIPELINE_OPENSCAD_BIN` in `.env` if needed.
+Stage 3 (`generate-parametric`) needs OpenSCAD; Stage 4 (`normalize-mesh`)
+needs Blender (4.0+; the mesh import step tries the modern
+`bpy.ops.wm.*_import` operators first and falls back to the legacy
+`import_mesh`/`import_scene` namespace). `config.py` auto-detects both from
+common install locations if installed, and never fails at import time if
+they're missing -- only the stages that actually shell out to them will
+error, and only when invoked. Install OpenSCAD from openscad.org (or
+`winget install OpenSCAD.OpenSCAD` / `brew install openscad`) and Blender
+from blender.org (or `winget install BlenderFoundation.Blender` / `brew
+install --cask blender`) if a command reports it can't find the binary;
+override the detected paths with `ASSET_PIPELINE_OPENSCAD_BIN` /
+`ASSET_PIPELINE_BLENDER_BIN` in `.env` if needed.
+
+When moving to a new machine, run `python cli.py doctor` first: it reports
+which tool binaries were detected (and actually runs each one, since a
+binary can exist on disk but be unlaunchable -- e.g. the MS Store Blender's
+`blender.exe` is blocked by WindowsApps ACLs and cannot be used headless;
+install the desktop build instead) and which LLM API keys are set.
 
 ## Running tests
 
@@ -65,6 +77,7 @@ test tier fast and keeps development of one stage from blocking on another.
 ## CLI
 
 ```bash
+python cli.py doctor         # check tool binaries + API keys on this machine
 python cli.py catalog seed   # (re)write the seed catalog of core primitives
 python cli.py catalog list   # list all current catalog entries
 python cli.py spec "a small gray moon with visible crater texture, about 15cm across"
@@ -72,6 +85,8 @@ python cli.py spec "..." --out spec_moon.json --provider openai --model gpt-4o-m
 python cli.py resolve "a small gray moon with visible crater texture"
 python cli.py resolve --spec-file spec_moon.json   # skips Stage 1, resolves a pre-parsed spec
 python cli.py generate-parametric bracket_01 "an L-shaped mounting bracket, 5cm wide"
+python cli.py normalize-mesh bracket_01 library/generated/bracket_01/source.stl --format stl --size 0.05
+python cli.py normalize-mesh bracket_01 ... --format stl --size 0.05 --pivot base_center
 ```
 
 ## LLM provider configuration

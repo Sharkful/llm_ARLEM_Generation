@@ -9,6 +9,7 @@ from the repo root once __main__ wiring is added in a later stage):
     python cli.py resolve "a small gray moon with visible crater texture"
     python cli.py resolve --spec-file spec_moon.json
     python cli.py generate-parametric bracket_01 "an L-shaped mounting bracket, 5cm wide"
+    python cli.py normalize-mesh bracket_01 library/generated/bracket_01/source.stl --format stl --size 0.05
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ import config
 from models.spec_models import AssetSpec
 from pipeline.catalog_writer import load_catalog
 from pipeline.classifier import ClassificationError
+from pipeline.mesh_processor import MeshProcessingError, normalize_mesh, save_mesh_meta
 from pipeline.openscad_generator import OpenSCADGenerationError, generate_parametric_asset
 from pipeline.resolver import resolve
 from pipeline.seed_catalog import main as seed_catalog_main
@@ -150,6 +152,94 @@ def cmd_generate_parametric(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_normalize_mesh(args: argparse.Namespace) -> int:
+    glb_path = config.LIBRARY_DIR / "generated" / args.asset_id / "model.glb"
+    try:
+        result = normalize_mesh(
+            asset_id=args.asset_id,
+            source_path=Path(args.source_path),
+            source_format=args.format,
+            glb_path=glb_path,
+            target_size_m=args.size,
+            pivot=args.pivot,
+        )
+    except MeshProcessingError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    print(json.dumps(result.model_dump(mode="json"), indent=2))
+    if not result.success:
+        print(f"\nFAILED: {result.error_message}", file=sys.stderr)
+        return 1
+
+    save_mesh_meta(args.asset_id, result)
+    print(f"\nWrote {glb_path}", file=sys.stderr)
+    if result.decimated:
+        print(
+            f"NOTE: mesh decimated {result.triangle_count_before} -> "
+            f"{result.triangle_count_after} triangles (exceeded MAX_TRIANGLE_COUNT).",
+            file=sys.stderr,
+        )
+    return 0
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Report external tool and API key status on this machine.
+
+    Detection paths can lie -- e.g. an MS Store Blender exists on disk but
+    Windows denies executing it directly -- so each detected binary is
+    actually run with --version rather than just stat'd.
+    """
+    import subprocess
+
+    ok = True
+
+    def check_tool(name: str, path: str | None, env_var: str) -> bool:
+        if not path:
+            print(f"  [MISSING] {name}: not found. Install it or set {env_var} in .env")
+            return False
+        try:
+            result = subprocess.run(
+                [path, "--version"], capture_output=True, text=True, timeout=30
+            )
+            version = (result.stdout or result.stderr).strip().splitlines()[0]
+            if result.returncode == 0:
+                print(f"  [OK]      {name}: {path} ({version})")
+                return True
+            print(f"  [BROKEN]  {name}: {path} exits {result.returncode}: {version}")
+        except Exception as exc:
+            print(f"  [BROKEN]  {name}: {path} found but won't run: {exc}")
+        return False
+
+    print("External tools:")
+    ok &= check_tool("OpenSCAD", config.OPENSCAD_BIN, "ASSET_PIPELINE_OPENSCAD_BIN")
+    ok &= check_tool("Blender", config.BLENDER_BIN, "ASSET_PIPELINE_BLENDER_BIN")
+
+    print("\nLLM API keys (only the provider you use needs one):")
+    keys = {
+        "anthropic": config.ANTHROPIC_API_KEY,
+        "openai": config.OPENAI_API_KEY,
+        "google": config.GEMINI_API_KEY,
+    }
+    any_key = False
+    for provider, key in keys.items():
+        marker = "set" if key else "not set"
+        default = "  <- default provider" if provider == config.DEFAULT_LLM_PROVIDER else ""
+        print(f"  [{'OK' if key else '--'}]      {provider}: {marker}{default}")
+        any_key = any_key or bool(key)
+    if not keys.get(config.DEFAULT_LLM_PROVIDER):
+        print(
+            f"  WARNING: default provider '{config.DEFAULT_LLM_PROVIDER}' has no key -- "
+            "LLM stages (spec/resolve/generate-parametric) will fail until it is set in .env"
+        )
+
+    print(f"\nCatalog: {config.CATALOG_PATH}"
+          f" ({'exists' if config.CATALOG_PATH.exists() else 'missing -- run `catalog seed`'})")
+    print(f"Library: {config.LIBRARY_DIR}")
+
+    return 0 if ok else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="asset_pipeline",
@@ -203,6 +293,30 @@ def build_parser() -> argparse.ArgumentParser:
         "--spec-file", metavar="PATH", help="Use an AssetSpec JSON file instead of a raw description"
     )
     gen_parser.set_defaults(func=cmd_generate_parametric)
+
+    norm_parser = sub.add_parser(
+        "normalize-mesh", help="Normalize a source mesh (STL/OBJ/FBX/GLB) into a scaled, pivoted GLB"
+    )
+    norm_parser.add_argument("asset_id", help="asset_id to write under library/generated/<asset_id>/model.glb")
+    norm_parser.add_argument("source_path", help="Path to the source mesh file")
+    norm_parser.add_argument(
+        "--format", choices=["stl", "obj", "fbx", "glb"], required=True, help="Source mesh format"
+    )
+    norm_parser.add_argument(
+        "--size", type=float, required=True,
+        help="Target size in meters for the largest original dimension",
+    )
+    norm_parser.add_argument(
+        "--pivot", choices=["center", "base_center"], default="center",
+        help="Pivot convention: center, or base_center for objects that stand on a surface",
+    )
+    norm_parser.set_defaults(func=cmd_normalize_mesh)
+
+    doctor_parser = sub.add_parser(
+        "doctor",
+        help="Check external tool binaries (OpenSCAD, Blender) and API keys on this machine",
+    )
+    doctor_parser.set_defaults(func=cmd_doctor)
 
     return parser
 

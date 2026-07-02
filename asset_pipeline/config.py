@@ -55,16 +55,32 @@ OPENSCAD_CANDIDATES = [
 ]
 
 BLENDER_CANDIDATES = [
-    r"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe",
-    r"C:\Program Files\Blender Foundation\Blender 5.0\blender.exe",
-    r"C:\Program Files\Blender Foundation\Blender 4.4\blender.exe",
-    r"C:\Program Files\Blender Foundation\Blender 4.3\blender.exe",
-    r"C:\Program Files\Blender Foundation\Blender 4.2\blender.exe",
-    r"C:\Program Files\Blender Foundation\Blender 4.1\blender.exe",
-    r"C:\Program Files\Blender Foundation\Blender 4.0\blender.exe",
-    r"C:\Program Files\Blender Foundation\Blender 3.6\blender.exe",
     "blender",  # on PATH
 ]
+
+
+def _find_desktop_blender() -> str | None:
+    """Find any versioned desktop Blender install, newest version first.
+
+    Version-agnostic on purpose: a hardcoded version list goes stale the
+    moment a machine has a newer Blender than the list anticipated. Sorting
+    the glob matches descending picks e.g. 'Blender 5.2' over 'Blender 4.2'
+    without a code change.
+    """
+    patterns = [
+        r"C:\Program Files\Blender Foundation\Blender *\blender.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Blender Foundation\Blender *\blender.exe"),
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        "/usr/bin/blender",
+        "/usr/local/bin/blender",
+        "/snap/bin/blender",
+    ]
+    matches: list[str] = []
+    for pattern in patterns:
+        matches.extend(glob.glob(pattern))
+    if not matches:
+        return None
+    return sorted(matches, reverse=True)[0]
 
 
 def _find_store_blender() -> str | None:
@@ -78,8 +94,8 @@ def _find_store_blender() -> str | None:
     return matches[0] if matches else None
 
 
-def _find_on_path_or_candidates(hint: str | None, candidates: list[str], extra: str | None = None) -> str | None:
-    ordered = ([hint] if hint else []) + ([extra] if extra else []) + candidates
+def _find_on_path_or_candidates(hint: str | None, candidates: list[str | None]) -> str | None:
+    ordered = ([hint] if hint else []) + candidates
     for c in ordered:
         if not c:
             continue
@@ -105,10 +121,13 @@ def find_openscad(hint: str | None = None) -> str | None:
 
 
 def find_blender(hint: str | None = None) -> str | None:
+    # Desktop install first, MS Store install last: the Store package's
+    # blender.exe sits under C:\Program Files\WindowsApps with ACLs that
+    # deny direct execution from a normal shell, so it only works as a
+    # last resort (and only on machines where those ACLs are relaxed).
     return _find_on_path_or_candidates(
         hint or os.getenv("ASSET_PIPELINE_BLENDER_BIN"),
-        BLENDER_CANDIDATES,
-        extra=_find_store_blender(),
+        [_find_desktop_blender()] + BLENDER_CANDIDATES + [_find_store_blender()],
     )
 
 
@@ -120,3 +139,10 @@ MAX_TRIANGLE_COUNT = int(os.getenv("ASSET_PIPELINE_MAX_TRIANGLES", "20000"))
 CATALOG_MATCH_CONFIDENCE_THRESHOLD = float(
     os.getenv("ASSET_PIPELINE_CATALOG_MATCH_THRESHOLD", "0.85")
 )
+
+# Fraction of original triangle count to keep when a mesh exceeds
+# MAX_TRIANGLE_COUNT (Stage 4 mesh normalization). E.g. 0.5 = decimate to
+# roughly half the original face count.
+DECIMATE_RATIO = float(os.getenv("ASSET_PIPELINE_DECIMATE_RATIO", "0.5"))
+
+BLENDER_TIMEOUT_SECONDS = int(os.getenv("ASSET_PIPELINE_BLENDER_TIMEOUT", "120"))
