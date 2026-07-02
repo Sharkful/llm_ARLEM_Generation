@@ -14,10 +14,20 @@ rest of the monorepo.
 ## Status
 
 Stage 0 (scaffolding, models, catalog read/write, seed catalog, multi-provider
-LLM client factory) is implemented. Later stages (spec parsing, classifier/
-resolver, OpenSCAD generation, mesh normalization, materials, external
-intake, validation, preview rendering, the Flask review app, and sync) are
-not yet built -- see the implementation plan for what's next.
+LLM client factory), Stage 1 (free-text description -> validated `AssetSpec`
+via `cli.py spec`), Stage 2 (classifier/resolver routing an `AssetSpec` to
+catalog_match / variant / composite / parametric / imported via
+`cli.py resolve`), and Stage 3 (OpenSCAD-based parametric generation with
+compile-failure repair and bounds-divergence checking via
+`cli.py generate-parametric`) are implemented. Catalog matching uses
+tag/token/fuzzy string matching only (no embeddings yet -- see
+`pipeline/catalog_matcher.py` docstring). Resolver output for `parametric`
+results still needs to be wired to Stage 3's generator and `imported`
+results still need Stage 6 (external intake, not yet built) -- both are
+currently always flagged for human review by `pipeline/resolver.py`. Later
+stages (mesh normalization/GLB export, materials, external intake,
+validation, preview rendering, the Flask review app, and sync) are not yet
+built -- see the implementation plan for what's next.
 
 ## Setup
 
@@ -29,10 +39,15 @@ pip install -r requirements.txt
 cp .env.example .env        # fill in whichever provider key(s) you use
 ```
 
-No external tool binaries (OpenSCAD, Blender) are required for Stage 0.
-Later stages will need them; `config.py` auto-detects both if installed and
-never fails at import time if they're missing -- only the stages that
-actually shell out to them will error, and only when invoked.
+No external tool binaries (OpenSCAD, Blender) are required for Stage 0-2.
+Stage 3 (`generate-parametric`) needs OpenSCAD; a later mesh-normalization
+stage will need Blender. `config.py` auto-detects both from common install
+locations if installed, and never fails at import time if they're
+missing -- only the stages that actually shell out to them will error, and
+only when invoked. Install OpenSCAD from openscad.org (or `winget install
+OpenSCAD.OpenSCAD` / `brew install openscad`) if `generate-parametric`
+reports it can't find the binary; override the detected path with
+`ASSET_PIPELINE_OPENSCAD_BIN` in `.env` if needed.
 
 ## Running tests
 
@@ -52,6 +67,11 @@ test tier fast and keeps development of one stage from blocking on another.
 ```bash
 python cli.py catalog seed   # (re)write the seed catalog of core primitives
 python cli.py catalog list   # list all current catalog entries
+python cli.py spec "a small gray moon with visible crater texture, about 15cm across"
+python cli.py spec "..." --out spec_moon.json --provider openai --model gpt-4o-mini
+python cli.py resolve "a small gray moon with visible crater texture"
+python cli.py resolve --spec-file spec_moon.json   # skips Stage 1, resolves a pre-parsed spec
+python cli.py generate-parametric bracket_01 "an L-shaped mounting bracket, 5cm wide"
 ```
 
 ## LLM provider configuration
