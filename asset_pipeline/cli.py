@@ -10,6 +10,9 @@ from the repo root once __main__ wiring is added in a later stage):
     python cli.py resolve --spec-file spec_moon.json
     python cli.py generate-parametric bracket_01 "an L-shaped mounting bracket, 5cm wide"
     python cli.py normalize-mesh bracket_01 library/generated/bracket_01/source.stl --format stl --size 0.05
+    python cli.py generate-material "rough red rust with visible texture"
+    python cli.py intake wooden_stool
+    python cli.py doctor
 """
 from __future__ import annotations
 
@@ -24,6 +27,7 @@ import config
 from models.spec_models import AssetSpec
 from pipeline.catalog_writer import load_catalog
 from pipeline.classifier import ClassificationError
+from pipeline.external_intake import IntakeError, intake_asset
 from pipeline.material_generator import MaterialGenerationError, generate_material
 from pipeline.mesh_processor import MeshProcessingError, normalize_mesh, save_mesh_meta
 from pipeline.openscad_generator import OpenSCADGenerationError, generate_parametric_asset
@@ -181,6 +185,31 @@ def cmd_normalize_mesh(args: argparse.Namespace) -> int:
             f"{result.triangle_count_after} triangles (exceeded MAX_TRIANGLE_COUNT).",
             file=sys.stderr,
         )
+    return 0
+
+
+def cmd_intake(args: argparse.Namespace) -> int:
+    try:
+        result = intake_asset(args.asset_id)
+    except IntakeError as exc:
+        print(f"REJECTED: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        # catalog_writer uniqueness violation (raced/duplicate id)
+        print(f"REJECTED: {exc}", file=sys.stderr)
+        return 1
+
+    print(json.dumps(result.model_dump(mode="json"), indent=2))
+    if not result.success:
+        print(f"\nFAILED: {result.error_message}", file=sys.stderr)
+        return 1
+    entry = result.catalog_entry
+    print(
+        f"\nCataloged {entry.asset_id!r} (review_level {entry.review_level}, "
+        f"license {entry.provenance.license}, bounds "
+        f"{'x'.join(f'{v:g}' for v in entry.canonical_bounds_m)} m)",
+        file=sys.stderr,
+    )
     return 0
 
 
@@ -346,6 +375,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Pivot convention: center, or base_center for objects that stand on a surface",
     )
     norm_parser.set_defaults(func=cmd_normalize_mesh)
+
+    intake_parser = sub.add_parser(
+        "intake",
+        help="Normalize and catalog a manually-provided model file from intake/<asset_id>/",
+    )
+    intake_parser.add_argument(
+        "asset_id", help="Folder name under intake/ holding the model file + source.json"
+    )
+    intake_parser.set_defaults(func=cmd_intake)
 
     mat_parser = sub.add_parser(
         "generate-material",

@@ -23,15 +23,19 @@ compile-failure repair and bounds-divergence checking via
 normalization -- STL/OBJ/FBX/GLB -> pivoted, scaled, decimated-if-needed
 GLB, via `cli.py normalize-mesh`), and Stage 5 (description -> `MaterialDef`
 JSON plus locally synthesized procedural textures -- noise/craters/stripes/
-grid/gradient/rust via numpy+Pillow -- via `cli.py generate-material`) are
-implemented. Catalog matching uses tag/token/fuzzy string matching only
-(no embeddings yet -- see `pipeline/catalog_matcher.py` docstring).
-Resolver output for `parametric` and `imported` results still needs to be
-wired to Stages 3/4's generator and Stage 6 (external intake, not yet
-built) respectively -- both are currently always flagged for human review
-by `pipeline/resolver.py`. Later stages (external intake, validation,
-preview rendering, the Flask review app, and sync) are not yet built --
-see the implementation plan for what's next.
+grid/gradient/rust via numpy+Pillow -- via `cli.py generate-material`), and
+Stage 6a (manual external intake: license-gated, provenance-recorded
+normalization of a human-provided model file from `intake/<asset_id>/`
+into `library/imported/` + the catalog, via `cli.py intake` -- see
+`intake/README.md` for the drop-folder workflow) are implemented. Catalog
+matching uses tag/token/fuzzy string matching only (no embeddings yet --
+see `pipeline/catalog_matcher.py` docstring). Resolver output for
+`parametric` and `imported` results still needs to be wired to Stage 3/4's
+generator and Stage 6a's intake respectively -- both are currently always
+flagged for human review by `pipeline/resolver.py`. Later stages (the
+Stage 6b Poly Haven search assist, validation, preview rendering, the
+Flask review app, and sync) are not yet built -- see the implementation
+plan for what's next.
 
 ## Setup
 
@@ -91,6 +95,7 @@ python cli.py normalize-mesh bracket_01 library/generated/bracket_01/source.stl 
 python cli.py normalize-mesh bracket_01 ... --format stl --size 0.05 --pivot base_center
 python cli.py generate-material "rough red rust with visible texture"
 python cli.py generate-material "dull gray rock" --id moon_surface --force
+python cli.py intake wooden_stool   # normalize + catalog intake/wooden_stool/ (see intake/README.md)
 ```
 
 ## LLM provider configuration

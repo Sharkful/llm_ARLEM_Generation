@@ -58,6 +58,29 @@ class AssetCatalogEntry(BaseModel):
     review_level: ReviewLevel = 0
 
 
+class IntakeSource(BaseModel):
+    """Hand-filled source.json stub accompanying a manually downloaded file
+    in intake/<asset_id>/ (Stage 6a). The human sourcing the file records
+    where it came from and under what license; the pipeline refuses intake
+    if the license isn't in the allowlist or attribution info is missing.
+    """
+
+    display_name: str
+    license: str
+    source_site: str | None = None
+    source_url: str | None = None
+    original_author: str | None = None
+    target_size_m: float = Field(
+        gt=0.0,
+        description="Largest dimension in meters after normalization -- required; nothing enters the catalog with unknown scale",
+    )
+    pivot: Literal["center", "base_center"] = "center"
+    tags: list[str] = Field(default_factory=list)
+    semantic_type: str | None = None
+    pedagogically_critical: bool = False
+    notes: str = ""
+
+
 class MaterialDef(BaseModel):
     """Matches offline_ar_asset_pipeline_requirements.md section 9 exactly."""
 
