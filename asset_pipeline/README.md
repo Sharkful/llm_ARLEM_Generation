@@ -27,15 +27,18 @@ grid/gradient/rust via numpy+Pillow -- via `cli.py generate-material`), and
 Stage 6a (manual external intake: license-gated, provenance-recorded
 normalization of a human-provided model file from `intake/<asset_id>/`
 into `library/imported/` + the catalog, via `cli.py intake` -- see
-`intake/README.md` for the drop-folder workflow) are implemented. Catalog
-matching uses tag/token/fuzzy string matching only (no embeddings yet --
-see `pipeline/catalog_matcher.py` docstring). Resolver output for
+`intake/README.md` for the drop-folder workflow), and Stage 6b (Poly Haven
+search assist: `cli.py search-external` lists CC0 models read-only,
+`cli.py fetch-external <id>` downloads only the one asset a human
+explicitly names into the intake folder with a pre-filled source.json --
+Poly Haven is the entire source allowlist by design) are implemented.
+Catalog matching uses tag/token/fuzzy string matching only (no embeddings
+yet -- see `pipeline/catalog_matcher.py` docstring). Resolver output for
 `parametric` and `imported` results still needs to be wired to Stage 3/4's
 generator and Stage 6a's intake respectively -- both are currently always
-flagged for human review by `pipeline/resolver.py`. Later stages (the
-Stage 6b Poly Haven search assist, validation, preview rendering, the
-Flask review app, and sync) are not yet built -- see the implementation
-plan for what's next.
+flagged for human review by `pipeline/resolver.py`. Later stages
+(validation, preview rendering, the Flask review app, and sync) are not
+yet built -- see the implementation plan for what's next.
 
 ## Setup
 
@@ -96,6 +99,8 @@ python cli.py normalize-mesh bracket_01 ... --format stl --size 0.05 --pivot bas
 python cli.py generate-material "rough red rust with visible texture"
 python cli.py generate-material "dull gray rock" --id moon_surface --force
 python cli.py intake wooden_stool   # normalize + catalog intake/wooden_stool/ (see intake/README.md)
+python cli.py search-external "wooden table"                    # Poly Haven search (read-only)
+python cli.py fetch-external small_wooden_table_01 --size 0.6   # download YOUR pick into intake/
 ```
 
 ## LLM provider configuration

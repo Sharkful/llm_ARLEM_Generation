@@ -28,6 +28,12 @@ from models.spec_models import AssetSpec
 from pipeline.catalog_writer import load_catalog
 from pipeline.classifier import ClassificationError
 from pipeline.external_intake import IntakeError, intake_asset
+from pipeline.polyhaven import (
+    PolyHavenSearchError,
+    fetch_to_intake,
+    list_model_files,
+    search_models,
+)
 from pipeline.material_generator import MaterialGenerationError, generate_material
 from pipeline.mesh_processor import MeshProcessingError, normalize_mesh, save_mesh_meta
 from pipeline.openscad_generator import OpenSCADGenerationError, generate_parametric_asset
@@ -213,6 +219,68 @@ def cmd_intake(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_search_external(args: argparse.Namespace) -> int:
+    try:
+        results = search_models(args.query, limit=args.limit)
+    except PolyHavenSearchError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    if not results:
+        print(f"No Poly Haven models matched {args.query!r}.")
+        return 0
+
+    print(f"{'id':<26} {'name':<30} {'license':<8} {'downloads':<10} tags")
+    print("-" * 100)
+    for r in results:
+        tags = ", ".join([*r.categories, *r.tags][:5])
+        print(f"{r.asset_id:<26} {r.name[:29]:<30} {r.license:<8} {r.download_count:<10} {tags}")
+        print(f"{'':<26} thumbnail: {r.thumbnail_url}")
+    print(
+        f"\n{len(results)} result(s). Inspect a thumbnail, then download YOUR pick with:\n"
+        "  python cli.py fetch-external <id> [--size <meters>]\n"
+        "Nothing is downloaded until you run that command."
+    )
+    return 0
+
+
+def cmd_fetch_external(args: argparse.Namespace) -> int:
+    try:
+        if args.list_files:
+            files = list_model_files(args.polyhaven_id)
+            print(f"{'format':<10} {'resolution':<11} {'size_mb':<9} includes")
+            print("-" * 45)
+            for f in files:
+                print(
+                    f"{f.file_format:<10} {f.resolution:<11} "
+                    f"{f.size_bytes / 1e6:<9.1f} {f.include_count}"
+                )
+            return 0
+        source_path, downloaded = fetch_to_intake(
+            args.polyhaven_id,
+            intake_id=args.intake_id,
+            file_format=args.format,
+            resolution=args.resolution,
+            target_size_m=args.size,
+        )
+    except PolyHavenSearchError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    intake_id = args.intake_id or args.polyhaven_id
+    total_mb = sum(p.stat().st_size for p in downloaded) / 1e6
+    print(f"Downloaded {len(downloaded)} file(s), {total_mb:.1f} MB -> {source_path.parent}")
+    print(f"Pre-filled {source_path}")
+    if args.size:
+        print(f"\nNext: python cli.py intake {intake_id}")
+    else:
+        print(
+            f"\nNext: edit {source_path.name} and set target_size_m "
+            f"(real-world largest dimension in meters), then run:\n"
+            f"  python cli.py intake {intake_id}"
+        )
+    return 0
+
+
 def cmd_generate_material(args: argparse.Namespace) -> int:
     try:
         result, plan, log_entry = generate_material(
@@ -384,6 +452,34 @@ def build_parser() -> argparse.ArgumentParser:
         "asset_id", help="Folder name under intake/ holding the model file + source.json"
     )
     intake_parser.set_defaults(func=cmd_intake)
+
+    search_ext = sub.add_parser(
+        "search-external",
+        help="Search Poly Haven (CC0) models -- read-only, downloads nothing",
+    )
+    search_ext.add_argument("query", help="Free-text search, e.g. 'wooden table'")
+    search_ext.add_argument("--limit", type=int, default=10, help="Max results (default 10)")
+    search_ext.set_defaults(func=cmd_search_external)
+
+    fetch_ext = sub.add_parser(
+        "fetch-external",
+        help="Download ONE human-chosen Poly Haven model into intake/<id>/ (your explicit pick is the approval)",
+    )
+    fetch_ext.add_argument("polyhaven_id", help="Poly Haven asset id from search-external")
+    fetch_ext.add_argument(
+        "--intake-id", default=None, help="Intake folder/asset id (default: the Poly Haven id)"
+    )
+    fetch_ext.add_argument("--format", default="gltf", help="File format (default gltf)")
+    fetch_ext.add_argument("--resolution", default="1k", help="Texture resolution (default 1k)")
+    fetch_ext.add_argument(
+        "--size", type=float, default=None,
+        help="Real-world largest dimension in meters (pre-fills source.json target_size_m)",
+    )
+    fetch_ext.add_argument(
+        "--list-files", action="store_true",
+        help="Only list available format/resolution downloads for this id",
+    )
+    fetch_ext.set_defaults(func=cmd_fetch_external)
 
     mat_parser = sub.add_parser(
         "generate-material",
