@@ -32,6 +32,8 @@ LIBRARY_DIR = Path(
     os.getenv("ASSET_PIPELINE_LIBRARY_DIR", str(PACKAGE_DIR / "library"))
 ).resolve()
 CATALOG_PATH = LIBRARY_DIR / "catalog.json"
+MATERIALS_DIR = LIBRARY_DIR / "materials"
+TEXTURES_DIR = MATERIALS_DIR / "textures"
 INTAKE_DIR = Path(
     os.getenv("ASSET_PIPELINE_INTAKE_DIR", str(PACKAGE_DIR / "intake"))
 ).resolve()
@@ -139,6 +141,9 @@ MAX_TRIANGLE_COUNT = int(os.getenv("ASSET_PIPELINE_MAX_TRIANGLES", "20000"))
 CATALOG_MATCH_CONFIDENCE_THRESHOLD = float(
     os.getenv("ASSET_PIPELINE_CATALOG_MATCH_THRESHOLD", "0.85")
 )
+
+# Procedural texture output resolution (Stage 5). Square, power of two.
+TEXTURE_SIZE = int(os.getenv("ASSET_PIPELINE_TEXTURE_SIZE", "512"))
 
 # Fraction of original triangle count to keep when a mesh exceeds
 # MAX_TRIANGLE_COUNT (Stage 4 mesh normalization). E.g. 0.5 = decimate to

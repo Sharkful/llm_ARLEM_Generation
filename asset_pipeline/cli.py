@@ -24,6 +24,7 @@ import config
 from models.spec_models import AssetSpec
 from pipeline.catalog_writer import load_catalog
 from pipeline.classifier import ClassificationError
+from pipeline.material_generator import MaterialGenerationError, generate_material
 from pipeline.mesh_processor import MeshProcessingError, normalize_mesh, save_mesh_meta
 from pipeline.openscad_generator import OpenSCADGenerationError, generate_parametric_asset
 from pipeline.resolver import resolve
@@ -183,6 +184,40 @@ def cmd_normalize_mesh(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_generate_material(args: argparse.Namespace) -> int:
+    try:
+        result, plan, log_entry = generate_material(
+            args.description,
+            material_id=args.id,
+            provider=args.provider,
+            model=args.model,
+            force=args.force,
+        )
+    except MaterialGenerationError as exc:
+        print(f"ERROR: material generation failed after retries: {exc}", file=sys.stderr)
+        return 1
+    except RuntimeError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    print(json.dumps(result.model_dump(mode="json"), indent=2))
+    print(
+        f"[{log_entry.provider}/{log_entry.model}] {log_entry.purpose} "
+        f"{log_entry.input_tokens}in/{log_entry.output_tokens}out tokens, "
+        f"{log_entry.duration_seconds}s",
+        file=sys.stderr,
+    )
+    if not result.success:
+        print(f"\nFAILED: {result.error_message}", file=sys.stderr)
+        return 1
+    if plan.procedural_texture:
+        print(
+            f"Synthesized {plan.procedural_texture.kind!r} texture -> {result.texture_path}",
+            file=sys.stderr,
+        )
+    return 0
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Report external tool and API key status on this machine.
 
@@ -311,6 +346,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Pivot convention: center, or base_center for objects that stand on a surface",
     )
     norm_parser.set_defaults(func=cmd_normalize_mesh)
+
+    mat_parser = sub.add_parser(
+        "generate-material",
+        help="Generate a MaterialDef JSON (+ optional procedural texture) from a description",
+    )
+    mat_parser.add_argument("description", help="Free-text material/surface description")
+    mat_parser.add_argument(
+        "--id", default=None, help="material_id to use (overrides the LLM's proposed id)"
+    )
+    mat_parser.add_argument(
+        "--force", action="store_true", help="Overwrite an existing material with the same id"
+    )
+    mat_parser.add_argument(
+        "--provider", choices=["anthropic", "openai", "google"], default=None,
+        help="Override the default LLM provider for this call",
+    )
+    mat_parser.add_argument("--model", default=None, help="Override the default model for this call")
+    mat_parser.set_defaults(func=cmd_generate_material)
 
     doctor_parser = sub.add_parser(
         "doctor",

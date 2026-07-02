@@ -19,17 +19,19 @@ via `cli.py spec`), Stage 2 (classifier/resolver routing an `AssetSpec` to
 catalog_match / variant / composite / parametric / imported via
 `cli.py resolve`), Stage 3 (OpenSCAD-based parametric generation with
 compile-failure repair and bounds-divergence checking via
-`cli.py generate-parametric`), and Stage 4 (Blender-based mesh
+`cli.py generate-parametric`), Stage 4 (Blender-based mesh
 normalization -- STL/OBJ/FBX/GLB -> pivoted, scaled, decimated-if-needed
-GLB, via `cli.py normalize-mesh`) are implemented. Catalog matching uses
-tag/token/fuzzy string matching only (no embeddings yet -- see
-`pipeline/catalog_matcher.py` docstring). Resolver output for `parametric`
-and `imported` results still needs to be wired to Stages 3/4's generator
-and Stage 6 (external intake, not yet built) respectively -- both are
-currently always flagged for human review by `pipeline/resolver.py`. Later
-stages (materials, external intake, validation, preview rendering, the
-Flask review app, and sync) are not yet built -- see the implementation
-plan for what's next.
+GLB, via `cli.py normalize-mesh`), and Stage 5 (description -> `MaterialDef`
+JSON plus locally synthesized procedural textures -- noise/craters/stripes/
+grid/gradient/rust via numpy+Pillow -- via `cli.py generate-material`) are
+implemented. Catalog matching uses tag/token/fuzzy string matching only
+(no embeddings yet -- see `pipeline/catalog_matcher.py` docstring).
+Resolver output for `parametric` and `imported` results still needs to be
+wired to Stages 3/4's generator and Stage 6 (external intake, not yet
+built) respectively -- both are currently always flagged for human review
+by `pipeline/resolver.py`. Later stages (external intake, validation,
+preview rendering, the Flask review app, and sync) are not yet built --
+see the implementation plan for what's next.
 
 ## Setup
 
@@ -87,6 +89,8 @@ python cli.py resolve --spec-file spec_moon.json   # skips Stage 1, resolves a p
 python cli.py generate-parametric bracket_01 "an L-shaped mounting bracket, 5cm wide"
 python cli.py normalize-mesh bracket_01 library/generated/bracket_01/source.stl --format stl --size 0.05
 python cli.py normalize-mesh bracket_01 ... --format stl --size 0.05 --pivot base_center
+python cli.py generate-material "rough red rust with visible texture"
+python cli.py generate-material "dull gray rock" --id moon_surface --force
 ```
 
 ## LLM provider configuration
