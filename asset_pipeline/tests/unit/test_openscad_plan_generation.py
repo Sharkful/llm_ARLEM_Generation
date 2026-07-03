@@ -81,7 +81,7 @@ def test_generate_openscad_plan_uses_repair_prompt_when_context_given(monkeypatc
 
 
 def test_generate_openscad_plan_wraps_failure(monkeypatch):
-    def _always_raise(client, llm_model, spec, repair_context):
+    def _always_raise(client, llm_model, spec, repair_context, revision_context=None):
         raise RuntimeError("rate limited")
 
     monkeypatch.setattr(gen, "get_instructor_client", lambda provider: _FakeClient(None, None))

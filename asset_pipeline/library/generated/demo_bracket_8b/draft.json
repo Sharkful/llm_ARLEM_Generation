@@ -1,0 +1,85 @@
+{
+  "asset_id": "demo_bracket_8b",
+  "status": "saved",
+  "resolution_method": "parametric",
+  "description": "an L-shaped mounting bracket about 6cm wide with two screw holes",
+  "spec": {
+    "object_id": "demo_bracket_8b",
+    "description": "An L-shaped mounting bracket about 6 cm wide with two screw holes.",
+    "kind": "bracket",
+    "semantic_type": "mounting_bracket",
+    "desired_size_m": 0.06,
+    "visual_style": "L-shaped profile with two screw holes",
+    "position": null
+  },
+  "plan": {
+    "parameters": {
+      "width": 0.12,
+      "flange_h": 0.05,
+      "base_d": 0.05,
+      "thickness": 0.006,
+      "hole_dia": 0.005,
+      "hole_inset": 0.012,
+      "fillet_r": 0.008,
+      "fn": 32.0
+    },
+    "scad_source": "\n// \u2500\u2500 L-Shaped Mounting Bracket \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// Units: meters.  Origin centred on the bracket's bounding-box mid-point.\n// +Y = up,  +Z = forward.\n\n// \u2500\u2500 Key parameters \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nwidth          = 0.12;    // overall width (X)  \u2013 ~12 cm\nflange_h       = 0.050;   // height of the vertical flange (Y)\nbase_d         = 0.050;   // depth  of the horizontal base leg (Z)\nthickness      = 0.006;   // material thickness of both legs\nhole_dia       = 0.005;   // screw-hole diameter\nhole_inset     = 0.012;   // distance from outer edge to hole centre\nfillet_r       = 0.008;   // corner fillet radius (chunkier than before)\nfn             = 32;      // cylinder facets\n\n// \u2500\u2500 Derived \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\ntotal_y = flange_h + thickness;\ntotal_z = base_d   + thickness;\n\n// Shift so bounding box is centred on origin\nox = -width / 2;\noy = -total_y / 2;\noz = -total_z / 2;\n\n// Inner-corner fillet: sits at the junction of the two legs on the inside\n// The fillet is a quarter-round rod spanning the full width (X axis).\n// It occupies the concave corner: Y = oy (bottom of flange base),\n// Z = oz + total_z - thickness (back face of base leg = front face of flange).\nmodule corner_fillet() {\n    // A cylinder lying along X, radius = fillet_r, trimmed to a quarter circle\n    // by intersecting with a cube that fills the inner-corner quadrant.\n    translate([ox, oy + thickness, oz + total_z - thickness])\n    intersection() {\n        // Full cylinder along X\n        rotate([0, 90, 0])\n            cylinder(r = fillet_r, h = width, $fn = fn);\n        // Keep only the quadrant that fills the concave corner\n        // (+Y, -Z relative to the cylinder axis)\n        cube([width, fillet_r, fillet_r]);\n    }\n}\n\nmodule bracket() {\n    union() {\n        // \u2500\u2500 Horizontal base leg (lies in XZ plane, at the bottom) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        translate([ox, oy, oz])\n            cube([width, thickness, total_z]);\n\n        // \u2500\u2500 Vertical flange (rises in Y from the back edge of base leg) \u2500\u2500\u2500\u2500\n        translate([ox, oy, oz + total_z - thickness])\n            cube([width, total_y, thickness]);\n\n        // \u2500\u2500 Inner-corner fillet \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        corner_fillet();\n    }\n}\n\nmodule screw_holes() {\n    // \u2500\u2500 Three holes on the vertical flange \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n    // Positions: left, centre, right\n    for (sx = [-1, 0, 1]) {\n        x_pos = (sx == 0) ? 0 : sx * (width / 2 - hole_inset);\n        translate([x_pos,\n                   oy + hole_inset,\n                   oz + total_z + 0.001])\n            cylinder(h = thickness * 2 + 0.002,\n                     d = hole_dia,\n                     center = true,\n                     $fn = fn);\n    }\n\n    // \u2500\u2500 Three holes on the horizontal base leg \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n    for (sx = [-1, 0, 1]) {\n        x_pos = (sx == 0) ? 0 : sx * (width / 2 - hole_inset);\n        translate([x_pos,\n                   oy - 0.001,\n                   oz + hole_inset])\n            rotate([90, 0, 0])\n            cylinder(h = thickness * 2 + 0.002,\n                     d = hole_dia,\n                     center = true,\n                     $fn = fn);\n    }\n}\n\ndifference() {\n    bracket();\n    screw_holes();\n}\n",
+    "expected_bounds_m": [
+      0.12,
+      0.056,
+      0.056
+    ],
+    "notes": "Added chunkier inner-corner fillet (fillet_r = 0.008 m, double the old implied zero) as a quarter-cylinder rod running the full width at the concave junction of the two legs. Expanded screw hole arrays from 2 holes (\u00b11) to 3 holes (\u22121, 0, +1) on both the flange and base leg, with the new centre hole at X = 0."
+  },
+  "generation": {
+    "asset_id": "demo_bracket_8b",
+    "success": true,
+    "scad_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\demo_bracket_8b\\source.scad",
+    "stl_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\demo_bracket_8b\\source.stl",
+    "actual_bounds_m": [
+      0.12,
+      0.056,
+      0.057999
+    ],
+    "expected_bounds_m": [
+      0.12,
+      0.056,
+      0.056
+    ],
+    "bounds_diverge": false,
+    "repair_attempts": [],
+    "error_message": null
+  },
+  "normalization": {
+    "asset_id": "demo_bracket_8b",
+    "success": true,
+    "source_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\demo_bracket_8b\\source.stl",
+    "glb_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\demo_bracket_8b\\model.glb",
+    "original_bounds_m": [
+      0.12,
+      0.056,
+      0.057999
+    ],
+    "final_bounds_m": [
+      0.06,
+      0.028,
+      0.029
+    ],
+    "pivot": "center",
+    "scale_applied": 0.5,
+    "triangle_count_before": 908,
+    "triangle_count_after": 908,
+    "decimated": false,
+    "error_message": null
+  },
+  "glb_address": "library/generated/demo_bracket_8b/model.glb",
+  "bounds_m": [
+    0.06,
+    0.028,
+    0.029
+  ],
+  "matched_asset_id": null,
+  "composite_id": null,
+  "message": "Generated via OpenSCAD. Edit parameters or send a tweak, then save.",
+  "updated_at": "2026-07-03T14:02:07.362382"
+}

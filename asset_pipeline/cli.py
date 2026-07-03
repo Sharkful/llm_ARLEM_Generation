@@ -363,6 +363,14 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0 if report.passed else 1
 
 
+def cmd_review(args: argparse.Namespace) -> int:
+    from webapp.app import main as review_main
+
+    print(f"Starting review app on http://127.0.0.1:{args.port}/ (Ctrl+C to stop)")
+    review_main(port=args.port, open_browser=not args.no_browser)
+    return 0
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Report external tool and API key status on this machine.
 
@@ -577,6 +585,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Also check a ResolutionRecord JSON file (or list) for unresolved specs (req. doc 12.5)",
     )
     validate_parser.set_defaults(func=cmd_validate)
+
+    review_parser = sub.add_parser(
+        "review",
+        help="Start the local Flask review/creation app (Library / Create / Worklist)",
+    )
+    review_parser.add_argument("--port", type=int, default=5173, help="Port (default 5173)")
+    review_parser.add_argument(
+        "--no-browser", action="store_true", help="Don't auto-open the browser"
+    )
+    review_parser.set_defaults(func=cmd_review)
 
     doctor_parser = sub.add_parser(
         "doctor",

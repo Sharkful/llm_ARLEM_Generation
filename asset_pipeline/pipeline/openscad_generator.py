@@ -64,6 +64,24 @@ Your previous OpenSCAD script failed to compile. Fix the script so it \
 compiles with OpenSCAD 2021.01. Keep the same overall design intent.
 """
 
+_REVISION_SYSTEM_SUFFIX = """\
+
+You previously wrote an OpenSCAD script for this object. The human reviewer \
+wants a change. Apply their instruction to the existing script -- keep \
+everything they did not ask to change, keep the same parameter-variable \
+style, and return the full revised script with updated parameters and \
+expected_bounds_m.
+"""
+
+
+def _build_revision_prompt(previous_source: str, instruction: str) -> str:
+    return (
+        "Current OpenSCAD script:\n\n"
+        f"```\n{previous_source}\n```\n\n"
+        f"Reviewer's change request: {instruction}\n\n"
+        "Return the full revised script."
+    )
+
 
 class OpenSCADGenerationError(RuntimeError):
     def __init__(self, message: str, log_entry: LLMCallEntry):
@@ -96,20 +114,35 @@ def generate_openscad_plan(
     provider: str | None = None,
     model: str | None = None,
     repair_context: tuple[str, str] | None = None,
+    revision_context: tuple[str, str] | None = None,
 ) -> tuple[OpenSCADPlan, LLMCallEntry]:
-    """One LLM call: AssetSpec (+ optional prior-failure context) -> OpenSCADPlan."""
+    """One LLM call: AssetSpec (+ optional context) -> OpenSCADPlan.
+
+    repair_context   = (previous_source, compiler_stderr) -- fix a broken script.
+    revision_context = (previous_source, human_instruction) -- apply a
+                       reviewer's change request (Stage 8b iterate loop).
+    """
+    if repair_context and revision_context:
+        raise ValueError("repair_context and revision_context are mutually exclusive")
+    purpose = (
+        "openscad_repair" if repair_context
+        else "openscad_revision" if revision_context
+        else "openscad_generation"
+    )
     resolved_provider, resolved_model = resolve_provider_and_model(provider, model)
     client = get_instructor_client(resolved_provider)
 
     start = time.monotonic()
     try:
-        response, completion = _call_with_usage(client, resolved_model, spec, repair_context)
+        response, completion = _call_with_usage(
+            client, resolved_model, spec, repair_context, revision_context
+        )
     except Exception as exc:
         duration = time.monotonic() - start
         failed_entry = LLMCallEntry(
             provider=resolved_provider,
             model=resolved_model,
-            purpose="openscad_repair" if repair_context else "openscad_generation",
+            purpose=purpose,
             duration_seconds=round(duration, 3),
             success=False,
             error_message=str(exc),
@@ -126,7 +159,7 @@ def generate_openscad_plan(
     entry = LLMCallEntry(
         provider=resolved_provider,
         model=resolved_model,
-        purpose="openscad_repair" if repair_context else "openscad_generation",
+        purpose=purpose,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         duration_seconds=round(duration, 3),
@@ -141,14 +174,23 @@ def _call_with_usage(
     llm_model: str,
     spec: AssetSpec,
     repair_context: tuple[str, str] | None,
+    revision_context: tuple[str, str] | None = None,
 ) -> tuple[OpenSCADPlan, object]:
     system_prompt = _SYSTEM_PROMPT
-    if repair_context is None:
-        user_content = _build_user_prompt(spec)
-    else:
+    if repair_context is not None:
         system_prompt = _SYSTEM_PROMPT + _REPAIR_SYSTEM_SUFFIX
         previous_source, stderr = repair_context
         user_content = _build_repair_prompt(previous_source, stderr)
+    elif revision_context is not None:
+        system_prompt = _SYSTEM_PROMPT + _REVISION_SYSTEM_SUFFIX
+        previous_source, instruction = revision_context
+        user_content = (
+            _build_user_prompt(spec)
+            + "\n\n"
+            + _build_revision_prompt(previous_source, instruction)
+        )
+    else:
+        user_content = _build_user_prompt(spec)
 
     return client.chat.completions.create_with_completion(
         model=llm_model,

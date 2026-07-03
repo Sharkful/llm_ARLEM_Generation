@@ -10,6 +10,7 @@ LLMPurpose = Literal[
     "classification",
     "openscad_generation",
     "openscad_repair",
+    "openscad_revision",
     "material_generation",
     "composite_decomposition",
 ]

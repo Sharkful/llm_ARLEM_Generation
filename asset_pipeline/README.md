@@ -39,11 +39,17 @@ exit 0 only when error-free), and Stage 8 (batch preview thumbnails:
 `cli.py preview <id>` / `preview --all` renders each catalog asset --
 GLBs and Unity-style primitives alike -- to `library/previews/<id>.png`
 via Playwright + `webapp/asset_preview.html`, plus a contact_sheet.html
-for fast human scanning; the preview page is deliberately dual-use and
-will be the Stage 8b interactive viewport) are implemented. Stage 8
-needs `playwright` and its chromium browser (`pip install playwright &&
-playwright install chromium`) plus network access to the three.js CDN
-(same one `viewer2.html` uses). Catalog matching uses
+for fast human scanning), and Stage 8b (local Flask review/creation app
+via `cli.py review`: a Library browser with live three.js inspection and
+human approval stamps, a Create mode -- type a description, generate,
+edit OpenSCAD parameters or send a free-text tweak, save to the catalog
+-- and a Worklist mode that steps through a pasted list of descriptions
+one by one for production authoring, with progress persisted across
+restarts; all orchestration lives in `pipeline/asset_factory.py`, which
+Stage 9's batch flow will reuse) are implemented. Stages 8/8b need
+`playwright` + chromium (`pip install playwright && playwright install
+chromium`), `Flask`, and network access to the three.js CDN (same one
+`viewer2.html` uses). Catalog matching uses
 tag/token/fuzzy string matching only (no embeddings yet -- see
 `pipeline/catalog_matcher.py` docstring). Resolver output for `parametric`
 and `imported` results still needs to be wired to Stage 3/4's generator
@@ -118,6 +124,7 @@ python cli.py validate --json        # machine-readable report
 python cli.py validate --records resolution_records.json   # also check for unresolved specs
 python cli.py preview sphere_basic --force   # render one thumbnail
 python cli.py preview --all                  # render all + library/previews/contact_sheet.html
+python cli.py review                         # start the local review/creation web app
 ```
 
 ## LLM provider configuration

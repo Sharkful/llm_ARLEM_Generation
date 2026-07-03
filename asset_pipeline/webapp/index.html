@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<!--
+  Stage 8b review/creation UI. Three modes, one shared live viewport
+  (asset_preview.html in an iframe; same-origin so we can call its
+  _previewLoad() directly to hot-swap assets without reloading):
+
+    Library  - browse/filter the catalog, inspect any asset in 3D, approve.
+    Create   - one-shot testing: type a description, generate, tweak
+               parameters or send a revision instruction, save when happy.
+    Worklist - production creation: paste a list of descriptions, step
+               through generate -> inspect -> iterate -> save, progress
+               persisted server-side (webapp/worklist.json).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Asset Pipeline Review</title>
+<style>
+  :root { --bg:#f4f5f7; --panel:#fff; --line:#dfe2e8; --ink:#26282d; --dim:#6a7078;
+          --accent:#2b5fd9; --ok:#1d8a4a; --warn:#b7791f; --err:#c0392b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 system-ui, sans-serif; color:var(--ink); background:var(--bg); }
+  header { display:flex; align-items:center; gap:18px; padding:10px 18px;
+           background:var(--panel); border-bottom:1px solid var(--line); }
+  header h1 { font-size:16px; margin:0 18px 0 0; }
+  header button { background:none; border:none; font:inherit; padding:6px 10px;
+                  cursor:pointer; border-radius:6px; color:var(--dim); }
+  header button.active { background:#e8eefc; color:var(--accent); font-weight:600; }
+  main { display:grid; grid-template-columns: 1fr 460px; gap:14px; padding:14px;
+         height: calc(100vh - 53px); }
+  #left { overflow-y:auto; }
+  #right { display:flex; flex-direction:column; gap:10px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  #viewport { width:100%; aspect-ratio:1; border:1px solid var(--line); border-radius:10px;
+              background:#e8eaed; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:10px; }
+  .tile { background:var(--panel); border:1px solid var(--line); border-radius:8px;
+          padding:8px; cursor:pointer; text-align:center; }
+  .tile:hover { border-color:var(--accent); }
+  .tile img { width:100%; aspect-ratio:1; object-fit:contain; background:#e8eaed; border-radius:4px; }
+  .tile .noimg { width:100%; aspect-ratio:1; display:flex; align-items:center; justify-content:center;
+                 background:#eee; color:#aaa; border-radius:4px; font-size:12px; }
+  .tile b { font-size:12px; word-break:break-all; }
+  .tile small { color:var(--dim); }
+  textarea, input[type=text] { width:100%; font:inherit; padding:8px; border:1px solid var(--line);
+                               border-radius:6px; }
+  button.action { background:var(--accent); color:#fff; border:none; border-radius:6px;
+                  padding:8px 14px; font:inherit; cursor:pointer; }
+  button.action:disabled { background:#a9b6cf; cursor:wait; }
+  button.secondary { background:#eef0f4; color:var(--ink); border:1px solid var(--line);
+                     border-radius:6px; padding:8px 14px; font:inherit; cursor:pointer; }
+  #log { font:12px/1.5 ui-monospace, monospace; white-space:pre-wrap; color:var(--dim);
+         max-height:180px; overflow-y:auto; }
+  .params { display:grid; grid-template-columns:1fr 110px; gap:6px 10px; align-items:center; }
+  .params label { font:12px ui-monospace, monospace; }
+  .params input { padding:4px 6px; }
+  .status-pending { color:var(--dim); } .status-in_progress { color:var(--warn); }
+  .status-saved { color:var(--ok); } .status-skipped { color:var(--dim); text-decoration:line-through; }
+  .wl-item { padding:6px 8px; border-radius:6px; display:flex; gap:8px; align-items:baseline; }
+  .wl-item.current { background:#e8eefc; }
+  .filters { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  .filters input, .filters select { font:inherit; padding:6px; border:1px solid var(--line); border-radius:6px; }
+  .badge { font-size:11px; padding:1px 7px; border-radius:9px; background:#eef0f4; color:var(--dim); }
+  h3 { margin:2px 0 10px; font-size:14px; }
+  .row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Asset Pipeline</h1>
+  <button data-mode="library" class="active">Library</button>
+  <button data-mode="create">Create</button>
+  <button data-mode="worklist">Worklist</button>
+</header>
+<main>
+  <div id="left">
+    <section id="mode-library">
+      <div class="filters">
+        <input type="text" id="f-text" placeholder="filter by id / tag…">
+        <select id="f-class"><option value="">any class</option>
+          <option>primitive</option><option>variant</option><option>composite</option>
+          <option>parametric</option><option>imported</option></select>
+      </div>
+      <div class="grid" id="catalog-grid"></div>
+    </section>
+
+    <section id="mode-create" hidden>
+      <div class="card">
+        <h3>Create from description</h3>
+        <textarea id="c-desc" rows="3" placeholder="e.g. an L-shaped mounting bracket with two screw holes, about 6cm wide"></textarea>
+        <div class="row">
+          <input type="text" id="c-id" placeholder="asset_id (optional)" style="max-width:220px">
+          <button class="action" id="c-generate">Generate</button>
+        </div>
+      </div>
+      <div class="card" id="draft-panel" hidden>
+        <h3>Draft: <span id="d-id"></span> <span class="badge" id="d-method"></span></h3>
+        <div id="d-message" style="color:var(--dim); margin-bottom:8px"></div>
+        <div id="d-params-wrap" hidden>
+          <b style="font-size:12px">Parameters (meters)</b>
+          <div class="params" id="d-params"></div>
+          <div class="row"><button class="secondary" id="d-apply">Recompile with edits</button></div>
+        </div>
+        <div style="margin-top:10px">
+          <b style="font-size:12px">Tweak instruction</b>
+          <textarea id="d-tweak" rows="2" placeholder="e.g. make the base twice as wide"></textarea>
+          <div class="row">
+            <button class="secondary" id="d-regenerate">Regenerate (LLM)</button>
+            <button class="action" id="d-save">Save to catalog</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="mode-worklist" hidden>
+      <div class="card">
+        <h3>Worklist</h3>
+        <textarea id="w-input" rows="4" placeholder="One description per line, or paste a JSON array of strings / AssetSpec-like objects"></textarea>
+        <div class="row">
+          <button class="secondary" id="w-load">Load list</button>
+          <button class="action" id="w-next">Generate next pending</button>
+          <button class="secondary" id="w-skip">Skip current</button>
+        </div>
+      </div>
+      <div class="card"><div id="w-list"></div></div>
+    </section>
+  </div>
+
+  <div id="right">
+    <iframe id="viewport" src="/webapp/asset_preview.html"></iframe>
+    <div class="card">
+      <h3 id="inspect-title">Nothing loaded</h3>
+      <div class="row" id="inspect-actions" hidden>
+        <button class="secondary" id="a-approve">Approve (record who/when)</button>
+      </div>
+      <div id="log"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const log = (msg) => { $('log').textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n` + $('log').textContent; };
+
+async function api(path, body) {
+  const res = await fetch(path, body === undefined ? {} : {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+// ── Viewport ──────────────────────────────────────────────────────────
+function viewportLoad(spec) {
+  const frame = $('viewport');
+  const call = () => frame.contentWindow._previewLoad &&
+    frame.contentWindow._previewLoad(spec).catch(e => log('viewport: ' + e));
+  if (frame.contentWindow && frame.contentWindow._previewReady) call();
+  else frame.addEventListener('load', call, { once: true });
+}
+const bust = (url) => url + '?t=' + Date.now();
+
+function showAsset(entry) {
+  $('inspect-title').textContent = `${entry.asset_id} — ${entry.asset_class}, review ${entry.review_level}`;
+  $('inspect-actions').hidden = false;
+  currentInspectId = entry.asset_id;
+  if (entry.address.startsWith('library/')) {
+    viewportLoad({ kind: 'glb', url: bust('/' + entry.address) });
+  } else {
+    const name = entry.address.split('/').pop().toLowerCase();
+    viewportLoad({ kind: 'primitive', name, bounds: entry.canonical_bounds_m });
+  }
+}
+
+// ── Mode switching ────────────────────────────────────────────────────
+document.querySelectorAll('header button').forEach(btn => btn.onclick = () => {
+  document.querySelectorAll('header button').forEach(b => b.classList.toggle('active', b === btn));
+  for (const mode of ['library', 'create', 'worklist'])
+    $('mode-' + mode).hidden = (btn.dataset.mode !== mode);
+});
+
+// ── Library ───────────────────────────────────────────────────────────
+let catalog = [], currentInspectId = null;
+async function refreshCatalog() {
+  catalog = (await api('/api/catalog')).assets;
+  renderCatalog();
+}
+function renderCatalog() {
+  const text = $('f-text').value.toLowerCase(), cls = $('f-class').value;
+  $('catalog-grid').innerHTML = '';
+  for (const e of catalog) {
+    if (cls && e.asset_class !== cls) continue;
+    if (text && !(e.asset_id + ' ' + e.tags.join(' ')).toLowerCase().includes(text)) continue;
+    const tile = document.createElement('div');
+    tile.className = 'tile';
+    tile.innerHTML = (e.preview_url
+        ? `<img src="${e.preview_url}" loading="lazy">`
+        : `<div class="noimg">no preview</div>`)
+      + `<b>${e.asset_id}</b><br><small>${e.asset_class} · r${e.review_level}</small>`;
+    tile.onclick = () => showAsset(e);
+    $('catalog-grid').appendChild(tile);
+  }
+}
+$('f-text').oninput = renderCatalog;
+$('f-class').onchange = renderCatalog;
+
+$('a-approve').onclick = async () => {
+  if (!currentInspectId) return;
+  try {
+    const { entry } = await api('/api/approve', { asset_id: currentInspectId });
+    log(`approved ${entry.asset_id}: ${entry.provenance.modifications.at(-1)}`);
+  } catch (e) { log('approve failed: ' + e.message); }
+};
+
+// ── Create / iterate ──────────────────────────────────────────────────
+let draft = null;
+function showDraft(d) {
+  draft = d;
+  $('draft-panel').hidden = false;
+  $('d-id').textContent = d.asset_id;
+  $('d-method').textContent = d.resolution_method + ' · ' + d.status;
+  $('d-message').textContent = d.message || '';
+  const hasParams = d.plan && Object.keys(d.plan.parameters || {}).length;
+  $('d-params-wrap').hidden = !hasParams;
+  if (hasParams) {
+    $('d-params').innerHTML = '';
+    for (const [name, value] of Object.entries(d.plan.parameters)) {
+      const label = document.createElement('label'); label.textContent = name;
+      const input = document.createElement('input');
+      input.type = 'number'; input.step = 'any'; input.value = value; input.dataset.name = name;
+      $('d-params').append(label, input);
+    }
+  }
+  if (d.glb_address) viewportLoad({ kind: 'glb', url: bust('/' + d.glb_address) });
+  else if (d.matched_asset_id) {
+    const m = catalog.find(e => e.asset_id === d.matched_asset_id);
+    if (m) showAsset(m);
+  }
+  $('inspect-title').textContent = `draft ${d.asset_id} (${d.status})`;
+  $('inspect-actions').hidden = true;
+}
+
+async function runGuarded(button, fn) {
+  button.disabled = true;
+  try { await fn(); } catch (e) { log('ERROR: ' + e.message); }
+  button.disabled = false;
+}
+
+$('c-generate').onclick = () => runGuarded($('c-generate'), async () => {
+  log('generating from description…');
+  const data = await api('/api/generate', {
+    description: $('c-desc').value, asset_id: $('c-id').value,
+  });
+  for (const call of data.llm_calls) log(`[${call.provider}/${call.model}] ${call.purpose} ${call.duration_seconds}s`);
+  showDraft(data.draft);
+  log(`draft ${data.draft.asset_id}: ${data.draft.status}`);
+});
+
+$('d-apply').onclick = () => runGuarded($('d-apply'), async () => {
+  const parameters = {};
+  $('d-params').querySelectorAll('input').forEach(i => parameters[i.dataset.name] = parseFloat(i.value));
+  log('recompiling with edited parameters…');
+  const data = await api('/api/regenerate', { asset_id: draft.asset_id, parameters });
+  showDraft(data.draft);
+  log('recompiled.');
+});
+
+$('d-regenerate').onclick = () => runGuarded($('d-regenerate'), async () => {
+  const tweak = $('d-tweak').value.trim();
+  if (!tweak) { log('type a tweak instruction first'); return; }
+  log('LLM revision: ' + tweak);
+  const data = await api('/api/regenerate', { asset_id: draft.asset_id, tweak });
+  for (const call of data.llm_calls) log(`[${call.provider}/${call.model}] ${call.purpose} ${call.duration_seconds}s`);
+  showDraft(data.draft);
+});
+
+$('d-save').onclick = () => runGuarded($('d-save'), async () => {
+  const { entry } = await api('/api/save', { asset_id: draft.asset_id });
+  log(`saved ${entry.asset_id} to catalog (review_level ${entry.review_level})`);
+  await refreshCatalog();
+  if (worklist.items.length) markCurrent('saved');
+});
+
+// ── Worklist ──────────────────────────────────────────────────────────
+let worklist = { items: [], cursor: 0 };
+
+function parseWorklistInput(text) {
+  text = text.trim();
+  if (!text) return [];
+  if (text.startsWith('[')) {
+    return JSON.parse(text).map(item =>
+      typeof item === 'string'
+        ? { description: item, status: 'pending' }
+        : { description: item.description, asset_id: item.object_id || item.asset_id, status: 'pending' });
+  }
+  return text.split('\n').map(s => s.trim()).filter(Boolean)
+             .map(description => ({ description, status: 'pending' }));
+}
+
+function renderWorklist() {
+  const el = $('w-list');
+  el.innerHTML = worklist.items.length ? '' : '<i style="color:var(--dim)">no items loaded</i>';
+  worklist.items.forEach((item, i) => {
+    const div = document.createElement('div');
+    div.className = 'wl-item' + (i === worklist.cursor ? ' current' : '');
+    div.innerHTML = `<span class="status-${item.status}">[${item.status}]</span> <span>${item.description}</span>`;
+    el.appendChild(div);
+  });
+}
+
+async function persistWorklist() {
+  await api('/api/worklist', worklist);
+  renderWorklist();
+}
+
+async function markCurrent(status) {
+  const item = worklist.items[worklist.cursor];
+  if (!item) return;
+  item.status = status;
+  const next = worklist.items.findIndex(it => it.status === 'pending');
+  if (next >= 0) worklist.cursor = next;
+  await persistWorklist();
+}
+
+$('w-load').onclick = () => runGuarded($('w-load'), async () => {
+  worklist = { items: parseWorklistInput($('w-input').value), cursor: 0 };
+  await persistWorklist();
+  log(`worklist loaded: ${worklist.items.length} item(s)`);
+});
+
+$('w-next').onclick = () => runGuarded($('w-next'), async () => {
+  const idx = worklist.items.findIndex(it => it.status === 'pending');
+  if (idx < 0) { log('worklist: nothing pending'); return; }
+  worklist.cursor = idx;
+  worklist.items[idx].status = 'in_progress';
+  await persistWorklist();
+  const item = worklist.items[idx];
+  log(`worklist ${idx + 1}/${worklist.items.length}: ${item.description}`);
+  const data = await api('/api/generate', { description: item.description, asset_id: item.asset_id || '' });
+  showDraft(data.draft);
+  document.querySelector('header button[data-mode=create]').click();
+});
+
+$('w-skip').onclick = () => runGuarded($('w-skip'), () => markCurrent('skipped'));
+
+// ── Init ──────────────────────────────────────────────────────────────
+(async () => {
+  await refreshCatalog();
+  try {
+    const saved = await api('/api/worklist');
+    if (saved.items) { worklist = saved; renderWorklist(); }
+  } catch { /* no saved worklist */ }
+})();
+</script>
+</body>
+</html>
