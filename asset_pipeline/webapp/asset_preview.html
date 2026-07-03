@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<!--
+  Single-asset preview page (Stage 8), companion to viewer2.html per the
+  implementation plan: same three.js version/import-map/GLTFLoader approach,
+  but scoped to one asset at origin with an auto-framed camera.
+
+  Dual use by design:
+    - Static thumbnails: pipeline/preview_renderer.py drives this page
+      headlessly via Playwright and calls window._previewCapture().
+    - Interactive review (Stage 8b): the same page has OrbitControls, so the
+      future Flask review app can embed it directly and hot-swap the asset
+      via window._previewLoad() after a regenerate call.
+
+  Load spec (query string or _previewLoad(spec)):
+    ?kind=glb&url=/library/imported/x/model.glb
+    ?kind=primitive&name=sphere&bx=1&by=1&bz=1
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Asset Preview</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #e8eaed; overflow: hidden; }
+  #status { position: fixed; left: 8px; bottom: 6px; font: 12px monospace; color: #666; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="status">loading…</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const status = (msg) => { document.getElementById('status').textContent = msg; };
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(1);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xe8eaed);
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.001, 1000);
+const controls = new OrbitControls(camera, renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x778088, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 1.6);
+key.position.set(3, 5, 4);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xdde4ff, 0.5);
+rim.position.set(-4, 2, -3);
+scene.add(rim);
+
+const DEFAULT_MAT = () => new THREE.MeshStandardMaterial({ color: 0x8a93a6, roughness: 0.65, metalness: 0.05 });
+let assetRoot = null;
+const glbLoader = new GLTFLoader();
+
+function primitiveMesh(name, bounds) {
+  const [bx, by, bz] = bounds;
+  const group = new THREE.Group();
+  let geo = null;
+  switch (name) {
+    case 'sphere':   geo = new THREE.SphereGeometry(0.5, 48, 32); break;
+    case 'cube':     geo = new THREE.BoxGeometry(1, 1, 1); break;
+    case 'cylinder': geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 48); break;
+    case 'cone':     geo = new THREE.ConeGeometry(0.5, 1, 48); break;
+    case 'torus':    geo = new THREE.TorusGeometry(0.35, 0.15, 24, 64); break;
+    case 'capsule':  geo = new THREE.CapsuleGeometry(0.25, 0.5, 8, 32); break;
+    case 'plane':
+    case 'quad':     geo = new THREE.PlaneGeometry(1, 1); break;
+    case 'arrow': {
+      // Built along +Z to match the catalog's default_forward_axis (+Z);
+      // arrow_basic's bounds are [0.2, 0.2, 1.0].
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.7, 24), DEFAULT_MAT());
+      shaft.rotation.x = Math.PI / 2;
+      shaft.position.z = 0.35 - 0.5;
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.3, 24), DEFAULT_MAT());
+      head.rotation.x = Math.PI / 2;
+      head.position.z = 0.85 - 0.5;
+      group.add(shaft, head);
+      break;
+    }
+    case 'label': {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = '#8a93a6'; ctx.lineWidth = 10; ctx.strokeRect(8, 8, 240, 240);
+      ctx.fillStyle = '#444'; ctx.font = 'bold 110px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('Aa', 128, 132);
+      geo = new THREE.PlaneGeometry(1, 1);
+      const mat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), side: THREE.DoubleSide });
+      group.add(new THREE.Mesh(geo, mat));
+      geo = null;
+      break;
+    }
+    default:
+      geo = new THREE.BoxGeometry(1, 1, 1);  // recognizable fallback
+  }
+  if (geo) {
+    const mat = DEFAULT_MAT();
+    if (name === 'plane' || name === 'quad') mat.side = THREE.DoubleSide;
+    group.add(new THREE.Mesh(geo, mat));
+  }
+  // Constructions above are not all unit-sized (torus is 1 x 0.3 x 1, arrow
+  // is thin, ...) -- measure the real box and scale per-axis so the final
+  // extents equal canonical_bounds_m exactly (flat dims -> tiny epsilon).
+  const built = new THREE.Box3().setFromObject(group).getSize(new THREE.Vector3());
+  group.scale.set(
+    Math.max(bx, 1e-4) / Math.max(built.x, 1e-6),
+    Math.max(by, 1e-4) / Math.max(built.y, 1e-6),
+    Math.max(bz, 1e-4) / Math.max(built.z, 1e-6),
+  );
+  return group;
+}
+
+function frameCamera(object) {
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const radius = Math.max(size.length() / 2, 1e-3);
+  const dist = radius / Math.tan((camera.fov * Math.PI / 180) / 2) * 1.25;
+  const dir = new THREE.Vector3(1, 0.65, 1).normalize();
+  camera.position.copy(center).addScaledVector(dir, dist);
+  camera.near = dist / 100;
+  camera.far = dist * 100;
+  camera.updateProjectionMatrix();
+  camera.lookAt(center);
+  controls.target.copy(center);
+  controls.update();
+}
+
+window._previewLoad = (spec) => new Promise((resolve, reject) => {
+  if (assetRoot) { scene.remove(assetRoot); assetRoot = null; }
+  const finish = (root) => {
+    assetRoot = root;
+    scene.add(root);
+    frameCamera(root);
+    renderer.render(scene, camera);
+    status(`${spec.kind}: ${spec.name || spec.url}`);
+    resolve(true);
+  };
+  if (spec.kind === 'glb') {
+    glbLoader.load(
+      spec.url,
+      (gltf) => finish(gltf.scene),
+      undefined,
+      (err) => { status(`ERROR: ${err.message || err}`); reject(err); }
+    );
+  } else {
+    finish(primitiveMesh(spec.name, spec.bounds || [1, 1, 1]));
+  }
+});
+
+window._previewCapture = () => {
+  renderer.render(scene, camera);
+  return renderer.domElement.toDataURL('image/png').split(',')[1];
+};
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Interactive/manual use: honor a load spec in the query string.
+const qs = new URLSearchParams(location.search);
+if (qs.has('kind')) {
+  window._previewLoad({
+    kind: qs.get('kind'),
+    url: qs.get('url'),
+    name: qs.get('name'),
+    bounds: [
+      parseFloat(qs.get('bx') || '1'),
+      parseFloat(qs.get('by') || '1'),
+      parseFloat(qs.get('bz') || '1'),
+    ],
+  }).catch(() => {});
+} else {
+  status('ready — pass ?kind=glb&url=… or ?kind=primitive&name=…');
+}
+window._previewReady = true;
+</script>
+</body>
+</html>

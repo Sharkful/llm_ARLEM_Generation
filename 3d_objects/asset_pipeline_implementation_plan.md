@@ -401,6 +401,25 @@ review levels, §18's "LLM should not be sole authority on final visual approval
 a live, orbit-able 3D view and the ability to nudge parameters without re-running the whole CLI by hand. This
 stage builds a small local Flask app that turns catalog review into a fast iterate-in-browser loop.
 
+**Two usage modes (added 2026-07, user requirement):** the app serves both *one-shot testing* and
+*production asset creation*:
+
+1. **Create-from-description (one-shot testing):** a text box on the main page where the user types a free
+   description, hits generate, and gets the full pipeline result (spec → resolve → generate/variant/composite
+   → normalize → material → preview) live in the viewport, with a regenerate button that accepts a tweak
+   instruction ("make it flatter", "more metallic") and re-runs only the stages that need it. This is the
+   fastest way to calibrate prompts and eyeball pipeline quality.
+2. **Worklist mode (production creation):** load a user-provided list of asset descriptions (JSON/CSV of
+   `AssetSpec`s or raw sentences — the same shape Stage 9's `resolve-scene` consumes), then step through it
+   one asset at a time: generate → inspect in the viewport → modify (parameter edits, material tweaks, or a
+   regenerate instruction) → iterate until acceptable → save/approve into the catalog → next. Progress is
+   persisted so a long list survives an app restart; each saved asset records the normal provenance/review
+   fields. This is the bulk-authoring workflow for building out a lab's full asset set.
+
+Stage 8's `webapp/asset_preview.html` is deliberately built as the shared viewport for both modes
+(`_previewLoad()` hot-swaps assets without a page reload), so 8b adds Flask endpoints + a worklist UI around
+it rather than a new renderer.
+
 This is deliberately **not** the runtime AR viewer and does not touch Unity — it's a development-time tool
 sitting next to `viewer2.html`/`screenshot_cli.py`, reusing the same three.js GLB-loading code rather than a
 new rendering stack.

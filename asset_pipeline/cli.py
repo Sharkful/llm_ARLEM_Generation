@@ -29,6 +29,12 @@ from models.spec_models import AssetSpec
 from pipeline.catalog_writer import load_catalog
 from pipeline.classifier import ClassificationError
 from pipeline.external_intake import IntakeError, intake_asset
+from pipeline.preview_renderer import (
+    PreviewError,
+    preview_path,
+    render_previews,
+    write_contact_sheet,
+)
 from pipeline.polyhaven import (
     PolyHavenSearchError,
     fetch_to_intake,
@@ -317,6 +323,35 @@ def cmd_generate_material(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_preview(args: argparse.Namespace) -> int:
+    if not args.all and not args.asset_id:
+        print("ERROR: give an asset_id or --all", file=sys.stderr)
+        return 1
+    entries = load_catalog()
+    if not args.all:
+        entries = [e for e in entries if e.asset_id == args.asset_id]
+        if not entries:
+            print(f"ERROR: asset_id {args.asset_id!r} not found in the catalog.", file=sys.stderr)
+            return 1
+
+    try:
+        written, skipped = render_previews(entries, force=args.force)
+    except PreviewError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    for path in written:
+        print(f"  rendered {path.name}")
+    if skipped:
+        print(f"  skipped {len(skipped)} existing preview(s) (use --force to redo)")
+    if args.all:
+        sheet = write_contact_sheet(load_catalog())
+        print(f"\nContact sheet: {sheet}")
+    elif written:
+        print(f"\nPreview: {preview_path(args.asset_id)}")
+    return 0
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     report = validate_library(
         records_path=Path(args.records) if args.records else None
@@ -511,6 +546,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     mat_parser.add_argument("--model", default=None, help="Override the default model for this call")
     mat_parser.set_defaults(func=cmd_generate_material)
+
+    preview_parser = sub.add_parser(
+        "preview",
+        help="Render preview thumbnail(s) into library/previews/ (+ contact sheet with --all)",
+    )
+    preview_parser.add_argument(
+        "asset_id", nargs="?", default=None, help="Single asset to preview"
+    )
+    preview_parser.add_argument(
+        "--all", action="store_true", help="Preview every catalog asset and write the contact sheet"
+    )
+    preview_parser.add_argument(
+        "--force", action="store_true", help="Re-render even if a preview PNG already exists"
+    )
+    preview_parser.set_defaults(func=cmd_preview)
 
     validate_parser = sub.add_parser(
         "validate",

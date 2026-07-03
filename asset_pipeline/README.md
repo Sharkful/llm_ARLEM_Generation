@@ -35,7 +35,15 @@ Poly Haven is the entire source allowlist by design), and Stage 7
 (executable validation of the catalog + library per req. doc section 12:
 schema, completeness, scale/geometry, licensing/provenance, and runtime
 readiness via `cli.py validate`, with colorized screen output or `--json`,
-exit 0 only when error-free) are implemented. Catalog matching uses
+exit 0 only when error-free), and Stage 8 (batch preview thumbnails:
+`cli.py preview <id>` / `preview --all` renders each catalog asset --
+GLBs and Unity-style primitives alike -- to `library/previews/<id>.png`
+via Playwright + `webapp/asset_preview.html`, plus a contact_sheet.html
+for fast human scanning; the preview page is deliberately dual-use and
+will be the Stage 8b interactive viewport) are implemented. Stage 8
+needs `playwright` and its chromium browser (`pip install playwright &&
+playwright install chromium`) plus network access to the three.js CDN
+(same one `viewer2.html` uses). Catalog matching uses
 tag/token/fuzzy string matching only (no embeddings yet -- see
 `pipeline/catalog_matcher.py` docstring). Resolver output for `parametric`
 and `imported` results still needs to be wired to Stage 3/4's generator
@@ -108,6 +116,8 @@ python cli.py fetch-external small_wooden_table_01 --size 0.6   # download YOUR 
 python cli.py validate               # library health check; exit 0 only if error-free
 python cli.py validate --json        # machine-readable report
 python cli.py validate --records resolution_records.json   # also check for unresolved specs
+python cli.py preview sphere_basic --force   # render one thumbnail
+python cli.py preview --all                  # render all + library/previews/contact_sheet.html
 ```
 
 ## LLM provider configuration
