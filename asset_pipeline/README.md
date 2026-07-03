@@ -31,14 +31,18 @@ into `library/imported/` + the catalog, via `cli.py intake` -- see
 search assist: `cli.py search-external` lists CC0 models read-only,
 `cli.py fetch-external <id>` downloads only the one asset a human
 explicitly names into the intake folder with a pre-filled source.json --
-Poly Haven is the entire source allowlist by design) are implemented.
-Catalog matching uses tag/token/fuzzy string matching only (no embeddings
-yet -- see `pipeline/catalog_matcher.py` docstring). Resolver output for
-`parametric` and `imported` results still needs to be wired to Stage 3/4's
-generator and Stage 6a's intake respectively -- both are currently always
-flagged for human review by `pipeline/resolver.py`. Later stages
-(validation, preview rendering, the Flask review app, and sync) are not
-yet built -- see the implementation plan for what's next.
+Poly Haven is the entire source allowlist by design), and Stage 7
+(executable validation of the catalog + library per req. doc section 12:
+schema, completeness, scale/geometry, licensing/provenance, and runtime
+readiness via `cli.py validate`, with colorized screen output or `--json`,
+exit 0 only when error-free) are implemented. Catalog matching uses
+tag/token/fuzzy string matching only (no embeddings yet -- see
+`pipeline/catalog_matcher.py` docstring). Resolver output for `parametric`
+and `imported` results still needs to be wired to Stage 3/4's generator
+and Stage 6a's intake respectively -- both are currently always flagged
+for human review by `pipeline/resolver.py`. Later stages (preview
+rendering, the Flask review app, and sync) are not yet built -- see the
+implementation plan for what's next.
 
 ## Setup
 
@@ -101,6 +105,9 @@ python cli.py generate-material "dull gray rock" --id moon_surface --force
 python cli.py intake wooden_stool   # normalize + catalog intake/wooden_stool/ (see intake/README.md)
 python cli.py search-external "wooden table"                    # Poly Haven search (read-only)
 python cli.py fetch-external small_wooden_table_01 --size 0.6   # download YOUR pick into intake/
+python cli.py validate               # library health check; exit 0 only if error-free
+python cli.py validate --json        # machine-readable report
+python cli.py validate --records resolution_records.json   # also check for unresolved specs
 ```
 
 ## LLM provider configuration

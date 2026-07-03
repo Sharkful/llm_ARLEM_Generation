@@ -12,6 +12,7 @@ from the repo root once __main__ wiring is added in a later stage):
     python cli.py normalize-mesh bracket_01 library/generated/bracket_01/source.stl --format stl --size 0.05
     python cli.py generate-material "rough red rust with visible texture"
     python cli.py intake wooden_stool
+    python cli.py validate
     python cli.py doctor
 """
 from __future__ import annotations
@@ -38,6 +39,7 @@ from pipeline.material_generator import MaterialGenerationError, generate_materi
 from pipeline.mesh_processor import MeshProcessingError, normalize_mesh, save_mesh_meta
 from pipeline.openscad_generator import OpenSCADGenerationError, generate_parametric_asset
 from pipeline.resolver import resolve
+from pipeline.validator import format_json_output, format_screen_text, validate_library
 from pipeline.seed_catalog import main as seed_catalog_main
 from pipeline.spec_parser import SpecParsingError, parse_description
 
@@ -315,6 +317,17 @@ def cmd_generate_material(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_validate(args: argparse.Namespace) -> int:
+    report = validate_library(
+        records_path=Path(args.records) if args.records else None
+    )
+    if args.json:
+        print(format_json_output(report))
+    else:
+        print(format_screen_text(report, use_color=not args.no_color))
+    return 0 if report.passed else 1
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Report external tool and API key status on this machine.
 
@@ -498,6 +511,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     mat_parser.add_argument("--model", default=None, help="Override the default model for this call")
     mat_parser.set_defaults(func=cmd_generate_material)
+
+    validate_parser = sub.add_parser(
+        "validate",
+        help="Validate catalog + library (schema, completeness, geometry, licensing); exit 0 only if error-free",
+    )
+    validate_parser.add_argument(
+        "--json", action="store_true", help="Machine-readable JSON report instead of screen text"
+    )
+    validate_parser.add_argument(
+        "--no-color", action="store_true", help="Disable ANSI colors in screen output"
+    )
+    validate_parser.add_argument(
+        "--records", metavar="PATH", default=None,
+        help="Also check a ResolutionRecord JSON file (or list) for unresolved specs (req. doc 12.5)",
+    )
+    validate_parser.set_defaults(func=cmd_validate)
 
     doctor_parser = sub.add_parser(
         "doctor",
