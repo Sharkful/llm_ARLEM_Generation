@@ -67,10 +67,11 @@ def _get_json(path: str) -> dict:
         raise PolyHavenSearchError(f"Poly Haven API request failed ({url}): {exc}") from exc
 
 
-def search_models(query: str, limit: int = 10) -> list[PolyHavenResult]:
-    """Token-match `query` against Poly Haven's model listing (client-side:
-    the API has no search endpoint). Read-only -- downloads nothing."""
-    assets = _get_json(f"/assets?t={_MODEL_TYPE}")
+def search_models(query: str, limit: int = 10, asset_type: str = _MODEL_TYPE) -> list[PolyHavenResult]:
+    """Token-match `query` against Poly Haven's listing (client-side: the
+    API has no search endpoint). Read-only -- downloads nothing.
+    asset_type: "models" or "textures" (Stage 6c.5) -- same API shape."""
+    assets = _get_json(f"/assets?t={asset_type}")
     tokens = [t for t in query.lower().split() if t]
     if not tokens:
         raise PolyHavenSearchError("Empty search query.")
@@ -226,6 +227,88 @@ def fetch_to_intake(
             if target_size_m
             else "FILL IN target_size_m (real-world largest dimension, meters) before running intake."
         ),
+    }
+    source_path = intake_dir / "source.json"
+    source_path.write_text(json.dumps(source, indent=2), encoding="utf-8")
+    return source_path, downloaded
+
+
+# ── Stage 6c.5: texture fetch (same human-approval contract) ─────────────
+
+# Poly Haven map-kind keys worth keeping (skip blend/gltf/mtlx bundles).
+_TEXTURE_MAP_KINDS = ["Diffuse", "nor_gl", "nor_dx", "Rough", "AO", "arm", "Displacement"]
+
+
+def fetch_texture_to_intake(
+    asset_id: str,
+    intake_id: str | None = None,
+    resolution: str = "1k",
+    target_size_m: float | None = None,  # unused; textures have no size -- kept for CLI symmetry
+) -> tuple[Path, list[Path]]:
+    """Download one human-chosen texture's map set into intake/<intake_id>/
+    with a pre-filled source.json, ready for `cli.py intake-texture`.
+
+    Downloads every available PBR map at the chosen resolution (albedo,
+    normals, roughness, AO...) -- v1 only wires albedo into materials, but
+    keeping the rest costs disk while re-downloading costs a human.
+    """
+    intake_id = intake_id or asset_id
+    assets = _get_json("/assets?t=textures")
+    if asset_id not in assets:
+        raise PolyHavenSearchError(
+            f"{asset_id!r} is not a Poly Haven texture id -- use "
+            "search-external --type texture first."
+        )
+    info = assets[asset_id]
+    tree = _get_json(f"/files/{asset_id}")
+
+    intake_dir = config.INTAKE_DIR / intake_id
+    if intake_dir.exists() and any(intake_dir.iterdir()):
+        raise PolyHavenSearchError(
+            f"Intake folder {intake_dir} already exists and is not empty -- "
+            "pick a different --intake-id or clear it first."
+        )
+
+    downloaded: list[Path] = []
+    for kind in _TEXTURE_MAP_KINDS:
+        res_map = tree.get(kind)
+        if not isinstance(res_map, dict) or resolution not in res_map:
+            continue
+        # Prefer jpg over png for size; take whatever single format exists.
+        entries = res_map[resolution]
+        payload = entries.get("jpg") or entries.get("png") or next(
+            (p for p in entries.values() if isinstance(p, dict) and "url" in p), None
+        )
+        if not (isinstance(payload, dict) and "url" in payload):
+            continue
+        ext = payload["url"].rsplit(".", 1)[-1].lower()
+        dest = intake_dir / f"{asset_id}_{kind}_{resolution}.{ext}"
+        _download_file(payload["url"], dest)
+        downloaded.append(dest)
+    if not downloaded:
+        raise PolyHavenSearchError(
+            f"No downloadable maps at resolution {resolution!r} for {asset_id!r}."
+        )
+
+    # Physical tile size: the API's `dimensions` field is millimeters.
+    dims_mm = info.get("dimensions")
+    tile_size_m = (
+        [round(dims_mm[0] / 1000, 4), round(dims_mm[1] / 1000, 4)]
+        if isinstance(dims_mm, list) and len(dims_mm) == 2
+        else None
+    )
+    source = {
+        "display_name": info.get("name", asset_id),
+        "license": LICENSE,
+        "mapping": "tileable",
+        "source_site": SITE,
+        "source_url": f"https://polyhaven.com/a/{asset_id}",
+        "original_author": ", ".join(sorted(info.get("authors", {}))) or None,
+        "semantic_type": None,
+        "tags": list(dict.fromkeys([*info.get("categories", []), *info.get("tags", [])])),
+        "tile_size_m": tile_size_m,
+        "authentic": True,
+        "notes": "",
     }
     source_path = intake_dir / "source.json"
     source_path.write_text(json.dumps(source, indent=2), encoding="utf-8")

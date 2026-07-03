@@ -34,11 +34,13 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 import config
-from models.catalog_models import AssetCatalogEntry, ProvenanceInfo
+from models.catalog_models import AssetCatalogEntry, MaterialDef, ProvenanceInfo, UVInfo
 from models.generation_models import GenerationResult, OpenSCADPlan
 from models.log_models import LLMCallEntry
 from models.spec_models import AssetSpec
+from pipeline import uv_tools
 from pipeline.catalog_writer import load_catalog, save_catalog
+from pipeline.material_generator import MaterialGenerationError, generate_material
 from pipeline.mesh_processor import MeshNormalizationResult, normalize_mesh, save_mesh_meta
 from pipeline.openscad_generator import generate_openscad_plan, generate_parametric_asset
 from pipeline.preview_renderer import render_previews
@@ -65,6 +67,10 @@ class DraftAsset(BaseModel):
     bounds_m: Optional[list[float]] = None
     matched_asset_id: Optional[str] = None
     composite_id: Optional[str] = None
+    uv: Optional[UVInfo] = None
+    material: Optional[MaterialDef] = None  # Stage 6c binding result
+    texture_pending: bool = False  # authentic surface awaiting human sourcing
+    texture_query: Optional[str] = None
     message: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -118,9 +124,58 @@ def _normalize_draft_mesh(draft: DraftAsset) -> DraftAsset:
         save_mesh_meta(draft.asset_id, normalization)
         draft.glb_address = f"library/generated/{draft.asset_id}/model.glb"
         draft.bounds_m = normalization.final_bounds_m
+        draft.uv = _record_uv(draft.asset_id, glb_path, normalization.uv_status)
     else:
         draft.message = f"Mesh normalization failed: {normalization.error_message}"
     return draft
+
+
+def _record_uv(asset_id: str, glb_path: Path, uv_status: str) -> UVInfo:
+    """Stage 6c.2: hash the UV layer and export the island layout image."""
+    if uv_status == "none":
+        return UVInfo(status="none", convention="none")
+    layout = uv_tools.export_uv_layout(glb_path, glb_path.parent / "uv_layout.png")
+    return UVInfo(
+        status=uv_status,
+        convention="generic",
+        layout_image=(
+            f"generated/{asset_id}/uv_layout.png" if layout is not None else None
+        ),
+        uv_hash=uv_tools.uv_hash(glb_path),
+    )
+
+
+def _bind_material(draft: DraftAsset, provider: str | None, model: str | None) -> list[LLMCallEntry]:
+    """Stage 6c.6: run the material/texture ladder for this draft's surface.
+
+    Non-fatal by design -- a draft with no material is still reviewable; the
+    message records what went wrong instead of failing the whole create.
+    """
+    try:
+        result, plan, entry = generate_material(
+            draft.description,
+            material_id=f"{draft.asset_id}_mat",
+            provider=provider,
+            model=model,
+            force=True,  # draft iteration overwrites its own material freely
+            target_uv=draft.uv,
+            target_bounds_m=draft.bounds_m,
+        )
+    except (MaterialGenerationError, RuntimeError) as exc:
+        draft.message = f"{draft.message or ''} (material step failed: {exc})".strip()
+        return []
+    material = MaterialDef.model_validate_json(
+        Path(result.material_path).read_text(encoding="utf-8-sig")
+    )
+    draft.material = material
+    draft.texture_pending = result.texture_pending
+    draft.texture_query = result.texture_query
+    if result.texture_pending:
+        draft.message = (
+            f"{draft.message or ''} Texture flagged for human sourcing "
+            f"(query: {result.texture_query!r}) -- intake a real map, then regenerate."
+        ).strip()
+    return [entry]
 
 
 def create_from_description(
@@ -155,12 +210,15 @@ def create_from_description(
             matched_asset_id=record.resolved_asset.asset_id,
             glb_address=matched.address if matched and matched.address.startswith("library/") else None,
             bounds_m=list(matched.canonical_bounds_m) if matched else None,
+            uv=matched.uv if matched else None,
             message=(
                 f"Resolved to existing catalog asset {record.resolved_asset.asset_id!r} "
                 f"({record.resolved_asset.resolution_method}, "
                 f"confidence {record.resolved_asset.confidence:.2f})."
             ),
         )
+        logs.extend(_bind_material(draft, provider, model))
+        save_draft_state(draft)
         return draft, logs
 
     # Route on the resolver's exact message prefixes (resolver.py owns these
@@ -198,6 +256,7 @@ def create_from_description(
         )
         draft.plan.parameters = extract_scad_parameters(plan.scad_source)
         draft = _normalize_draft_mesh(draft)
+        logs.extend(_bind_material(draft, provider, model))
         save_draft_state(draft)
         return draft, logs
 
@@ -331,6 +390,8 @@ def save_draft(
         address=draft.glb_address,
         canonical_bounds_m=draft.bounds_m,
         pivot=draft.normalization.pivot if draft.normalization else "center",
+        uv=draft.uv,
+        material_slots=["surface"] if draft.material else [],
         tags=tags if tags is not None else [t for t in [draft.spec.semantic_type, draft.spec.kind] if t],
         provenance=ProvenanceInfo(
             source_type="generated",

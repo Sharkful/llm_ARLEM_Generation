@@ -232,13 +232,38 @@ function showDraft(d) {
       $('d-params').append(label, input);
     }
   }
-  if (d.glb_address) viewportLoad({ kind: 'glb', url: bust('/' + d.glb_address) });
-  else if (d.matched_asset_id) {
+  const material = materialSpec(d.material);
+  if (d.glb_address) {
+    viewportLoad({ kind: 'glb', url: bust('/' + d.glb_address), material });
+  } else if (d.matched_asset_id) {
     const m = catalog.find(e => e.asset_id === d.matched_asset_id);
-    if (m) showAsset(m);
+    if (m) {
+      const spec = m.address.startsWith('library/')
+        ? { kind: 'glb', url: bust('/' + m.address) }
+        : { kind: 'primitive', name: m.address.split('/').pop().toLowerCase(),
+            bounds: m.canonical_bounds_m };
+      spec.material = material;
+      viewportLoad(spec);
+    }
   }
-  $('inspect-title').textContent = `draft ${d.asset_id} (${d.status})`;
+  $('inspect-title').textContent = `draft ${d.asset_id} (${d.status})`
+    + (d.texture_pending ? ' — texture awaiting human sourcing' : '');
   $('inspect-actions').hidden = true;
+}
+
+// MaterialDef (JSON) -> asset_preview.html material override spec.
+function materialSpec(m) {
+  if (!m) return null;
+  return {
+    albedo_url: m.texture ? bust('/library/' + m.texture) : null,
+    base_color: m.base_color,
+    metallic: m.metallic,
+    smoothness: m.smoothness,
+    alpha: m.alpha,
+    transparent: m.transparent,
+    emissive: m.emissive,
+    tiling: m.uv_tiling || [1, 1],
+  };
 }
 
 async function runGuarded(button, fn) {

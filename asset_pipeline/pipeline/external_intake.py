@@ -21,7 +21,7 @@ from pathlib import Path
 from pydantic import BaseModel, ValidationError
 
 import config
-from models.catalog_models import AssetCatalogEntry, IntakeSource, ProvenanceInfo
+from models.catalog_models import AssetCatalogEntry, IntakeSource, ProvenanceInfo, UVInfo
 from pipeline.catalog_writer import append_entry, find_by_id
 from pipeline.mesh_processor import (
     MeshNormalizationResult,
@@ -33,16 +33,36 @@ from pipeline.mesh_processor import (
 # Licenses that may enter the library (req. doc section 11). CC-BY variants
 # additionally require original_author so attribution is actually capturable.
 # Add new licenses only after a human verifies the terms -- this list is the
-# guardrail, not a suggestion.
+# guardrail, not a suggestion. ("public-domain" added for NASA/USGS planetary
+# imagery, Stage 6c -- record the source URL so the PD claim is checkable.)
 _LICENSE_ALLOWLIST = {
     "cc0",
     "cc0-1.0",
     "cc-by",
     "cc-by-3.0",
     "cc-by-4.0",
+    "public-domain",
     "internal",
     "proprietary-cleared",
 }
+
+
+def check_license_fields(license_str: str, original_author: str | None) -> str:
+    """Shared 6a/6c license gate: normalized license must be allowlisted;
+    CC-BY requires a recorded author. Returns the normalized license."""
+    normalized = _normalize_license(license_str)
+    if normalized not in _LICENSE_ALLOWLIST:
+        raise IntakeError(
+            f"License {license_str!r} is not in the allowlist "
+            f"({', '.join(sorted(_LICENSE_ALLOWLIST))}). Verify the terms and either "
+            "correct source.json or do not intake this asset."
+        )
+    if normalized.startswith("cc-by") and not (original_author or "").strip():
+        raise IntakeError(
+            "License is CC-BY but source.json has no original_author -- attribution "
+            "must be captured before a CC-BY asset can enter the library."
+        )
+    return normalized
 
 _MESH_FORMATS: dict[str, SourceFormat] = {
     ".stl": "stl",
@@ -99,19 +119,7 @@ def load_intake_source(asset_id: str) -> tuple[IntakeSource, Path]:
 
 
 def check_license(source: IntakeSource) -> str:
-    normalized = _normalize_license(source.license)
-    if normalized not in _LICENSE_ALLOWLIST:
-        raise IntakeError(
-            f"License {source.license!r} is not in the allowlist "
-            f"({', '.join(sorted(_LICENSE_ALLOWLIST))}). Verify the terms and either "
-            "correct source.json or do not intake this asset."
-        )
-    if normalized.startswith("cc-by") and not (source.original_author or "").strip():
-        raise IntakeError(
-            "License is CC-BY but source.json has no original_author -- attribution "
-            "must be captured before a CC-BY asset can enter the library."
-        )
-    return normalized
+    return check_license_fields(source.license, source.original_author)
 
 
 def find_mesh_file(intake_dir: Path) -> tuple[Path, SourceFormat]:
@@ -210,6 +218,19 @@ def intake_asset(asset_id: str) -> IntakeResult:
         modifications=["normalized scale/pivot (Stage 4 mesh processor)"],
         date_imported_or_generated=date.today().isoformat(),
     )
+    # Stage 6c.2: record UV facts (layout image + hash) for texture binding.
+    uv_info = UVInfo(status="none", convention="none")
+    if normalization.uv_status != "none":
+        from pipeline import uv_tools
+
+        layout = uv_tools.export_uv_layout(glb_path, out_dir / "uv_layout.png")
+        uv_info = UVInfo(
+            status=normalization.uv_status,
+            convention="generic",
+            layout_image=f"imported/{asset_id}/uv_layout.png" if layout else None,
+            uv_hash=uv_tools.uv_hash(glb_path),
+        )
+
     entry = AssetCatalogEntry(
         asset_id=asset_id,
         display_name=source.display_name,
@@ -218,6 +239,7 @@ def intake_asset(asset_id: str) -> IntakeResult:
         canonical_bounds_m=normalization.final_bounds_m,
         pivot=source.pivot,
         tags=source.tags,
+        uv=uv_info,
         provenance=provenance,
         # Implementation plan section 4: imported assets default to review
         # level 3, or 4 when tagged pedagogically critical.

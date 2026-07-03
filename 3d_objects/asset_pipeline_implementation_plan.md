@@ -296,6 +296,10 @@ Exit test: feed it a Stage 3 STL and a hand-picked sample FBX; confirm the outpu
 via `pygltflib`, same accessor min/max fields `prefab_to_glb.py` already computes at
 `prefab_to_glb.py:267-273`) matches the requested `target_size_m` within floating point tolerance.
 
+**Addendum (2026-07, not yet implemented):** Stage 4 also owns UV unwrapping — Smart UV Project for
+meshes that arrive without UVs (all OpenSCAD STLs), run after decimation, plus UV layout image export
+and a UV hash recorded in meta.json. Specified in Stage 6c.2 below; build it as part of Stage 6c.
+
 ### Stage 5 — Materials and (optional) procedural textures
 
 **Goal:** LLM proposes a material definition matching req. doc §9's schema; simple procedural textures
@@ -323,6 +327,11 @@ Deliverables:
 Exit test: five material descriptions ("dull gray rock", "glowing blue energy field", "brushed metal",
 "transparent glass", "rough red rust with visible texture") produce valid `MaterialDef` JSON; the last one
 also produces a texture file that visibly looks rust-like when opened.
+
+**Addendum (2026-07):** procedural synthesis is no longer the whole texture story — it becomes step 3 of
+the texture resolution ladder in Stage 6c.3 (archive match first, procedural for generic patterns,
+human-sourced real maps for authentic surfaces like planets and basketballs). The synthesis code itself
+is unchanged; its outputs get registered in the Stage 6c texture index so they are reused too.
 
 ### Stage 6 — External asset intake (manual first, semi-automated second)
 
@@ -355,6 +364,148 @@ works — add an assisted search step that still requires human approval before 
 Exit test (6a): manually source one CC0 GLB (e.g. a simple prop), run intake, confirm it appears in
 `catalog.json` with correct provenance and normalized scale. Exit test (6b): search "wooden table" returns
 real Poly Haven results with correct license field populated.
+
+### Stage 6c — Texture library: archive, intake, search, and separate UV maps (added 2026-07)
+
+**Goal:** textures get the same resolution ladder geometry already has — *local archive first, then
+generation or human-approved external sourcing* — instead of Stage 5's current "procedural or nothing".
+Motivating cases: basketballs, Earth, the Moon. Real, authoritative surface maps for these exist online
+(NASA/USGS planetary maps are public domain and already equirectangular; Poly Haven's texture section is
+CC0 with physical tile dimensions in its API), and a synthesized crater-noise moon is categorically worse
+than the real map. **Download once, reuse forever**: a texture that enters the library is never re-fetched
+or re-generated for a later request that matches it.
+
+**Design principle (user requirement, 2026-07): UV layout is a separate concern from texture image.**
+A texture is only reusable if you know what UV layout it assumes; conversely, once an object's UV layout
+is known and recorded, generating *N* different surfaces for it costs one texture each, with no
+re-unwrapping. The pipeline therefore records UV information per geometry asset and mapping conventions
+per texture, and checks compatibility at bind time.
+
+**6c.1 — Data model**
+
+- `library/textures/index.json` — the texture registry (same single-file + uniqueness pattern as
+  `catalog.json`; payload files live in `library/textures/<texture_id>/`). `TextureAsset` fields:
+  - `texture_id`, `display_name`, `semantic_type` (e.g. `"moon_surface"`, `"basketball_skin"`),
+    `tags: list[str]` — the searchable surface for archive matching.
+  - `mapping: Literal["equirectangular", "tileable", "atlas"]` — the reuse contract:
+    *equirectangular* (planet maps, ball skins) fits any standard UV sphere; *tileable* (wood, rust,
+    asphalt) fits anything with UVs, scaled by tiling factors; *atlas* was painted/baked against one
+    specific mesh's UV islands and only fits that mesh (records `bound_asset_id` + `uv_hash`).
+  - `maps: dict[str, str]` — map-kind → relative file path. Kinds: `albedo`, `normal_gl`, `normal_dx`,
+    `roughness`, `ao`, `arm`, `displacement`. **v1 consumes `albedo` only** but *stores* whatever the
+    source provides (Poly Haven ships full PBR sets; keeping them costs disk, re-downloading costs a
+    human). Normal/roughness wiring into `MaterialDef` is a later, purely additive step — do not solve
+    the Unity nor_gl-vs-nor_dx question now, just keep both files when offered.
+  - `resolution: [w, h]`; `tile_size_m: [u, v] | null` — physical meters per tile for tileables
+    (Poly Haven's `dimensions` field, mm → m). Enables scale-correct tiling: `uv_tiling =
+    object_extent / tile_size_m` computed at bind time, not guessed.
+  - `authentic: bool` — photographic/measured (NASA map, Poly Haven scan) vs synthesized (Stage 5
+    procedural). Archive matching prefers authentic when the request names a real thing.
+  - `provenance: ProvenanceInfo` (the existing §11 model, unchanged) + `LICENSE.txt` in the payload
+    folder for imported textures — same rules as 6a.
+- `MaterialDef` additions (backward-compatible): `texture_id: str | None` (the registry link;
+  `texture` keeps holding the resolved runtime path), `uv_tiling: [float, float]` default `[1, 1]`.
+  This answers req. doc §20.2's tiling open question.
+- Catalog entry addition — `uv: UVInfo` on `AssetCatalogEntry`:
+  `{status: "none" | "builtin" | "preserved" | "generated", convention: "equirect" | "generic" | "atlas",
+  layout_image: str | None, uv_hash: str | None}`. Seed primitives get `builtin`/`equirect` for the
+  sphere family and `builtin`/`generic` for the rest (Unity and three.js built-in primitives share
+  those conventions — this is exactly why an equirect Earth map "just works" on `sphere_basic`).
+  Imported GLBs get `preserved`; Stage 4-unwrapped meshes get `generated` + a layout image + a hash.
+
+**6c.2 — UV unwrap and layout export (Stage 4 addendum)**
+
+- `mesh_processor.py` gains an unwrap step: if the imported mesh has no UV layer (always true for
+  OpenSCAD STLs), run Blender Smart UV Project **after** decimation (decimating after unwrapping would
+  invalidate the layout), and report `uv_status` in the normalization result/meta.json.
+- New `pipeline/uv_tools.py`: read the exported GLB's UV accessors + triangle indices with `pygltflib`
+  (already a dependency) and rasterize the UV island wireframe to
+  `library/.../<asset_id>/uv_layout.png` with Pillow — **no second Blender run needed**. This layout
+  image is the human/LLM-facing template for authoring atlas textures later. `uv_hash` = md5 of the UV
+  buffer, so an atlas texture can assert which layout it was made for and the validator can catch
+  drift after a regenerate.
+- Out of scope: multiple UV channels per mesh (lightmaps), in-browser UV editing.
+
+**6c.3 — Resolution ladder (Stage 5 revision)**
+
+Stage 5's LLM call is extended to classify the texture need, then route — mirroring the geometry
+classifier's cheap-first philosophy:
+
+1. `texture_need: "none" | "pattern" | "authentic"` + search terms + mapping preference come back from
+   the (existing, cheap) material LLM call. "authentic" means the description names a real-world
+   surface (Earth, Moon, basketball, oak) where a real map beats synthesis.
+2. **Archive match first** (new `pipeline/texture_matcher.py`, same token/fuzzy scoring as
+   `catalog_matcher` over `semantic_type`/`tags`/`display_name`, filtered by mapping compatibility
+   with the target object's `uv` info). Hit → reuse, zero cost. This is the "download once" guarantee.
+3. `pattern` + no match → **procedural synthesis** (existing Stage 5 code, unchanged) — and the output
+   is *registered in the index* (`authentic: false`) so even procedural textures are reused next time.
+4. `authentic` + no match → **flag for human sourcing** (6c.4/6c.5). Never synthesize a fake Earth —
+   this extends req. doc §17's no-silent-fallback rule to textures. (A human can override to
+   procedural explicitly.)
+
+**6c.4 — Manual texture intake (build first, mirrors 6a)**
+
+- `intake/<texture_id>/` with image file(s) (png/jpg/tif; exr deferred — extra dependency) + the same
+  hand-filled `source.json`, extended with `mapping`, `tile_size_m` (tileables), `semantic_type`, and
+  optional per-file map-kind labels (filename conventions `*_diff*`/`*_nor_gl*`/`*_rough*`/`*_ao*`
+  auto-detected, explicit dict wins). Same license-gate code as 6a (refactor the allowlist check out of
+  `external_intake.py` into a shared helper rather than duplicating); allowlist gains
+  `public-domain` for NASA/USGS material — added only with the source URL recorded, same
+  human-verifies-the-source rule as ever.
+- Validation on intake: image opens; equirectangular textures must be ~2:1 aspect (warn otherwise);
+  images larger than `TEXTURE_MAX_DIM` (config, default 4096) get a downscaled **runtime derivative**
+  while the original is kept in the payload folder (planet maps run 8k–21k px; keep the original so
+  higher-quality derivatives never require re-downloading).
+- CLI: `python cli.py intake-texture <texture_id>`.
+- `intake/README.md` gains a curated list of verified planetary-map sources (NASA SVS, USGS
+  Astrogeology) — these are browse-and-download-by-hand sources, not APIs; the curation list is the
+  search assist for them.
+
+**6c.5 — Search assist (extends 6b, same human-approval contract)**
+
+- `pipeline/polyhaven.py` already speaks this API: the textures endpoint is the same shape with
+  `t=textures` (verified 2026-07: per-texture file trees expose `Diffuse`, `nor_gl`, `nor_dx`,
+  `Rough`, `AO`, `arm`, `Displacement` exactly like model map sets, plus physical `dimensions`).
+  Add `search-external --type texture` and `fetch-external --type texture <id>`; a fetch downloads
+  the chosen-resolution map set into `intake/<texture_id>/` with a pre-filled `source.json`
+  (`mapping: "tileable"`, `tile_size_m` from `dimensions`), then 6c.4's intake runs normally.
+  The human's explicit fetch remains the approval step; nothing auto-downloads.
+
+**6c.6 — Binding and preview**
+
+- Binding = resolving a `(geometry asset, texture)` pair into a `MaterialDef`: check mapping
+  compatibility against the object's `uv` info, compute `uv_tiling` for tileables from
+  `canonical_bounds_m / tile_size_m`, set `texture_id` + runtime `texture` path.
+- `webapp/asset_preview.html` learns a material override on `_previewLoad` (albedo texture URL +
+  color/metallic/roughness/tiling applied to the loaded object's material) so the review app and the
+  Stage 8 thumbnails both show textured results — an Earth request should *look like Earth* in the
+  create loop, not like a gray sphere with a JSON attachment.
+- Texture previews/contact sheet: thumbnails of each registry texture alongside the existing asset
+  contact sheet.
+
+**6c.7 — Validation (Stage 7 additions)**
+
+Index schema validates; every `maps` file exists; imported textures have approved licenses; every
+`MaterialDef.texture_id` exists in the index; equirect aspect sanity; atlas `uv_hash` matches the
+bound asset's current hash (catches regenerate-invalidated atlases); orphan files under
+`library/textures/` not referenced by the index.
+
+**Migration:** the five existing Stage 5 procedural textures get backfilled into the index
+(`authentic: false`, `mapping: "tileable"`) by a one-off script so the archive-match step sees them.
+
+**Build order when implementing:** models + index IO → migration backfill → texture matcher + Stage 5
+ladder rewiring → manual intake (6c.4) → Poly Haven textures (6c.5) → Stage 4 unwrap + uv_tools +
+catalog `uv` field → preview binding (6c.6) → validator additions (6c.7).
+
+**Exit tests:**
+1. *Basketball*: "an orange basketball with black seams, 24cm" → sphere variant; texture ladder flags
+   `authentic`; human intakes a real (or Poly Haven) ball texture; preview shows a textured ball.
+2. *Download-once*: after a Moon map is intaken, a second "gray cratered moon" request resolves via
+   archive match with zero LLM-texture/download activity.
+3. *UV separation payoff*: Earth and Moon materials both bind to `sphere_basic` — one geometry, two
+   materials, no mesh work.
+4. *Generated-mesh path*: a Stage 3 bracket gets Smart-UV'd by Stage 4, a Poly Haven rust tileable
+   binds to it with computed tiling, and the preview shows rusted metal.
 
 ### Stage 7 — Validation
 
@@ -548,3 +699,10 @@ Ties req. doc §15's review levels to which pipeline stage produced the asset, s
 - Do not make a stage's CLI command depend on another stage having been run first (see §1.1) — each stage
   must be independently testable and runnable, which is also what makes the standalone unit-test tier
   possible.
+- Do not synthesize a procedural stand-in for a texture the description identifies as a specific
+  real-world surface (Earth, the Moon, a basketball) — that's the texture-flavored version of the
+  silent-fallback failure mode. Flag it for human sourcing per Stage 6c.3; a human may explicitly
+  choose procedural, the pipeline may not.
+- Do not auto-download textures any more than models: Stage 6c.5's fetch runs only on an explicit
+  human pick, and new texture sources (beyond Poly Haven and the hand-curated NASA/USGS list) require
+  the same human license verification as 6b.

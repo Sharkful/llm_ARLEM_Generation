@@ -1,0 +1,115 @@
+{
+  "asset_id": "rusty_bracket_demo",
+  "status": "draft",
+  "resolution_method": "parametric",
+  "description": "a rusty weathered metal L-bracket, about 8cm wide",
+  "spec": {
+    "object_id": "rusty_bracket_demo",
+    "description": "A rusty, weathered metal L-bracket, about 8cm wide",
+    "kind": "bracket",
+    "semantic_type": "hardware_bracket",
+    "desired_size_m": 0.08,
+    "visual_style": "rusty, weathered metal",
+    "position": null
+  },
+  "plan": {
+    "parameters": {
+      "width": 0.08,
+      "arm_length": 0.075,
+      "thickness": 0.008,
+      "depth": 0.08,
+      "hole_radius": 0.004,
+      "hole_inset": 0.015
+    },
+    "scad_source": "\n// === L-Bracket (Weathered Metal) ===\n// All units in meters. Centered on origin.\n\n// --- Key Parameters ---\nwidth        = 0.08;   // overall width of the bracket (X)\narm_length   = 0.075;  // length of each arm (Y / Z)\nthickness    = 0.008;  // material thickness\ndepth        = 0.08;   // depth of bracket into scene (Z / X cross-section)\nhole_radius  = 0.004;  // mounting hole radius\nhole_inset   = 0.015;  // hole centre distance from each end\n\n// --- Derived ---\n// Vertical arm: stands along +Y from origin\n// Horizontal arm: extends along +Z from origin\n// The bracket corner sits at origin; object is centred by offsetting by depth/2 in X\n\nmodule l_bracket() {\n    translate([-depth/2, -arm_length/2, -thickness/2])\n    union() {\n        // --- Vertical arm (rises in Y) ---\n        difference() {\n            cube([depth, arm_length, thickness]);\n            // Two mounting holes on vertical arm\n            translate([depth/2, hole_inset, -0.001])\n                cylinder(h = thickness + 0.002, r = hole_radius, $fn = 24);\n            translate([depth/2, arm_length - hole_inset, -0.001])\n                cylinder(h = thickness + 0.002, r = hole_radius, $fn = 24);\n        }\n\n        // --- Horizontal arm (extends in Z, shares corner with vertical arm) ---\n        translate([0, 0, thickness])\n        difference() {\n            cube([depth, thickness, arm_length]);\n            // Two mounting holes on horizontal arm\n            translate([depth/2, -0.001, hole_inset])\n                rotate([-90, 0, 0])\n                    cylinder(h = thickness + 0.002, r = hole_radius, $fn = 24);\n            translate([depth/2, -0.001, arm_length - hole_inset])\n                rotate([-90, 0, 0])\n                    cylinder(h = thickness + 0.002, r = hole_radius, $fn = 24);\n        }\n\n        // --- Gusset / fillet block at the inner corner for rigidity ---\n        translate([depth * 0.2, 0, thickness])\n            rotate([0, 0, 0])\n            linear_extrude(height = depth * 0.6)\n            polygon(points = [\n                [0, 0],\n                [thickness * 1.5, 0],\n                [0, thickness * 1.5]\n            ]);\n\n        // --- Weathering detail: surface bolt heads (raised nubs) ---\n        for (bx = [depth * 0.2, depth * 0.8]) {\n            // bolt on vertical face\n            translate([bx, arm_length * 0.5, thickness])\n                cylinder(h = 0.001, r = 0.002, $fn = 6);\n            // bolt on horizontal face\n            translate([bx, thickness, thickness + arm_length * 0.5])\n                rotate([-90, 0, 0])\n                    cylinder(h = 0.001, r = 0.002, $fn = 6);\n        }\n    }\n}\n\nl_bracket();\n",
+    "expected_bounds_m": [
+      0.08,
+      0.083,
+      0.083
+    ],
+    "notes": ""
+  },
+  "generation": {
+    "asset_id": "rusty_bracket_demo",
+    "success": true,
+    "scad_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\rusty_bracket_demo\\source.scad",
+    "stl_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\rusty_bracket_demo\\source.stl",
+    "actual_bounds_m": [
+      0.08,
+      0.075,
+      0.083
+    ],
+    "expected_bounds_m": [
+      0.08,
+      0.083,
+      0.083
+    ],
+    "bounds_diverge": false,
+    "repair_attempts": [
+      {
+        "attempt_number": 1,
+        "scad_source": "\n// === L-Bracket (Weathered Metal) ===\n// All units in meters. Centered on origin.\n\n// --- Key Parameters ---\nwidth        = 0.08;   // overall width of the bracket (X)\narm_length   = 0.075;  // length of each arm (Y / Z)\nthickness    = 0.008;  // material thickness\ndepth        = 0.08;   // depth of bracket into scene (Z / X cross-section)\nhole_radius  = 0.004;  // mounting hole radius\nhole_inset   = 0.015;  // hole centre distance from each end\n\n// --- Derived ---\n// Vertical arm: stands along +Y from origin\n// Horizontal arm: extends along +Z from origin\n// The bracket corner sits at origin; object is centred by offsetting by depth/2 in X\n\nmodule l_bracket() {\n    translate([-depth/2, -arm_length/2, -thickness/2])\n    union() {\n        // --- Vertical arm (rises in Y) ---\n        difference() {\n            cube([depth, arm_length, thickness]);\n            // Two mounting holes on vertical arm\n            translate([depth/2, hole_inset, -0.001])\n                cylinder(h = thickness + 0.002, r = hole_radius, $fn = 24);\n            translate([depth/2, arm_length - hole_inset, -0.001])\n                cylinder(h = thickness + 0.002, r = hole_radius, $fn = 24);\n        }\n\n        // --- Horizontal arm (extends in Z, shares corner with vertical arm) ---\n        translate([0, 0, thickness])\n        difference() {\n            cube([depth, thickness, arm_length]);\n            // Two mounting holes on horizontal arm\n            translate([depth/2, -0.001, hole_inset])\n                rotate([-90, 0, 0])\n                    cylinder(h = thickness + 0.002, r = hole_radius, $fn = 24);\n            translate([depth/2, -0.001, arm_length - hole_inset])\n                rotate([-90, 0, 0])\n                    cylinder(h = thickness + 0.002, r = hole_radius, $fn = 24);\n        }\n\n        // --- Gusset / fillet block at the inner corner for rigidity ---\n        translate([depth * 0.2, 0, thickness])\n            rotate([0, 0, 0])\n            linear_extrude(height = depth * 0.6)\n            polygon(points = [\n                [0, 0],\n                [thickness * 1.5, 0],\n                [0, thickness * 1.5]\n            ]);\n\n        // --- Weathering detail: surface bolt heads (raised nubs) ---\n        for (bx = [depth * 0.2, depth * 0.8]) {\n            // bolt on vertical face\n            translate([bx, arm_length * 0.5, thickness])\n                cylinder(h = 0.001, r = 0.002, $fn = 6);\n            // bolt on horizontal face\n            translate([bx, thickness, thickness + arm_length * 0.5])\n                rotate([-90, 0, 0])\n                    cylinder(h = 0.001, r = 0.002, $fn = 6);\n        }\n    }\n}\n\nl_bracket();\n",
+        "success": true,
+        "stderr": "Geometries in cache: 18\nGeometry cache size in bytes: 31512\nCGAL Polyhedrons in cache: 6\nCGAL cache size in bytes: 1201840\nTotal rendering time: 0:00:01.187\n   Top level object is a 3D object:\n   Simple:        yes\n   Vertices:      264\n   Halfedges:     792\n   Edges:         396\n   Halffacets:    274\n   Facets:        137\n   Volumes:         2\n"
+      }
+    ],
+    "error_message": null
+  },
+  "normalization": {
+    "asset_id": "rusty_bracket_demo",
+    "success": true,
+    "source_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\rusty_bracket_demo\\source.stl",
+    "glb_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\rusty_bracket_demo\\model.glb",
+    "original_bounds_m": [
+      0.08,
+      0.075,
+      0.083
+    ],
+    "final_bounds_m": [
+      0.077109,
+      0.072289,
+      0.08
+    ],
+    "pivot": "center",
+    "scale_applied": 0.963858,
+    "triangle_count_before": 540,
+    "triangle_count_after": 540,
+    "decimated": false,
+    "uv_status": "generated",
+    "error_message": null
+  },
+  "glb_address": "library/generated/rusty_bracket_demo/model.glb",
+  "bounds_m": [
+    0.077109,
+    0.072289,
+    0.08
+  ],
+  "matched_asset_id": null,
+  "composite_id": null,
+  "uv": {
+    "status": "generated",
+    "convention": "generic",
+    "layout_image": "generated/rusty_bracket_demo/uv_layout.png",
+    "uv_hash": "6b54208c88552d03"
+  },
+  "material": {
+    "material_id": "rusty_bracket_demo_mat",
+    "shader_family": "URP/Lit",
+    "base_color": "#7a3a1e",
+    "alpha": 1.0,
+    "metallic": 0.3,
+    "smoothness": 0.15,
+    "transparent": false,
+    "emissive": false,
+    "texture": "materials/textures/rusty_bracket_demo_mat.png",
+    "texture_id": "proc_rusty_bracket_demo_mat",
+    "uv_tiling": [
+      2.0,
+      2.0
+    ]
+  },
+  "texture_pending": false,
+  "texture_query": null,
+  "message": "Generated via OpenSCAD. Edit parameters or send a tweak, then save.",
+  "updated_at": "2026-07-03T18:47:04.860374"
+}

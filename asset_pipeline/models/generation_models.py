@@ -60,10 +60,18 @@ class MaterialPlan(BaseModel):
     """Structured instructor response for Stage 5 material generation.
 
     `material.texture` must be left null by the LLM -- the generator fills
-    it in with the real relative path if `procedural_texture` is synthesized.
+    it in via the Stage 6c texture ladder (archive match, procedural
+    synthesis, or flag-for-sourcing).
     """
 
     material: MaterialDef
+    # Stage 6c.3: does this surface need a texture, and what kind?
+    #   none      -- plain shaded surface (roughness lives in smoothness)
+    #   pattern   -- generic visible pattern; procedural synthesis is acceptable
+    #   authentic -- a named real-world surface (Earth, the Moon, a basketball,
+    #                oak); only a real map will do, never a synthesized fake
+    texture_need: Literal["none", "pattern", "authentic"] = "none"
+    texture_query: str | None = None  # search terms for the archive/sourcing step
     procedural_texture: ProceduralTextureSpec | None = None
     reasoning: str = ""
 
@@ -73,4 +81,8 @@ class MaterialGenerationResult(BaseModel):
     success: bool
     material_path: str | None = None
     texture_path: str | None = None
+    texture_id: str | None = None  # set when the ladder bound a registry texture
+    texture_source: Literal["none", "archive", "procedural", "pending"] = "none"
+    texture_pending: bool = False  # authentic surface with no archive match:
+    texture_query: str | None = None  # ...human sourcing needed (6c.4/6c.5)
     error_message: str | None = None

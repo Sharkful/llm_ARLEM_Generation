@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import config
-from models.catalog_models import AssetCatalogEntry, ProvenanceInfo
+from models.catalog_models import AssetCatalogEntry, ProvenanceInfo, UVInfo
 from pipeline.catalog_writer import save_catalog
 
 _NOW = datetime.now(timezone.utc).isoformat()
@@ -155,6 +155,15 @@ def build_seed_entries() -> list[AssetCatalogEntry]:
             review_level=0,
         ),
     ]
+    # Stage 6c: built-in primitives ship with known UV conventions. The
+    # sphere family is equirectangular -- which is exactly why a planet map
+    # binds to sphere_basic with zero mesh work. Everything else gets
+    # "generic" (usable UVs exist; tileables fit, equirect maps do not).
+    for entry in entries:
+        entry.uv = UVInfo(
+            status="builtin",
+            convention="equirect" if entry.asset_id == "sphere_basic" else "generic",
+        )
     return entries
 
 

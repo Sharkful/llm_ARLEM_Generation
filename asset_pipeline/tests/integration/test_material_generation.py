@@ -21,6 +21,7 @@ def test_generate_material_real_call(provider, tmp_path, monkeypatch):
     if not _PROVIDER_KEYS[provider]:
         pytest.skip(f"no API key for provider {provider!r} on this machine")
 
+    monkeypatch.setattr(config, "LIBRARY_DIR", tmp_path)
     monkeypatch.setattr(config, "MATERIALS_DIR", tmp_path / "materials")
     monkeypatch.setattr(config, "TEXTURES_DIR", tmp_path / "materials" / "textures")
 
@@ -35,6 +36,8 @@ def test_generate_material_real_call(provider, tmp_path, monkeypatch):
     )
     # A rust description should read as a rough, non-glowing surface with a
     # visible pattern -- the texture is the point of this exit-test example.
+    # (Empty sandbox index -> no archive match -> the procedural rung fires.)
     assert written.emissive is False
-    assert plan.procedural_texture is not None
+    assert plan.texture_need == "pattern"
+    assert result.texture_source == "procedural"
     assert result.texture_path is not None

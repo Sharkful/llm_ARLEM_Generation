@@ -39,8 +39,23 @@ class ProvenanceInfo(BaseModel):
     date_imported_or_generated: str | None = None
 
 
+class UVInfo(BaseModel):
+    """Stage 6c: UV layout facts recorded per geometry asset.
+
+    Separating this from textures is what makes 'one sphere, many planets'
+    cheap: the layout is established once per object, and each new texture
+    only has to declare a compatible mapping (see models/texture_models.py).
+    """
+
+    status: Literal["none", "builtin", "preserved", "generated"] = "none"
+    convention: Literal["equirect", "generic", "atlas", "none"] = "none"
+    layout_image: str | None = None  # UV island wireframe PNG, LIBRARY_DIR-relative
+    uv_hash: str | None = None
+
+
 class AssetCatalogEntry(BaseModel):
-    """Matches offline_ar_asset_pipeline_requirements.md section 5.3 exactly."""
+    """Matches offline_ar_asset_pipeline_requirements.md section 5.3 exactly,
+    plus the Stage 6c `uv` addition (implementation plan section 6c.1)."""
 
     asset_id: str
     display_name: str
@@ -56,6 +71,8 @@ class AssetCatalogEntry(BaseModel):
     collider: ColliderInfo = Field(default_factory=ColliderInfo)
     provenance: ProvenanceInfo
     review_level: ReviewLevel = 0
+    # Stage 6c: UV layout facts (None = not yet recorded).
+    uv: UVInfo | None = None
 
 
 class IntakeSource(BaseModel):
@@ -82,7 +99,14 @@ class IntakeSource(BaseModel):
 
 
 class MaterialDef(BaseModel):
-    """Matches offline_ar_asset_pipeline_requirements.md section 9 exactly."""
+    """Matches offline_ar_asset_pipeline_requirements.md section 9 exactly,
+    plus Stage 6c additions (texture_id registry link, uv_tiling -- which
+    answers req. doc section 20.2's tiling open question).
+
+    `texture` is the runtime path, relative to LIBRARY_DIR (Stage 6c changed
+    this from materials-dir-relative so registry textures under
+    library/textures/ are addressable too).
+    """
 
     material_id: str
     shader_family: str = "URP/Lit"
@@ -93,3 +117,7 @@ class MaterialDef(BaseModel):
     transparent: bool = False
     emissive: bool = False
     texture: str | None = None
+    texture_id: str | None = None  # link into library/textures/index.json
+    uv_tiling: Annotated[list[float], Field(min_length=2, max_length=2)] = Field(
+        default_factory=lambda: [1.0, 1.0]
+    )

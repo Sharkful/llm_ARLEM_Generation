@@ -37,10 +37,13 @@ from pipeline.preview_renderer import (
 )
 from pipeline.polyhaven import (
     PolyHavenSearchError,
+    fetch_texture_to_intake,
     fetch_to_intake,
     list_model_files,
     search_models,
 )
+from pipeline.texture_index import load_index
+from pipeline.texture_intake import intake_texture
 from pipeline.material_generator import MaterialGenerationError, generate_material
 from pipeline.mesh_processor import MeshProcessingError, normalize_mesh, save_mesh_meta
 from pipeline.openscad_generator import OpenSCADGenerationError, generate_parametric_asset
@@ -228,13 +231,14 @@ def cmd_intake(args: argparse.Namespace) -> int:
 
 
 def cmd_search_external(args: argparse.Namespace) -> int:
+    asset_type = "textures" if args.type == "texture" else "models"
     try:
-        results = search_models(args.query, limit=args.limit)
+        results = search_models(args.query, limit=args.limit, asset_type=asset_type)
     except PolyHavenSearchError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     if not results:
-        print(f"No Poly Haven models matched {args.query!r}.")
+        print(f"No Poly Haven {asset_type} matched {args.query!r}.")
         return 0
 
     print(f"{'id':<26} {'name':<30} {'license':<8} {'downloads':<10} tags")
@@ -243,9 +247,13 @@ def cmd_search_external(args: argparse.Namespace) -> int:
         tags = ", ".join([*r.categories, *r.tags][:5])
         print(f"{r.asset_id:<26} {r.name[:29]:<30} {r.license:<8} {r.download_count:<10} {tags}")
         print(f"{'':<26} thumbnail: {r.thumbnail_url}")
+    fetch_hint = (
+        "fetch-external --type texture <id>" if args.type == "texture"
+        else "fetch-external <id> [--size <meters>]"
+    )
     print(
         f"\n{len(results)} result(s). Inspect a thumbnail, then download YOUR pick with:\n"
-        "  python cli.py fetch-external <id> [--size <meters>]\n"
+        f"  python cli.py {fetch_hint}\n"
         "Nothing is downloaded until you run that command."
     )
     return 0
@@ -253,6 +261,18 @@ def cmd_search_external(args: argparse.Namespace) -> int:
 
 def cmd_fetch_external(args: argparse.Namespace) -> int:
     try:
+        if args.type == "texture":
+            source_path, downloaded = fetch_texture_to_intake(
+                args.polyhaven_id,
+                intake_id=args.intake_id,
+                resolution=args.resolution,
+            )
+            intake_id = args.intake_id or args.polyhaven_id
+            total_mb = sum(p.stat().st_size for p in downloaded) / 1e6
+            print(f"Downloaded {len(downloaded)} map(s), {total_mb:.1f} MB -> {source_path.parent}")
+            print(f"Pre-filled {source_path}")
+            print(f"\nNext: python cli.py intake-texture {intake_id}")
+            return 0
         if args.list_files:
             files = list_model_files(args.polyhaven_id)
             print(f"{'format':<10} {'resolution':<11} {'size_mb':<9} includes")
@@ -286,6 +306,42 @@ def cmd_fetch_external(args: argparse.Namespace) -> int:
             f"(real-world largest dimension in meters), then run:\n"
             f"  python cli.py intake {intake_id}"
         )
+    return 0
+
+
+def cmd_intake_texture(args: argparse.Namespace) -> int:
+    try:
+        result = intake_texture(args.texture_id)
+    except IntakeError as exc:
+        print(f"REJECTED: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"REJECTED: {exc}", file=sys.stderr)
+        return 1
+
+    print(json.dumps(result.model_dump(mode="json"), indent=2))
+    for warning in result.warnings:
+        print(f"WARNING: {warning}", file=sys.stderr)
+    t = result.texture
+    print(
+        f"\nIndexed texture {t.texture_id!r} ({t.mapping}, "
+        f"{'x'.join(str(v) for v in (t.resolution or []))}, license {t.provenance.license})",
+        file=sys.stderr,
+    )
+    return 0
+
+
+def cmd_textures_list(args: argparse.Namespace) -> int:
+    entries = load_index()
+    if not entries:
+        print("Texture index is empty (library/textures/index.json).")
+        return 0
+    print(f"{'texture_id':<26} {'mapping':<16} {'authentic':<10} {'resolution':<12} tags")
+    print("-" * 100)
+    for t in entries:
+        res = "x".join(str(v) for v in (t.resolution or [])) or "?"
+        print(f"{t.texture_id:<26} {t.mapping:<16} {str(t.authentic):<10} {res:<12} {', '.join(t.tags[:5])}")
+    print(f"\n{len(entries)} texture(s)")
     return 0
 
 
@@ -515,6 +571,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search_ext.add_argument("query", help="Free-text search, e.g. 'wooden table'")
     search_ext.add_argument("--limit", type=int, default=10, help="Max results (default 10)")
+    search_ext.add_argument(
+        "--type", choices=["model", "texture"], default="model",
+        help="Search Poly Haven models (default) or textures",
+    )
     search_ext.set_defaults(func=cmd_search_external)
 
     fetch_ext = sub.add_parser(
@@ -535,7 +595,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--list-files", action="store_true",
         help="Only list available format/resolution downloads for this id",
     )
+    fetch_ext.add_argument(
+        "--type", choices=["model", "texture"], default="model",
+        help="Fetch a Poly Haven model (default) or texture map set",
+    )
     fetch_ext.set_defaults(func=cmd_fetch_external)
+
+    intake_tex_parser = sub.add_parser(
+        "intake-texture",
+        help="Index a manually-provided texture from intake/<texture_id>/ into library/textures/",
+    )
+    intake_tex_parser.add_argument(
+        "texture_id", help="Folder name under intake/ holding image file(s) + source.json"
+    )
+    intake_tex_parser.set_defaults(func=cmd_intake_texture)
+
+    textures_parser = sub.add_parser("textures", help="Inspect the texture registry")
+    textures_sub = textures_parser.add_subparsers(dest="textures_command", required=True)
+    textures_sub.add_parser("list", help="List all registry textures").set_defaults(
+        func=cmd_textures_list
+    )
 
     mat_parser = sub.add_parser(
         "generate-material",

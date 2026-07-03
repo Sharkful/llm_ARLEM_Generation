@@ -75,9 +75,11 @@ class _FakeClient:
         self.chat = SimpleNamespace(completions=_FakeCompletions(response, completion))
 
 
-def _plan(material_id="dull_gray_rock", texture=None):
+def _plan(material_id="dull_gray_rock", texture=None, texture_need=None, texture_query=None):
     return MaterialPlan(
         material=MaterialDef(material_id=material_id, base_color="#8a8a8a", smoothness=0.1),
+        texture_need=texture_need or ("pattern" if texture is not None else "none"),
+        texture_query=texture_query,
         procedural_texture=texture,
         reasoning="test",
     )
@@ -85,6 +87,7 @@ def _plan(material_id="dull_gray_rock", texture=None):
 
 @pytest.fixture
 def materials_in_tmp(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "LIBRARY_DIR", tmp_path)
     monkeypatch.setattr(config, "MATERIALS_DIR", tmp_path / "materials")
     monkeypatch.setattr(config, "TEXTURES_DIR", tmp_path / "materials" / "textures")
     return tmp_path / "materials"
@@ -125,11 +128,17 @@ def test_generate_material_synthesizes_texture_and_links_relative_path(
     )
 
     assert result.success is True
+    assert result.texture_source == "procedural"
     assert (materials_in_tmp / "textures" / "rusty_panel.png").exists()
     written = MaterialDef.model_validate_json(
         (materials_in_tmp / "rusty_panel.json").read_text(encoding="utf-8")
     )
-    assert written.texture == "textures/rusty_panel.png"
+    assert written.texture == "materials/textures/rusty_panel.png"
+    # Synthesized output is registered in the texture index for future reuse.
+    from pipeline.texture_index import find_texture
+    registered = find_texture("proc_rusty_panel")
+    assert registered is not None
+    assert registered.authentic is False
 
 
 def test_generate_material_id_override_wins(materials_in_tmp, monkeypatch):
@@ -176,6 +185,90 @@ def test_generate_material_wraps_failure_with_log_entry(materials_in_tmp, monkey
 
     assert exc_info.value.log_entry.success is False
     assert "boom" in exc_info.value.log_entry.error_message
+
+
+def test_authentic_with_archive_match_binds_registry_texture(materials_in_tmp, monkeypatch):
+    from datetime import date
+    from models.catalog_models import ProvenanceInfo, UVInfo
+    from models.texture_models import TextureAsset
+    from pipeline.texture_index import append_texture
+
+    (materials_in_tmp.parent / "textures" / "earth_daymap").mkdir(parents=True)
+    (materials_in_tmp.parent / "textures" / "earth_daymap" / "albedo.jpg").write_bytes(b"jpg")
+    append_texture(TextureAsset(
+        texture_id="earth_daymap", display_name="Earth daymap",
+        mapping="equirectangular", maps={"albedo": "textures/earth_daymap/albedo.jpg"},
+        semantic_type="earth_surface", tags=["earth", "planet", "daymap"],
+        authentic=True,
+        provenance=ProvenanceInfo(source_type="external_approved", license="CC-BY",
+                                  license_status="approved", original_author="X"),
+    ))
+    _patch_client(monkeypatch, _plan(
+        material_id="earth_mat", texture_need="authentic", texture_query="earth daymap",
+    ))
+
+    result, plan, _ = material_generator.generate_material(
+        "the planet earth", provider="anthropic", model="m",
+        target_uv=UVInfo(status="builtin", convention="equirect"),
+    )
+
+    assert result.texture_source == "archive"
+    assert result.texture_id == "earth_daymap"
+    assert result.texture_pending is False
+    written = MaterialDef.model_validate_json(
+        (materials_in_tmp / "earth_mat.json").read_text(encoding="utf-8")
+    )
+    assert written.texture == "textures/earth_daymap/albedo.jpg"
+    assert written.texture_id == "earth_daymap"
+
+
+def test_authentic_without_match_flags_for_sourcing_never_synthesizes(
+    materials_in_tmp, monkeypatch
+):
+    # Even with a procedural spec present, an authentic surface must not be faked.
+    texture = ProceduralTextureSpec(kind="noise", base_color="#3a6b9a", accent_color="#2a4a6a")
+    _patch_client(monkeypatch, _plan(
+        material_id="earth_mat", texture=texture, texture_need="authentic",
+        texture_query="earth daymap",
+    ))
+
+    result, plan, _ = material_generator.generate_material(
+        "the planet earth", provider="anthropic", model="m",
+    )
+
+    assert result.success is True
+    assert result.texture_pending is True
+    assert result.texture_source == "pending"
+    assert result.texture_query == "earth daymap"
+    assert result.texture_path is None
+    written = MaterialDef.model_validate_json(
+        (materials_in_tmp / "earth_mat.json").read_text(encoding="utf-8")
+    )
+    assert written.texture is None  # written, but awaiting a real map
+
+
+def test_equirect_texture_does_not_match_incompatible_target(materials_in_tmp, monkeypatch):
+    from models.catalog_models import ProvenanceInfo, UVInfo
+    from models.texture_models import TextureAsset
+    from pipeline.texture_index import append_texture
+
+    append_texture(TextureAsset(
+        texture_id="earth_daymap", display_name="Earth daymap",
+        mapping="equirectangular", maps={"albedo": "textures/earth_daymap/albedo.jpg"},
+        tags=["earth"], authentic=True,
+        provenance=ProvenanceInfo(source_type="external_approved", license="CC0",
+                                  license_status="approved"),
+    ))
+    _patch_client(monkeypatch, _plan(
+        material_id="earth_mat", texture_need="authentic", texture_query="earth",
+    ))
+
+    result, _, _ = material_generator.generate_material(
+        "the planet earth", provider="anthropic", model="m",
+        target_uv=UVInfo(status="generated", convention="generic"),  # unwrapped bracket
+    )
+
+    assert result.texture_source == "pending"  # geometric mismatch -> no bind
 
 
 def test_generate_material_sends_material_plan_response_model(materials_in_tmp, monkeypatch):

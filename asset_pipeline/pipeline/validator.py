@@ -19,8 +19,10 @@ from pydantic import BaseModel, Field, ValidationError
 import config
 from models.catalog_models import AssetCatalogEntry, MaterialDef
 from models.spec_models import ResolutionRecord
+from models.texture_models import TextureAsset
 from pipeline.catalog_writer import load_catalog
 from pipeline.composite_builder import CompositeFragment
+from pipeline.texture_index import load_index
 
 Category = Literal["schema", "completeness", "geometry", "licensing", "runtime"]
 CATEGORY_ORDER: list[Category] = [
@@ -45,6 +47,7 @@ class ValidationReport(BaseModel):
     checked_assets: int = 0
     checked_materials: int = 0
     checked_composites: int = 0
+    checked_textures: int = 0
     checked_records: int = 0
 
     @property
@@ -95,9 +98,45 @@ def check_catalog_schema() -> tuple[list[AssetCatalogEntry], list[ValidationIssu
     return entries, issues
 
 
-def check_materials() -> tuple[list[MaterialDef], list[ValidationIssue]]:
+def check_texture_index() -> tuple[list[TextureAsset], list[ValidationIssue]]:
+    """12.1 + 12.2 + 12.4 for the Stage 6c texture registry."""
+    issues: list[ValidationIssue] = []
+    try:
+        textures = load_index()
+    except (json.JSONDecodeError, ValidationError, OSError) as exc:
+        return [], [_err("schema", f"texture index failed to load/validate: {exc}")]
+
+    for texture in textures:
+        for kind, rel_path in texture.maps.items():
+            if not (config.LIBRARY_DIR / rel_path).is_file():
+                issues.append(
+                    _err("completeness",
+                         f"texture {texture.texture_id!r} {kind} map missing: {rel_path!r}")
+                )
+        if (
+            texture.provenance.source_type == "external_approved"
+            and texture.provenance.license_status != "approved"
+        ):
+            issues.append(
+                _err("licensing",
+                     f"imported texture {texture.texture_id!r} has license_status "
+                     f"{texture.provenance.license_status!r} (must be 'approved')")
+            )
+        if texture.mapping == "equirectangular" and texture.resolution:
+            w, h = texture.resolution
+            if h and abs(w / h - 2.0) > 0.1:
+                issues.append(
+                    _warn("geometry",
+                          f"texture {texture.texture_id!r} claims equirectangular but "
+                          f"is {w}x{h} (not ~2:1)")
+                )
+    return textures, issues
+
+
+def check_materials(texture_ids: set[str]) -> tuple[list[MaterialDef], list[ValidationIssue]]:
     """12.1 + 12.2 for materials: every material JSON validates, its id
-    matches its filename, and any texture it references exists."""
+    matches its filename, its texture file exists (LIBRARY_DIR-relative,
+    Stage 6c convention), and its texture_id is in the registry."""
     issues: list[ValidationIssue] = []
     materials: list[MaterialDef] = []
     for path in sorted(config.MATERIALS_DIR.glob("*.json")):
@@ -115,7 +154,7 @@ def check_materials() -> tuple[list[MaterialDef], list[ValidationIssue]]:
                 )
             )
         if material.texture:
-            if not (config.MATERIALS_DIR / material.texture).is_file():
+            if not (config.LIBRARY_DIR / material.texture).is_file():
                 issues.append(
                     _err(
                         "completeness",
@@ -123,6 +162,14 @@ def check_materials() -> tuple[list[MaterialDef], list[ValidationIssue]]:
                         f"{material.texture!r}",
                     )
                 )
+        if material.texture_id and material.texture_id not in texture_ids:
+            issues.append(
+                _err(
+                    "completeness",
+                    f"material {material.material_id!r} references unknown texture_id "
+                    f"{material.texture_id!r}",
+                )
+            )
     return materials, issues
 
 
@@ -294,7 +341,34 @@ def validate_library(records_path: Path | None = None) -> ValidationReport:
     report.checked_assets = len(entries)
     catalog_ids = {e.asset_id for e in entries}
 
-    materials, issues = check_materials()
+    textures, issues = check_texture_index()
+    report.issues.extend(issues)
+    report.checked_textures = len(textures)
+
+    # Atlas textures must still match the UV layout of the asset they were
+    # painted for -- a regenerate that re-unwrapped the mesh breaks them.
+    by_id = {e.asset_id: e for e in entries}
+    for texture in textures:
+        if texture.mapping == "atlas" and texture.bound_asset_id:
+            bound = by_id.get(texture.bound_asset_id)
+            if bound is None:
+                report.issues.append(
+                    _err("completeness",
+                         f"atlas texture {texture.texture_id!r} bound to unknown asset "
+                         f"{texture.bound_asset_id!r}")
+                )
+            elif (
+                texture.uv_hash and bound.uv and bound.uv.uv_hash
+                and texture.uv_hash != bound.uv.uv_hash
+            ):
+                report.issues.append(
+                    _err("geometry",
+                         f"atlas texture {texture.texture_id!r} was painted for a "
+                         f"different UV layout than {texture.bound_asset_id!r} now has "
+                         "(regenerated mesh?)")
+                )
+
+    materials, issues = check_materials({t.texture_id for t in textures})
     report.issues.extend(issues)
     report.checked_materials = len(materials)
 
@@ -332,7 +406,7 @@ def format_screen_text(report: ValidationReport, use_color: bool = True) -> str:
     lines = [_colorize("=== Asset Pipeline Validation ===", _BOLD, use_color)]
     lines.append(
         f"Assets: {report.checked_assets}  |  Materials: {report.checked_materials}  |  "
-        f"Composites: {report.checked_composites}"
+        f"Textures: {report.checked_textures}  |  Composites: {report.checked_composites}"
         + (f"  |  Records: {report.checked_records}" if report.checked_records else "")
         + f"  |  Errors: {report.errors}  |  Warnings: {report.warnings}"
     )
@@ -369,6 +443,7 @@ def format_json_output(report: ValidationReport) -> str:
             "summary": {
                 "checked_assets": report.checked_assets,
                 "checked_materials": report.checked_materials,
+                "checked_textures": report.checked_textures,
                 "checked_composites": report.checked_composites,
                 "checked_records": report.checked_records,
                 "errors": report.errors,

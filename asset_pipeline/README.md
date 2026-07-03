@@ -46,7 +46,20 @@ edit OpenSCAD parameters or send a free-text tweak, save to the catalog
 -- and a Worklist mode that steps through a pasted list of descriptions
 one by one for production authoring, with progress persisted across
 restarts; all orchestration lives in `pipeline/asset_factory.py`, which
-Stage 9's batch flow will reuse) are implemented. Stages 8/8b need
+Stage 9's batch flow will reuse), and Stage 6c (the texture library:
+`library/textures/index.json` registry of reusable textures with mapping
+contracts -- equirectangular/tileable/atlas -- and full provenance;
+archive-first resolution in Stage 5 so a texture is downloaded/generated
+once and reused forever; `cli.py intake-texture` for human-sourced maps
+(planetary maps etc.), `search-external/fetch-external --type texture`
+for Poly Haven's CC0 texture sets, `cli.py textures list` to inspect;
+Stage 4 now Smart-UV-unwraps meshes that arrive without UVs and exports a
+UV island layout PNG + hash per asset via `pipeline/uv_tools.py`, and
+catalog entries carry a `uv` block -- sphere primitives are equirect,
+which is why real planet maps bind to `sphere_basic` with zero mesh work;
+the create/review app binds materials+textures live in the viewport, and
+authentic surfaces with no archive match are flagged for human sourcing,
+never synthesized) are implemented. Stages 8/8b need
 `playwright` + chromium (`pip install playwright && playwright install
 chromium`), `Flask`, and network access to the three.js CDN (same one
 `viewer2.html` uses). Catalog matching uses
@@ -125,6 +138,10 @@ python cli.py validate --records resolution_records.json   # also check for unre
 python cli.py preview sphere_basic --force   # render one thumbnail
 python cli.py preview --all                  # render all + library/previews/contact_sheet.html
 python cli.py review                         # start the local review/creation web app
+python cli.py textures list                  # inspect the texture registry
+python cli.py intake-texture moon_surface    # index intake/moon_surface/ (image + source.json)
+python cli.py search-external "rusty metal" --type texture   # Poly Haven CC0 textures
+python cli.py fetch-external rusty_metal_02 --type texture   # download YOUR pick into intake/
 ```
 
 ## LLM provider configuration

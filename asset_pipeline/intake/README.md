@@ -63,3 +63,41 @@ author, source URL). If you omit `--size`, edit `target_size_m` by hand
 before running `intake`. Do not add further sources to
 `pipeline/polyhaven.py`'s allowlist until a human has verified that
 source's API terms and per-asset license metadata.
+
+## Texture intake (Stage 6c)
+
+Same workflow for standalone textures: drop image file(s) into
+`intake/<texture_id>/` with a `source.json`, then run
+`python cli.py intake-texture <texture_id>`:
+
+```json
+{
+  "display_name": "Moon Surface",
+  "license": "CC-BY-4.0",
+  "mapping": "equirectangular",
+  "source_site": "solarsystemscope.com",
+  "source_url": "https://www.solarsystemscope.com/textures/",
+  "original_author": "Solar System Scope (INOVE)",
+  "semantic_type": "moon_surface",
+  "tags": ["moon", "lunar", "craters"],
+  "authentic": true
+}
+```
+
+`mapping` is required: `equirectangular` (planet maps / ball skins — must
+be ~2:1, fits any standard UV sphere), `tileable` (add `tile_size_m`, the
+real-world meters per tile), or `atlas` (painted for one specific mesh).
+Multiple files are classified by filename (`*_diff*`, `*_nor_gl*`,
+`*_rough*`, `*_ao*`, ...) or an explicit `maps` dict. Oversized images get
+a downscaled runtime copy; the original is kept.
+
+**Verified planetary-map sources** (browse and download by hand):
+
+- NASA SVS & NASA Visible Earth — public domain (`"license": "public-domain"`)
+- USGS Astrogeology (astrogeology.usgs.gov) — public domain
+- Solar System Scope (solarsystemscope.com/textures) — CC-BY 4.0, credit INOVE
+- Poly Haven textures — CC0, use `fetch-external --type texture` instead
+
+Once indexed, a texture is never re-downloaded: Stage 5's archive matcher
+finds it for every later description that fits both semantically and
+geometrically ("the moon" → `moon_surface` on `sphere_basic`).

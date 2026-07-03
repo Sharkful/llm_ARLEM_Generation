@@ -31,13 +31,16 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 import config
 from llm.client_factory import get_instructor_client, resolve_provider_and_model
-from models.catalog_models import MaterialDef
+from models.catalog_models import MaterialDef, ProvenanceInfo, UVInfo
 from models.generation_models import (
     MaterialGenerationResult,
     MaterialPlan,
     ProceduralTextureSpec,
 )
 from models.log_models import LLMCallEntry
+from models.texture_models import TextureAsset
+from pipeline.texture_index import append_texture, find_texture
+from pipeline.texture_matcher import match_texture
 
 _SYSTEM_PROMPT = """\
 You turn a free-text description of a surface/material for an AR/VR \
@@ -53,11 +56,21 @@ Rules:
 - material.smoothness: 0.0-0.2 rough/matte, 0.4-0.6 typical, 0.8-1.0 polished/glassy
 - material.emissive: true only if the material visibly glows or emits light
 - material.texture: ALWAYS leave null -- the pipeline fills it in
-- procedural_texture: set ONLY if the description implies a visible surface PATTERN
-  (craters, stripes, rust, grid lines, mottling). A plain colored surface --
-  even a rough or shiny one -- needs NO texture; roughness is carried by
-  smoothness, not a pattern. Choose the closest supported kind:
-  noise (mottled/speckled), craters, stripes, grid, gradient, rust.
+- texture_need: "none" for a plain colored surface (even rough or shiny ones --
+  roughness is carried by smoothness, not a pattern). "pattern" if the
+  description implies a generic visible pattern (craters, stripes, rust, grid
+  lines, mottling) that a procedural generator could plausibly synthesize.
+  "authentic" if the description names a SPECIFIC real-world surface where
+  only a real photographic/measured map is acceptable -- planets and moons
+  (Earth, Mars, the Moon), recognizable objects (a basketball's pebbled skin
+  and seams), specific real materials where fidelity matters. Never downgrade
+  an authentic surface to "pattern".
+- texture_query: when texture_need is not "none", 2-6 short search words for
+  the texture library/archive (e.g. "earth daymap equirectangular",
+  "basketball orange skin", "rusty metal tileable")
+- procedural_texture: set ONLY when texture_need is "pattern". Choose the
+  closest supported kind: noise (mottled/speckled), craters, stripes, grid,
+  gradient, rust.
 - Do NOT invent details not present or clearly implied in the description
 """
 
@@ -162,8 +175,20 @@ def generate_material(
     provider: str | None = None,
     model: str | None = None,
     force: bool = False,
+    target_uv: UVInfo | None = None,
+    target_bounds_m: list[float] | None = None,
 ) -> tuple[MaterialGenerationResult, MaterialPlan, LLMCallEntry]:
-    """Description -> MaterialPlan (LLM) -> material JSON + optional texture.
+    """Description -> MaterialPlan (LLM) -> texture ladder -> material JSON.
+
+    Texture ladder (Stage 6c.3): archive match first (zero cost, the
+    download-once guarantee), procedural synthesis for generic patterns
+    (output registered in the index so it is reused too), and
+    flag-for-human-sourcing for authentic surfaces with no archive match --
+    never a synthesized fake Earth.
+
+    `target_uv`/`target_bounds_m` describe the destination object when
+    known: uv gates geometric compatibility of archive matches, bounds +
+    tile_size_m give scale-correct uv_tiling for tileables.
 
     `material_id`, when given, overrides whatever id the LLM proposed.
     Refuses to overwrite an existing material file unless `force` -- same
@@ -225,11 +250,43 @@ def generate_material(
             entry,
         )
 
+    # ── Stage 6c.3 texture ladder ────────────────────────────────────────
     texture_path: Path | None = None
-    if plan.procedural_texture is not None:
-        texture_path = config.TEXTURES_DIR / f"{final_id}.png"
-        synthesize_texture(plan.procedural_texture, texture_path)
-        material = material.model_copy(update={"texture": f"textures/{final_id}.png"})
+    texture_id: str | None = None
+    texture_source = "none"
+    texture_pending = False
+    query = plan.texture_query or description
+
+    if plan.texture_need != "none":
+        match = match_texture(
+            query, target_uv=target_uv,
+            prefer_authentic=(plan.texture_need == "authentic"),
+        )
+        if match is not None:
+            # Archive hit: reuse, zero cost. (The download-once guarantee.)
+            texture_id = match.texture.texture_id
+            texture_source = "archive"
+            rel = match.texture.maps["albedo"]
+            texture_path = config.LIBRARY_DIR / rel
+            material = material.model_copy(update={
+                "texture": rel,
+                "texture_id": texture_id,
+                "uv_tiling": _tiling_for(match.texture, target_bounds_m),
+            })
+        elif plan.texture_need == "pattern" and plan.procedural_texture is not None:
+            texture_path = config.TEXTURES_DIR / f"{final_id}.png"
+            synthesize_texture(plan.procedural_texture, texture_path)
+            rel = f"materials/textures/{final_id}.png"
+            texture_id = _register_procedural(final_id, description, plan, rel)
+            texture_source = "procedural"
+            material = material.model_copy(update={"texture": rel, "texture_id": texture_id})
+        elif plan.texture_need == "authentic":
+            # No archive match for a real-world surface: flag for human
+            # sourcing (6c.4/6c.5) rather than synthesizing a fake -- the
+            # material is still written (color/shader values are fine) with
+            # texture left null for a later bind.
+            texture_pending = True
+            texture_source = "pending"
 
     material_path.parent.mkdir(parents=True, exist_ok=True)
     material_path.write_text(
@@ -242,10 +299,59 @@ def generate_material(
             success=True,
             material_path=str(material_path),
             texture_path=str(texture_path) if texture_path else None,
+            texture_id=texture_id,
+            texture_source=texture_source,
+            texture_pending=texture_pending,
+            texture_query=query if texture_pending else None,
         ),
         plan,
         entry,
     )
+
+
+def _tiling_for(texture: TextureAsset, target_bounds_m: list[float] | None) -> list[float]:
+    """Scale-correct tiling: object extent / physical tile size, when both known."""
+    if (
+        texture.mapping != "tileable"
+        or not texture.tile_size_m
+        or not target_bounds_m
+    ):
+        return [1.0, 1.0]
+    extent = max(target_bounds_m)
+    return [
+        max(round(extent / texture.tile_size_m[0], 3), 0.001),
+        max(round(extent / texture.tile_size_m[1], 3), 0.001),
+    ]
+
+
+def _register_procedural(
+    material_id: str, description: str, plan: MaterialPlan, rel_path: str
+) -> str:
+    """Index a synthesized texture (authentic=False) so it is reused next time."""
+    from datetime import date
+
+    texture_id = f"proc_{material_id}"
+    if find_texture(texture_id) is not None:
+        return texture_id  # regenerated with --force; entry already present
+    append_texture(
+        TextureAsset(
+            texture_id=texture_id,
+            display_name=f"Procedural: {plan.procedural_texture.kind} ({material_id})",
+            mapping="tileable",
+            maps={"albedo": rel_path},
+            semantic_type=None,
+            tags=[plan.procedural_texture.kind, *(plan.texture_query or description).split()[:6]],
+            resolution=[config.TEXTURE_SIZE, config.TEXTURE_SIZE],
+            authentic=False,
+            provenance=ProvenanceInfo(
+                source_type="generated",
+                license="internal",
+                license_status="approved",
+                date_imported_or_generated=date.today().isoformat(),
+            ),
+        )
+    )
+    return texture_id
 
 
 @retry(

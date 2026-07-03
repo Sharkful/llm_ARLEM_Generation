@@ -44,6 +44,7 @@ for _dir in (
     LIBRARY_DIR / "imported",
     LIBRARY_DIR / "composites",
     LIBRARY_DIR / "materials" / "textures",
+    LIBRARY_DIR / "textures",
     LIBRARY_DIR / "previews",
     INTAKE_DIR,
 ):
@@ -144,6 +145,11 @@ CATALOG_MATCH_CONFIDENCE_THRESHOLD = float(
 
 # Procedural texture output resolution (Stage 5). Square, power of two.
 TEXTURE_SIZE = int(os.getenv("ASSET_PIPELINE_TEXTURE_SIZE", "512"))
+
+# Stage 6c: imported textures larger than this on either axis get a
+# downscaled runtime derivative (the original is kept alongside -- planet
+# maps run 8k-21k px and re-downloading costs a human).
+TEXTURE_MAX_DIM = int(os.getenv("ASSET_PIPELINE_TEXTURE_MAX_DIM", "4096"))
 
 # Fraction of original triangle count to keep when a mesh exceeds
 # MAX_TRIANGLE_COUNT (Stage 4 mesh normalization). E.g. 0.5 = decimate to

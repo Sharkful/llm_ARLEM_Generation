@@ -58,6 +58,7 @@ class MeshNormalizationResult(BaseModel):
     triangle_count_before: int | None = None
     triangle_count_after: int | None = None
     decimated: bool = False
+    uv_status: Literal["none", "preserved", "generated"] = "none"
     error_message: str | None = None
 
 
@@ -170,6 +171,21 @@ if tri_count_before > max_triangles:
     decimated = True
 tri_count_after = len(obj.data.polygons)
 
+# --- UV unwrap (Stage 6c.2) -- after decimation, so the recorded layout
+# matches the exported mesh. STL imports never have UVs; imported OBJ/FBX/
+# GLB usually do and keep theirs. ------------------------------------------
+if obj.data.uv_layers:
+    uv_status = "preserved"
+else:
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    try:
+        bpy.ops.uv.smart_project(angle_limit=math.radians(66.0), island_margin=0.02)
+    except TypeError:
+        bpy.ops.uv.smart_project(angle_limit=66.0)  # older Blender took degrees
+    bpy.ops.object.mode_set(mode='OBJECT')
+    uv_status = "generated"
+
 # --- Export GLB --------------------------------------------------------------
 bpy.ops.export_scene.gltf(
     filepath=glb_path,
@@ -186,6 +202,7 @@ json.dump({
     "triangle_count_before": tri_count_before,
     "triangle_count_after": tri_count_after,
     "decimated": decimated,
+    "uv_status": uv_status,
 }, open(report_path, "w"))
 print(f"Exported: {glb_path}")
 """
@@ -274,6 +291,7 @@ def normalize_mesh(
         triangle_count_before=report["triangle_count_before"],
         triangle_count_after=report["triangle_count_after"],
         decimated=report["decimated"],
+        uv_status=report.get("uv_status", "none"),
     )
 
 

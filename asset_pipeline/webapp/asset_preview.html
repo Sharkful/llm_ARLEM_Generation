@@ -140,9 +140,35 @@ function frameCamera(object) {
   controls.update();
 }
 
+// Stage 6c.6: apply a MaterialDef-shaped override to everything in `root`.
+// mat = { albedo_url, base_color, metallic, smoothness, alpha, transparent,
+//         emissive, tiling: [u, v] }
+function applyMaterialOverride(root, mat) {
+  const params = {
+    color: new THREE.Color(mat.base_color || '#8a93a6'),
+    metalness: mat.metallic ?? 0.0,
+    roughness: 1.0 - (mat.smoothness ?? 0.5),
+  };
+  if (mat.transparent) { params.transparent = true; params.opacity = mat.alpha ?? 1.0; }
+  if (mat.emissive) { params.emissive = new THREE.Color(mat.base_color || '#ffffff'); params.emissiveIntensity = 0.9; }
+  const material = new THREE.MeshStandardMaterial(params);
+  if (mat.albedo_url) {
+    const tex = new THREE.TextureLoader().load(mat.albedo_url, () => renderer.render(scene, camera));
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    const [tu, tv] = mat.tiling || [1, 1];
+    tex.repeat.set(tu, tv);
+    material.map = tex;
+    // A textured surface should show the map, not the tint mixed in dark.
+    if (!mat.emissive) material.color = new THREE.Color('#ffffff');
+  }
+  root.traverse((node) => { if (node.isMesh) node.material = material; });
+}
+
 window._previewLoad = (spec) => new Promise((resolve, reject) => {
   if (assetRoot) { scene.remove(assetRoot); assetRoot = null; }
   const finish = (root) => {
+    if (spec.material) applyMaterialOverride(root, spec.material);
     assetRoot = root;
     scene.add(root);
     frameCamera(root);
@@ -161,6 +187,11 @@ window._previewLoad = (spec) => new Promise((resolve, reject) => {
     finish(primitiveMesh(spec.name, spec.bounds || [1, 1, 1]));
   }
 });
+
+// Live material tweak without reloading geometry (Stage 8b material loop).
+window._previewApplyMaterial = (mat) => {
+  if (assetRoot) { applyMaterialOverride(assetRoot, mat); renderer.render(scene, camera); }
+};
 
 window._previewCapture = () => {
   renderer.render(scene, camera);

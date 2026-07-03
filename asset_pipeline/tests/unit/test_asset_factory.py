@@ -42,6 +42,9 @@ def _patch_stage_1_2(monkeypatch, record):
         asset_factory, "parse_description", lambda d, provider=None, model=None: (_spec(), _log())
     )
     monkeypatch.setattr(asset_factory, "resolve", lambda spec, catalog: (record, []))
+    # The Stage 6c material bind is exercised separately; stub it here so
+    # routing tests never reach a real LLM.
+    monkeypatch.setattr(asset_factory, "_bind_material", lambda draft, provider, model: [])
 
 
 # ── extract / substitute parameters ───────────────────────────────────────
@@ -143,6 +146,48 @@ def test_create_routes_imported_to_needs_human(sandbox, monkeypatch):
 
     assert draft.status == "needs_human"
     assert draft.resolution_method == "imported"
+
+
+def test_bind_material_attaches_material_and_pending_flag(sandbox, monkeypatch):
+    from models.generation_models import MaterialGenerationResult, MaterialPlan
+    from models.catalog_models import MaterialDef
+
+    (sandbox / "library" / "materials").mkdir(parents=True, exist_ok=True)
+    mat = MaterialDef(material_id="earth_mat", base_color="#3a6b9a")
+    mat_path = sandbox / "library" / "materials" / "earth_mat.json"
+    mat_path.write_text(json.dumps(mat.model_dump(mode="json")), encoding="utf-8")
+
+    captured = {}
+
+    def fake_generate_material(description, material_id=None, provider=None, model=None,
+                               force=False, target_uv=None, target_bounds_m=None):
+        captured.update(target_uv=target_uv, target_bounds_m=target_bounds_m)
+        return (
+            MaterialGenerationResult(
+                material_id="earth_mat", success=True, material_path=str(mat_path),
+                texture_source="pending", texture_pending=True, texture_query="earth daymap",
+            ),
+            MaterialPlan(material=mat, texture_need="authentic"),
+            _log("material_generation"),
+        )
+
+    monkeypatch.setattr(asset_factory, "generate_material", fake_generate_material)
+
+    from models.catalog_models import UVInfo
+    draft = asset_factory.DraftAsset(
+        asset_id="earth", status="existing", resolution_method="catalog_match",
+        description="the planet earth", spec=_spec("earth"),
+        bounds_m=[0.3, 0.3, 0.3],
+        uv=UVInfo(status="builtin", convention="equirect"),
+    )
+    logs = asset_factory._bind_material(draft, None, None)
+
+    assert len(logs) == 1
+    assert draft.material.material_id == "earth_mat"
+    assert draft.texture_pending is True
+    assert "human sourcing" in draft.message
+    assert captured["target_uv"].convention == "equirect"
+    assert captured["target_bounds_m"] == [0.3, 0.3, 0.3]
 
 
 # ── save / approve ────────────────────────────────────────────────────────
