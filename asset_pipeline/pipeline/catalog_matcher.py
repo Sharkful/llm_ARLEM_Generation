@@ -25,6 +25,18 @@ _STOPWORDS = {
     "on", "in", "at", "small", "large", "basic", "simple",
 }
 
+# Broad *category* words that must never trigger the semantic_type identity
+# shortcut below: "furniture" matching a table's 'furniture' tag is not
+# evidence the spec IS that table (found the hard way: 'worn leather
+# armchair' -> semantic_type 'furniture' -> confidence 1.0 against
+# small_wooden_table_01). Identity-level types ("moon", "table", "beaker")
+# still shortcut; category-level ones fall through to token scoring.
+_GENERIC_SEMANTIC_TYPES = {
+    "furniture", "equipment", "apparatus", "object", "item", "prop",
+    "decor", "decoration", "tool", "hardware", "container", "device",
+    "structure", "shape", "primitive", "model", "asset",
+}
+
 
 @dataclass
 class CatalogMatch:
@@ -59,9 +71,15 @@ def score_entry(spec: AssetSpec, entry: AssetCatalogEntry) -> CatalogMatch:
 
     matched = sorted(spec_tokens & entry_tokens)
 
-    # Exact semantic_type-to-tag hit is the strongest possible signal.
+    # Exact semantic_type-to-tag hit is the strongest possible signal --
+    # but only for identity-level types, never broad categories (see
+    # _GENERIC_SEMANTIC_TYPES).
     semantic_type = (spec.semantic_type or "").strip().lower()
-    if semantic_type and semantic_type in entry_tokens:
+    if (
+        semantic_type
+        and semantic_type not in _GENERIC_SEMANTIC_TYPES
+        and semantic_type in entry_tokens
+    ):
         return CatalogMatch(entry=entry, confidence=1.0, matched_on=[semantic_type, *matched])
 
     if not spec_tokens or not entry_tokens:

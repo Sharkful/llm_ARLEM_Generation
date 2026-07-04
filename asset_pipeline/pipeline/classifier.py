@@ -39,15 +39,29 @@ in the existing asset catalog closely enough to reuse.
 
 Choose exactly one geometry_class:
 - "composite": the object is an assembly of 2+ simple recognizable primitive \
-shapes (spheres, cubes, cylinders, etc.) at relative positions -- e.g. a \
-water molecule, coordinate axes, a solar system diagram. List each sub-part \
-briefly in composite_parts.
+shapes (spheres, cubes, cylinders, cones, etc.) at relative positions -- e.g. \
+a water molecule, coordinate axes, a solar system diagram, a simple snowman \
+or robot built from stacked/attached primitives. List each sub-part briefly \
+in composite_parts. HARD RULE: every composite_part must be ONE primitive \
+shape describable in a short phrase naming that primitive ("large white \
+sphere", "thin gray cylinder", "small orange cone") -- never itself an \
+assembly, never a phrase that would need further decomposition. If the \
+object cannot be expressed as 2-12 single-primitive parts, do NOT choose \
+composite; choose parametric or imported instead. Prefer composite over \
+imported whenever a recognizable approximation is possible with primitives \
+-- a crude hand-built composite of the right identity (a snowman made of \
+three spheres, stick arms, and a hat) is a far better educational AR asset \
+than an unrelated real-world scan from an external library, which is \
+unlikely to exist for whimsical/fictional subjects anyway.
 - "parametric": the object has clear mechanical/geometric structure that a \
 CSG modeling script (extrude, boolean union/subtract, simple shapes) could \
 reasonably build -- e.g. a bracket, stand, dial, cutaway box, clamp.
 - "imported": the object is organic, highly detailed, or realistic in a way \
-a CSG script cannot reasonably approximate -- e.g. furniture, realistic lab \
-equipment, characters, plants.
+neither a CSG script nor a primitive composite can reasonably approximate \
+-- e.g. real furniture, realistic lab equipment, real spacecraft, plants, \
+detailed characters that need more than 12 primitive parts. When you choose \
+this, also fill search_keywords with the identity words a person would \
+search an external 3D asset library for.
 - "unclear": you cannot confidently pick one of the above from the \
 description given.
 

@@ -29,6 +29,20 @@ def test_exact_semantic_type_match_scores_highest():
     assert match.confidence == 1.0
 
 
+def test_generic_category_semantic_type_does_not_shortcut():
+    """Regression (Stage 9 exit test): 'worn leather armchair' parsed with
+    semantic_type 'furniture' must not score 1.0 against a table carrying a
+    'furniture' tag -- that is the silent-wrong-fallback failure mode."""
+    armchair = AssetSpec(
+        object_id="worn_leather_armchair",
+        description="a realistic worn leather armchair",
+        kind="composite", semantic_type="furniture",
+        visual_style="realistic, worn leather",
+    )
+    match = score_entry(armchair, _catalog()[2])  # lab_table_01, tag 'furniture'
+    assert match.confidence < 0.5  # falls through to token scoring
+
+
 def test_unrelated_entry_scores_low():
     spec = AssetSpec(object_id="moon", description="a small gray moon with craters")
     match = score_entry(spec, _entry("lab_table_01", ["furniture", "table", "lab"]))

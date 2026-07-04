@@ -66,8 +66,10 @@ Rules:
   and seams), specific real materials where fidelity matters. Never downgrade
   an authentic surface to "pattern".
 - texture_query: when texture_need is not "none", 2-6 short search words for
-  the texture library/archive (e.g. "earth daymap equirectangular",
-  "basketball orange skin", "rusty metal tileable")
+  the texture library/archive. The words MUST name THIS object's own surface
+  (its planet/material/object name) -- never copy wording from these
+  instructions. Pattern: "<object name> <surface kind>", e.g. for Mars:
+  "mars red surface"; for a basketball: "basketball orange pebbled skin".
 - procedural_texture: set ONLY when texture_need is "pattern". Choose the
   closest supported kind: noise (mottled/speckled), craters, stripes, grid,
   gradient, rust.
@@ -261,6 +263,9 @@ def generate_material(
         match = match_texture(
             query, target_uv=target_uv,
             prefer_authentic=(plan.texture_need == "authentic"),
+            # The object's own words gate the match: an LLM texture_query
+            # that drifted to another object's name cannot mis-bind.
+            must_relate_to=description,
         )
         if match is not None:
             # Archive hit: reuse, zero cost. (The download-once guarantee.)

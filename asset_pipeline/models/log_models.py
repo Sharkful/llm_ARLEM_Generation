@@ -13,6 +13,8 @@ LLMPurpose = Literal[
     "openscad_revision",
     "material_generation",
     "composite_decomposition",
+    "source_relevance_text",
+    "source_relevance_image",
 ]
 
 

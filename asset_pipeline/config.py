@@ -151,9 +151,11 @@ TEXTURE_SIZE = int(os.getenv("ASSET_PIPELINE_TEXTURE_SIZE", "512"))
 # maps run 8k-21k px and re-downloading costs a human).
 TEXTURE_MAX_DIM = int(os.getenv("ASSET_PIPELINE_TEXTURE_MAX_DIM", "4096"))
 
-# Fraction of original triangle count to keep when a mesh exceeds
-# MAX_TRIANGLE_COUNT (Stage 4 mesh normalization). E.g. 0.5 = decimate to
-# roughly half the original face count.
-DECIMATE_RATIO = float(os.getenv("ASSET_PIPELINE_DECIMATE_RATIO", "0.5"))
+# Stage 4 decimation QUALITY FLOOR: when a mesh exceeds MAX_TRIANGLE_COUNT
+# it is decimated toward the budget, but never below this fraction of its
+# original faces -- a mesh still over budget after hitting the floor gets a
+# validator error for a human to decide (raise the budget or accept it),
+# rather than being silently gutted.
+DECIMATE_RATIO = float(os.getenv("ASSET_PIPELINE_DECIMATE_RATIO", "0.1"))
 
 BLENDER_TIMEOUT_SECONDS = int(os.getenv("ASSET_PIPELINE_BLENDER_TIMEOUT", "120"))

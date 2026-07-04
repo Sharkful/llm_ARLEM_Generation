@@ -361,9 +361,62 @@ works — add an assisted search step that still requires human approval before 
   confirms, *then* the file is downloaded into `intake/<asset_id>/` and 6a's pipeline runs normally. The
   agent never auto-downloads.
 
+**Policy amendment (2026-07, user decision — supersedes "never auto-downloads" for one narrow case):**
+the sourcing workflow was too manual — an `imported` classification just told the user to go search.
+`pipeline/source_assist.py` now runs automatically for `imported` specs:
+
+1. **Auto-download IS permitted** when all three hold: the source is on the verified allowlist with
+   machine-verifiable unrestricted licensing (Poly Haven = all CC0), the top search hit matches the spec
+   confidently (token coverage ≥ `AUTO_ADOPT_CONFIDENCE`), and the real-world size is known
+   (`desired_size_m`) so intake can complete unattended. The download still flows through the normal 6a
+   gate (license check, normalization, provenance).
+2. Otherwise, **candidates** (name, thumbnail, license, source URL, confidence) are attached to the draft
+   and the review app offers one-click *Approve & download* (`POST /api/adopt`).
+3. With no usable hits, the draft carries **specific search URLs** for verified sources (Poly Haven,
+   NASA 3D Resources, Smithsonian 3D) — the user clicks a link, never hunts blind.
+
+Unchanged: only allowlisted sources are contacted; unverified sources still require human license
+verification before being added; attribution-required licenses are never auto-adopted. Extending the same
+assist to the texture `pending` flow (6c.3 step 4) is the natural follow-up.
+
 Exit test (6a): manually source one CC0 GLB (e.g. a simple prop), run intake, confirm it appears in
 `catalog.json` with correct provenance and normalized scale. Exit test (6b): search "wooden table" returns
 real Poly Haven results with correct license field populated.
+
+**Policy amendment (2026-07 — "Frosty the Snowman" incident):** a request for a snowman surfaced NASA's
+"Vesta - Snowman Craters" (an asteroid crater formation nicknamed for its shape, not a snowman) as a
+sourcing candidate, purely because keyword scoring cannot distinguish an object from something merely
+*named after* it. Root-caused to three compounding gaps, all fixed:
+
+1. **Search queries were positional, not semantic.** `build_query()` sliced the first 4 "non-generic"
+   words out of the raw sentence, which for anything longer than a terse description picks up grammatical
+   filler ("friendly", "made", "from") ahead of the actual identity words. Fixed by extending
+   `GeometryClassification` with `search_keywords: list[str]` — the same LLM call that decides `imported`
+   now also names the identity words to search for (zero extra LLM calls), carried onto
+   `ResolutionRecord.search_keywords` and preferred by `build_query()` over mechanical extraction.
+2. **No semantic relevance gate.** A single coincidental word match could clear the visibility floor and
+   be shown as if it were a real option. New `pipeline/source_relevance.py`: every candidate is checked by
+   an LLM against the object's own description ("is this actually the same kind of object, or just named
+   similarly?") before being shown, and — for the survivors — checked again against its actual thumbnail
+   image (vision, anthropic/openai only; degrades to text-only for google or on fetch failure). Auto-adopt
+   additionally requires an explicit `matches=True` verdict, not just "not rejected".
+3. **The composite path gave up too early.** The composite hard-rule capped parts at 2-6, so anything
+   needing more (a snowman: 3 body spheres + 2 arms + a hat + facial features) fell through to `imported`
+   — a dead end for whimsical/fictional subjects no real-world source will ever have. Raised to 2-12 and the
+   classifier now explicitly prefers a crude composite approximation over `imported` when one is possible.
+   Composite sub-parts also gained a `_guess_primitive_kind()` hint (`build_part_specs()`,
+   `pipeline/composite_builder.py`) so an obvious part like "large white sphere" catalog-matches the seed
+   primitive instantly instead of costing its own LLM classification call — a 12-part composite went from
+   22 LLM calls to 2 once both fixes landed.
+
+**Manual override (2026-07, same incident):** a stuck draft previously had no way out except editing
+OpenSCAD parameters that don't exist yet for non-parametric items. `asset_factory.redirect_draft()` lets a
+human force any existing draft down a specific path — `parametric` (run Stage 3 directly), `composite`
+(force a decomposition via `composite_builder.decompose_into_primitives()`, deliberately more permissive
+than the normal classifier judgment since a human already overrode it), or `imported` (re-run the sourcing
+assist, optionally with the human's own search words via `manual_query`) — bypassing the original
+classify()/resolve() verdict for that asset_id rather than re-asking the same question. Exposed in the
+review app as three buttons on a `needs_human` draft (`POST /api/redirect`).
 
 ### Stage 6c — Texture library: archive, intake, search, and separate UV maps (added 2026-07)
 

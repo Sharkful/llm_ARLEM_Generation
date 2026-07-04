@@ -20,6 +20,13 @@ from pipeline.texture_index import load_index
 # stance as the geometry catalog matcher.
 MATCH_THRESHOLD = 0.5
 
+# Identity words too generic to prove a texture belongs to an object
+# ("surface" matching everything is how Mars nearly got the Earth daymap).
+_GENERIC_IDENTITY = {
+    "surface", "map", "maps", "texture", "daymap", "tileable",
+    "equirectangular", "procedural", "material", "albedo", "skin",
+}
+
 
 @dataclass
 class TextureMatch:
@@ -49,22 +56,51 @@ def score_texture(query_tokens: list[str], texture: TextureAsset) -> float:
     return total / len(query_tokens)
 
 
+def identity_relates(texture: TextureAsset, description: str) -> bool:
+    """Does the object's own description mention this texture's identity?
+
+    Guard against LLM search-query drift (a texture_query that says "earth"
+    for a Mars object): the texture's specific identity words (texture_id /
+    semantic_type / display_name, minus generic surface words) must
+    intersect the description. Textures with no specific identity words
+    (purely generic names) pass -- there is nothing to contradict.
+    """
+    identity = {
+        t for t in _tokens(
+            f"{texture.texture_id} {texture.semantic_type or ''} {texture.display_name}"
+        )
+        if t not in _GENERIC_IDENTITY
+    }
+    if not identity:
+        return True
+    desc_tokens = _tokens(description)
+    return any(
+        i in d or d in i for i in identity for d in desc_tokens
+    )
+
+
 def match_texture(
     query: str,
     target_uv: UVInfo | None = None,
     prefer_authentic: bool = False,
     threshold: float = MATCH_THRESHOLD,
+    must_relate_to: str | None = None,
 ) -> TextureMatch | None:
     """Best compatible texture for `query`, or None if nothing clears the bar.
 
     target_uv: the destination object's UV info -- geometrically incompatible
     textures are excluded outright (an equirect Earth map must not "match"
     onto an unwrapped bracket no matter how good the words look).
+
+    must_relate_to: the object's own description; candidates whose specific
+    identity words don't appear in it are excluded (see identity_relates).
     """
     query_tokens = _tokens(query)
     best: TextureMatch | None = None
     for texture in load_index():
         if target_uv is not None and not mapping_fits(texture.mapping, target_uv):
+            continue
+        if must_relate_to is not None and not identity_relates(texture, must_relate_to):
             continue
         score = score_texture(query_tokens, texture)
         if prefer_authentic and texture.authentic:

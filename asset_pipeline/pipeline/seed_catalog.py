@@ -37,7 +37,14 @@ def build_seed_entries() -> list[AssetCatalogEntry]:
             material_slots=["surface"],
             canonical_bounds_m=[1.0, 1.0, 1.0],
             pivot="center",
-            tags=["sphere", "primitive", "planet", "atom", "marker", "moon"],
+            # Body names included deliberately: any planet/moon/star request
+            # should resolve to this sphere + an equirectangular texture from
+            # the Stage 6c library, never to "imported".
+            tags=[
+                "sphere", "primitive", "planet", "atom", "marker", "ball", "globe",
+                "moon", "earth", "mars", "venus", "mercury", "jupiter", "saturn",
+                "uranus", "neptune", "sun", "star",
+            ],
             provenance=_core_provenance(),
             review_level=0,
         ),

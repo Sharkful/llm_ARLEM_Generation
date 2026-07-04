@@ -15,6 +15,7 @@ silent fallback behavior).
 from __future__ import annotations
 
 from models.catalog_models import AssetCatalogEntry
+from models.classification_models import GeometryClassification
 from models.log_models import LLMCallEntry
 from models.spec_models import AssetSpec, ResolutionRecord
 from pipeline.classifier import ClassifierFn, classify
@@ -35,12 +36,26 @@ def resolve(
     catalog: list[AssetCatalogEntry],
     classify_geometry_fn: ClassifierFn | None = None,
     _depth: int = 0,
+    forced_composite_parts: list[str] | None = None,
 ) -> tuple[ResolutionRecord, list[LLMCallEntry]]:
+    """forced_composite_parts: bypass catalog-match/LLM classification
+    entirely and build a composite from these exact part descriptions.
+    Used by asset_factory.redirect_draft() when a human overrides a stuck
+    'imported'/'unclear' draft with "build this as a composite instead" --
+    the human's decision replaces the classifier's judgment, it doesn't
+    re-ask the same question."""
     all_log_entries: list[LLMCallEntry] = []
 
-    resolved_ref, geometry, log_entries = classify(
-        spec, catalog, classify_geometry_fn=classify_geometry_fn
-    )
+    if forced_composite_parts is not None:
+        resolved_ref, geometry, log_entries = None, GeometryClassification(
+            geometry_class="composite",
+            reasoning="Composite decomposition requested directly by a human override.",
+            composite_parts=forced_composite_parts,
+        ), []
+    else:
+        resolved_ref, geometry, log_entries = classify(
+            spec, catalog, classify_geometry_fn=classify_geometry_fn
+        )
     all_log_entries.extend(log_entries)
 
     if resolved_ref is not None:
@@ -134,5 +149,6 @@ def resolve(
         requested_asset_spec=spec,
         requires_author_review=True,
         review_reason=reason,
+        search_keywords=geometry.search_keywords,
     )
     return record, all_log_entries

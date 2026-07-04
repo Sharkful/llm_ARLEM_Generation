@@ -165,8 +165,12 @@ bpy.ops.object.mode_set(mode='OBJECT')
 tri_count_before = len(obj.data.polygons)
 decimated = False
 if tri_count_before > max_triangles:
+    # Target the triangle budget directly; decimate_ratio acts as a QUALITY
+    # FLOOR (never keep less than this fraction), so a huge mesh over budget
+    # is flagged by the validator rather than silently gutted.
+    needed = max_triangles / float(tri_count_before)
     mod = obj.modifiers.new(name="AssetPipelineDecimate", type='DECIMATE')
-    mod.ratio = decimate_ratio
+    mod.ratio = max(needed, decimate_ratio)
     bpy.ops.object.modifier_apply(modifier=mod.name)
     decimated = True
 tri_count_after = len(obj.data.polygons)

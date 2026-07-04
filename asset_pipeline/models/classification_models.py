@@ -24,3 +24,13 @@ class GeometryClassification(BaseModel):
         "each sub-part (e.g. '1 large red sphere', '2 small white spheres'). "
         "Empty otherwise.",
     )
+    search_keywords: list[str] = Field(
+        default_factory=list,
+        description="If geometry_class is 'imported', 2-6 short IDENTITY "
+        "phrases naming what the object actually is, for searching external "
+        "3D asset libraries -- e.g. ['snowman', 'christmas figure'] or "
+        "['leather armchair', 'vintage chair']. Never grammatical filler "
+        "words ('friendly', 'made', 'from') and never words copied "
+        "positionally from the description -- pick the words a person would "
+        "actually type into a search box for this object. Empty otherwise.",
+    )

@@ -82,6 +82,12 @@
           <option>parametric</option><option>imported</option></select>
       </div>
       <div class="grid" id="catalog-grid"></div>
+      <h3 style="margin-top:18px">Scene objects &amp; drafts</h3>
+      <div style="color:var(--dim); font-size:12px; margin-bottom:8px">
+        Bindings and works-in-progress from Create / resolve-scene — not (yet)
+        catalog entries. Click to view; open in Create to iterate.
+      </div>
+      <div class="grid" id="drafts-grid"></div>
     </section>
 
     <section id="mode-create" hidden>
@@ -96,6 +102,28 @@
       <div class="card" id="draft-panel" hidden>
         <h3>Draft: <span id="d-id"></span> <span class="badge" id="d-method"></span></h3>
         <div id="d-message" style="color:var(--dim); margin-bottom:8px"></div>
+        <div id="d-candidates" hidden>
+          <b style="font-size:12px">Sourcing candidates (approve one to download &amp; intake)</b>
+          <div id="d-candidate-cards" style="display:flex; flex-direction:column; gap:8px; margin:8px 0"></div>
+          <div class="row">
+            <input type="number" id="d-adopt-size" step="any" min="0" placeholder="real size (m)" style="max-width:140px">
+          </div>
+        </div>
+        <div id="d-sources" hidden style="font-size:12px; margin:8px 0">
+          <b>Where to look (verified sources)</b>
+          <div id="d-source-links"></div>
+        </div>
+        <div id="d-redirect" hidden class="card" style="background:#fff8ec; border-color:#e9d9b8">
+          <b style="font-size:12px">Not right? Override and build a different way</b>
+          <div class="row">
+            <button class="secondary" id="d-force-parametric">Build with OpenSCAD instead</button>
+            <button class="secondary" id="d-force-composite">Build as composite instead</button>
+          </div>
+          <div class="row">
+            <input type="text" id="d-search-query" placeholder="search these words instead…" style="flex:1">
+            <button class="secondary" id="d-force-search">Search again</button>
+          </div>
+        </div>
         <div id="d-params-wrap" hidden>
           <b style="font-size:12px">Parameters (meters)</b>
           <div class="params" id="d-params"></div>
@@ -119,7 +147,13 @@
         <div class="row">
           <button class="secondary" id="w-load">Load list</button>
           <button class="action" id="w-next">Generate next pending</button>
+          <button class="secondary" id="w-prev">◀ Back</button>
+          <button class="secondary" id="w-regen">Regenerate current (alternative)</button>
           <button class="secondary" id="w-skip">Skip current</button>
+        </div>
+        <div style="color:var(--dim); font-size:12px; margin-top:6px">
+          Click any item to select it; Regenerate produces a fresh alternative
+          for the selected item even if it was already saved.
         </div>
       </div>
       <div class="card"><div id="w-list"></div></div>
@@ -132,6 +166,7 @@
       <h3 id="inspect-title">Nothing loaded</h3>
       <div class="row" id="inspect-actions" hidden>
         <button class="secondary" id="a-approve">Approve (record who/when)</button>
+        <button class="secondary" id="a-edit-params" hidden>Edit parameters</button>
       </div>
       <div id="log"></div>
     </div>
@@ -151,6 +186,24 @@ async function api(path, body) {
   return data;
 }
 
+// Long pipeline calls run as server-side jobs; poll and stream each
+// progress line ("checking local library for possible matches...") to the log.
+async function runJob(path, body) {
+  const { job_id } = await api(path, body);
+  let seen = 0;
+  for (;;) {
+    const job = await api('/api/job/' + job_id);
+    for (; seen < job.events.length; seen++) log(job.events[seen]);
+    if (job.done) {
+      if (job.error) throw new Error(job.error);
+      for (const call of job.llm_calls || [])
+        log(`[${call.provider}/${call.model}] ${call.purpose} ${call.duration_seconds}s`);
+      return job;
+    }
+    await new Promise(r => setTimeout(r, 600));
+  }
+}
+
 // ── Viewport ──────────────────────────────────────────────────────────
 function viewportLoad(spec) {
   const frame = $('viewport');
@@ -165,6 +218,14 @@ function showAsset(entry) {
   $('inspect-title').textContent = `${entry.asset_id} — ${entry.asset_class}, review ${entry.review_level}`;
   $('inspect-actions').hidden = false;
   currentInspectId = entry.asset_id;
+  // Saved parametric assets keep their draft (OpenSCAD script + parameters)
+  // forever -- offer the parameter editor directly from the Library.
+  const paramDraft = draftsCache.find(d => d.asset_id === entry.asset_id && d.plan);
+  $('a-edit-params').hidden = !paramDraft;
+  $('a-edit-params').onclick = () => {
+    showDraft(paramDraft);
+    document.querySelector('header button[data-mode=create]').click();
+  };
   if (entry.address.startsWith('library/')) {
     viewportLoad({ kind: 'glb', url: bust('/' + entry.address) });
   } else {
@@ -181,10 +242,42 @@ document.querySelectorAll('header button').forEach(btn => btn.onclick = () => {
 });
 
 // ── Library ───────────────────────────────────────────────────────────
-let catalog = [], currentInspectId = null;
+let catalog = [], currentInspectId = null, draftsCache = [];
 async function refreshCatalog() {
   catalog = (await api('/api/catalog')).assets;
   renderCatalog();
+  await refreshDrafts();
+}
+
+async function refreshDrafts() {
+  const { drafts } = await api('/api/drafts');
+  draftsCache = drafts;
+  const grid = $('drafts-grid');
+  grid.innerHTML = drafts.length ? '' : '<i style="color:var(--dim)">none yet</i>';
+  for (const d of drafts) {
+    const tile = document.createElement('div');
+    tile.className = 'tile';
+    const badge = d.status === 'needs_human' ? '⚠ needs sourcing'
+                : d.texture_pending ? '⚠ texture pending'
+                : d.status;
+    // Thumbnail fallback chain: bound texture -> resolved asset's catalog
+    // preview -> top sourcing candidate's thumbnail -> labelled placeholder.
+    const resolved = catalog.find(e => e.asset_id === (d.matched_asset_id || d.asset_id));
+    const thumb =
+      (d.material && d.material.texture) ? '/library/' + d.material.texture
+      : (resolved && resolved.preview_url) ? resolved.preview_url
+      : (d.candidates && d.candidates[0]) ? d.candidates[0].thumbnail_url
+      : null;
+    tile.innerHTML = (thumb
+        ? `<img src="${thumb}" loading="lazy">`
+        : `<div class="noimg">${d.resolution_method}</div>`)
+      + `<b>${d.asset_id}</b><br><small>${badge}</small>`;
+    tile.onclick = () => {
+      showDraft(d);
+      document.querySelector('header button[data-mode=create]').click();
+    };
+    grid.appendChild(tile);
+  }
 }
 function renderCatalog() {
   const text = $('f-text').value.toLowerCase(), cls = $('f-class').value;
@@ -206,7 +299,10 @@ $('f-text').oninput = renderCatalog;
 $('f-class').onchange = renderCatalog;
 
 $('a-approve').onclick = async () => {
-  if (!currentInspectId) return;
+  if (!currentInspectId) {
+    log('select a catalog asset (Library grid) first — for drafts/bindings use "Approve binding" in the Create panel');
+    return;
+  }
   try {
     const { entry } = await api('/api/approve', { asset_id: currentInspectId });
     log(`approved ${entry.asset_id}: ${entry.provenance.modifications.at(-1)}`);
@@ -221,6 +317,10 @@ function showDraft(d) {
   $('d-id').textContent = d.asset_id;
   $('d-method').textContent = d.resolution_method + ' · ' + d.status;
   $('d-message').textContent = d.message || '';
+  renderCandidates(d);
+  $('d-save').textContent =
+    (d.status === 'existing' || d.status === 'saved')
+      ? 'Approve binding (record who/when)' : 'Save to catalog';
   const hasParams = d.plan && Object.keys(d.plan.parameters || {}).length;
   $('d-params-wrap').hidden = !hasParams;
   if (hasParams) {
@@ -251,6 +351,53 @@ function showDraft(d) {
   $('inspect-actions').hidden = true;
 }
 
+function renderCandidates(d) {
+  const hasCandidates = d.status === 'needs_human' && (d.candidates || []).length;
+  $('d-candidates').hidden = !hasCandidates;
+  $('d-sources').hidden = !(d.status === 'needs_human' && (d.suggested_sources || []).length);
+  $('d-redirect').hidden = d.status !== 'needs_human';
+  if ($('d-sources').hidden === false) {
+    $('d-source-links').innerHTML = d.suggested_sources.map(s => {
+      const [label, url] = s.split(/:\s(.+)/);
+      return `<div><a href="${url}" target="_blank" rel="noopener">${label}</a></div>`;
+    }).join('');
+  }
+  if (!hasCandidates) return;
+  $('d-adopt-size').value = d.spec.desired_size_m || '';
+  const cards = $('d-candidate-cards');
+  cards.innerHTML = '';
+  for (const c of d.candidates) {
+    const card = document.createElement('div');
+    card.style.cssText = 'display:flex; gap:10px; align-items:center; border:1px solid var(--line); border-radius:8px; padding:8px';
+    let verdictBadge = '';
+    if (c.relevance_match === true) {
+      verdictBadge = `<span class="badge" style="background:#e6f4ea; color:var(--ok)">✓ reviewed${c.relevance_reviewed_with_image ? ' (image)' : ''}</span>`;
+    } else if (c.relevance_match === null) {
+      verdictBadge = `<span class="badge">review unavailable</span>`;
+    }
+    const reasoning = c.relevance_reasoning
+      ? `<br><small style="color:var(--dim); font-style:italic">"${c.relevance_reasoning}"</small>` : '';
+    card.innerHTML =
+      `<img src="${c.thumbnail_url}" style="width:72px; height:72px; object-fit:cover; border-radius:6px" loading="lazy">`
+      + `<div style="flex:1"><b>${c.name}</b> <span class="badge">${c.license}</span> ${verdictBadge}<br>`
+      + `<small style="color:var(--dim)">confidence ${(c.confidence * 100).toFixed(0)}% · ${c.download_count.toLocaleString()} downloads · `
+      + `<a href="${c.url}" target="_blank" rel="noopener">view on ${c.source}</a></small>${reasoning}</div>`;
+    const btn = document.createElement('button');
+    btn.className = 'action';
+    btn.textContent = 'Approve & download';
+    btn.onclick = () => runGuarded(btn, async () => {
+      const size = parseFloat($('d-adopt-size').value);
+      if (!size) { log('enter the real-world size (meters) first'); return; }
+      const job = await runJob('/api/adopt', { asset_id: draft.asset_id, source_id: c.source_id, size });
+      showDraft(job.draft);
+      await refreshCatalog();
+      log(`adopted ${c.source_id} -> cataloged as ${job.draft.matched_asset_id}`);
+    });
+    card.appendChild(btn);
+    cards.appendChild(card);
+  }
+}
+
 // MaterialDef (JSON) -> asset_preview.html material override spec.
 function materialSpec(m) {
   if (!m) return null;
@@ -274,38 +421,55 @@ async function runGuarded(button, fn) {
 
 $('c-generate').onclick = () => runGuarded($('c-generate'), async () => {
   log('generating from description…');
-  const data = await api('/api/generate', {
+  const job = await runJob('/api/generate', {
     description: $('c-desc').value, asset_id: $('c-id').value,
   });
-  for (const call of data.llm_calls) log(`[${call.provider}/${call.model}] ${call.purpose} ${call.duration_seconds}s`);
-  showDraft(data.draft);
-  log(`draft ${data.draft.asset_id}: ${data.draft.status}`);
+  showDraft(job.draft);
+  await refreshDrafts();
+  log(`draft ${job.draft.asset_id}: ${job.draft.status}`);
 });
 
 $('d-apply').onclick = () => runGuarded($('d-apply'), async () => {
   const parameters = {};
   $('d-params').querySelectorAll('input').forEach(i => parameters[i.dataset.name] = parseFloat(i.value));
-  log('recompiling with edited parameters…');
-  const data = await api('/api/regenerate', { asset_id: draft.asset_id, parameters });
-  showDraft(data.draft);
-  log('recompiled.');
+  const job = await runJob('/api/regenerate', { asset_id: draft.asset_id, parameters });
+  showDraft(job.draft);
+  log('recompiled with edited parameters.');
 });
 
 $('d-regenerate').onclick = () => runGuarded($('d-regenerate'), async () => {
   const tweak = $('d-tweak').value.trim();
   if (!tweak) { log('type a tweak instruction first'); return; }
-  log('LLM revision: ' + tweak);
-  const data = await api('/api/regenerate', { asset_id: draft.asset_id, tweak });
-  for (const call of data.llm_calls) log(`[${call.provider}/${call.model}] ${call.purpose} ${call.duration_seconds}s`);
-  showDraft(data.draft);
+  const job = await runJob('/api/regenerate', { asset_id: draft.asset_id, tweak });
+  showDraft(job.draft);
 });
 
 $('d-save').onclick = () => runGuarded($('d-save'), async () => {
   const { entry } = await api('/api/save', { asset_id: draft.asset_id });
-  log(`saved ${entry.asset_id} to catalog (review_level ${entry.review_level})`);
+  if (draft.status === 'existing' || draft.status === 'saved') {
+    log(`binding approved (recorded who/when); uses catalog asset ${entry.asset_id}`);
+  } else {
+    log(`saved ${entry.asset_id} to catalog (review_level ${entry.review_level})`);
+  }
   await refreshCatalog();
   if (worklist.items.length) markCurrent('saved');
 });
+
+function redirectDraft(button, target, manualQuery) {
+  return runGuarded(button, async () => {
+    log(`overriding: rebuilding ${draft.asset_id} as ${target}${manualQuery ? ' (custom search)' : ''}...`);
+    const job = await runJob('/api/redirect', {
+      asset_id: draft.asset_id, target, manual_query: manualQuery || undefined,
+    });
+    showDraft(job.draft);
+    await refreshDrafts();
+  });
+}
+
+$('d-force-parametric').onclick = () => redirectDraft($('d-force-parametric'), 'parametric');
+$('d-force-composite').onclick = () => redirectDraft($('d-force-composite'), 'composite');
+$('d-force-search').onclick = () => redirectDraft(
+  $('d-force-search'), 'imported', $('d-search-query').value.trim());
 
 // ── Worklist ──────────────────────────────────────────────────────────
 let worklist = { items: [], cursor: 0 };
@@ -329,9 +493,26 @@ function renderWorklist() {
   worklist.items.forEach((item, i) => {
     const div = document.createElement('div');
     div.className = 'wl-item' + (i === worklist.cursor ? ' current' : '');
+    div.style.cursor = 'pointer';
     div.innerHTML = `<span class="status-${item.status}">[${item.status}]</span> <span>${item.description}</span>`;
+    div.onclick = async () => { worklist.cursor = i; await persistWorklist(); };
     el.appendChild(div);
   });
+}
+
+async function generateWorklistItem(index) {
+  const item = worklist.items[index];
+  if (!item) return;
+  worklist.cursor = index;
+  item.status = 'in_progress';
+  await persistWorklist();
+  log(`worklist ${index + 1}/${worklist.items.length}: ${item.description}`);
+  const job = await runJob('/api/generate', {
+    description: item.description, asset_id: item.asset_id || '',
+  });
+  showDraft(job.draft);
+  await refreshDrafts();
+  document.querySelector('header button[data-mode=create]').click();
 }
 
 async function persistWorklist() {
@@ -356,15 +537,20 @@ $('w-load').onclick = () => runGuarded($('w-load'), async () => {
 
 $('w-next').onclick = () => runGuarded($('w-next'), async () => {
   const idx = worklist.items.findIndex(it => it.status === 'pending');
-  if (idx < 0) { log('worklist: nothing pending'); return; }
-  worklist.cursor = idx;
-  worklist.items[idx].status = 'in_progress';
+  if (idx < 0) { log('worklist: nothing pending — click an item and Regenerate for an alternative'); return; }
+  await generateWorklistItem(idx);
+});
+
+$('w-prev').onclick = () => runGuarded($('w-prev'), async () => {
+  if (!worklist.items.length) return;
+  worklist.cursor = Math.max(0, worklist.cursor - 1);
   await persistWorklist();
-  const item = worklist.items[idx];
-  log(`worklist ${idx + 1}/${worklist.items.length}: ${item.description}`);
-  const data = await api('/api/generate', { description: item.description, asset_id: item.asset_id || '' });
-  showDraft(data.draft);
-  document.querySelector('header button[data-mode=create]').click();
+  log(`worklist: selected ${worklist.cursor + 1}/${worklist.items.length} — Regenerate for an alternative`);
+});
+
+$('w-regen').onclick = () => runGuarded($('w-regen'), async () => {
+  if (!worklist.items.length) { log('worklist: nothing loaded'); return; }
+  await generateWorklistItem(worklist.cursor);
 });
 
 $('w-skip').onclick = () => runGuarded($('w-skip'), () => markCurrent('skipped'));

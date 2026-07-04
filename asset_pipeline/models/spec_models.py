@@ -51,4 +51,9 @@ class ResolutionRecord(BaseModel):
     resolved_asset: Optional[ResolvedAssetRef] = None
     requires_author_review: bool = False
     review_reason: Optional[str] = None
+    # LLM-authored identity words for external sourcing, populated when the
+    # geometry classifier chose 'imported' (see GeometryClassification).
+    # Carrying these forward avoids re-deriving search terms mechanically
+    # from the raw description, which produces filler-word noise.
+    search_keywords: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)

@@ -88,6 +88,31 @@ def test_match_texture_returns_none_below_threshold(sandbox):
     assert texture_matcher.match_texture("wooden crate slats") is None
 
 
+def test_identity_guard_blocks_llm_query_drift(sandbox):
+    """Regression: the LLM's texture_query said 'earth daymap' (parroting a
+    prompt example) for a MARS object -- the object's own description must
+    gate the bind."""
+    append_texture(_texture("earth_daymap", semantic_type="earth_surface",
+                            tags=["earth", "planet", "daymap"]))
+    append_texture(_texture("mars_surface", semantic_type="mars_surface",
+                            tags=["mars", "planet", "surface", "red"]))
+    sphere = UVInfo(status="builtin", convention="equirect")
+
+    # Drifted query, honest description: earth must be excluded, mars can win.
+    drifted = texture_matcher.match_texture(
+        "earth daymap equirectangular", target_uv=sphere,
+        must_relate_to="the planet mars with its red dusty surface",
+    )
+    assert drifted is None or drifted.texture.texture_id != "earth_daymap"
+
+    honest = texture_matcher.match_texture(
+        "mars red surface", target_uv=sphere,
+        must_relate_to="the planet mars with its red dusty surface",
+    )
+    assert honest is not None
+    assert honest.texture.texture_id == "mars_surface"
+
+
 def test_prefer_authentic_breaks_ties(sandbox):
     append_texture(_texture("earth_proc", authentic=False, tags=["earth", "planet"]))
     append_texture(_texture("earth_real", authentic=True, tags=["earth", "planet"]))

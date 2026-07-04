@@ -48,6 +48,8 @@ from pipeline.material_generator import MaterialGenerationError, generate_materi
 from pipeline.mesh_processor import MeshProcessingError, normalize_mesh, save_mesh_meta
 from pipeline.openscad_generator import OpenSCADGenerationError, generate_parametric_asset
 from pipeline.resolver import resolve
+from pipeline.scene_resolver import resolve_scene, write_build_report
+from pipeline.sync import DEFAULT_SYNC_TARGET, sync_assets
 from pipeline.validator import format_json_output, format_screen_text, validate_library
 from pipeline.seed_catalog import main as seed_catalog_main
 from pipeline.spec_parser import SpecParsingError, parse_description
@@ -408,6 +410,52 @@ def cmd_preview(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_resolve_scene(args: argparse.Namespace) -> int:
+    specs_path = Path(args.scene_specs)
+    if not specs_path.is_file():
+        print(f"ERROR: {specs_path} not found.", file=sys.stderr)
+        return 1
+    try:
+        report = resolve_scene(
+            specs_path,
+            sync_target=Path(args.sync_target) if args.sync_target else (
+                DEFAULT_SYNC_TARGET if args.sync else None
+            ),
+            provider=args.provider,
+            model=args.model,
+        )
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    out = write_build_report(report, specs_path)
+    print(json.dumps(report.model_dump(mode="json"), indent=2))
+    print(f"\nBuild report: {out}", file=sys.stderr)
+    print(
+        f"{report.resolved} resolved, {report.needs_review} need review, "
+        f"{report.failed} failed -> status {report.status.upper()}",
+        file=sys.stderr,
+    )
+    for item in report.items:
+        if item.requires_author_review:
+            print(f"  REVIEW {item.object_id}: {item.message}", file=sys.stderr)
+    # Exit codes: 0 clean, 2 human review needed (distinct from hard failure 1).
+    return {"ok": 0, "needs_review": 2, "failed": 1}[report.status]
+
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    if args.all:
+        asset_ids = [e.asset_id for e in load_catalog()]
+    elif args.assets:
+        asset_ids = args.assets
+    else:
+        print("ERROR: give asset ids or --all", file=sys.stderr)
+        return 1
+    result = sync_assets(asset_ids, Path(args.target) if args.target else None)
+    print(json.dumps(result.model_dump(mode="json"), indent=2))
+    return 0
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     report = validate_library(
         records_path=Path(args.records) if args.records else None
@@ -648,6 +696,37 @@ def build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="Re-render even if a preview PNG already exists"
     )
     preview_parser.set_defaults(func=cmd_preview)
+
+    resolve_scene_parser = sub.add_parser(
+        "resolve-scene",
+        help="Resolve every asset in a scene specs JSON end-to-end; writes a build report",
+    )
+    resolve_scene_parser.add_argument(
+        "scene_specs",
+        help="JSON list: free-text descriptions and/or AssetSpec objects",
+    )
+    resolve_scene_parser.add_argument(
+        "--sync", action="store_true",
+        help=f"Also copy resolved assets into the viewer assets folder ({DEFAULT_SYNC_TARGET})",
+    )
+    resolve_scene_parser.add_argument(
+        "--sync-target", default=None, metavar="DIR", help="Sync to a custom folder instead"
+    )
+    resolve_scene_parser.add_argument(
+        "--provider", choices=["anthropic", "openai", "google"], default=None,
+        help="Override the default LLM provider for this batch",
+    )
+    resolve_scene_parser.add_argument("--model", default=None, help="Override the default model")
+    resolve_scene_parser.set_defaults(func=cmd_resolve_scene)
+
+    sync_parser = sub.add_parser(
+        "sync", help="Copy resolved library assets into a consumer assets folder"
+    )
+    sync_parser.add_argument("assets", nargs="*", help="asset_ids to sync")
+    sync_parser.add_argument("--all", action="store_true", help="Sync every catalog asset")
+    sync_parser.add_argument("--target", default=None, metavar="DIR",
+                             help=f"Target folder (default {DEFAULT_SYNC_TARGET})")
+    sync_parser.set_defaults(func=cmd_sync)
 
     validate_parser = sub.add_parser(
         "validate",

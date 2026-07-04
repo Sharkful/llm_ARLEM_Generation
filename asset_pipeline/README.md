@@ -7,6 +7,11 @@ for the full requirements and
 [`3d_objects/asset_pipeline_implementation_plan.md`](../3d_objects/asset_pipeline_implementation_plan.md)
 for the staged build plan this module implements.
 
+**Authors/users: start with [USER_GUIDE.md](USER_GUIDE.md)** — the
+workflow-oriented guide (making assets in the app, batch scene resolution,
+bringing in external models and textures, validating and shipping). This
+README covers setup, testing, and module layout.
+
 This is a **semi-independent sub-project**: it has its own dependencies,
 environment file, and test suite, and can be set up without touching the
 rest of the monorepo.
@@ -59,7 +64,15 @@ catalog entries carry a `uv` block -- sphere primitives are equirect,
 which is why real planet maps bind to `sphere_basic` with zero mesh work;
 the create/review app binds materials+textures live in the viewport, and
 authentic surfaces with no archive match are flagged for human sourcing,
-never synthesized) are implemented. Stages 8/8b need
+never synthesized), and Stage 9 (`cli.py resolve-scene <specs.json>` runs
+a whole scene's asset list end-to-end -- resolve/generate/material/
+validate/preview -- writing a req.-doc-section-17-shaped build report;
+items the pipeline can't finish autonomously halt individually as
+`needs_review` (exit code 2, distinct from hard failure 1) per the
+human-checkpoint rule; `cli.py sync` copies the resolved subset into the
+viewer's assets/{models,materials,textures} layout, copy-only, library
+stays the source of truth) are implemented. **All planned stages (0-9)
+are now built** -- see USER_GUIDE.md for the author-facing workflows. Stages 8/8b need
 `playwright` + chromium (`pip install playwright && playwright install
 chromium`), `Flask`, and network access to the three.js CDN (same one
 `viewer2.html` uses). Catalog matching uses
@@ -142,6 +155,8 @@ python cli.py textures list                  # inspect the texture registry
 python cli.py intake-texture moon_surface    # index intake/moon_surface/ (image + source.json)
 python cli.py search-external "rusty metal" --type texture   # Poly Haven CC0 textures
 python cli.py fetch-external rusty_metal_02 --type texture   # download YOUR pick into intake/
+python cli.py resolve-scene examples/scene_example.json --sync  # whole scene end-to-end + viewer sync
+python cli.py sync --all                     # copy the resolved library into the viewer assets
 ```
 
 ## LLM provider configuration

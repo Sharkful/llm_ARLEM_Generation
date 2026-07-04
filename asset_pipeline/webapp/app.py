@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
+import uuid
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -26,9 +28,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import config
 from pipeline.asset_factory import (
     AssetFactoryError,
+    adopt_draft_candidate,
     approve_asset,
     create_from_description,
     load_draft_state,
+    redirect_draft,
     regenerate,
     save_draft,
 )
@@ -45,6 +49,40 @@ app = Flask(__name__)
 
 def _error(message: str, code: int = 400):
     return jsonify({"error": message}), code
+
+
+# ── Background jobs: long pipeline calls (LLM + OpenSCAD + Blender) run in
+#    a thread; the UI polls /api/job/<id> and shows each progress line live
+#    ("checking local library for possible matches...") ───────────────────
+
+_JOBS: dict[str, dict] = {}
+
+
+def _start_job(fn) -> str:
+    """fn(progress) -> (draft, llm_call_entries). Returns the job id."""
+    job_id = uuid.uuid4().hex[:12]
+    job = {"events": [], "done": False, "error": None, "draft": None, "llm_calls": []}
+    _JOBS[job_id] = job
+
+    def target():
+        try:
+            draft, logs = fn(lambda message: job["events"].append(message))
+            job["draft"] = draft.model_dump(mode="json")
+            job["llm_calls"] = [entry.model_dump(mode="json") for entry in logs]
+        except Exception as exc:  # surfaced to the UI, never a silent thread death
+            job["error"] = str(exc)
+        job["done"] = True
+
+    threading.Thread(target=target, daemon=True).start()
+    return job_id
+
+
+@app.get("/api/job/<job_id>")
+def api_job(job_id: str):
+    job = _JOBS.get(job_id)
+    if job is None:
+        return _error(f"unknown job {job_id!r}", 404)
+    return jsonify(job)
 
 
 # ── Static: UI, viewport, library files ───────────────────────────────────
@@ -87,20 +125,14 @@ def api_generate():
     description = (payload.get("description") or "").strip()
     if not description:
         return _error("description is required")
-    try:
-        draft, logs = create_from_description(
-            description,
-            asset_id=(payload.get("asset_id") or "").strip() or None,
-            provider=payload.get("provider"),
-            model=payload.get("model"),
-        )
-    except (SpecParsingError, OpenSCADGenerationError, MeshProcessingError,
-            AssetFactoryError, RuntimeError) as exc:
-        return _error(str(exc), 500)
-    return jsonify({
-        "draft": draft.model_dump(mode="json"),
-        "llm_calls": [entry.model_dump(mode="json") for entry in logs],
-    })
+    job_id = _start_job(lambda progress: create_from_description(
+        description,
+        asset_id=(payload.get("asset_id") or "").strip() or None,
+        provider=payload.get("provider"),
+        model=payload.get("model"),
+        progress=progress,
+    ))
+    return jsonify({"job_id": job_id}), 202
 
 
 @app.post("/api/regenerate")
@@ -115,21 +147,16 @@ def api_regenerate():
             parameters = {str(k): float(v) for k, v in parameters.items()}
         except (TypeError, ValueError):
             return _error("parameters must map names to numbers")
-    try:
-        draft, logs = regenerate(
-            asset_id,
-            parameters=parameters,
-            tweak=(payload.get("tweak") or "").strip() or None,
-            provider=payload.get("provider"),
-            model=payload.get("model"),
-        )
-    except (OpenSCADGenerationError, MeshProcessingError, AssetFactoryError,
-            RuntimeError) as exc:
-        return _error(str(exc), 500)
-    return jsonify({
-        "draft": draft.model_dump(mode="json"),
-        "llm_calls": [entry.model_dump(mode="json") for entry in logs],
-    })
+    tweak = (payload.get("tweak") or "").strip() or None
+    job_id = _start_job(lambda progress: regenerate(
+        asset_id,
+        parameters=parameters,
+        tweak=tweak,
+        provider=payload.get("provider"),
+        model=payload.get("model"),
+        progress=progress,
+    ))
+    return jsonify({"job_id": job_id}), 202
 
 
 @app.get("/api/draft/<asset_id>")
@@ -138,6 +165,60 @@ def api_draft(asset_id: str):
     if draft is None:
         return _error(f"no draft for {asset_id!r}", 404)
     return jsonify({"draft": draft.model_dump(mode="json")})
+
+
+@app.get("/api/drafts")
+def api_drafts():
+    """All persisted drafts -- scene-object bindings (moon = sphere + moon
+    texture), works in progress, and items awaiting human sourcing. These
+    are not catalog entries, so the Library grid alone would hide them."""
+    drafts = []
+    for draft_file in sorted((config.LIBRARY_DIR / "generated").glob("*/draft.json")):
+        draft = load_draft_state(draft_file.parent.name)
+        if draft is not None:
+            drafts.append(draft.model_dump(mode="json"))
+    drafts.sort(key=lambda d: d.get("updated_at") or "", reverse=True)
+    return jsonify({"drafts": drafts})
+
+
+@app.post("/api/adopt")
+def api_adopt():
+    """One-click approval of a sourcing candidate: download + intake + resolve."""
+    payload = request.get_json(silent=True) or {}
+    asset_id = (payload.get("asset_id") or "").strip()
+    source_id = (payload.get("source_id") or "").strip()
+    if not asset_id or not source_id:
+        return _error("asset_id and source_id are required")
+    try:
+        size = float(payload.get("size") or 0)
+    except (TypeError, ValueError):
+        return _error("size must be a number (meters)")
+    if size <= 0:
+        return _error("size (real-world largest dimension, meters) is required")
+    def run(progress):
+        progress(f"Downloading {source_id!r} and running the intake gate...")
+        draft = adopt_draft_candidate(asset_id, source_id, target_size_m=size)
+        progress("Intake complete -- cataloged with provenance.")
+        return draft, []
+
+    return jsonify({"job_id": _start_job(run)}), 202
+
+
+@app.post("/api/redirect")
+def api_redirect():
+    """Manual override: force a stuck draft down a specific path
+    (parametric/composite/imported), bypassing the original classification."""
+    payload = request.get_json(silent=True) or {}
+    asset_id = (payload.get("asset_id") or "").strip()
+    target = (payload.get("target") or "").strip()
+    if not asset_id or target not in ("parametric", "composite", "imported"):
+        return _error("asset_id and target ('parametric'|'composite'|'imported') are required")
+    manual_query = (payload.get("manual_query") or "").strip() or None
+    job_id = _start_job(lambda progress: redirect_draft(
+        asset_id, target, manual_query=manual_query,
+        provider=payload.get("provider"), model=payload.get("model"), progress=progress,
+    ))
+    return jsonify({"job_id": job_id}), 202
 
 
 @app.post("/api/save")

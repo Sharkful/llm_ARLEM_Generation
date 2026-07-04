@@ -29,7 +29,15 @@ import json
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
+
+# Progress callback: receives one human-readable line per pipeline step so
+# UIs can show "checking local library for possible matches..." live.
+ProgressFn = Callable[[str], None]
+
+
+def _noop_progress(message: str) -> None:
+    pass
 
 from pydantic import BaseModel, Field
 
@@ -40,6 +48,8 @@ from models.log_models import LLMCallEntry
 from models.spec_models import AssetSpec
 from pipeline import uv_tools
 from pipeline.catalog_writer import load_catalog, save_catalog
+from pipeline.composite_builder import decompose_into_primitives
+from pipeline.source_assist import SourceCandidate, adopt_candidate, assist_imported
 from pipeline.material_generator import MaterialGenerationError, generate_material
 from pipeline.mesh_processor import MeshNormalizationResult, normalize_mesh, save_mesh_meta
 from pipeline.openscad_generator import generate_openscad_plan, generate_parametric_asset
@@ -67,10 +77,14 @@ class DraftAsset(BaseModel):
     bounds_m: Optional[list[float]] = None
     matched_asset_id: Optional[str] = None
     composite_id: Optional[str] = None
+    approved_by: Optional[str] = None  # human sign-off on a binding (who/when)
+    approved_at: Optional[datetime] = None
     uv: Optional[UVInfo] = None
     material: Optional[MaterialDef] = None  # Stage 6c binding result
     texture_pending: bool = False  # authentic surface awaiting human sourcing
     texture_query: Optional[str] = None
+    candidates: list[SourceCandidate] = Field(default_factory=list)  # sourcing assist hits
+    suggested_sources: list[str] = Field(default_factory=list)  # search URLs when no hits
     message: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -145,12 +159,19 @@ def _record_uv(asset_id: str, glb_path: Path, uv_status: str) -> UVInfo:
     )
 
 
-def _bind_material(draft: DraftAsset, provider: str | None, model: str | None) -> list[LLMCallEntry]:
+def _bind_material(
+    draft: DraftAsset,
+    provider: str | None,
+    model: str | None,
+    progress: ProgressFn | None = None,
+) -> list[LLMCallEntry]:
     """Stage 6c.6: run the material/texture ladder for this draft's surface.
 
     Non-fatal by design -- a draft with no material is still reviewable; the
     message records what went wrong instead of failing the whole create.
     """
+    progress = progress or _noop_progress
+    progress("Binding material and texture (archive first, synthesis or sourcing after)...")
     try:
         result, plan, entry = generate_material(
             draft.description,
@@ -183,21 +204,49 @@ def create_from_description(
     asset_id: str | None = None,
     provider: str | None = None,
     model: str | None = None,
+    progress: ProgressFn | None = None,
 ) -> tuple[DraftAsset, list[LLMCallEntry]]:
     """One-shot flow: free text -> routed, generated (if parametric), normalized draft."""
-    logs: list[LLMCallEntry] = []
+    progress = progress or _noop_progress
+    progress("Parsing description into a structured asset spec (LLM)...")
     spec, entry = parse_description(description, provider=provider, model=model)
-    logs.append(entry)
     if asset_id:
         spec = spec.model_copy(update={"object_id": asset_id})
+    draft, logs = create_from_spec(
+        spec, asset_id=asset_id, provider=provider, model=model, progress=progress
+    )
+    return draft, [entry, *logs]
+
+
+def create_from_spec(
+    spec: AssetSpec,
+    asset_id: str | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    progress: ProgressFn | None = None,
+) -> tuple[DraftAsset, list[LLMCallEntry]]:
+    """Same flow starting from an already-parsed AssetSpec (Stage 9 batch
+    input, or a worklist of pre-authored specs -- skips the Stage 1 call)."""
+    progress = progress or _noop_progress
+    logs: list[LLMCallEntry] = []
+    description = spec.description
     final_id = asset_id or _slug(spec.object_id)
 
     catalog = load_catalog()
+    progress(
+        f"Checking local library for possible matches ({len(catalog)} assets, "
+        "then LLM classification if nothing fits)..."
+    )
     record, resolve_logs = resolve(spec, catalog)
     logs.extend(resolve_logs)
 
     if record.resolved_asset is not None:
         # catalog_match / variant: nothing to build -- show the match.
+        progress(
+            f"Matched existing catalog asset {record.resolved_asset.asset_id!r} "
+            f"({record.resolved_asset.resolution_method}, confidence "
+            f"{record.resolved_asset.confidence:.2f}) -- no new geometry needed."
+        )
         matched = next(
             (e for e in catalog if e.asset_id == record.resolved_asset.asset_id), None
         )
@@ -217,7 +266,7 @@ def create_from_description(
                 f"confidence {record.resolved_asset.confidence:.2f})."
             ),
         )
-        logs.extend(_bind_material(draft, provider, model))
+        logs.extend(_bind_material(draft, provider, model, progress=progress))
         save_draft_state(draft)
         return draft, logs
 
@@ -234,6 +283,10 @@ def create_from_description(
         return draft, logs
 
     if reason.startswith("Classified as 'parametric'"):
+        progress(
+            "Classified as parametric -- generating an OpenSCAD script (LLM) and "
+            "compiling it (up to 3 repair attempts)..."
+        )
         generation, gen_logs = generate_parametric_asset(spec, final_id)
         logs.extend(gen_logs)
         if not generation.success:
@@ -254,21 +307,165 @@ def create_from_description(
             description=description, spec=spec, plan=plan, generation=generation,
             message="Generated via OpenSCAD. Edit parameters or send a tweak, then save.",
         )
+        progress("Compile succeeded -- normalizing mesh in Blender (scale/pivot/UVs)...")
         draft.plan.parameters = extract_scad_parameters(plan.scad_source)
         draft = _normalize_draft_mesh(draft)
-        logs.extend(_bind_material(draft, provider, model))
+        logs.extend(_bind_material(draft, provider, model, progress=progress))
         save_draft_state(draft)
         return draft, logs
 
     # imported / unclear / composite-without-parts
+    is_imported = reason.startswith("Classified as 'imported'")
+    if is_imported:
+        # Sourcing assist (policy 2026-07): search allowlisted sources;
+        # auto-download a confident CC0 match; otherwise surface candidates
+        # or specific search URLs -- the user should never have to hunt.
+        progress(
+            "Classified as imported -- searching allowlisted sources "
+            "(Poly Haven, NASA 3D Resources)..."
+        )
+        assist, assist_logs = assist_imported(
+            spec, final_id, keywords=record.search_keywords, provider=provider, model=model
+        )
+        logs.extend(assist_logs)
+        progress("Reviewing candidates for relevance to the request...")
+        progress(assist.note or "Source search finished.")
+        if assist.auto_adopted is not None and assist.auto_adopted.success:
+            entry = assist.auto_adopted.catalog_entry
+            draft = DraftAsset(
+                asset_id=final_id, status="existing", resolution_method="imported",
+                description=description, spec=spec,
+                matched_asset_id=entry.asset_id,
+                glb_address=entry.address,
+                bounds_m=list(entry.canonical_bounds_m),
+                uv=entry.uv,
+                message=assist.note,
+            )
+            # Imported GLBs carry their own textures/materials -- no bind.
+            save_draft_state(draft)
+            return draft, logs
+        draft = DraftAsset(
+            asset_id=final_id, status="needs_human", resolution_method="imported",
+            description=description, spec=spec,
+            candidates=assist.candidates,
+            suggested_sources=assist.search_urls,
+            message=f"{reason} {assist.note}".strip(),
+        )
+        save_draft_state(draft)
+        return draft, logs
+
     draft = DraftAsset(
-        asset_id=final_id, status="needs_human",
-        resolution_method=(
-            "imported" if reason.startswith("Classified as 'imported'") else "flagged_for_review"
-        ),
+        asset_id=final_id, status="needs_human", resolution_method="flagged_for_review",
         description=description, spec=spec,
         message=reason or "Flagged for human review.",
     )
+    save_draft_state(draft)
+    return draft, logs
+
+
+# ── Manual redirect (added 2026-07) ───────────────────────────────────────
+#
+# A stuck draft (needs_human: imported with bad/no candidates, or
+# flagged_for_review) previously had no way out except editing OpenSCAD
+# parameters that don't exist yet for it. This lets a human override the
+# classifier's judgment directly: force it down the parametric, composite,
+# or imported path instead of re-asking the same question that already
+# produced the wrong answer.
+
+RedirectTarget = Literal["parametric", "composite", "imported"]
+
+
+def redirect_draft(
+    asset_id: str,
+    target: RedirectTarget,
+    manual_query: str | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    progress: ProgressFn | None = None,
+) -> tuple[DraftAsset, list[LLMCallEntry]]:
+    """Rebuild an existing draft via a human-chosen path, bypassing
+    classify()/resolve()'s original verdict for this asset_id.
+
+    manual_query: only used for target='imported' -- search these words
+    verbatim instead of re-deriving them, for "search again" after a bad
+    first attempt.
+    """
+    progress = progress or _noop_progress
+    draft = load_draft_state(asset_id)
+    if draft is None:
+        raise AssetFactoryError(f"No draft found for {asset_id!r}.")
+    spec = draft.spec
+    logs: list[LLMCallEntry] = []
+
+    if target == "parametric":
+        progress("Redirecting to OpenSCAD generation (human override)...")
+        generation, gen_logs = generate_parametric_asset(spec, asset_id)
+        logs.extend(gen_logs)
+        if not generation.success:
+            draft.status = "needs_human"
+            draft.resolution_method = "parametric"
+            draft.generation = generation
+            draft.message = f"Forced OpenSCAD generation failed: {generation.error_message}"
+            save_draft_state(draft)
+            return draft, logs
+        plan = OpenSCADPlan(
+            parameters={},
+            scad_source=generation.repair_attempts[-1].scad_source,
+            expected_bounds_m=generation.expected_bounds_m or [0, 0, 0],
+        )
+        plan.parameters = extract_scad_parameters(plan.scad_source)
+        draft = DraftAsset(
+            asset_id=asset_id, status="draft", resolution_method="parametric",
+            description=draft.description, spec=spec, plan=plan, generation=generation,
+            message="Generated via OpenSCAD (human override). Edit parameters or send a tweak, then save.",
+        )
+        progress("Normalizing mesh in Blender (scale/pivot/UVs)...")
+        draft = _normalize_draft_mesh(draft)
+        logs.extend(_bind_material(draft, provider, model, progress=progress))
+        save_draft_state(draft)
+        return draft, logs
+
+    if target == "composite":
+        progress("Redirecting to composite decomposition (human override)...")
+        parts, decomp_entry = decompose_into_primitives(spec, max_parts=12, provider=provider, model=model)
+        logs.append(decomp_entry)
+        progress(f"Decomposed into {len(parts)} primitive part(s): {', '.join(parts)}")
+        catalog = load_catalog()
+        record, resolve_logs = resolve(spec, catalog, forced_composite_parts=parts)
+        logs.extend(resolve_logs)
+        draft = DraftAsset(
+            asset_id=asset_id, status="composite", resolution_method="composite",
+            description=draft.description, spec=spec,
+            composite_id=f"{spec.object_id}_composite",
+            message=record.review_reason or "Built as a composite (human override).",
+        )
+        save_draft_state(draft)
+        return draft, logs
+
+    # target == "imported": re-run the sourcing assist, optionally with the
+    # human's own search words instead of whatever produced bad results.
+    progress(f"Searching allowlisted sources again{' with your keywords' if manual_query else ''}...")
+    assist, assist_logs = assist_imported(
+        spec, asset_id, manual_query=manual_query, provider=provider, model=model
+    )
+    logs.extend(assist_logs)
+    progress(assist.note or "Source search finished.")
+    if assist.auto_adopted is not None and assist.auto_adopted.success:
+        entry = assist.auto_adopted.catalog_entry
+        draft = DraftAsset(
+            asset_id=asset_id, status="existing", resolution_method="imported",
+            description=draft.description, spec=spec,
+            matched_asset_id=entry.asset_id, glb_address=entry.address,
+            bounds_m=list(entry.canonical_bounds_m), uv=entry.uv, message=assist.note,
+        )
+    else:
+        draft = DraftAsset(
+            asset_id=asset_id, status="needs_human", resolution_method="imported",
+            description=draft.description, spec=spec,
+            candidates=assist.candidates, suggested_sources=assist.search_urls,
+            message=assist.note,
+        )
+    save_draft_state(draft)
     return draft, logs
 
 
@@ -313,6 +510,7 @@ def regenerate(
     tweak: str | None = None,
     provider: str | None = None,
     model: str | None = None,
+    progress: ProgressFn | None = None,
 ) -> tuple[DraftAsset, list[LLMCallEntry]]:
     """Iterate on a parametric draft.
 
@@ -322,6 +520,7 @@ def regenerate(
     """
     from pipeline.openscad_generator import compile_scad, measure_stl_bounds_m
 
+    progress = progress or _noop_progress
     draft = load_draft_state(asset_id)
     if draft is None or draft.plan is None:
         raise AssetFactoryError(
@@ -334,8 +533,10 @@ def regenerate(
     logs: list[LLMCallEntry] = []
     source = draft.plan.scad_source
     if parameters:
+        progress(f"Substituting parameter edits into the script: {parameters}")
         source = substitute_scad_parameters(source, parameters)
     if tweak:
+        progress(f"Requesting a script revision from the LLM: {tweak!r}...")
         plan, entry = generate_openscad_plan(
             draft.spec, provider=provider, model=model,
             revision_context=(source, tweak),
@@ -345,6 +546,7 @@ def regenerate(
         draft.plan.expected_bounds_m = plan.expected_bounds_m
         draft.plan.notes = plan.notes
 
+    progress("Compiling with OpenSCAD...")
     asset_dir = _draft_dir(asset_id)
     success, stderr = compile_scad(source, asset_dir / "source.scad", asset_dir / "source.stl")
     if not success:
@@ -360,6 +562,7 @@ def regenerate(
     )
     draft.status = "draft"
     draft.updated_at = datetime.utcnow()
+    progress("Normalizing mesh in Blender (scale/pivot/UVs)...")
     draft = _normalize_draft_mesh(draft)
     save_draft_state(draft)
     return draft, logs
@@ -374,10 +577,38 @@ def save_draft(
     render_preview: bool = True,
 ) -> AssetCatalogEntry:
     """Promote a draft into catalog.json (upsert) -- the human's save IS the
-    review acknowledgment, recorded in provenance."""
+    review acknowledgment, recorded in provenance.
+
+    For a BINDING draft (status 'existing': the moon = sphere + moon
+    texture; an adopted import), there is no new geometry to catalog --
+    saving records the human approval (who/when) on the draft itself and
+    returns the underlying catalog entry.
+    """
     draft = load_draft_state(asset_id)
     if draft is None:
         raise AssetFactoryError(f"No draft found for {asset_id!r}.")
+
+    if draft.status in ("existing", "saved") and draft.matched_asset_id:
+        entry = next(
+            (e for e in load_catalog() if e.asset_id == draft.matched_asset_id), None
+        )
+        if entry is None:
+            raise AssetFactoryError(
+                f"Draft {asset_id!r} resolves to {draft.matched_asset_id!r}, which is "
+                "no longer in the catalog."
+            )
+        draft.approved_by = getpass.getuser()
+        draft.approved_at = datetime.utcnow()
+        draft.status = "saved"
+        draft.message = (
+            f"Binding approved by {draft.approved_by} on {date.today().isoformat()} "
+            f"(uses {entry.asset_id!r}"
+            + (f" with material {draft.material.material_id!r}" if draft.material else "")
+            + ")."
+        )
+        save_draft_state(draft)
+        return entry
+
     if not draft.glb_address or not draft.bounds_m:
         raise AssetFactoryError(
             f"Draft {asset_id!r} has no normalized GLB yet -- generate/regenerate first."
@@ -421,6 +652,39 @@ def save_draft(
         except Exception:
             pass  # preview is a nicety at save time; `cli.py preview` can redo it
     return entry
+
+
+def adopt_draft_candidate(
+    asset_id: str, source_id: str, target_size_m: float
+) -> DraftAsset:
+    """One-click approval of a sourcing candidate (webapp POST /api/adopt):
+    fetch the chosen file, run the normal intake gate, resolve the draft."""
+    draft = load_draft_state(asset_id)
+    if draft is None:
+        raise AssetFactoryError(f"No draft found for {asset_id!r}.")
+    candidate = next((c for c in draft.candidates if c.source_id == source_id), None)
+    if candidate is None:
+        raise AssetFactoryError(
+            f"{source_id!r} is not one of this draft's candidates "
+            f"({', '.join(c.source_id for c in draft.candidates) or 'none'})."
+        )
+    result = adopt_candidate(candidate, asset_id, target_size_m=target_size_m)
+    if not result.success:
+        raise AssetFactoryError(result.error_message or "intake failed")
+
+    entry = result.catalog_entry
+    draft.status = "existing"
+    draft.matched_asset_id = entry.asset_id
+    draft.glb_address = entry.address
+    draft.bounds_m = list(entry.canonical_bounds_m)
+    draft.uv = entry.uv
+    draft.message = (
+        f"Adopted {candidate.source_id!r} from {candidate.source} "
+        f"({candidate.license}) and cataloged as {entry.asset_id!r}."
+    )
+    draft.updated_at = datetime.utcnow()
+    save_draft_state(draft)
+    return draft
 
 
 def approve_asset(asset_id: str) -> AssetCatalogEntry:
