@@ -24,8 +24,11 @@ def sandbox(tmp_path, monkeypatch):
     lib = tmp_path / "library"
     monkeypatch.setattr(config, "LIBRARY_DIR", lib)
     monkeypatch.setattr(config, "CATALOG_PATH", lib / "catalog.json")
+    monkeypatch.setattr(config, "MATERIALS_DIR", lib / "materials")
     (lib / "generated").mkdir(parents=True)
     (lib / "previews").mkdir(parents=True)
+    (lib / "materials").mkdir(parents=True)
+    (lib / "composites").mkdir(parents=True)
     return tmp_path
 
 
@@ -248,6 +251,26 @@ def test_save_draft_upserts_catalog_entry_with_generated_provenance(sandbox, mon
     assert len(load_catalog()) == 1
 
 
+def test_save_draft_composite_gets_composite_asset_class(sandbox, monkeypatch):
+    """Regression: save_draft used to hardcode asset_class='parametric' for
+    any draft with a glb_address, which would have mis-cataloged a baked
+    composite (a snowman) as if it were an OpenSCAD part."""
+    monkeypatch.setattr(asset_factory, "render_previews", lambda entries, force: ([], []))
+    draft = asset_factory.DraftAsset(
+        asset_id="frosty", status="draft", resolution_method="composite",
+        description="a friendly snowman", spec=_spec("frosty"),
+        composite_id="frosty_composite",
+        glb_address="library/composites/frosty/model.glb",
+        bounds_m=[0.2, 0.3, 0.2],
+    )
+    asset_factory.save_draft_state(draft)
+
+    entry = asset_factory.save_draft("frosty")
+
+    assert entry.asset_class == "composite"
+    assert any("baked into one mesh" in m for m in entry.provenance.modifications)
+
+
 def test_save_draft_without_glb_is_rejected(sandbox):
     draft = _seed_draft()
     draft.glb_address = None
@@ -415,14 +438,17 @@ def test_redirect_to_parametric_bypasses_classification(sandbox, monkeypatch):
 
 
 def test_redirect_to_composite_uses_forced_parts(sandbox, monkeypatch):
-    _seed_stuck_draft()
+    from models.classification_models import CompositePartPlan
 
+    _seed_stuck_draft()
+    forced_parts = [
+        CompositePartPlan(description="large white sphere", color_hint="white"),
+        CompositePartPlan(description="small white sphere", color_hint="white"),
+        CompositePartPlan(description="thin black cylinder", color_hint="black"),
+    ]
     monkeypatch.setattr(
         asset_factory, "decompose_into_primitives",
-        lambda spec, max_parts=12, provider=None, model=None: (
-            ["large white sphere", "small white sphere", "thin black cylinder"],
-            _log("composite_decomposition"),
-        ),
+        lambda spec, max_parts=12, provider=None, model=None: (forced_parts, _log("composite_decomposition")),
     )
     captured = {}
 
@@ -439,12 +465,22 @@ def test_redirect_to_composite_uses_forced_parts(sandbox, monkeypatch):
 
     monkeypatch.setattr(asset_factory, "resolve", fake_resolve)
 
+    baked = asset_factory.DraftAsset(
+        asset_id="frosty", status="draft", resolution_method="composite",
+        description="a friendly snowman", spec=_spec("frosty"),
+        composite_id="frosty_composite", glb_address="library/composites/frosty/model.glb",
+        bounds_m=[0.2, 0.3, 0.2],
+    )
+    monkeypatch.setattr(
+        asset_factory, "_materialize_and_bake_composite",
+        lambda composite_id, asset_id, target_size_m, provider, model, progress: (baked, [_log("material_generation")]),
+    )
+
     draft, logs = asset_factory.redirect_draft("frosty", "composite")
 
-    assert draft.status == "composite"
-    assert draft.composite_id == "frosty_composite"
-    assert captured["parts"] == ["large white sphere", "small white sphere", "thin black cylinder"]
-    assert len(logs) == 1  # only the decomposition call -- resolve() was faked with no logs
+    assert draft.glb_address == "library/composites/frosty/model.glb"
+    assert captured["parts"] == forced_parts
+    assert len(logs) == 2  # decomposition + the (faked) materialize/bake call's log
 
 
 def test_redirect_to_imported_passes_manual_query(sandbox, monkeypatch):
@@ -466,3 +502,389 @@ def test_redirect_to_imported_passes_manual_query(sandbox, monkeypatch):
 
     assert captured["manual_query"] == "snowman christmas decoration"
     assert draft.status == "needs_human"
+
+
+# ── _materialize_and_bake_composite (added 2026-07) ───────────────────────
+# Regression coverage for "Frosty the Snowman is all gray": composites used
+# to never generate per-part materials or bake a real mesh at all.
+
+def _seed_fragment(sandbox, composite_id="frosty_composite", n_parts=2):
+    from pipeline.composite_builder import (
+        CompositeFragment, CompositePart, save_composite_fragment,
+    )
+
+    parts = [
+        CompositePart(
+            part_id=f"p{i}",
+            asset_spec=AssetSpec(object_id=f"p{i}", description=f"part {i}"),
+            resolved_asset_id="sphere_basic",
+            color_hint=("white" if i == 0 else "black"),
+        )
+        for i in range(n_parts)
+    ]
+    fragment = CompositeFragment(
+        composite_id=composite_id, display_name="Frosty", source_description="a snowman",
+        parts=parts,
+    )
+    save_composite_fragment(fragment)
+    return fragment
+
+
+def test_materialize_and_bake_generates_one_material_per_part(sandbox, monkeypatch):
+    from models.generation_models import MaterialGenerationResult
+
+    _seed_fragment(sandbox, n_parts=3)
+    calls = []
+
+    def fake_generate_material(description, material_id=None, provider=None, model=None, force=False):
+        calls.append((description, material_id))
+        return (
+            MaterialGenerationResult(material_id=material_id, success=True),
+            None, _log("material_generation"),
+        )
+
+    monkeypatch.setattr(asset_factory, "generate_material", fake_generate_material)
+
+    def raising_bake(fragment, asset_id, target_size_m):
+        raise asset_factory.CompositeBakeError("stub: bake not under test")
+
+    monkeypatch.setattr(asset_factory, "bake_composite", raising_bake)
+
+    draft, logs = asset_factory._materialize_and_bake_composite(
+        "frosty_composite", "frosty", None, None, None, lambda m: None
+    )
+
+    assert len(calls) == 3
+    assert calls[0][1] == "frosty_composite_p0_mat"
+    assert draft.status == "needs_human"  # bake failed, but materials were still generated
+    from pipeline.composite_builder import load_composite_fragment
+    fragment = load_composite_fragment("frosty_composite")
+    assert all(p.material_id == f"frosty_composite_{p.part_id}_mat" for p in fragment.parts)
+
+
+def test_materialize_and_bake_success_populates_glb_and_bounds(sandbox, monkeypatch):
+    from models.generation_models import MaterialGenerationResult
+    from pipeline.composite_baker import CompositeBakeResult
+
+    _seed_fragment(sandbox, n_parts=2)
+    monkeypatch.setattr(
+        asset_factory, "generate_material",
+        lambda description, material_id=None, provider=None, model=None, force=False: (
+            MaterialGenerationResult(material_id=material_id, success=True), None, _log("material_generation"),
+        ),
+    )
+    monkeypatch.setattr(
+        asset_factory, "bake_composite",
+        lambda fragment, asset_id, target_size_m: CompositeBakeResult(
+            asset_id=asset_id, success=True, glb_path=str(sandbox / "x" / "model.glb"),
+            final_bounds_m=[0.2, 0.3, 0.2], triangle_count=500, uv_status="generated",
+        ),
+    )
+
+    draft, logs = asset_factory._materialize_and_bake_composite(
+        "frosty_composite", "frosty", 0.3, None, None, lambda m: None
+    )
+
+    assert draft.status == "draft"
+    assert draft.resolution_method == "composite"
+    assert draft.glb_address == "library/composites/frosty/model.glb"
+    assert draft.bounds_m == [0.2, 0.3, 0.2]
+    assert draft.uv.status == "generated"
+
+
+def test_materialize_and_bake_reports_bake_failure(sandbox, monkeypatch):
+    from models.generation_models import MaterialGenerationResult
+    from pipeline.composite_baker import CompositeBakeResult
+
+    _seed_fragment(sandbox, n_parts=1)
+    monkeypatch.setattr(
+        asset_factory, "generate_material",
+        lambda description, material_id=None, provider=None, model=None, force=False: (
+            MaterialGenerationResult(material_id=material_id, success=True), None, _log("material_generation"),
+        ),
+    )
+    monkeypatch.setattr(
+        asset_factory, "bake_composite",
+        lambda fragment, asset_id, target_size_m: CompositeBakeResult(
+            asset_id=asset_id, success=False, error_message="Blender crashed",
+        ),
+    )
+
+    draft, logs = asset_factory._materialize_and_bake_composite(
+        "frosty_composite", "frosty", None, None, None, lambda m: None
+    )
+
+    assert draft.status == "needs_human"
+    assert "Blender crashed" in draft.message
+
+
+# ── edit_composite (added 2026-07, "I can't edit it" / methane incident) ──
+# Mirrors the OpenSCAD regenerate() coverage above: numeric/geometry edits
+# must not cost an LLM call, and rebake using the edited fragment.
+
+def _seed_composite_draft(sandbox, asset_id="molecule", composite_id="molecule_composite"):
+    from pipeline.composite_builder import CompositeFragment, CompositePart, save_composite_fragment
+
+    fragment = CompositeFragment(
+        composite_id=composite_id, display_name="Molecule", source_description="methane",
+        parts=[
+            CompositePart(
+                part_id="C", asset_spec=AssetSpec(object_id="C", description="carbon"),
+                resolved_asset_id="sphere_basic", label="C", position=[0.0, 0.0, 0.0],
+                color_hint="dark gray",
+            ),
+            CompositePart(
+                part_id="H1", asset_spec=AssetSpec(object_id="H1", description="hydrogen"),
+                resolved_asset_id="sphere_basic", label="H1", position=[0.3, 0.3, 0.3],
+                color_hint="white",
+            ),
+            CompositePart(
+                part_id="bond1", asset_spec=AssetSpec(object_id="bond1", description="C-H bond"),
+                bond_between=["C", "H1"], bond_thickness=0.06,
+            ),
+        ],
+    )
+    save_composite_fragment(fragment)
+    draft = asset_factory.DraftAsset(
+        asset_id=asset_id, status="draft", resolution_method="composite",
+        description="methane", spec=_spec(asset_id), composite_id=composite_id,
+        glb_address=f"library/composites/{asset_id}/model.glb", bounds_m=[0.3, 0.3, 0.3],
+    )
+    asset_factory.save_draft_state(draft)
+    return draft, fragment
+
+
+def test_edit_composite_updates_geometry_without_llm(sandbox, monkeypatch):
+    from pipeline.composite_baker import CompositeBakeResult
+    from pipeline.composite_builder import load_composite_fragment
+
+    _seed_composite_draft(sandbox)
+
+    def fake_bake(fragment, asset_id, target_size_m):
+        return CompositeBakeResult(
+            asset_id=asset_id, success=True,
+            final_bounds_m=[0.4, 0.4, 0.4], triangle_count=100, uv_status="none",
+        )
+
+    monkeypatch.setattr(asset_factory, "bake_composite", fake_bake)
+
+    draft, logs = asset_factory.edit_composite(
+        "molecule",
+        part_edits={"H1": {"position": [0.5, 0.5, 0.5]}, "bond1": {"bond_thickness": 0.1}},
+    )
+
+    assert logs == []  # no LLM call for a geometry-only edit
+    assert draft.status == "draft"
+    assert draft.bounds_m == [0.4, 0.4, 0.4]
+    fragment = load_composite_fragment("molecule_composite")
+    h1 = next(p for p in fragment.parts if p.part_id == "H1")
+    assert h1.position == [0.5, 0.5, 0.5]
+    bond = next(p for p in fragment.parts if p.part_id == "bond1")
+    assert bond.bond_thickness == 0.1
+
+
+def test_edit_composite_color_hex_writes_material_directly(sandbox, monkeypatch):
+    from pipeline.composite_baker import CompositeBakeResult
+    from models.catalog_models import MaterialDef
+
+    _seed_composite_draft(sandbox)
+    monkeypatch.setattr(
+        asset_factory, "bake_composite",
+        lambda fragment, asset_id, target_size_m: CompositeBakeResult(
+            asset_id=asset_id, success=True, final_bounds_m=[0.3, 0.3, 0.3],
+            triangle_count=10, uv_status="none",
+        ),
+    )
+
+    draft, logs = asset_factory.edit_composite("molecule", part_edits={"C": {"color_hex": "#112233"}})
+
+    assert logs == []  # no LLM call for a raw hex color edit
+    mat_path = config.MATERIALS_DIR / "molecule_composite_C_mat.json"
+    assert mat_path.is_file()
+    mat = MaterialDef.model_validate_json(mat_path.read_text(encoding="utf-8"))
+    assert mat.base_color == "#112233"
+
+
+def test_edit_composite_rejects_bad_hex(sandbox):
+    _seed_composite_draft(sandbox)
+    with pytest.raises(asset_factory.AssetFactoryError, match="rrggbb"):
+        asset_factory.edit_composite("molecule", part_edits={"C": {"color_hex": "red"}})
+
+
+def test_edit_composite_rejects_unknown_part(sandbox):
+    _seed_composite_draft(sandbox)
+    with pytest.raises(asset_factory.AssetFactoryError, match="Unknown part"):
+        asset_factory.edit_composite("molecule", part_edits={"ghost": {"position": [0, 0, 0]}})
+
+
+def test_edit_composite_requires_composite_draft(sandbox):
+    _seed_draft()  # a parametric draft, no composite_id
+    with pytest.raises(asset_factory.AssetFactoryError, match="No composite draft"):
+        asset_factory.edit_composite("bracket", part_edits={})
+
+
+def test_edit_composite_regenerate_materials_for_calls_llm(sandbox, monkeypatch):
+    from models.generation_models import MaterialGenerationResult
+    from pipeline.composite_baker import CompositeBakeResult
+
+    _seed_composite_draft(sandbox)
+    calls = []
+
+    def fake_generate_material(description, material_id=None, provider=None, model=None, force=False):
+        calls.append((description, material_id))
+        return (
+            MaterialGenerationResult(material_id=material_id, success=True),
+            None, _log("material_generation"),
+        )
+
+    monkeypatch.setattr(asset_factory, "generate_material", fake_generate_material)
+    monkeypatch.setattr(
+        asset_factory, "bake_composite",
+        lambda fragment, asset_id, target_size_m: CompositeBakeResult(
+            asset_id=asset_id, success=True, final_bounds_m=[0.3, 0.3, 0.3],
+            triangle_count=10, uv_status="none",
+        ),
+    )
+
+    draft, logs = asset_factory.edit_composite(
+        "molecule", part_edits={"C": {"color_hint": "jet black"}},
+        regenerate_materials_for=["C"],
+    )
+
+    assert len(logs) == 1  # exactly the one requested material regen
+    assert calls[0] == ("jet black", "molecule_composite_C_mat")
+
+
+def test_get_composite_fragment_returns_parts(sandbox):
+    _seed_composite_draft(sandbox)
+    fragment = asset_factory.get_composite_fragment("molecule")
+    assert {p.part_id for p in fragment.parts} == {"C", "H1", "bond1"}
+
+
+# ── review_and_repair (added 2026-07, "methane sticks don't connect"
+#    visual-review auto-repair incident) ──────────────────────────────────
+
+def test_review_and_repair_records_matching_verdict(sandbox, monkeypatch):
+    from pipeline.visual_review import AssetVisualReview
+
+    _seed_composite_draft(sandbox)
+    monkeypatch.setattr(asset_factory, "render_glb_to_png", lambda glb, path: path)
+    monkeypatch.setattr(
+        asset_factory, "review_asset_render",
+        lambda description, image_path, provider=None, model=None: (
+            AssetVisualReview(matches=True, confidence=0.9, reasoning="looks correct"),
+            _log("visual_review"),
+        ),
+    )
+
+    draft, review, logs = asset_factory.review_and_repair("molecule")
+
+    assert review.matches is True
+    assert draft.visual_review.matches is True
+    assert "matches the request" in draft.message
+    assert len(logs) == 1  # just the review call, no repair triggered
+
+
+def test_review_and_repair_triggers_composite_revision_on_mismatch(sandbox, monkeypatch):
+    from pipeline.visual_review import AssetVisualReview
+    from models.classification_models import CompositePartPlan
+    from pipeline.composite_baker import CompositeBakeResult
+
+    _seed_composite_draft(sandbox)
+    monkeypatch.setattr(asset_factory, "render_glb_to_png", lambda glb, path: path)
+    monkeypatch.setattr(
+        asset_factory, "review_asset_render",
+        lambda description, image_path, provider=None, model=None: (
+            AssetVisualReview(
+                matches=False, confidence=0.85,
+                reasoning="the bond doesn't reach H1",
+                suggested_fix="recompute the bond's geometry from the real atom positions",
+            ),
+            _log("visual_review"),
+        ),
+    )
+    captured = {}
+
+    def fake_revise(spec, current_parts, feedback, max_parts=12, provider=None, model=None):
+        captured["current_parts"] = current_parts
+        captured["feedback"] = feedback
+        revised = [
+            CompositePartPlan(description="carbon sphere", color_hint="dark gray", label="C"),
+            CompositePartPlan(description="hydrogen sphere", color_hint="white", label="H1"),
+            CompositePartPlan(description="bond", color_hint="white", bond_between=["C", "H1"], bond_thickness=0.08),
+        ]
+        return revised, _log("composite_revision")
+
+    monkeypatch.setattr(asset_factory, "revise_composite_parts", fake_revise)
+
+    def fake_resolve(spec, catalog, forced_composite_parts=None):
+        captured["forced_parts"] = forced_composite_parts
+        return (
+            ResolutionRecord(
+                object_id=spec.object_id, requested_asset_spec=spec,
+                requires_author_review=False,
+                review_reason=f"Resolved as composite: {spec.object_id}_composite",
+            ),
+            [],
+        )
+
+    monkeypatch.setattr(asset_factory, "resolve", fake_resolve)
+
+    baked = asset_factory.DraftAsset(
+        asset_id="molecule", status="draft", resolution_method="composite",
+        description="methane", spec=_spec("molecule"),
+        composite_id="molecule_composite", glb_address="library/composites/molecule/model.glb",
+        bounds_m=[0.3, 0.3, 0.3],
+    )
+    monkeypatch.setattr(
+        asset_factory, "_materialize_and_bake_composite",
+        lambda composite_id, asset_id, target_size_m, provider, model, progress: (
+            baked, [_log("material_generation")]
+        ),
+    )
+
+    draft, review, logs = asset_factory.review_and_repair("molecule")
+
+    assert review.matches is False
+    assert len(captured["forced_parts"]) == 3  # the revised part list was passed straight through
+    assert captured["forced_parts"][2].bond_thickness == 0.08
+    assert len(captured["current_parts"]) == 3  # C, H1, bond1 from the seeded fragment
+    assert "bond doesn't reach" in captured["feedback"]
+    assert draft.glb_address == "library/composites/molecule/model.glb"
+    assert draft.visual_review.matches is False
+    assert len(logs) == 3  # review + revision + the (faked) materialize/bake log
+
+
+def test_review_and_repair_skips_repair_when_auto_repair_false(sandbox, monkeypatch):
+    from pipeline.visual_review import AssetVisualReview
+
+    _seed_composite_draft(sandbox)
+    monkeypatch.setattr(asset_factory, "render_glb_to_png", lambda glb, path: path)
+    monkeypatch.setattr(
+        asset_factory, "review_asset_render",
+        lambda description, image_path, provider=None, model=None: (
+            AssetVisualReview(matches=False, confidence=0.7, reasoning="wrong colors", suggested_fix="fix colors"),
+            _log("visual_review"),
+        ),
+    )
+    monkeypatch.setattr(
+        asset_factory, "revise_composite_parts",
+        lambda *a, **k: pytest.fail("auto_repair=False must not call the repair path"),
+    )
+
+    draft, review, logs = asset_factory.review_and_repair("molecule", auto_repair=False)
+
+    assert review.matches is False
+    assert "MISMATCH" in draft.message
+    assert len(logs) == 1
+
+
+def test_review_and_repair_requires_glb(sandbox):
+    draft = asset_factory.DraftAsset(
+        asset_id="ghost", status="needs_human", resolution_method="imported",
+        description="x", spec=_spec("ghost"),
+    )
+    asset_factory.save_draft_state(draft)
+
+    with pytest.raises(asset_factory.AssetFactoryError, match="no renderable GLB"):
+        asset_factory.review_and_repair("ghost")

@@ -64,8 +64,12 @@ def test_five_path_scene_report(sandbox, monkeypatch):
     resolution path, each reported with the expected status."""
     _route_by_description(monkeypatch, {
         "moon": _draft("moon", "existing", matched_asset_id="sphere_basic"),
-        "water": _draft("water", "composite", resolution_method="composite",
-                        composite_id="water_composite"),
+        "water": _draft(
+            "water", "draft", resolution_method="composite",
+            composite_id="water_composite",
+            glb_address="library/composites/water/model.glb",
+            bounds_m=[0.1, 0.1, 0.1],
+        ),
         "bracket": _draft(
             "bracket", "draft", resolution_method="parametric",
             glb_address="library/generated/bracket/model.glb",
@@ -77,11 +81,12 @@ def test_five_path_scene_report(sandbox, monkeypatch):
         "mystery": RuntimeError("LLM exploded"),
     })
 
-    saved = {}
+    saved = []
     def fake_save(asset_id, display_name=None, tags=None, render_preview=True):
-        saved["id"] = asset_id
+        saved.append(asset_id)
         return AssetCatalogEntry(
-            asset_id=asset_id, display_name=asset_id, asset_class="parametric",
+            asset_id=asset_id, display_name=asset_id,
+            asset_class="composite" if asset_id == "water" else "parametric",
             address=f"library/generated/{asset_id}/model.glb",
             canonical_bounds_m=[0.06, 0.04, 0.005],
             provenance=ProvenanceInfo(source_type="generated"), review_level=2,
@@ -97,13 +102,20 @@ def test_five_path_scene_report(sandbox, monkeypatch):
     ])
     report = scene_resolver.resolve_scene(path)
 
-    by_status = {i.status: i for i in report.items}
-    assert by_status["resolved_existing"].asset_id == "sphere_basic"
-    assert by_status["composite"].asset_id == "water_composite"
-    assert by_status["saved_parametric"].review_level == 2
-    assert saved["id"] == "bracket"
-    assert by_status["needs_review"].requires_author_review is True
-    assert "LLM exploded" in by_status["failed"].message
+    by_object_id = {i.object_id: i for i in report.items}
+    assert by_object_id["moon"].status == "resolved_existing"
+    assert by_object_id["moon"].asset_id == "sphere_basic"
+    assert by_object_id["water"].status == "saved_generated"
+    assert by_object_id["water"].asset_id == "water"  # baked composite, auto-cataloged like any generated asset
+    assert by_object_id["bracket"].status == "saved_generated"
+    assert by_object_id["bracket"].review_level == 2
+    assert sorted(saved) == ["bracket", "water"]
+    assert by_object_id["couch"].status == "needs_review"
+    assert by_object_id["couch"].requires_author_review is True
+    # Raw-string scene items have no object_id until the LLM parses one;
+    # an exception before that point falls back to "?".
+    assert "LLM exploded" in by_object_id["?"].message
+    assert by_object_id["?"].status == "failed"
     assert (report.resolved, report.needs_review, report.failed) == (3, 1, 1)
     assert report.status == "failed"  # hard failure dominates
 

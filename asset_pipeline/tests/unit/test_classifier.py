@@ -1,7 +1,11 @@
 from models.catalog_models import AssetCatalogEntry, ProvenanceInfo
-from models.classification_models import GeometryClassification
+from models.classification_models import CompositePartPlan, GeometryClassification
 from models.spec_models import AssetSpec
 from pipeline.classifier import classify
+
+
+def _part(description, color="gray"):
+    return CompositePartPlan(description=description, color_hint=color)
 
 
 def _entry(asset_id, tags):
@@ -52,7 +56,7 @@ def test_no_match_falls_through_to_geometry_classifier():
             GeometryClassification(
                 geometry_class="composite",
                 reasoning="Water molecule is oxygen + two hydrogens.",
-                composite_parts=["1 red sphere (oxygen)", "2 white spheres (hydrogen)"],
+                composite_parts=[_part("1 red sphere (oxygen)", "red"), _part("2 white spheres (hydrogen)", "white")],
             ),
             None,
         )

@@ -1,9 +1,13 @@
 import pytest
 
 from models.catalog_models import AssetCatalogEntry, ProvenanceInfo
-from models.classification_models import GeometryClassification
+from models.classification_models import CompositePartPlan, GeometryClassification
 from models.spec_models import AssetSpec
 from pipeline.resolver import resolve
+
+
+def _part(description, color="gray"):
+    return CompositePartPlan(description=description, color_hint=color)
 
 
 def _entry(asset_id, tags):
@@ -45,7 +49,10 @@ def test_resolve_composite_builds_fragment_and_resolves_all_parts():
                 GeometryClassification(
                     geometry_class="composite",
                     reasoning="Oxygen + two hydrogens.",
-                    composite_parts=["a sphere shape for oxygen (moon-like)", "a sphere shape for hydrogen (moon-like)"],
+                    composite_parts=[
+                        _part("a sphere shape for oxygen (moon-like)", "red"),
+                        _part("a sphere shape for hydrogen (moon-like)", "white"),
+                    ],
                 ),
                 None,
             )
@@ -116,7 +123,7 @@ def test_resolve_composite_recursion_depth_guard():
             GeometryClassification(
                 geometry_class="composite",
                 reasoning="infinite nesting",
-                composite_parts=["another nested composite thing"],
+                composite_parts=[_part("another nested composite thing")],
             ),
             None,
         )
@@ -124,3 +131,54 @@ def test_resolve_composite_recursion_depth_guard():
     # Should terminate (not recurse forever) thanks to the depth guard.
     record, logs = resolve(spec, [], classify_geometry_fn=always_composite)
     assert record is not None
+
+
+def test_resolve_imported_carries_search_keywords_forward():
+    """Regression: search_keywords must survive from the classifier's
+    GeometryClassification onto the ResolutionRecord, so the sourcing
+    assist can use LLM-picked identity words instead of re-deriving a
+    query mechanically from the raw description."""
+    spec = AssetSpec(object_id="frosty", description="a friendly snowman made from snowballs")
+
+    def fake_classifier(spec, candidates):
+        return (
+            GeometryClassification(
+                geometry_class="imported", reasoning="Too detailed for CSG or composite.",
+                search_keywords=["snowman", "christmas figure"],
+            ),
+            None,
+        )
+
+    record, logs = resolve(spec, [], classify_geometry_fn=fake_classifier)
+    assert record.search_keywords == ["snowman", "christmas figure"]
+
+
+def test_resolve_forced_composite_parts_bypasses_classification():
+    """redirect_draft's manual override: skip catalog-match/LLM classify for
+    the TOP-LEVEL decision and build a composite from the human-approved
+    part list directly. Sub-parts still resolve normally afterward (e.g. a
+    part with no catalog match still needs its own classification) --
+    forcing only replaces the one judgment call that was already wrong."""
+    spec = AssetSpec(object_id="frosty", description="a friendly snowman")
+    top_level_calls = []
+
+    def track_calls(spec, candidates):
+        top_level_calls.append(spec.object_id)
+        return (
+            GeometryClassification(geometry_class="unclear", reasoning="no match"),
+            None,
+        )
+
+    record, logs = resolve(
+        spec, _catalog(), classify_geometry_fn=track_calls,
+        forced_composite_parts=[
+            _part("large white sphere", "white"), _part("small white sphere", "white"),
+            _part("thin black cylinder", "black"),
+        ],
+    )
+
+    assert "frosty" not in top_level_calls  # top-level decision was bypassed
+    assert record.review_reason.startswith("Resolved as composite") or record.requires_author_review
+    from pipeline.composite_builder import load_composite_fragment
+    fragment = load_composite_fragment("frosty_composite")
+    assert len(fragment.parts) == 3

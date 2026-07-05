@@ -46,6 +46,52 @@ def preview_path(asset_id: str) -> Path:
     return config.LIBRARY_DIR / "previews" / f"{asset_id}.png"
 
 
+def render_glb_to_png(glb_address: str, out_path: Path, size: int = 512) -> Path:
+    """One-off render of an arbitrary library/... GLB that isn't (yet) a
+    catalog entry -- e.g. a draft mid-iteration, for the visual review step
+    (pipeline/visual_review.py) to grab a fresh screenshot of exactly what
+    the human/reviewer would currently see, without requiring a save first.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise PreviewError(
+            "playwright is not installed. Run: pip install playwright && playwright install chromium"
+        ) from exc
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    httpd, port = _start_server(config.PACKAGE_DIR)
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch(args=["--enable-webgl"])
+            except Exception as exc:
+                raise PreviewError(
+                    f"Chromium failed to launch ({exc}). Run: playwright install chromium"
+                ) from exc
+            page = browser.new_page(viewport={"width": size, "height": size})
+            page.goto(f"http://127.0.0.1:{port}{_PAGE_ROUTE}")
+            try:
+                page.wait_for_function("window._previewReady === true", timeout=20000)
+            except Exception as exc:
+                raise PreviewError(
+                    "asset_preview.html never initialized -- no network access to the "
+                    f"three.js CDN? ({exc})"
+                ) from exc
+            try:
+                page.evaluate(
+                    "(spec) => window._previewLoad(spec)", {"kind": "glb", "url": f"/{glb_address}"}
+                )
+                b64 = page.evaluate("() => window._previewCapture()")
+            except Exception as exc:
+                raise PreviewError(f"Preview failed for {glb_address!r}: {exc}") from exc
+            out_path.write_bytes(base64.b64decode(b64))
+            browser.close()
+    finally:
+        httpd.shutdown()
+    return out_path
+
+
 def _start_server(root: Path) -> tuple[http.server.ThreadingHTTPServer, int]:
     class QuietHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):

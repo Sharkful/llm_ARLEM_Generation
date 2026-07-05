@@ -409,6 +409,49 @@ sourcing candidate, purely because keyword scoring cannot distinguish an object 
    primitive instantly instead of costing its own LLM classification call — a 12-part composite went from
    22 LLM calls to 2 once both fixes landed.
 
+**Follow-up (2026-07 — "Frosty is all gray" incident):** the routing fix above was necessary but not
+sufficient. Once Frosty actually classified as `composite`, it turned out composites had **never** produced
+a visible or colored result at all: `CompositePart` had no material field, no code path ever generated one,
+and the transform fields (`position`/`rotation`/`scale`) were never populated either -- always the
+constructor defaults `[0,0,0]`/`[0,0,0]`/`[1,1,1]`. Every composite ever built by this pipeline was, in
+effect, a pure inventory list with zero placement or appearance data; nothing anywhere (webapp, sync,
+preview) had a rendering path for one. Fixed as a full loop-closer, by decision to **bake composites into
+one ordinary GLB** rather than teach every consumer to assemble a live parts list:
+
+1. `GeometryClassification.composite_parts` changed from `list[str]` to `list[CompositePartPlan]`
+   (`models/classification_models.py`) -- each part now carries `color_hint` plus an approximate
+   `relative_position`/`relative_scale` (fractions of the object's own bounding box, `+Y` up matching the
+   rest of the pipeline's convention), authored by the same classification call at zero extra LLM cost.
+   `composite_builder.decompose_into_primitives()` (the forced-redirect path) produces the same structured
+   shape.
+2. `asset_factory.py`'s composite branches (`create_from_spec` and `redirect_draft`) now call
+   `_materialize_and_bake_composite()`: generate one material per part (reusing Stage 5's
+   `generate_material()`, keyed off each part's own `color_hint`), then bake.
+3. New `pipeline/composite_baker.py`: a headless-Blender script that builds/imports each part (seed
+   primitives built natively with `bpy.ops.mesh.primitive_*_add`; non-primitive parts imported as glTF),
+   positions/scales/colors it, and **joins everything into one mesh** -- Blender's join preserves each
+   source object's material slot, so the result is one glTF with several materials. This is why baking (not
+   a live parts-list renderer) was the right call: a baked composite is indistinguishable from any other
+   cataloged asset as far as preview/sync/validate/save are concerned, so none of those needed
+   composite-specific code once this landed.
+4. Axis-convention pitfall worth flagging for future Blender-scripting work in this codebase: Blender is
+   natively Z-up; this pipeline (and glTF/three.js) is Y-up. Feeding a part's Y-up position/scale straight
+   into `obj.location`/`obj.scale` produces a Blender-native result that Blender's own Z-up→Y-up export
+   conversion then re-interprets wrong (a vertical stack came out laid out sideways). The fix is a fixed
+   swap at the point objects are placed: Blender-`(x, y, z)` = pipeline-`(x, -z, y)` for both position and
+   scale, letting the exporter's automatic conversion round-trip the pipeline's own numbers correctly.
+5. `AssetCatalogEntry.asset_class="composite"` (not `"parametric"`) and provenance wording were fixed in
+   `save_draft()`, which had hardcoded the parametric case for any draft with a `glb_address`.
+
+**Scope note:** solid per-part colors need no UV data (a material with no texture ignores UVs), so this
+does not depend on or block Stage 6c's texture/UV work. A part that later wants a real image texture keeps
+its own UVs through the join. Also out of scope for now, flagged for later: parametric (single-CSG-mesh)
+assets still get only one flattened material each, since OpenSCAD's STL export has no concept of named
+sub-regions -- unifying "composite" (existing-primitive parts) and "parametric" (freshly-generated parts)
+into one general "assembly of independently-colorable pieces" concept, where a part's geometry can be
+either a catalog reference OR a small freshly-generated OpenSCAD piece, is the natural next step if
+multi-color parametric assets are needed.
+
 **Manual override (2026-07, same incident):** a stuck draft previously had no way out except editing
 OpenSCAD parameters that don't exist yet for non-parametric items. `asset_factory.redirect_draft()` lets a
 human force any existing draft down a specific path — `parametric` (run Stage 3 directly), `composite`
@@ -417,6 +460,66 @@ than the normal classifier judgment since a human already overrode it), or `impo
 assist, optionally with the human's own search words via `manual_query`) — bypassing the original
 classify()/resolve() verdict for that asset_id rather than re-asking the same question. Exposed in the
 review app as three buttons on a `needs_human` draft (`POST /api/redirect`).
+
+**Follow-up (2026-07 — "methane sticks don't connect" incident):** a ball-and-stick methane model baked
+with its four C–H bonds rendered as flattened discs pointing the same fixed direction regardless of where
+their two atoms actually were — and the user had no way to fix it, since composites had no editor and no
+OpenSCAD script to hand-edit. Root-caused and closed as three separate deliverables:
+
+1. **Structural fix — connectors need real trigonometry, not an LLM guess.** Pointing a cylinder from one
+   arbitrary 3D position to another requires computing a rotation from the direction vector between them;
+   every attempt at asking the LLM for this left `rotation=[0,0,0]`, so every "bond" pointed the same fixed
+   direction no matter where its two atoms were. Fixed by giving the LLM an easier, more reliable job: name
+   the two endpoints instead of computing geometry. `CompositePartPlan`/`CompositePart` gained `label` (a
+   short stable name like `"C"`, `"H1"`) and `bond_between: [labelA, labelB]` (set only on a connector part,
+   which then ignores `relative_position`/`relative_scale`) plus `bond_thickness`. `composite_baker.py` now
+   bakes in two passes: pass 1 places every labeled atom/regular part and records its real final Blender-space
+   position; pass 2 builds each connector as a cylinder whose midpoint, length, and rotation are computed
+   deterministically from its two named atoms' actual positions via `mathutils.Vector.to_track_quat('Z', 'Y')`.
+   The classifier prompt (`pipeline/classifier.py`) explains this mechanism explicitly and adds CPK-style atom
+   coloring guidance (carbon=dark gray/black, hydrogen=white, oxygen=red, nitrogen=blue, sulfur=yellow) for
+   molecule requests. Verified live: a hand-built two-atom "dumbbell" test, then the user's exact original
+   methane prompt rebuilt from scratch, both rendered with bonds correctly reaching their atoms.
+2. **Composite editor — "I probably would be able to fix this if I could edit parameters."** Composites had
+   no equivalent of the OpenSCAD parameter-edit loop. New `asset_factory.edit_composite()`: given
+   `{part_id: {field: value}}` edits (position/scale/rotation/bond_between/bond_thickness/label/color_hex),
+   mutates the stored `CompositeFragment` directly and rebakes — **no LLM call**, same cost profile as
+   `regenerate()`'s numeric parameter substitution. A `color_hex` edit (`'#rrggbb'`) writes straight to that
+   part's material file immediately; a free-text `color_hint` edit only updates the hint, since actually
+   changing the rendered color from a hint requires an LLM material call — that's the separate, explicitly
+   opt-in `regenerate_materials_for` list, so an edit action never silently does nothing while looking like it
+   took effect. `get_composite_fragment()` + `GET /api/composite/<id>` (inlining each part's *current* resolved
+   `base_color`, since the fragment JSON only stores a `material_id`) feed a part-by-part editor panel in the
+   review app — every part's label/position/scale/bond endpoints/color swatch/color hint editable, with an
+   "Apply edits & rebake" button (`POST /api/composite/<id>/edit`). Available from both the Create panel (a
+   loaded composite draft) and the Library ("Edit composite parts" button, mirroring "Edit parameters" for
+   parametric assets). Verified live end-to-end (real Blender rebake, real browser render, actual button
+   click) moving/recoloring parts and confirming the bond geometry followed correctly.
+3. **Automated visual review + auto-repair — "we need to have it review the images to see if they actually
+   correspond to reality."** Nothing in the pipeline had ever noticed its own bad output; a broken bake looked
+   exactly as "successful" as a correct one until a human happened to look. New `pipeline/visual_review.py`
+   (same two-tier-review shape as `source_relevance.py`, but always an image call — there's no cheap
+   text-only pass, since the point is judging what was actually *built*, not what was intended): renders the
+   draft's current GLB (`preview_renderer.render_glb_to_png()`, a single-shot version of the Stage 8 preview
+   pipeline for an arbitrary draft GLB that isn't yet a catalog entry) and asks a vision-capable LLM
+   (anthropic/openai only) whether it matches the original description, returning `matches`, `reasoning`, and
+   — when `matches=False` — a specific, actionable `suggested_fix`. `asset_factory.review_and_repair()`
+   wires this into a repair pass when the verdict is a mismatch (opt-in via `auto_repair`, default on):
+   for a `parametric` draft, the reviewer's complaint becomes a `regenerate()` tweak instruction (the existing
+   LLM-revision path); for a `composite` draft, new `composite_builder.revise_composite_parts()` shows the LLM
+   the description, the CURRENT part list exactly as built (`fragment_to_part_plans()`), and the complaint,
+   and asks for a corrected FULL part list that fixes only what's wrong — explicitly instructed to leave
+   parts the complaint doesn't implicate unchanged, rather than regenerating everything from scratch. The
+   revised parts re-enter the normal composite pipeline via `resolve(..., forced_composite_parts=...)` and
+   `_materialize_and_bake_composite()`. Exposed as "Review vs. intent" in the review app
+   (`POST /api/review/<asset_id>`), with the verdict shown as a badge and the draft's `visual_review` field
+   persisted either way. **Verified live end-to-end with a real vision LLM call**: seeded an intentionally
+   broken two-atom composite (no connecting bond, both atoms defaulted to the same gray) matching the
+   methane incident's actual defect shape; the review correctly identified "disconnected... both uniformly
+   default gray" and produced a specific fix; auto-repair regenerated a corrected part list (bond +
+   distinct red/blue atom colors) and rebaked; a second review of the repaired asset returned `matches=True`.
+   Confirmed through the actual browser UI (Playwright-driven click of "Review vs. intent") as well as
+   directly against pipeline functions.
 
 ### Stage 6c — Texture library: archive, intake, search, and separate UV maps (added 2026-07)
 

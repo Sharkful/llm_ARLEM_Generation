@@ -18,8 +18,10 @@ cheapest path that works:
 
 1. **Catalog match** — an existing asset already fits. Nothing is built.
 2. **Variant** — an existing asset fits with a different material/size.
-3. **Composite** — the object is an arrangement of existing assets
-   (a water molecule = three spheres).
+3. **Composite** — the object is an assembly of primitive shapes, each with
+   its own color, baked into one real asset (a water molecule = a red
+   sphere + two white spheres; a snowman = stacked spheres + a hat +
+   coal eyes + a carrot nose, each independently colored).
 4. **Parametric** — mechanical/geometric shapes (brackets, stands, dials)
    are generated as OpenSCAD scripts, compiled, and normalized.
 5. **Imported** — organic/complex objects (furniture, realistic props) are
@@ -86,6 +88,30 @@ editor at any time. Saving a *binding* (an object that reuses existing
 geometry, like a planet) records your approval (who/when) on the object
 itself via the same Save button, relabeled **Approve binding**.
 
+**Editing a composite (a molecule, a snowman, anything built from
+primitive parts + bonds):** a composite draft shows a card per part —
+label, position, scale, color swatch, color hint, and (for a
+bond/strut/connector) which two labeled parts it connects and how thick.
+Edit any field and click **Apply edits & rebake** — like the OpenSCAD
+parameter editor, this is instant and costs no AI call; a connector's own
+position/length/rotation are always recomputed for you from its two
+endpoints, so you never have to get that geometry right by hand. Only
+check **regen material from hint (LLM)** if you've changed the color hint
+text and want a real AI-generated material for it — a raw color swatch
+edit applies immediately with no AI call either. Saved composites keep
+this editor forever too — **Edit composite parts** in the Library.
+
+**"Review vs. intent"** (the button next to Regenerate) renders the
+current result and asks a vision-capable AI the same question you would:
+does this actually look like what was requested? If it finds a real
+mismatch (parts that should touch but don't, missing/wrong colors, a
+shape that doesn't read as the request), it explains why and — unless you
+uncheck **auto-repair on mismatch** — fixes it immediately: a tweak
+instruction for a parametric part, or a corrected part list for a
+composite (touching only what the review actually flagged, not a
+from-scratch redo). The verdict badge and reasoning stay attached to the
+draft either way, so you always know whether it's been checked.
+
 ## 4. Making a whole scene (batch)
 
 Put your scene's asset list in a JSON file — strings, spec objects, or a
@@ -111,8 +137,7 @@ Every item is resolved end-to-end; a **build report**
 | status | meaning | what you do |
 |---|---|---|
 | `resolved_existing` | matched a catalog asset | nothing |
-| `composite` | decomposed into existing parts | nothing |
-| `saved_parametric` | generated + auto-cataloged (review level 2) | eyeball it in the app when convenient |
+| `saved_generated` | generated (OpenSCAD part or a baked composite) + auto-cataloged (review level 2) | eyeball it in the app when convenient |
 | `needs_review` | pipeline stopped on purpose | see §5/§6 — source a file or inspect in the app |
 | `failed` | hard error | read the message, fix, re-run |
 
@@ -129,7 +154,7 @@ catalog.
 | build report | `<scene>.build_report.json` | one entry per object: status + what it resolved to + why |
 | the scene object itself | `library/generated/<object_id>/draft.json` | which catalog asset it uses + its bound material |
 | its material | `library/materials/<object_id>_mat.json` | shader values + texture reference |
-| new geometry | `library/generated/<object_id>/model.glb` + a catalog entry | **only** for generated (parametric) objects |
+| new geometry | `library/generated/<id>/model.glb` (parametric) or `library/composites/<id>/model.glb` (composite) + a catalog entry | for generated or composite-built objects |
 
 Important: an object that resolves to existing geometry (the Moon =
 `sphere_basic` + the `moon_surface` texture) does **not** create a new
@@ -253,7 +278,10 @@ asset_pipeline/
   tags/semantic_type to the texture's index entry, or lower
   `MATCH_THRESHOLD` in `pipeline/texture_matcher.py`.
 - **Generated part looks wrong** — open it in `review`, edit parameters
-  (instant) or send a tweak instruction (one AI call), then Save.
+  (instant) or send a tweak instruction (one AI call), then Save. For a
+  composite (bond doesn't reach an atom, wrong color), use its part editor
+  the same way, or click **Review vs. intent** to have it diagnosed and
+  auto-repaired.
 - **Something claims to exist but validate fails** — the validator's
   message names the asset and field; fix the file or entry it names and
   re-run.

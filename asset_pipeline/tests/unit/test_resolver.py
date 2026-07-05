@@ -1,9 +1,13 @@
 import pytest
 
 from models.catalog_models import AssetCatalogEntry, ProvenanceInfo
-from models.classification_models import GeometryClassification
+from models.classification_models import CompositePartPlan, GeometryClassification
 from models.spec_models import AssetSpec
 from pipeline.resolver import resolve
+
+
+def _part(description, color="gray"):
+    return CompositePartPlan(description=description, color_hint=color)
 
 
 def _entry(asset_id, tags):
@@ -45,7 +49,10 @@ def test_resolve_composite_builds_fragment_and_resolves_all_parts():
                 GeometryClassification(
                     geometry_class="composite",
                     reasoning="Oxygen + two hydrogens.",
-                    composite_parts=["a sphere shape for oxygen (moon-like)", "a sphere shape for hydrogen (moon-like)"],
+                    composite_parts=[
+                        _part("a sphere shape for oxygen (moon-like)", "red"),
+                        _part("a sphere shape for hydrogen (moon-like)", "white"),
+                    ],
                 ),
                 None,
             )
@@ -116,7 +123,7 @@ def test_resolve_composite_recursion_depth_guard():
             GeometryClassification(
                 geometry_class="composite",
                 reasoning="infinite nesting",
-                composite_parts=["another nested composite thing"],
+                composite_parts=[_part("another nested composite thing")],
             ),
             None,
         )
@@ -164,7 +171,10 @@ def test_resolve_forced_composite_parts_bypasses_classification():
 
     record, logs = resolve(
         spec, _catalog(), classify_geometry_fn=track_calls,
-        forced_composite_parts=["large white sphere", "small white sphere", "thin black cylinder"],
+        forced_composite_parts=[
+            _part("large white sphere", "white"), _part("small white sphere", "white"),
+            _part("thin black cylinder", "black"),
+        ],
     )
 
     assert "frosty" not in top_level_calls  # top-level decision was bypassed

@@ -129,6 +129,11 @@
           <div class="params" id="d-params"></div>
           <div class="row"><button class="secondary" id="d-apply">Recompile with edits</button></div>
         </div>
+        <div id="d-composite-wrap" hidden>
+          <b style="font-size:12px">Composite parts — edit geometry/color, then rebake (no LLM unless "regen material" is checked)</b>
+          <div id="d-composite-parts" style="display:flex; flex-direction:column; gap:8px; margin:8px 0"></div>
+          <div class="row"><button class="secondary" id="d-composite-rebake">Apply edits &amp; rebake</button></div>
+        </div>
         <div style="margin-top:10px">
           <b style="font-size:12px">Tweak instruction</b>
           <textarea id="d-tweak" rows="2" placeholder="e.g. make the base twice as wide"></textarea>
@@ -136,6 +141,13 @@
             <button class="secondary" id="d-regenerate">Regenerate (LLM)</button>
             <button class="action" id="d-save">Save to catalog</button>
           </div>
+        </div>
+        <div style="margin-top:10px">
+          <div class="row">
+            <button class="secondary" id="d-review">Review vs. intent (vision LLM)</button>
+            <label style="font-size:12px"><input type="checkbox" id="d-review-autorepair" checked> auto-repair on mismatch</label>
+          </div>
+          <div id="d-review-verdict" style="font-size:12px; margin-top:6px"></div>
         </div>
       </div>
     </section>
@@ -218,12 +230,17 @@ function showAsset(entry) {
   $('inspect-title').textContent = `${entry.asset_id} — ${entry.asset_class}, review ${entry.review_level}`;
   $('inspect-actions').hidden = false;
   currentInspectId = entry.asset_id;
-  // Saved parametric assets keep their draft (OpenSCAD script + parameters)
-  // forever -- offer the parameter editor directly from the Library.
-  const paramDraft = draftsCache.find(d => d.asset_id === entry.asset_id && d.plan);
-  $('a-edit-params').hidden = !paramDraft;
+  // Saved parametric/composite assets keep their draft (OpenSCAD script +
+  // parameters, or the composite parts list) forever -- offer the editor
+  // directly from the Library.
+  const editableDraft = draftsCache.find(
+    d => d.asset_id === entry.asset_id && (d.plan || d.composite_id)
+  );
+  $('a-edit-params').hidden = !editableDraft;
+  $('a-edit-params').textContent = editableDraft && editableDraft.composite_id
+    ? 'Edit composite parts' : 'Edit parameters';
   $('a-edit-params').onclick = () => {
-    showDraft(paramDraft);
+    showDraft(editableDraft);
     document.querySelector('header button[data-mode=create]').click();
   };
   if (entry.address.startsWith('library/')) {
@@ -332,6 +349,8 @@ function showDraft(d) {
       $('d-params').append(label, input);
     }
   }
+  loadCompositeEditor(d);
+  renderReviewVerdict(d);
   const material = materialSpec(d.material);
   if (d.glb_address) {
     viewportLoad({ kind: 'glb', url: bust('/' + d.glb_address), material });
@@ -427,6 +446,106 @@ $('c-generate').onclick = () => runGuarded($('c-generate'), async () => {
   showDraft(job.draft);
   await refreshDrafts();
   log(`draft ${job.draft.asset_id}: ${job.draft.status}`);
+});
+
+// ── Composite editor (added 2026-07, "I can't edit it" incident) ──────
+// Direct geometry/color edits, rebaked with no LLM call -- mirrors the
+// OpenSCAD parameter editor above but for composite parts/bonds.
+async function loadCompositeEditor(d) {
+  const isComposite = d.resolution_method === 'composite' && d.composite_id;
+  $('d-composite-wrap').hidden = !isComposite;
+  if (!isComposite) return;
+  const { fragment } = await api('/api/composite/' + d.asset_id);
+  const wrap = $('d-composite-parts');
+  wrap.innerHTML = '';
+  for (const p of fragment.parts) {
+    const card = document.createElement('div');
+    card.dataset.partId = p.part_id;
+    card.style.cssText = 'border:1px solid var(--line); border-radius:8px; padding:8px; font-size:12px';
+    const isBond = !!p.bond_between;
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center">
+        <b>${p.part_id}</b>${p.label ? ` <span class="badge">${p.label}</span>` : ''}
+        <input type="color" data-field="color_hex" value="${p.current_base_color || '#aaaaaa'}" style="width:40px; padding:0">
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label>label <input type="text" data-field="label" value="${p.label || ''}" style="width:60px"></label>
+        ${isBond ? `
+          <label>bond A <input type="text" data-field="bond_a" value="${p.bond_between[0]}" style="width:50px"></label>
+          <label>bond B <input type="text" data-field="bond_b" value="${p.bond_between[1]}" style="width:50px"></label>
+          <label>thickness <input type="number" step="any" data-field="bond_thickness" value="${p.bond_thickness}" style="width:60px"></label>
+        ` : `
+          <label>pos <input type="number" step="any" data-field="px" value="${p.position[0]}" style="width:55px">
+                     <input type="number" step="any" data-field="py" value="${p.position[1]}" style="width:55px">
+                     <input type="number" step="any" data-field="pz" value="${p.position[2]}" style="width:55px"></label>
+          <label>scale <input type="number" step="any" data-field="sx" value="${p.scale[0]}" style="width:55px">
+                       <input type="number" step="any" data-field="sy" value="${p.scale[1]}" style="width:55px">
+                       <input type="number" step="any" data-field="sz" value="${p.scale[2]}" style="width:55px"></label>
+        `}
+      </div>
+      <div class="row" style="margin-top:4px; align-items:center">
+        <label style="flex:1">color hint <input type="text" data-field="color_hint" value="${p.color_hint || ''}" style="width:90%"></label>
+        <label><input type="checkbox" data-field="regen"> regen material from hint (LLM)</label>
+      </div>
+    `;
+    wrap.appendChild(card);
+  }
+}
+
+$('d-composite-rebake').onclick = () => runGuarded($('d-composite-rebake'), async () => {
+  const part_edits = {};
+  const regenerate_materials_for = [];
+  $('d-composite-parts').querySelectorAll('[data-part-id]').forEach(card => {
+    const id = card.dataset.partId;
+    const field = (name) => card.querySelector(`[data-field="${name}"]`);
+    const edits = {};
+    edits.label = field('label').value;
+    const bondA = field('bond_a'), bondB = field('bond_b');
+    if (bondA && bondB) {
+      edits.bond_between = [bondA.value, bondB.value];
+      edits.bond_thickness = parseFloat(field('bond_thickness').value);
+    } else {
+      edits.position = ['px', 'py', 'pz'].map(f => parseFloat(field(f).value));
+      edits.scale = ['sx', 'sy', 'sz'].map(f => parseFloat(field(f).value));
+    }
+    edits.color_hint = field('color_hint').value;
+    if (field('regen').checked) {
+      regenerate_materials_for.push(id);
+    } else {
+      edits.color_hex = field('color_hex').value;
+    }
+    part_edits[id] = edits;
+  });
+  const job = await runJob('/api/composite/' + draft.asset_id + '/edit', {
+    part_edits,
+    regenerate_materials_for: regenerate_materials_for.length ? regenerate_materials_for : undefined,
+  });
+  showDraft(job.draft);
+  log('composite edited and rebaked.');
+});
+
+// ── Visual review + auto-repair (added 2026-07, "methane sticks don't
+// connect" incident) -- render the current result, ask a vision LLM if it
+// matches the original request, and optionally auto-repair on a mismatch.
+function renderReviewVerdict(d) {
+  const el = $('d-review-verdict');
+  if (!d.visual_review) { el.innerHTML = ''; return; }
+  const v = d.visual_review;
+  if (v.matches) {
+    el.innerHTML = `<span class="badge" style="background:#e6f4ea; color:var(--ok)">✓ matches intent</span> <small style="color:var(--dim)">${v.reasoning}</small>`;
+  } else {
+    el.innerHTML = `<span class="badge" style="background:#fbeaea; color:var(--err)">✗ mismatch</span> <small style="color:var(--dim)">${v.reasoning}</small>`
+      + (v.suggested_fix ? `<br><small style="color:var(--dim); font-style:italic">fix: ${v.suggested_fix}</small>` : '');
+  }
+}
+
+$('d-review').onclick = () => runGuarded($('d-review'), async () => {
+  const auto_repair = $('d-review-autorepair').checked;
+  log(`reviewing ${draft.asset_id} against its original description...`);
+  const job = await runJob('/api/review/' + draft.asset_id, { auto_repair });
+  showDraft(job.draft);
+  log(job.draft.visual_review && job.draft.visual_review.matches
+    ? 'review: matches intent.' : 'review: mismatch found (see verdict).');
 });
 
 $('d-apply').onclick = () => runGuarded($('d-apply'), async () => {

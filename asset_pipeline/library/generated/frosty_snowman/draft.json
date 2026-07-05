@@ -1,128 +1,41 @@
 {
   "asset_id": "frosty_snowman",
-  "status": "saved",
-  "resolution_method": "parametric",
+  "status": "draft",
+  "resolution_method": "composite",
   "description": "Frosty the Snowman has a simple, friendly shape made from three rounded snowballs stacked on top of one another: a wide base, a smaller middle, and a round head. His body is slightly lumpy and uneven, as though it was packed by hand from soft snow. Thin stick arms extend from his sides, and his face is broad and cheerful, with dark coal eyes, a smiling coal mouth, and a long carrot nose pointing outward. A tall black top hat sits on his head, giving his otherwise soft, rounded silhouette a distinctive, playful outline.",
   "spec": {
     "object_id": "frosty_snowman",
     "description": "Frosty the Snowman has a simple, friendly shape made from three rounded snowballs stacked on top of one another: a wide base, a smaller middle, and a round head. His body is slightly lumpy and uneven, as though it was packed by hand from soft snow. Thin stick arms extend from his sides, and his face is broad and cheerful, with dark coal eyes, a smiling coal mouth, and a long carrot nose pointing outward. A tall black top hat sits on his head, giving his otherwise soft, rounded silhouette a distinctive, playful outline.",
-    "kind": "composite",
-    "semantic_type": "snowman",
-    "desired_size_m": null,
-    "visual_style": "white lumpy snow body, dark coal eyes and mouth, orange carrot nose, thin stick arms, tall black top hat",
+    "kind": null,
+    "semantic_type": null,
+    "desired_size_m": 0.15,
+    "visual_style": null,
     "position": null
   },
-  "plan": {
-    "parameters": {
-      "base_r": 0.18,
-      "mid_r": 0.13,
-      "head_r": 0.09,
-      "lump_scale": 0.04,
-      "hat_brim_r": 0.115,
-      "hat_brim_h": 0.018,
-      "hat_crown_r": 0.075,
-      "hat_crown_h": 0.17,
-      "arm_len": 0.22,
-      "arm_r": 0.012,
-      "eye_r": 0.018,
-      "nose_len": 0.07,
-      "nose_base_r": 0.014,
-      "mouth_r": 0.013,
-      "coal_depth": 0.005
-    },
-    "scad_source": "\n// ============================================================\n//  Frosty the Snowman \u2013 parametric OpenSCAD model\n//  Units: meters   +Y up   +Z forward\n//  Bottom of base ball sits at Z=0 (stands on surface)\n// ============================================================\n\n// --- Key parameters ---\nbase_r        = 0.18;   // radius of bottom snowball\nmid_r         = 0.13;   // radius of middle snowball\nhead_r        = 0.09;   // radius of head snowball\nlump_scale    = 0.04;   // amplitude of hand-packed lumps\nhat_brim_r    = 0.115;  // radius of hat brim\nhat_brim_h    = 0.018;  // thickness of hat brim\nhat_crown_r   = 0.075;  // radius of hat crown cylinder\nhat_crown_h   = 0.17;   // height of hat crown\narm_len       = 0.22;   // half-length of each stick arm\narm_r         = 0.012;  // radius of stick arm\neye_r         = 0.018;  // radius of coal eye sphere\nnose_len      = 0.07;   // length of carrot nose\nnose_base_r   = 0.014;  // base radius of carrot nose\nmouth_r       = 0.013;  // radius of coal mouth dots\ncoal_depth    = 0.005;  // how far coal sits inside head\n\n// --- Derived vertical positions (Y axis is up) ---\nbase_cy   = base_r;                        // centre of base ball\nmid_cy    = base_r*2 - 0.04 + mid_r;      // centre of mid ball (slightly overlapping)\nhead_cy   = mid_cy + mid_r + head_r - 0.03; // centre of head (slightly overlapping)\nhat_y     = head_cy + head_r - 0.01;      // bottom of hat\n\n// ============================================================\n//  Helper: lumpy sphere \u2013 base sphere with small bumps\n// ============================================================\nmodule lumpy_sphere(r, lumps=8, amp=0.04) {\n    // Approximate lumps by scaling slightly differently on each axis\n    // and adding small spheres at random-ish positions\n    union() {\n        scale([1.0, 0.97, 1.02]) sphere(r=r, $fn=40);\n        for (i = [0 : lumps-1]) {\n            angle_a = i * (360 / lumps) + i * 7;\n            angle_b = 30 + i * 15;\n            translate([\n                r * 0.88 * cos(angle_a) * sin(angle_b),\n                r * 0.88 * cos(angle_b) * (i % 2 == 0 ? 1 : -1) * 0.3,\n                r * 0.88 * sin(angle_a) * sin(angle_b)\n            ])\n            sphere(r = r * amp * (0.6 + 0.4 * (i % 3)), $fn=14);\n        }\n    }\n}\n\n// ============================================================\n//  BODY \u2013 three stacked lumpy snowballs  (white)\n// ============================================================\ncolor([0.97, 0.97, 1.0]) {\n    // Base ball\n    translate([0, base_cy, 0])\n        lumpy_sphere(base_r, lumps=10, amp=lump_scale/base_r);\n\n    // Middle ball\n    translate([0, mid_cy, 0])\n        lumpy_sphere(mid_r, lumps=8, amp=lump_scale/mid_r);\n\n    // Head ball\n    translate([0, head_cy, 0])\n        lumpy_sphere(head_r, lumps=6, amp=lump_scale/head_r);\n}\n\n// ============================================================\n//  COAL EYES  (dark, slightly forward on head)\n// ============================================================\ncolor([0.08, 0.06, 0.06]) {\n    for (side = [-1, 1]) {\n        translate([\n            side * head_r * 0.42,\n            head_cy + head_r * 0.28,\n            head_r * 0.82 - coal_depth\n        ])\n        sphere(r=eye_r, $fn=16);\n    }\n}\n\n// ============================================================\n//  COAL MOUTH \u2013 arc of five dots\n// ============================================================\ncolor([0.08, 0.06, 0.06]) {\n    for (i = [-2, -1, 0, 1, 2]) {\n        mouth_angle = i * 18;\n        translate([\n            head_r * 0.72 * sin(mouth_angle),\n            head_cy - head_r * 0.18 + head_r * 0.12 * cos(mouth_angle * 1.5),\n            head_r * 0.82 - coal_depth\n        ])\n        sphere(r=mouth_r, $fn=14);\n    }\n}\n\n// ============================================================\n//  CARROT NOSE  \u2013 orange cone pointing +Z\n// ============================================================\ncolor([1.0, 0.45, 0.05]) {\n    translate([0, head_cy + head_r * 0.04, head_r * 0.88 - coal_depth])\n    rotate([-90, 0, 0])   // tip points forward (+Z)\n    rotate([90, 0, 0])\n    cylinder(h=nose_len, r1=nose_base_r, r2=0.001, $fn=18);\n}\n\n// ============================================================\n//  STICK ARMS \u2013 thin cylinders angled slightly upward\n// ============================================================\ncolor([0.35, 0.22, 0.10]) {\n    for (side = [-1, 1]) {\n        translate([side * mid_r * 0.88, mid_cy + mid_r * 0.15, 0])\n        rotate([0, 0, side * 25])   // angle upward\n        rotate([90, 0, 0])          // lay along X axis\n        rotate([0, 90, 0])\n        cylinder(h=arm_len, r=arm_r, center=true, $fn=10);\n    }\n}\n\n// ============================================================\n//  TOP HAT  \u2013 brim + crown  (black)\n// ============================================================\ncolor([0.07, 0.05, 0.07]) {\n    // Brim\n    translate([0, hat_y, 0])\n    rotate([-90, 0, 0])\n    cylinder(h=hat_brim_h, r=hat_brim_r, center=false, $fn=40);\n\n    // Crown\n    translate([0, hat_y + hat_brim_h, 0])\n    rotate([-90, 0, 0])\n    cylinder(h=hat_crown_h, r=hat_crown_r, center=false, $fn=40);\n}\n",
-    "expected_bounds_m": [
-      0.5,
-      1.05,
-      0.5
-    ],
-    "notes": ""
-  },
-  "generation": {
-    "asset_id": "frosty_snowman",
-    "success": true,
-    "scad_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\frosty_snowman\\source.scad",
-    "stl_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\frosty_snowman\\source.stl",
-    "actual_bounds_m": [
-      0.43833,
-      0.902061,
-      0.374474
-    ],
-    "expected_bounds_m": [
-      0.5,
-      1.05,
-      0.5
-    ],
-    "bounds_diverge": true,
-    "repair_attempts": [
-      {
-        "attempt_number": 1,
-        "scad_source": "\n// ============================================================\n//  Frosty the Snowman \u2013 parametric OpenSCAD model\n//  Units: meters   +Y up   +Z forward\n//  Bottom of base ball sits at Z=0 (stands on surface)\n// ============================================================\n\n// --- Key parameters ---\nbase_r        = 0.18;   // radius of bottom snowball\nmid_r         = 0.13;   // radius of middle snowball\nhead_r        = 0.09;   // radius of head snowball\nlump_scale    = 0.04;   // amplitude of hand-packed lumps\nhat_brim_r    = 0.115;  // radius of hat brim\nhat_brim_h    = 0.018;  // thickness of hat brim\nhat_crown_r   = 0.075;  // radius of hat crown cylinder\nhat_crown_h   = 0.17;   // height of hat crown\narm_len       = 0.22;   // half-length of each stick arm\narm_r         = 0.012;  // radius of stick arm\neye_r         = 0.018;  // radius of coal eye sphere\nnose_len      = 0.07;   // length of carrot nose\nnose_base_r   = 0.014;  // base radius of carrot nose\nmouth_r       = 0.013;  // radius of coal mouth dots\ncoal_depth    = 0.005;  // how far coal sits inside head\n\n// --- Derived vertical positions (Y axis is up) ---\nbase_cy   = base_r;                        // centre of base ball\nmid_cy    = base_r*2 - 0.04 + mid_r;      // centre of mid ball (slightly overlapping)\nhead_cy   = mid_cy + mid_r + head_r - 0.03; // centre of head (slightly overlapping)\nhat_y     = head_cy + head_r - 0.01;      // bottom of hat\n\n// ============================================================\n//  Helper: lumpy sphere \u2013 base sphere with small bumps\n// ============================================================\nmodule lumpy_sphere(r, lumps=8, amp=0.04) {\n    // Approximate lumps by scaling slightly differently on each axis\n    // and adding small spheres at random-ish positions\n    union() {\n        scale([1.0, 0.97, 1.02]) sphere(r=r, $fn=40);\n        for (i = [0 : lumps-1]) {\n            angle_a = i * (360 / lumps) + i * 7;\n            angle_b = 30 + i * 15;\n            translate([\n                r * 0.88 * cos(angle_a) * sin(angle_b),\n                r * 0.88 * cos(angle_b) * (i % 2 == 0 ? 1 : -1) * 0.3,\n                r * 0.88 * sin(angle_a) * sin(angle_b)\n            ])\n            sphere(r = r * amp * (0.6 + 0.4 * (i % 3)), $fn=14);\n        }\n    }\n}\n\n// ============================================================\n//  BODY \u2013 three stacked lumpy snowballs  (white)\n// ============================================================\ncolor([0.97, 0.97, 1.0]) {\n    // Base ball\n    translate([0, base_cy, 0])\n        lumpy_sphere(base_r, lumps=10, amp=lump_scale/base_r);\n\n    // Middle ball\n    translate([0, mid_cy, 0])\n        lumpy_sphere(mid_r, lumps=8, amp=lump_scale/mid_r);\n\n    // Head ball\n    translate([0, head_cy, 0])\n        lumpy_sphere(head_r, lumps=6, amp=lump_scale/head_r);\n}\n\n// ============================================================\n//  COAL EYES  (dark, slightly forward on head)\n// ============================================================\ncolor([0.08, 0.06, 0.06]) {\n    for (side = [-1, 1]) {\n        translate([\n            side * head_r * 0.42,\n            head_cy + head_r * 0.28,\n            head_r * 0.82 - coal_depth\n        ])\n        sphere(r=eye_r, $fn=16);\n    }\n}\n\n// ============================================================\n//  COAL MOUTH \u2013 arc of five dots\n// ============================================================\ncolor([0.08, 0.06, 0.06]) {\n    for (i = [-2, -1, 0, 1, 2]) {\n        mouth_angle = i * 18;\n        translate([\n            head_r * 0.72 * sin(mouth_angle),\n            head_cy - head_r * 0.18 + head_r * 0.12 * cos(mouth_angle * 1.5),\n            head_r * 0.82 - coal_depth\n        ])\n        sphere(r=mouth_r, $fn=14);\n    }\n}\n\n// ============================================================\n//  CARROT NOSE  \u2013 orange cone pointing +Z\n// ============================================================\ncolor([1.0, 0.45, 0.05]) {\n    translate([0, head_cy + head_r * 0.04, head_r * 0.88 - coal_depth])\n    rotate([-90, 0, 0])   // tip points forward (+Z)\n    rotate([90, 0, 0])\n    cylinder(h=nose_len, r1=nose_base_r, r2=0.001, $fn=18);\n}\n\n// ============================================================\n//  STICK ARMS \u2013 thin cylinders angled slightly upward\n// ============================================================\ncolor([0.35, 0.22, 0.10]) {\n    for (side = [-1, 1]) {\n        translate([side * mid_r * 0.88, mid_cy + mid_r * 0.15, 0])\n        rotate([0, 0, side * 25])   // angle upward\n        rotate([90, 0, 0])          // lay along X axis\n        rotate([0, 90, 0])\n        cylinder(h=arm_len, r=arm_r, center=true, $fn=10);\n    }\n}\n\n// ============================================================\n//  TOP HAT  \u2013 brim + crown  (black)\n// ============================================================\ncolor([0.07, 0.05, 0.07]) {\n    // Brim\n    translate([0, hat_y, 0])\n    rotate([-90, 0, 0])\n    cylinder(h=hat_brim_h, r=hat_brim_r, center=false, $fn=40);\n\n    // Crown\n    translate([0, hat_y + hat_brim_h, 0])\n    rotate([-90, 0, 0])\n    cylinder(h=hat_crown_h, r=hat_crown_r, center=false, $fn=40);\n}\n",
-        "success": true,
-        "stderr": "Geometries in cache: 60\nGeometry cache size in bytes: 1211232\nCGAL Polyhedrons in cache: 18\nCGAL cache size in bytes: 36343280\nTotal rendering time: 0:00:23.339\n   Top level object is a 3D object:\n   Simple:        yes\n   Vertices:     3646\n   Halfedges:   16660\n   Edges:        8330\n   Halffacets:   9376\n   Facets:       4688\n   Volumes:         2\n"
-      }
-    ],
-    "error_message": null
-  },
-  "normalization": {
-    "asset_id": "frosty_snowman",
-    "success": true,
-    "source_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\frosty_snowman\\source.stl",
-    "glb_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\frosty_snowman\\model.glb",
-    "original_bounds_m": [
-      0.43833,
-      0.902061,
-      0.374474
-    ],
-    "final_bounds_m": [
-      0.43833,
-      0.902061,
-      0.374474
-    ],
-    "pivot": "center",
-    "scale_applied": 1.0,
-    "triangle_count_before": 7288,
-    "triangle_count_after": 7288,
-    "decimated": false,
-    "uv_status": "generated",
-    "error_message": null
-  },
-  "glb_address": "library/generated/frosty_snowman/model.glb",
+  "plan": null,
+  "generation": null,
+  "normalization": null,
+  "glb_address": "library/composites/frosty_snowman/model.glb",
   "bounds_m": [
-    0.43833,
-    0.902061,
-    0.374474
+    0.183,
+    0.075,
+    0.219
   ],
   "matched_asset_id": null,
-  "composite_id": null,
+  "composite_id": "frosty_snowman_composite",
   "approved_by": null,
   "approved_at": null,
   "uv": {
-    "status": "generated",
+    "status": "preserved",
     "convention": "generic",
-    "layout_image": "generated/frosty_snowman/uv_layout.png",
-    "uv_hash": "a84368ef0eb992af"
+    "layout_image": null,
+    "uv_hash": null
   },
-  "material": {
-    "material_id": "frosty_snowman_mat",
-    "shader_family": "URP/Lit",
-    "base_color": "#f0f4f8",
-    "alpha": 1.0,
-    "metallic": 0.0,
-    "smoothness": 0.15,
-    "transparent": false,
-    "emissive": false,
-    "texture": "materials/textures/frosty_snowman_mat.png",
-    "texture_id": "proc_frosty_snowman_mat",
-    "uv_tiling": [
-      1.0,
-      1.0
-    ]
-  },
+  "material": null,
   "texture_pending": false,
   "texture_query": null,
   "candidates": [],
   "suggested_sources": [],
-  "message": "Generated via OpenSCAD (human override). Edit parameters or send a tweak, then save.",
-  "updated_at": "2026-07-04T20:52:59.821330"
+  "message": "Built as a composite and baked into one mesh -- each part has its own color.",
+  "updated_at": "2026-07-05T17:48:19.630606"
 }

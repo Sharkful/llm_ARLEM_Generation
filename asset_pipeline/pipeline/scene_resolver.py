@@ -38,8 +38,7 @@ from pipeline.validator import validate_library
 
 ItemStatus = Literal[
     "resolved_existing",  # catalog match / variant -- nothing built
-    "saved_parametric",   # generated, normalized, auto-cataloged at review level 2
-    "composite",          # decomposed into existing parts (fragment written)
+    "saved_generated",    # generated (OpenSCAD or a baked composite), auto-cataloged at review level 2
     "needs_review",       # halted for a human: imported/unclear/diverging bounds
     "failed",             # hard error (generation/normalization crash)
 ]
@@ -111,8 +110,6 @@ def _item_from_draft(
     )
     if draft.status == "existing":
         return SceneItemReport(status="resolved_existing", asset_id=draft.matched_asset_id, **base)
-    if draft.status == "composite":
-        return SceneItemReport(status="composite", asset_id=draft.composite_id, **base)
     if draft.status == "draft":
         diverges = bool(draft.generation and draft.generation.bounds_diverge)
         if diverges or not draft.glb_address:
@@ -124,7 +121,7 @@ def _item_from_draft(
             return SceneItemReport(status="needs_review", asset_id=draft.asset_id, **base)
         entry = save_draft(draft.asset_id)
         return SceneItemReport(
-            status="saved_parametric", asset_id=entry.asset_id,
+            status="saved_generated", asset_id=entry.asset_id,
             review_level=entry.review_level, **base,
         )
     # needs_human
@@ -160,7 +157,7 @@ def resolve_scene(
 
     report.resolved = sum(
         1 for i in report.items
-        if i.status in ("resolved_existing", "saved_parametric", "composite")
+        if i.status in ("resolved_existing", "saved_generated")
     )
     report.needs_review = sum(1 for i in report.items if i.status == "needs_review")
     report.failed = sum(1 for i in report.items if i.status == "failed")
@@ -186,9 +183,12 @@ def resolve_scene(
             sync_target,
             # Scene objects name their material after the object (moon_mat),
             # not the catalog asset they resolved to (sphere_basic).
+            # A baked composite's colors are already inside its GLB (no
+            # separate <id>_mat.json exists for it); harmless to include --
+            # sync_assets() just finds nothing to copy for that name.
             material_ids=[
                 f"{i.object_id}_mat" for i in report.items
-                if i.status in ("resolved_existing", "saved_parametric")
+                if i.status in ("resolved_existing", "saved_generated")
             ],
         )
 

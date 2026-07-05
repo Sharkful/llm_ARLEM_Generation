@@ -41,18 +41,44 @@ Choose exactly one geometry_class:
 - "composite": the object is an assembly of 2+ simple recognizable primitive \
 shapes (spheres, cubes, cylinders, cones, etc.) at relative positions -- e.g. \
 a water molecule, coordinate axes, a solar system diagram, a simple snowman \
-or robot built from stacked/attached primitives. List each sub-part briefly \
-in composite_parts. HARD RULE: every composite_part must be ONE primitive \
-shape describable in a short phrase naming that primitive ("large white \
-sphere", "thin gray cylinder", "small orange cone") -- never itself an \
-assembly, never a phrase that would need further decomposition. If the \
-object cannot be expressed as 2-12 single-primitive parts, do NOT choose \
-composite; choose parametric or imported instead. Prefer composite over \
-imported whenever a recognizable approximation is possible with primitives \
--- a crude hand-built composite of the right identity (a snowman made of \
-three spheres, stick arms, and a hat) is a far better educational AR asset \
-than an unrelated real-world scan from an external library, which is \
-unlikely to exist for whimsical/fictional subjects anyway.
+or robot built from stacked/attached primitives. List each sub-part in \
+composite_parts as a CompositePartPlan. HARD RULE: every part's description \
+must be ONE primitive shape describable in a short phrase naming that \
+primitive ("large white sphere", "thin gray cylinder", "small orange cone") \
+-- never itself an assembly, never a phrase that would need further \
+decomposition. If the object cannot be expressed as 2-12 single-primitive \
+parts, do NOT choose composite; choose parametric or imported instead. \
+Prefer composite over imported whenever a recognizable approximation is \
+possible with primitives -- a crude hand-built composite of the right \
+identity (a snowman made of three spheres, stick arms, and a hat) is a far \
+better educational AR asset than an unrelated real-world scan from an \
+external library, which is unlikely to exist for whimsical/fictional \
+subjects anyway. EVERY part needs its own color_hint (parts are rendered \
+with independent materials -- a snowman's hat, eyes, and nose must each get \
+their own real color, never left to default to gray) and an approximate \
+relative_position/relative_scale so the assembled object actually looks \
+like the request instead of every part overlapping at the origin -- think \
+through the object's real proportions (a "wide base" snowball is larger \
+and lower than the head; stick arms are thin and stick out sideways at \
+roughly the middle sphere's height; a hat sits at the very top).
+
+CONNECTORS (bonds, struts, axles -- anything that must reach exactly between \
+two other parts, e.g. a ball-and-stick molecule's bonds): give the two atoms/ \
+endpoints a short `label` each, then give the connecting part `bond_between: \
+[labelA, labelB]` instead of trying to compute its position/rotation \
+yourself -- you are reliably bad at the 3D trigonometry needed to point a \
+cylinder from one arbitrary point to another (this has been tried; every \
+attempt left rotation at zero and every "bond" ended up pointing the same \
+fixed direction regardless of where its two atoms were). The geometry \
+engine positions, sizes, and rotates a bond_between part exactly, every \
+time -- you only decide WHICH two labeled parts it connects and how thick \
+(bond_thickness) it should be. For a molecule: give every atom a label \
+(element symbol + index, e.g. "C", "H1"), place atoms at real relative \
+tetrahedral/geometric positions scaled so bond lengths are roughly \
+proportionate to the real molecule, then add one bond_between connector \
+per actual chemical bond. Use standard CPK-style colors for atoms when the \
+object is a molecule (carbon=dark gray/black, hydrogen=white, \
+oxygen=red, nitrogen=blue, sulfur=yellow) unless the request says otherwise.
 - "parametric": the object has clear mechanical/geometric structure that a \
 CSG modeling script (extrude, boolean union/subtract, simple shapes) could \
 reasonably build -- e.g. a bracket, stand, dial, cutaway box, clamp.

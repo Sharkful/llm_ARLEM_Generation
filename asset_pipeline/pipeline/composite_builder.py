@@ -20,6 +20,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 import config
 from llm.client_factory import get_instructor_client, resolve_provider_and_model
+from models.classification_models import CompositePartPlan
 from models.log_models import LLMCallEntry
 from models.spec_models import AssetSpec
 
@@ -31,6 +32,19 @@ class CompositePart(BaseModel):
     position: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
     rotation: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
     scale: list[float] = Field(default_factory=lambda: [1.0, 1.0, 1.0])
+    # Added 2026-07 alongside CompositePartPlan: every part needs its own
+    # color, or composite_baker.py has nothing to paint it with and the
+    # whole assembly ends up uniformly gray/default.
+    color_hint: str = ""
+    material_id: str | None = None
+    # Added 2026-07, "methane ball-and-stick" incident: a connector part
+    # (bond_between set) is positioned/sized/rotated by composite_baker.py's
+    # deterministic vector math, not by `position`/`scale` above -- an LLM
+    # cannot reliably compute the rotation to point a cylinder from one 3D
+    # position to another (see CompositePartPlan's docstring).
+    label: str = ""
+    bond_between: list[str] | None = None
+    bond_thickness: float = 0.06
 
 
 class CompositeFragment(BaseModel):
@@ -79,8 +93,8 @@ def _guess_primitive_kind(part_description: str) -> str | None:
     return None
 
 
-def build_part_specs(parent_object_id: str, composite_parts: list[str]) -> list[AssetSpec]:
-    """Turn the classifier's free-text part descriptions into AssetSpecs.
+def build_part_specs(parent_object_id: str, composite_parts: list[CompositePartPlan]) -> list[AssetSpec]:
+    """Turn the classifier's structured part plans into AssetSpecs.
 
     This does not call an LLM -- part descriptions are already short,
     LLM-authored phrases (from GeometryClassification.composite_parts);
@@ -92,12 +106,12 @@ def build_part_specs(parent_object_id: str, composite_parts: list[str]) -> list[
     map to one without further guessing.
     """
     specs = []
-    for i, part_description in enumerate(composite_parts):
-        primitive_kind = _guess_primitive_kind(part_description)
+    for i, plan in enumerate(composite_parts):
+        primitive_kind = _guess_primitive_kind(plan.description)
         specs.append(
             AssetSpec(
                 object_id=f"{parent_object_id}_part{i}",
-                description=part_description,
+                description=plan.description,
                 kind=primitive_kind,
                 semantic_type=primitive_kind,
             )
@@ -133,10 +147,10 @@ def load_composite_fragment(composite_id: str) -> CompositeFragment | None:
 # the same judgment call that already said no.
 
 class _ForcedDecomposition(BaseModel):
-    parts: list[str] = Field(
-        description="Short phrases, each ONE primitive shape (e.g. 'large "
-        "white sphere', 'thin gray cylinder', 'small black cone'), that "
-        "together approximate the object as a hand-built assembly."
+    parts: list[CompositePartPlan] = Field(
+        description="One entry per primitive part, each with its own color "
+        "and approximate placement/size, that together approximate the "
+        "object as a hand-built assembly."
     )
 
 
@@ -144,10 +158,20 @@ _FORCED_SYSTEM_PROMPT = """\
 A human has decided this object should be built as an assembly of simple \
 primitive shapes (spheres, cubes, cylinders, cones, tori), even though it \
 may be organic or detailed -- give your best approximation, not a refusal. \
-List each part as a short phrase naming exactly one primitive and its \
-approximate color/size (e.g. "large white sphere", "thin black cylinder", \
-"small orange cone"). Use as many parts as needed, up to the given budget, \
-to capture the object's recognizable silhouette and key features.
+List each part as a short phrase naming exactly one primitive (e.g. "large \
+white sphere", "thin black cylinder", "small orange cone"), with its own \
+color_hint and an approximate relative_position/relative_scale so the \
+assembled result actually resembles the object's real proportions instead \
+of every part overlapping at the origin. Use as many parts as needed, up \
+to the given budget, to capture the object's recognizable silhouette and \
+key features.
+
+For any strut/rod/bond that must connect two other named points (e.g. a \
+molecule's bonds, an axle between wheels): give the two endpoint parts a \
+short `label` each and set the connector's `bond_between: [labelA, labelB]` \
+instead of guessing its position/rotation yourself -- the geometry engine \
+computes the exact placement deterministically from the two labeled parts' \
+real positions.
 """
 
 
@@ -156,7 +180,7 @@ def decompose_into_primitives(
     max_parts: int = 12,
     provider: str | None = None,
     model: str | None = None,
-) -> tuple[list[str], LLMCallEntry]:
+) -> tuple[list[CompositePartPlan], LLMCallEntry]:
     resolved_provider, resolved_model = resolve_provider_and_model(provider, model)
     client = get_instructor_client(resolved_provider)
 
@@ -200,4 +224,119 @@ def _call_decompose(client: instructor.Instructor, llm_model: str, spec: AssetSp
             )},
         ],
         max_tokens=1024,
+    )
+
+
+# ── Revision from visual review feedback (added 2026-07, "methane sticks
+#    don't connect" incident) ─────────────────────────────────────────────
+#
+# pipeline/visual_review.py renders the baked composite and asks a vision
+# LLM whether it matches the original description; when it doesn't, this
+# turns that specific complaint into a corrected part list -- the same
+# structured output decompose_into_primitives produces, but grounded in
+# what was ACTUALLY built (not a fresh guess) plus the reviewer's exact
+# complaint, so a working part isn't discarded just because a different
+# part was wrong.
+
+def fragment_to_part_plans(fragment: CompositeFragment) -> list[CompositePartPlan]:
+    """The current built state of a composite, in the same shape the
+    classifier/decomposer produces, so it can be shown back to an LLM as
+    'here is what currently exists' for a revision pass."""
+    return [
+        CompositePartPlan(
+            description=part.asset_spec.description,
+            color_hint=part.color_hint,
+            label=part.label,
+            bond_between=part.bond_between,
+            bond_thickness=part.bond_thickness,
+            relative_position=part.position,
+            relative_scale=part.scale,
+        )
+        for part in fragment.parts
+    ]
+
+
+class _CompositeRevision(BaseModel):
+    parts: list[CompositePartPlan] = Field(
+        description="The corrected FULL part list (not just the changed parts) -- "
+        "keep every part that the complaint doesn't implicate, fix the ones it does."
+    )
+
+
+_REVISION_SYSTEM_PROMPT = """\
+A composite object (an assembly of simple primitive shapes) was built and \
+rendered, then reviewed against its original description. The review found \
+a specific problem. You are given the object's description, the CURRENT \
+part list exactly as built, and the reviewer's complaint.
+
+Output a corrected FULL part list that fixes the complaint. Keep every part \
+that the complaint does not implicate unchanged (same description, \
+color_hint, label, position/scale) -- do not regenerate parts that were \
+already correct just because you're revising the object. Follow the same \
+rules the parts were originally built under: every part is exactly one \
+primitive shape with its own color_hint; a connector (bond/strut/axle) uses \
+`label`/`bond_between` to reach exactly between two other named parts \
+instead of a hand-computed position/rotation -- never compute a connector's \
+position or rotation directly, geometry engine handles that from the two \
+labeled parts' real positions.
+"""
+
+
+def revise_composite_parts(
+    spec: AssetSpec,
+    current_parts: list[CompositePartPlan],
+    feedback: str,
+    max_parts: int = 12,
+    provider: str | None = None,
+    model: str | None = None,
+) -> tuple[list[CompositePartPlan], LLMCallEntry]:
+    resolved_provider, resolved_model = resolve_provider_and_model(provider, model)
+    client = get_instructor_client(resolved_provider)
+
+    start = time.monotonic()
+    try:
+        response, completion = _call_revise(
+            client, resolved_model, spec, current_parts, feedback, max_parts
+        )
+    except Exception as exc:
+        duration = time.monotonic() - start
+        entry = LLMCallEntry(
+            provider=resolved_provider, model=resolved_model,
+            purpose="composite_revision", duration_seconds=round(duration, 3),
+            success=False, error_message=str(exc),
+        )
+        raise RuntimeError(f"Composite revision failed: {exc}") from exc
+    duration = time.monotonic() - start
+
+    usage = getattr(completion, "usage", None)
+    input_tokens = getattr(usage, "input_tokens", None) or getattr(usage, "prompt_tokens", 0) or 0
+    output_tokens = getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens", 0) or 0
+    entry = LLMCallEntry(
+        provider=resolved_provider, model=resolved_model,
+        purpose="composite_revision", input_tokens=input_tokens,
+        output_tokens=output_tokens, duration_seconds=round(duration, 3), success=True,
+    )
+    return response.parts[:max_parts], entry
+
+
+@retry(wait=wait_exponential(min=2, max=20), stop=stop_after_attempt(3), reraise=True)
+def _call_revise(
+    client: instructor.Instructor, llm_model: str, spec: AssetSpec,
+    current_parts: list[CompositePartPlan], feedback: str, max_parts: int,
+):
+    current_json = json.dumps([p.model_dump(mode="json") for p in current_parts], indent=2)
+    return client.chat.completions.create_with_completion(
+        model=llm_model,
+        response_model=_CompositeRevision,
+        max_retries=2,
+        messages=[
+            {"role": "system", "content": _REVISION_SYSTEM_PROMPT},
+            {"role": "user", "content": (
+                f"Object description: {spec.description}\n\n"
+                f"Current parts (as built):\n{current_json}\n\n"
+                f"Reviewer's complaint: {feedback}\n\n"
+                f"Maximum parts: {max_parts}"
+            )},
+        ],
+        max_tokens=1536,
     )

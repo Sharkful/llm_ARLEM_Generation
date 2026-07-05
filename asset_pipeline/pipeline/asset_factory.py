@@ -48,14 +48,23 @@ from models.log_models import LLMCallEntry
 from models.spec_models import AssetSpec
 from pipeline import uv_tools
 from pipeline.catalog_writer import load_catalog, save_catalog
-from pipeline.composite_builder import decompose_into_primitives
+from pipeline.composite_baker import CompositeBakeError, bake_composite
+from pipeline.composite_builder import (
+    CompositeFragment,
+    decompose_into_primitives,
+    fragment_to_part_plans,
+    load_composite_fragment,
+    revise_composite_parts,
+    save_composite_fragment,
+)
 from pipeline.source_assist import SourceCandidate, adopt_candidate, assist_imported
 from pipeline.material_generator import MaterialGenerationError, generate_material
 from pipeline.mesh_processor import MeshNormalizationResult, normalize_mesh, save_mesh_meta
 from pipeline.openscad_generator import generate_openscad_plan, generate_parametric_asset
-from pipeline.preview_renderer import render_previews
+from pipeline.preview_renderer import PreviewError, render_glb_to_png, render_previews
 from pipeline.resolver import resolve
 from pipeline.spec_parser import parse_description
+from pipeline.visual_review import AssetVisualReview, VisualReviewError, review_asset_render
 
 DEFAULT_TARGET_SIZE_M = 0.15  # when neither the author nor the LLM sized it
 
@@ -86,6 +95,7 @@ class DraftAsset(BaseModel):
     candidates: list[SourceCandidate] = Field(default_factory=list)  # sourcing assist hits
     suggested_sources: list[str] = Field(default_factory=list)  # search URLs when no hits
     message: Optional[str] = None
+    visual_review: Optional[AssetVisualReview] = None  # Stage 8b.5 review verdict
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -199,6 +209,83 @@ def _bind_material(
     return [entry]
 
 
+def _materialize_and_bake_composite(
+    composite_id: str,
+    asset_id: str,
+    target_size_m: float | None,
+    provider: str | None,
+    model: str | None,
+    progress: ProgressFn,
+) -> tuple[DraftAsset, list[LLMCallEntry]]:
+    """Give every part of a resolved composite its own material (reusing
+    Stage 5, one call per part -- a snowman's hat/eyes/nose/arms all need
+    independent colors, which is the whole point of building it as a
+    composite rather than one fused CSG solid), then bake the assembly into
+    one GLB (composite_baker.py). Shared by create_from_spec's composite
+    branch and redirect_draft's forced-composite path.
+    """
+    logs: list[LLMCallEntry] = []
+    fragment = load_composite_fragment(composite_id)
+    if fragment is None:
+        raise AssetFactoryError(f"Composite fragment {composite_id!r} not found after resolve().")
+
+    progress(f"Generating a material for each of {len(fragment.parts)} part(s)...")
+    for part in fragment.parts:
+        if not part.resolved_asset_id:
+            continue  # unresolved parts are skipped by the baker too
+        try:
+            result, _, entry = generate_material(
+                part.color_hint or part.asset_spec.description,
+                material_id=f"{composite_id}_{part.part_id}_mat",
+                provider=provider, model=model, force=True,
+            )
+            logs.append(entry)
+            part.material_id = result.material_id if result.success else None
+        except (MaterialGenerationError, RuntimeError) as exc:
+            part.material_id = None
+            progress(f"  material failed for {part.part_id!r} ({exc}); it will use a default gray.")
+    save_composite_fragment(fragment)
+
+    progress("Baking the assembly into one multi-material mesh (Blender)...")
+    size = target_size_m or DEFAULT_TARGET_SIZE_M
+    try:
+        bake = bake_composite(fragment, asset_id, target_size_m=size)
+    except CompositeBakeError as exc:
+        draft = DraftAsset(
+            asset_id=asset_id, status="needs_human", resolution_method="composite",
+            description=fragment.source_description,
+            spec=fragment.parts[0].asset_spec.model_copy(update={"object_id": asset_id})
+            if fragment.parts else AssetSpec(object_id=asset_id, description=fragment.source_description),
+            composite_id=composite_id, message=f"Composite baking unavailable: {exc}",
+        )
+        save_draft_state(draft)
+        return draft, logs
+    if not bake.success:
+        draft = DraftAsset(
+            asset_id=asset_id, status="needs_human", resolution_method="composite",
+            description=fragment.source_description,
+            spec=AssetSpec(object_id=asset_id, description=fragment.source_description),
+            composite_id=composite_id, message=f"Composite baking failed: {bake.error_message}",
+        )
+        save_draft_state(draft)
+        return draft, logs
+
+    uv = UVInfo(status=bake.uv_status, convention="generic") if bake.uv_status != "none" else UVInfo()
+    message = "Built as a composite and baked into one mesh -- each part has its own color."
+    if bake.error_message:  # non-fatal notes (skipped parts) even on success
+        message += f" ({bake.error_message})"
+    draft = DraftAsset(
+        asset_id=asset_id, status="draft", resolution_method="composite",
+        description=fragment.source_description,
+        spec=AssetSpec(object_id=asset_id, description=fragment.source_description, desired_size_m=size),
+        composite_id=composite_id,
+        glb_address=f"library/composites/{asset_id}/model.glb",
+        bounds_m=bake.final_bounds_m, uv=uv, message=message,
+    )
+    save_draft_state(draft)
+    return draft, logs
+
+
 def create_from_description(
     description: str,
     asset_id: str | None = None,
@@ -275,11 +362,12 @@ def create_from_spec(
     # fails loudly here instead of silently misrouting).
     reason = record.review_reason or ""
     if reason.startswith("Resolved as composite:") and not record.requires_author_review:
-        draft = DraftAsset(
-            asset_id=final_id, status="composite", resolution_method="composite",
-            description=description, spec=spec,
-            composite_id=f"{spec.object_id}_composite", message=reason,
+        composite_id = f"{spec.object_id}_composite"
+        progress(f"Classified as composite -- resolved into {composite_id!r}, materializing...")
+        draft, bake_logs = _materialize_and_bake_composite(
+            composite_id, final_id, spec.desired_size_m, provider, model, progress
         )
+        logs.extend(bake_logs)
         return draft, logs
 
     if reason.startswith("Classified as 'parametric'"):
@@ -429,18 +517,16 @@ def redirect_draft(
         progress("Redirecting to composite decomposition (human override)...")
         parts, decomp_entry = decompose_into_primitives(spec, max_parts=12, provider=provider, model=model)
         logs.append(decomp_entry)
-        progress(f"Decomposed into {len(parts)} primitive part(s): {', '.join(parts)}")
+        progress(f"Decomposed into {len(parts)} primitive part(s): {', '.join(p.description for p in parts)}")
         catalog = load_catalog()
         record, resolve_logs = resolve(spec, catalog, forced_composite_parts=parts)
         logs.extend(resolve_logs)
-        draft = DraftAsset(
-            asset_id=asset_id, status="composite", resolution_method="composite",
-            description=draft.description, spec=spec,
-            composite_id=f"{spec.object_id}_composite",
-            message=record.review_reason or "Built as a composite (human override).",
+        composite_id = f"{spec.object_id}_composite"
+        new_draft, bake_logs = _materialize_and_bake_composite(
+            composite_id, asset_id, spec.desired_size_m, provider, model, progress
         )
-        save_draft_state(draft)
-        return draft, logs
+        logs.extend(bake_logs)
+        return new_draft, logs
 
     # target == "imported": re-run the sourcing assist, optionally with the
     # human's own search words instead of whatever produced bad results.
@@ -568,6 +654,279 @@ def regenerate(
     return draft, logs
 
 
+# ── Composite edit loop (added 2026-07, "methane sticks don't connect" /
+#    "I can't edit it" incident) ──────────────────────────────────────────
+#
+# Mirrors regenerate()'s numeric-parameter-edit pattern for composites: a
+# human who can SEE the bad geometry (a bond not reaching its atom, a part
+# scaled wrong) should be able to nudge position/scale/bond_between/color
+# directly and rebake, the same way an OpenSCAD parameter edit recompiles --
+# no LLM call, no re-asking a question that already produced the wrong
+# answer. A `color_hex` edit writes straight to that part's material file
+# (also no LLM); a free-text color_hint edit only updates the hint for a
+# future LLM material regeneration (see regenerate_materials_for below) and
+# leaves the current material untouched until then, so it never silently
+# does nothing while looking like it took effect.
+
+_EDITABLE_COMPOSITE_FIELDS = {
+    "position", "scale", "rotation", "bond_between", "bond_thickness", "label",
+    "color_hint", "color_hex",
+}
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def get_composite_fragment(asset_id: str) -> CompositeFragment:
+    """The composite fragment behind a composite draft, for an editor UI to
+    show current part transforms/colors/bonds before submitting edits."""
+    draft = load_draft_state(asset_id)
+    if draft is None or not draft.composite_id:
+        raise AssetFactoryError(f"No composite draft for {asset_id!r}.")
+    fragment = load_composite_fragment(draft.composite_id)
+    if fragment is None:
+        raise AssetFactoryError(f"Composite fragment {draft.composite_id!r} not found.")
+    return fragment
+
+
+def edit_composite(
+    asset_id: str,
+    part_edits: dict[str, dict],
+    regenerate_materials_for: list[str] | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    progress: ProgressFn | None = None,
+) -> tuple[DraftAsset, list[LLMCallEntry]]:
+    """Edit one or more parts of a composite draft directly, then rebake.
+
+    part_edits: {part_id: {field: value, ...}, ...} -- editable fields are
+    position/scale/rotation (list[float] x3), bond_between (list[str] of 2
+    labels or null to clear), bond_thickness (float), label (str),
+    color_hex ('#rrggbb', writes the material file immediately, no LLM),
+    and color_hint (free text, stored for a future material regen only).
+
+    regenerate_materials_for: part_ids whose color_hint should be sent
+    through the normal LLM material generator (Stage 5) right now -- the
+    one part of this flow that costs an LLM call, so it is opt-in.
+    """
+    progress = progress or _noop_progress
+    draft = load_draft_state(asset_id)
+    if draft is None or not draft.composite_id:
+        raise AssetFactoryError(
+            f"No composite draft for {asset_id!r} -- only composite drafts can be edited this way."
+        )
+    fragment = load_composite_fragment(draft.composite_id)
+    if fragment is None:
+        raise AssetFactoryError(f"Composite fragment {draft.composite_id!r} not found.")
+
+    parts_by_id = {p.part_id: p for p in fragment.parts}
+    unknown_parts = set(part_edits) - set(parts_by_id)
+    if unknown_parts:
+        raise AssetFactoryError(
+            f"Unknown part id(s): {', '.join(sorted(unknown_parts))}. "
+            f"Known: {', '.join(parts_by_id)}"
+        )
+
+    logs: list[LLMCallEntry] = []
+    if part_edits:
+        progress(f"Applying edits to {len(part_edits)} part(s) (no LLM call)...")
+    for part_id, edits in part_edits.items():
+        part = parts_by_id[part_id]
+        unknown_fields = set(edits) - _EDITABLE_COMPOSITE_FIELDS
+        if unknown_fields:
+            raise AssetFactoryError(
+                f"Unknown field(s) for part {part_id!r}: {', '.join(sorted(unknown_fields))}"
+            )
+        if "position" in edits:
+            part.position = [float(v) for v in edits["position"]]
+        if "scale" in edits:
+            part.scale = [float(v) for v in edits["scale"]]
+        if "rotation" in edits:
+            part.rotation = [float(v) for v in edits["rotation"]]
+        if "bond_between" in edits:
+            part.bond_between = list(edits["bond_between"]) if edits["bond_between"] else None
+        if "bond_thickness" in edits:
+            part.bond_thickness = float(edits["bond_thickness"])
+        if "label" in edits:
+            part.label = str(edits["label"])
+        if "color_hint" in edits:
+            part.color_hint = str(edits["color_hint"])
+        if "color_hex" in edits:
+            hexval = str(edits["color_hex"])
+            if not _HEX_COLOR_RE.match(hexval):
+                raise AssetFactoryError(
+                    f"color_hex for {part_id!r} must look like '#rrggbb', got {hexval!r}"
+                )
+            mat_id = part.material_id or f"{fragment.composite_id}_{part_id}_mat"
+            mat_path = config.MATERIALS_DIR / f"{mat_id}.json"
+            existing = (
+                MaterialDef.model_validate_json(mat_path.read_text(encoding="utf-8-sig"))
+                if mat_path.is_file() else MaterialDef(material_id=mat_id, base_color=hexval)
+            )
+            updated = existing.model_copy(update={"material_id": mat_id, "base_color": hexval})
+            mat_path.parent.mkdir(parents=True, exist_ok=True)
+            mat_path.write_text(
+                json.dumps(updated.model_dump(mode="json"), indent=2), encoding="utf-8"
+            )
+            part.material_id = mat_id
+
+    for part_id in regenerate_materials_for or []:
+        if part_id not in parts_by_id:
+            raise AssetFactoryError(f"Unknown part id for material regen: {part_id!r}")
+        part = parts_by_id[part_id]
+        progress(f"Regenerating material for {part_id!r} from its color hint (LLM)...")
+        try:
+            result, _, entry = generate_material(
+                part.color_hint or part.asset_spec.description,
+                material_id=f"{fragment.composite_id}_{part_id}_mat",
+                provider=provider, model=model, force=True,
+            )
+            logs.append(entry)
+            part.material_id = result.material_id if result.success else part.material_id
+        except (MaterialGenerationError, RuntimeError) as exc:
+            progress(f"  material regen failed for {part_id!r} ({exc}); keeping the current one.")
+
+    save_composite_fragment(fragment)
+
+    progress("Rebaking the assembly (Blender)...")
+    size = (
+        draft.spec.desired_size_m
+        or (max(draft.bounds_m) if draft.bounds_m else None)
+        or DEFAULT_TARGET_SIZE_M
+    )
+    try:
+        bake = bake_composite(fragment, asset_id, target_size_m=size)
+    except CompositeBakeError as exc:
+        draft.status = "needs_human"
+        draft.message = f"Composite baking unavailable: {exc}"
+        draft.updated_at = datetime.utcnow()
+        save_draft_state(draft)
+        return draft, logs
+    if not bake.success:
+        draft.status = "needs_human"
+        draft.message = f"Composite baking failed: {bake.error_message}"
+        draft.updated_at = datetime.utcnow()
+        save_draft_state(draft)
+        return draft, logs
+
+    draft.status = "draft"
+    draft.glb_address = f"library/composites/{asset_id}/model.glb"
+    draft.bounds_m = bake.final_bounds_m
+    draft.uv = UVInfo(status=bake.uv_status, convention="generic") if bake.uv_status != "none" else UVInfo()
+    draft.message = "Edited and rebaked -- each part has its own color."
+    if bake.error_message:
+        draft.message += f" ({bake.error_message})"
+    draft.updated_at = datetime.utcnow()
+    save_draft_state(draft)
+    return draft, logs
+
+
+# ── Visual review + auto-repair (added 2026-07, "methane sticks don't
+#    connect" incident) ─────────────────────────────────────────────────
+#
+# The pipeline had no way to notice its own bad output -- a broken bake
+# (disconnected bonds, ungraded colors) looked exactly as "successful" as a
+# correct one until a human happened to look. This renders the draft's
+# current GLB, asks a vision LLM the same question a human reviewer would
+# ("does this actually match the request?"), and -- opt-in, since it's an
+# LLM call plus a render -- feeds a real mismatch's specific complaint back
+# into a repair pass instead of a human having to describe the bug.
+
+def review_and_repair(
+    asset_id: str,
+    auto_repair: bool = True,
+    provider: str | None = None,
+    model: str | None = None,
+    progress: ProgressFn | None = None,
+) -> tuple[DraftAsset, AssetVisualReview, list[LLMCallEntry]]:
+    """Render the draft, review it against the original description, and
+    (when auto_repair and the review found a mismatch) feed the reviewer's
+    complaint into a repair pass: regenerate()'s tweak flow for a parametric
+    draft, or a composite part-list revision for a composite. Drafts with no
+    generative repair path (imported/existing) are left as-is with the
+    review attached -- never a silent no-op that looks like it did something.
+    """
+    progress = progress or _noop_progress
+    draft = load_draft_state(asset_id)
+    if draft is None:
+        raise AssetFactoryError(f"No draft found for {asset_id!r}.")
+    if not draft.glb_address:
+        raise AssetFactoryError(f"Draft {asset_id!r} has no renderable GLB yet.")
+
+    progress("Rendering the current result for visual review...")
+    image_path = _draft_dir(asset_id) / "review_render.png"
+    try:
+        render_glb_to_png(draft.glb_address, image_path)
+    except PreviewError as exc:
+        raise AssetFactoryError(f"Could not render {asset_id!r} for review: {exc}") from exc
+
+    progress("Asking a vision-capable LLM whether the render matches the request...")
+    try:
+        review, entry = review_asset_render(
+            draft.description, image_path, provider=provider, model=model
+        )
+    except VisualReviewError as exc:
+        raise AssetFactoryError(f"Visual review unavailable: {exc}") from exc
+    logs = [entry]
+    draft.visual_review = review
+
+    if review.matches:
+        progress("Visual review: matches the request.")
+        draft.message = f"{draft.message or ''} Visual review: matches the request.".strip()
+        draft.updated_at = datetime.utcnow()
+        save_draft_state(draft)
+        return draft, review, logs
+
+    progress(f"Visual review found a mismatch: {review.reasoning}")
+    draft.message = f"Visual review: MISMATCH -- {review.reasoning} Suggested fix: {review.suggested_fix}"
+    if not auto_repair:
+        draft.updated_at = datetime.utcnow()
+        save_draft_state(draft)
+        return draft, review, logs
+
+    feedback = f"{review.reasoning} Fix: {review.suggested_fix}"
+
+    if draft.resolution_method == "parametric" and draft.plan is not None:
+        progress("Auto-repairing via an OpenSCAD revision (LLM)...")
+        repaired, repair_logs = regenerate(
+            asset_id, tweak=feedback, provider=provider, model=model, progress=progress
+        )
+        logs.extend(repair_logs)
+        repaired.visual_review = review
+        save_draft_state(repaired)
+        return repaired, review, logs
+
+    if draft.resolution_method == "composite" and draft.composite_id:
+        progress("Auto-repairing the composite part list (LLM)...")
+        fragment = load_composite_fragment(draft.composite_id)
+        if fragment is None:
+            raise AssetFactoryError(f"Composite fragment {draft.composite_id!r} not found.")
+        current_plans = fragment_to_part_plans(fragment)
+        revised_plans, revise_entry = revise_composite_parts(
+            draft.spec, current_plans, feedback, provider=provider, model=model,
+        )
+        logs.append(revise_entry)
+        catalog = load_catalog()
+        record, resolve_logs = resolve(draft.spec, catalog, forced_composite_parts=revised_plans)
+        logs.extend(resolve_logs)
+        # resolve() derives the composite_id from spec.object_id itself
+        # (see resolver.py) -- match that exactly rather than assuming it
+        # equals asset_id, which can differ when a custom asset_id was given.
+        composite_id = f"{draft.spec.object_id}_composite"
+        repaired, bake_logs = _materialize_and_bake_composite(
+            composite_id, asset_id, draft.spec.desired_size_m, provider, model, progress
+        )
+        logs.extend(bake_logs)
+        repaired.visual_review = review
+        save_draft_state(repaired)
+        return repaired, review, logs
+
+    # imported/existing/unclear: no generative repair path -- surface the
+    # review so a human can act on it manually instead of silently no-oping.
+    draft.message += " (auto-repair isn't available for this resolution method; edit manually.)"
+    draft.updated_at = datetime.utcnow()
+    save_draft_state(draft)
+    return draft, review, logs
+
+
 # ── Save / approve ────────────────────────────────────────────────────────
 
 def save_draft(
@@ -614,13 +973,14 @@ def save_draft(
             f"Draft {asset_id!r} has no normalized GLB yet -- generate/regenerate first."
         )
 
+    is_composite = draft.resolution_method == "composite"
     entry = AssetCatalogEntry(
         asset_id=asset_id,
         display_name=display_name or draft.spec.semantic_type or asset_id,
-        asset_class="parametric",
+        asset_class="composite" if is_composite else "parametric",
         address=draft.glb_address,
         canonical_bounds_m=draft.bounds_m,
-        pivot=draft.normalization.pivot if draft.normalization else "center",
+        pivot=draft.normalization.pivot if draft.normalization else "base_center",
         uv=draft.uv,
         material_slots=["surface"] if draft.material else [],
         tags=tags if tags is not None else [t for t in [draft.spec.semantic_type, draft.spec.kind] if t],
@@ -630,12 +990,16 @@ def save_draft(
             license_status="approved",
             modified=True,
             modifications=[
-                "generated via OpenSCAD (Stage 3) + normalized (Stage 4)",
+                "assembled from primitives and baked into one mesh (composite_baker.py)"
+                if is_composite else "generated via OpenSCAD (Stage 3) + normalized (Stage 4)",
                 f"reviewed and saved by {getpass.getuser()} on {date.today().isoformat()}",
             ],
             date_imported_or_generated=date.today().isoformat(),
         ),
-        review_level=2,  # implementation plan section 4: parametric default
+        # implementation plan section 4: parametric default review level;
+        # composites inherit the same level (still LLM-decomposed geometry
+        # a human should eyeball, same trust tier as a generated CSG part).
+        review_level=2,
     )
 
     entries = load_catalog()

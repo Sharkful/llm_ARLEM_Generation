@@ -31,9 +31,12 @@ from pipeline.asset_factory import (
     adopt_draft_candidate,
     approve_asset,
     create_from_description,
+    edit_composite,
+    get_composite_fragment,
     load_draft_state,
     redirect_draft,
     regenerate,
+    review_and_repair,
     save_draft,
 )
 from pipeline.catalog_writer import load_catalog
@@ -219,6 +222,66 @@ def api_redirect():
         provider=payload.get("provider"), model=payload.get("model"), progress=progress,
     ))
     return jsonify({"job_id": job_id}), 202
+
+
+@app.get("/api/composite/<asset_id>")
+def api_composite_get(asset_id: str):
+    """Current parts list of a composite draft, for the editor panel.
+    Each part gets its resolved base_color inlined (fragment.json only
+    stores a material_id) so the editor can show a real color swatch
+    instead of guessing from color_hint text."""
+    try:
+        fragment = get_composite_fragment(asset_id)
+    except AssetFactoryError as exc:
+        return _error(str(exc), 404)
+    data = fragment.model_dump(mode="json")
+    for part in data["parts"]:
+        part["current_base_color"] = None
+        if part.get("material_id"):
+            mat_path = config.MATERIALS_DIR / f"{part['material_id']}.json"
+            if mat_path.is_file():
+                part["current_base_color"] = json.loads(
+                    mat_path.read_text(encoding="utf-8-sig")
+                ).get("base_color")
+    return jsonify({"fragment": data})
+
+
+@app.post("/api/composite/<asset_id>/edit")
+def api_composite_edit(asset_id: str):
+    """Edit part transforms/colors/bonds directly and rebake -- no LLM call
+    unless regenerate_materials_for is given (see edit_composite docstring)."""
+    payload = request.get_json(silent=True) or {}
+    part_edits = payload.get("part_edits") or {}
+    if not isinstance(part_edits, dict):
+        return _error("part_edits must be an object of {part_id: {field: value}}")
+    regenerate_materials_for = payload.get("regenerate_materials_for") or None
+    job_id = _start_job(lambda progress: edit_composite(
+        asset_id, part_edits=part_edits,
+        regenerate_materials_for=regenerate_materials_for,
+        provider=payload.get("provider"), model=payload.get("model"),
+        progress=progress,
+    ))
+    return jsonify({"job_id": job_id}), 202
+
+
+@app.post("/api/review/<asset_id>")
+def api_review(asset_id: str):
+    """Render the draft, ask a vision LLM whether it matches the original
+    description, and (auto_repair, default True) feed a real mismatch back
+    into a repair pass. The verdict is embedded in the returned draft
+    (draft.visual_review) either way."""
+    payload = request.get_json(silent=True) or {}
+    auto_repair = payload.get("auto_repair", True)
+
+    def run(progress):
+        draft, review, logs = review_and_repair(
+            asset_id, auto_repair=auto_repair,
+            provider=payload.get("provider"), model=payload.get("model"),
+            progress=progress,
+        )
+        return draft, logs
+
+    return jsonify({"job_id": _start_job(run)}), 202
 
 
 @app.post("/api/save")

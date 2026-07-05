@@ -15,7 +15,7 @@ silent fallback behavior).
 from __future__ import annotations
 
 from models.catalog_models import AssetCatalogEntry
-from models.classification_models import GeometryClassification
+from models.classification_models import CompositePartPlan, GeometryClassification
 from models.log_models import LLMCallEntry
 from models.spec_models import AssetSpec, ResolutionRecord
 from pipeline.classifier import ClassifierFn, classify
@@ -36,7 +36,7 @@ def resolve(
     catalog: list[AssetCatalogEntry],
     classify_geometry_fn: ClassifierFn | None = None,
     _depth: int = 0,
-    forced_composite_parts: list[str] | None = None,
+    forced_composite_parts: list[CompositePartPlan] | None = None,
 ) -> tuple[ResolutionRecord, list[LLMCallEntry]]:
     """forced_composite_parts: bypass catalog-match/LLM classification
     entirely and build a composite from these exact part descriptions.
@@ -76,7 +76,7 @@ def resolve(
 
         parts: list[CompositePart] = []
         any_part_needs_review = False
-        for part_spec in part_specs:
+        for part_spec, plan in zip(part_specs, geometry.composite_parts):
             # Recursive resolution -- guard against pathological infinite
             # recursion (an LLM classifying a sub-part as composite again)
             # rather than trusting the LLM never loops.
@@ -104,6 +104,12 @@ def resolve(
                     part_id=part_spec.object_id,
                     asset_spec=part_spec,
                     resolved_asset_id=resolved_part_id,
+                    position=plan.relative_position,
+                    scale=plan.relative_scale,
+                    color_hint=plan.color_hint,
+                    label=plan.label,
+                    bond_between=plan.bond_between,
+                    bond_thickness=plan.bond_thickness,
                 )
             )
 
