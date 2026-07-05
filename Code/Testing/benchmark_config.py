@@ -55,27 +55,27 @@ class ModelConfig:
         return None
 
 
-# Pre-defined model configs for quick benchmarking
+# Final generation-test roster (locked in issue #32, re-verified 2026-07).
+# Every model_id here must have a matching DEFAULT_PRICING key or cost computes
+# as $0 silently. Dropped this round: gpt-5-mini/gpt-5-nano (superseded/retired),
+# gpt-4o-mini (legacy), claude-sonnet-4.6 (→ Sonnet 5), gemini-2.5-pro/2.5-flash
+# (kept 2.5-flash-lite as the cheapest data point).
 MODELS = {
     # ── OpenAI ────────────────────────────────────────────────────────────
     "gpt-5.5":      ModelConfig("gpt-5.5",      Provider.OPENAI, "GPT-5.5",      ModelSize.LARGE),
+    "gpt-5.4":      ModelConfig("gpt-5.4",      Provider.OPENAI, "GPT-5.4",      ModelSize.MEDIUM),
     "gpt-5.4-mini": ModelConfig("gpt-5.4-mini", Provider.OPENAI, "GPT-5.4 Mini", ModelSize.SMALL),
     "gpt-5.4-nano": ModelConfig("gpt-5.4-nano", Provider.OPENAI, "GPT-5.4 Nano", ModelSize.SMALL),
-    "gpt-5-mini":   ModelConfig("gpt-5-mini",   Provider.OPENAI, "GPT-5 Mini",   ModelSize.SMALL),
-    "gpt-5-nano":   ModelConfig("gpt-5-nano",   Provider.OPENAI, "GPT-5 Nano",   ModelSize.SMALL),
-    "gpt-4o-mini":  ModelConfig("gpt-4o-mini",  Provider.OPENAI, "GPT-4o Mini",  ModelSize.SMALL),
 
     # ── Anthropic ─────────────────────────────────────────────────────────
-    "claude-opus-4.8":   ModelConfig("claude-opus-4-8",          Provider.ANTHROPIC, "Claude Opus 4.8",   ModelSize.LARGE),
-    "claude-sonnet-4.6": ModelConfig("claude-sonnet-4-6",        Provider.ANTHROPIC, "Claude Sonnet 4.6", ModelSize.MEDIUM),
-    "claude-haiku-4.5":  ModelConfig("claude-haiku-4-5-20251001", Provider.ANTHROPIC, "Claude Haiku 4.5",  ModelSize.SMALL),
+    "claude-opus-4.8":  ModelConfig("claude-opus-4-8",           Provider.ANTHROPIC, "Claude Opus 4.8", ModelSize.LARGE),
+    "claude-sonnet-5":  ModelConfig("claude-sonnet-5",           Provider.ANTHROPIC, "Claude Sonnet 5", ModelSize.MEDIUM),
+    "claude-haiku-4.5": ModelConfig("claude-haiku-4-5-20251001", Provider.ANTHROPIC, "Claude Haiku 4.5", ModelSize.SMALL),
 
     # ── Google Gemini ─────────────────────────────────────────────────────
-    "gemini-3.1-pro":        ModelConfig("gemini-3.1-pro-preview",        Provider.GOOGLE, "Gemini 3.1 Pro",        ModelSize.LARGE),
-    "gemini-3.1-flash-lite": ModelConfig("gemini-3.1-flash-lite-preview", Provider.GOOGLE, "Gemini 3.1 Flash Lite", ModelSize.SMALL),
+    "gemini-3.1-pro":        ModelConfig("gemini-3.1-pro",        Provider.GOOGLE, "Gemini 3.1 Pro",        ModelSize.LARGE),
     "gemini-3.5-flash":      ModelConfig("gemini-3.5-flash",      Provider.GOOGLE, "Gemini 3.5 Flash",      ModelSize.MEDIUM),
-    "gemini-2.5-pro":        ModelConfig("gemini-2.5-pro",        Provider.GOOGLE, "Gemini 2.5 Pro",        ModelSize.LARGE),
-    "gemini-2.5-flash":      ModelConfig("gemini-2.5-flash",      Provider.GOOGLE, "Gemini 2.5 Flash",      ModelSize.MEDIUM),
+    "gemini-3.1-flash-lite": ModelConfig("gemini-3.1-flash-lite", Provider.GOOGLE, "Gemini 3.1 Flash Lite", ModelSize.SMALL),
     "gemini-2.5-flash-lite": ModelConfig("gemini-2.5-flash-lite", Provider.GOOGLE, "Gemini 2.5 Flash Lite", ModelSize.SMALL),
 }
 
@@ -220,8 +220,8 @@ DEFAULT_TOPICS = [
     "Basic Circuit Components - Resistors, capacitors, and LEDs",
 ]
 
-# Quick test: small set of fast/cheap models
-QUICK_BENCHMARK_MODELS = ["gpt-4o-mini", "claude-haiku-4.5", "gemini-2.5-flash-lite"]
+# Quick test: cheapest current model per provider (all roster keys)
+QUICK_BENCHMARK_MODELS = ["gpt-5.4-nano", "claude-haiku-4.5", "gemini-2.5-flash-lite"]
 
 # Full benchmark: comprehensive model comparison
 FULL_BENCHMARK_MODELS = list(MODELS.keys())

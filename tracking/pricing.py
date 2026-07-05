@@ -11,32 +11,35 @@ from .metrics import TokenUsage
 
 
 # Default pricing per 1M tokens (USD), base/standard tier (no caching/batch).
-# Entries marked "verified 2026-05" were checked against the official provider
-# pricing pages (platform.claude.com, developers.openai.com, ai.google.dev).
-# Entries marked "UNVERIFIED"/"legacy" were NOT on the current pricing page
-# (superseded or deprecated); the stored value is retained — treat with caution.
+# Entries marked "verified 2026-07" were re-checked against the official provider
+# pricing pages (platform.claude.com, developers.openai.com, ai.google.dev) as
+# part of issue #32. Entries marked "legacy"/"retired" were superseded or removed
+# from the current page and are NOT in the benchmark roster; the stored value is
+# retained for historical-artifact cost comparison — treat with caution.
 DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     # ── OpenAI ────────────────────────────────────────────────────────────
-    "gpt-5.5":       {"input": 5.00,  "output": 30.00},   # verified 2026-05 (current flagship)
-    "gpt-5.4":       {"input": 2.50,  "output": 15.00},   # verified 2026-05 (prev flagship; mini/nano still current)
-    "gpt-5.4-mini":  {"input": 0.75,  "output":  4.50},   # verified 2026-05
-    "gpt-5.4-nano":  {"input": 0.20,  "output":  1.25},   # verified 2026-05
-    "gpt-5-mini":    {"input": 0.15,  "output":  0.60},   # UNVERIFIED — not on current page
-    "gpt-5-nano":    {"input": 0.05,  "output":  0.40},   # UNVERIFIED — not on current page
+    "gpt-5.5":       {"input": 5.00,  "output": 30.00},   # verified 2026-07 (current flagship; >272k in = 2x/1.5x)
+    "gpt-5.4":       {"input": 2.50,  "output": 15.00},   # verified 2026-07 (current mid)
+    "gpt-5.4-mini":  {"input": 0.75,  "output":  4.50},   # verified 2026-07
+    "gpt-5.4-nano":  {"input": 0.20,  "output":  1.25},   # verified 2026-07
+    "gpt-5-mini":    {"input": 0.25,  "output":  2.00},   # 2026-07: superseded by 5.4-mini (was mis-stored 0.15/0.60); not in roster
+    "gpt-5-nano":    {"input": 0.05,  "output":  0.40},   # retired 2026-07 — removed from current page; not in roster
     "gpt-5":         {"input": 2.50,  "output": 10.00},
     "gpt-4.1":       {"input": 2.00,  "output":  8.00},
     "gpt-4.1-mini":  {"input": 0.40,  "output":  1.60},
     "gpt-4.1-nano":  {"input": 0.10,  "output":  0.40},
     "gpt-4o":        {"input": 2.50,  "output": 10.00},
-    "gpt-4o-mini":   {"input": 0.15,  "output":  0.60},   # legacy — not on current page; value unchanged
+    "gpt-4o-mini":   {"input": 0.15,  "output":  0.60},   # verified 2026-07: legacy/grandfathered; dropped from roster (issue #32)
     "gpt-4-turbo":   {"input": 10.00, "output": 30.00},
     "gpt-3.5-turbo": {"input": 0.50,  "output":  1.50},
 
     # ── Anthropic ─────────────────────────────────────────────────────────
-    "claude-opus-4-8":          {"input":  5.00, "output": 25.00},   # verified 2026-05 (current flagship Opus)
-    "claude-sonnet-4-6":        {"input":  3.00, "output": 15.00},   # verified 2026-05
+    "claude-opus-4-8":          {"input":  5.00, "output": 25.00},   # verified 2026-07 (current flagship Opus)
+    "claude-sonnet-5":          {"input":  3.00, "output": 15.00},   # verified 2026-07 (current mid; intro $2/$10 thru 2026-08-31 — standard rate stored)
+    "claude-sonnet-4-6":        {"input":  3.00, "output": 15.00},   # verified 2026-07: now legacy (superseded by Sonnet 5); dropped from roster
     # Haiku 4.5 — keyed by its full versioned model ID used in API calls
-    "claude-haiku-4-5-20251001": {"input":  1.00, "output":  5.00},   # verified 2026-05 (was 0.80/4 — old Haiku-3.5 pricing)
+    "claude-haiku-4-5-20251001": {"input":  1.00, "output":  5.00},   # verified 2026-07 (current small)
+    "claude-fable-5":           {"input": 10.00, "output": 50.00},   # verified 2026-07 (most capable; GA 2026-06-09; not in roster)
     "claude-3-haiku-20240307":   {"input":  0.25, "output":  1.25},   # legacy/deprecated — not on current page
     # Legacy / alternate keys
     "claude-opus-4":      {"input": 15.00, "output": 75.00},
@@ -48,12 +51,13 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     "claude-3.5-haiku":   {"input":  0.80, "output":  4.00},
 
     # ── Google Gemini ─────────────────────────────────────────────────────
-    "gemini-3.1-pro-preview":        {"input": 2.00,  "output": 12.00},  # verified 2026-05 (<=200k tier)
-    "gemini-3.1-flash-lite-preview":  {"input": 0.25,  "output":  1.50},  # verified 2026-05
-    "gemini-3.5-flash":      {"input": 1.50,  "output":  9.00},  # verified 2026-05 (current text flash)
-    "gemini-2.5-pro":        {"input": 1.25,  "output": 10.00},  # verified 2026-05 (<=200k tier)
-    "gemini-2.5-flash":      {"input": 0.30,  "output":  2.50},  # verified 2026-05 (was 0.15/0.60)
-    "gemini-2.5-flash-lite": {"input": 0.10,  "output":  0.40},  # verified 2026-05
+    # Pro models are context-tiered; our runs are well under 200k so the <=200k tier applies.
+    "gemini-3.1-pro":        {"input": 2.00,  "output": 12.00},  # verified 2026-07 (GA'd 2026-02-19, renamed from -preview; <=200k tier)
+    "gemini-3.1-flash-lite": {"input": 0.25,  "output":  1.50},  # verified 2026-07 (GA'd 2026-05-07, renamed from -preview)
+    "gemini-3.5-flash":      {"input": 1.50,  "output":  9.00},  # verified 2026-07 (current text flash)
+    "gemini-2.5-pro":        {"input": 1.25,  "output": 10.00},  # verified 2026-07 (<=200k tier; current but dropped from roster)
+    "gemini-2.5-flash":      {"input": 0.30,  "output":  2.50},  # verified 2026-07 (current but dropped from roster)
+    "gemini-2.5-flash-lite": {"input": 0.10,  "output":  0.40},  # verified 2026-07 (cheapest; kept in roster)
     "gemini-2.0-flash":      {"input": 0.10,  "output":  0.40},
     "gemini-1.5-pro":        {"input": 1.25,  "output":  5.00},
     "gemini-1.5-flash":      {"input": 0.075, "output":  0.30},
