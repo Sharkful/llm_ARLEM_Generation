@@ -8,17 +8,25 @@ model, provider, and prompt-specificity level (L1-L4).
 
 Data is loaded via ``benchmark_dataframe.load_runs()`` and embedded inline in the
 notebook so the report stays self-contained / re-runnable. A flat
-``benchmark_runs.csv`` is also written for slicing in any other tool.
+``benchmark_runs_<label>.csv`` is also written for slicing in any other tool.
+
+By default it reports **only today's** runs (so a fresh sweep is isolated from
+the ~89 prior historical runs) and stamps every output filename with today's
+date so successive reports never clobber each other. Use ``--since``/``--until``
+to pick a window and ``--label`` to set the filename suffix.
 
 Usage:
-    python "Code/Testing/build_statistics_report.py"
-Outputs:
-    Artifacts/Reports/benchmark_statistics.ipynb   (executed)
-    Artifacts/Reports/benchmark_statistics.html
-    Artifacts/Reports/benchmark_runs.csv
+    python "Code/Testing/build_statistics_report.py"                  # today's sweep
+    python "Code/Testing/build_statistics_report.py" --since 00000000 --label all   # full history
+Outputs (all under Artifacts/Data/Benchmark/Reports/):
+    benchmark_statistics_<label>.ipynb   (executed)
+    benchmark_statistics_<label>.html
+    benchmark_runs_<label>.csv
 """
 
+import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import nbformat
@@ -31,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from benchmark_dataframe import load_runs  # noqa: E402
 
 
-def build_notebook(records_json: str) -> nbformat.NotebookNode:
+def build_notebook(records_json: str, csv_name: str) -> nbformat.NotebookNode:
     nb = new_notebook()
     cells = []
 
@@ -124,8 +132,8 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
 
     cells.append(new_markdown_cell(
         "## Slice it yourself\n\n"
-        "The full flat table lives in `Artifacts/Reports/benchmark_runs.csv`, or "
-        "load it live from the source metrics files:\n\n"
+        f"The full flat table lives in `Artifacts/Data/Benchmark/Reports/{csv_name}`, "
+        "or load it live from the source metrics files:\n\n"
         "```python\n"
         "import sys; sys.path.insert(0, 'Code/Testing')\n"
         "from benchmark_dataframe import load_runs\n"
@@ -450,18 +458,67 @@ def build_notebook(records_json: str) -> nbformat.NotebookNode:
     return nb
 
 
-def main():
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    df = load_runs(include_failures=True)
+def parse_args(argv=None) -> argparse.Namespace:
+    today = datetime.now().strftime("%Y%m%d")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Build a dated, non-colliding benchmark statistics report for a run "
+            "window. Defaults to today's runs so a fresh sweep is isolated from "
+            "prior history and its outputs don't clobber earlier reports."
+        )
+    )
+    parser.add_argument(
+        "--since",
+        default=today,
+        metavar="YYYYMMDD",
+        help="Inclusive lower date bound (default: today). "
+        "Use 00000000 to include all history.",
+    )
+    parser.add_argument(
+        "--until",
+        default=None,
+        metavar="YYYYMMDD",
+        help="Optional inclusive upper date bound (default: no upper bound).",
+    )
+    parser.add_argument(
+        "--label",
+        default=today,
+        help="Suffix appended to output filenames (default: today). "
+        "e.g. --label all -> benchmark_runs_all.csv.",
+    )
+    return parser.parse_args(argv)
 
-    csv_path = OUT_DIR / "benchmark_runs.csv"
+
+def main(argv=None):
+    args = parse_args(argv)
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    df = load_runs(
+        include_failures=True,
+        since=args.since,
+        until=args.until,
+        dedupe_latest=True,
+    )
+
+    if df.empty:
+        window = f"since {args.since}"
+        if args.until:
+            window += f" until {args.until}"
+        print(
+            f"No runs found in the window ({window}). Nothing to report; "
+            "no files written."
+        )
+        return
+
+    csv_name = f"benchmark_runs_{args.label}.csv"
+    csv_path = OUT_DIR / csv_name
     df.to_csv(csv_path, index=False)
     print(f"Wrote {csv_path.relative_to(ROOT)} ({len(df)} rows)")
 
     # to_json handles numpy types and emits null for NaN — valid for json.loads.
-    nb = build_notebook(df.to_json(orient="records"))
+    nb = build_notebook(df.to_json(orient="records"), csv_name)
 
-    ipynb_path = OUT_DIR / "benchmark_statistics.ipynb"
+    ipynb_path = OUT_DIR / f"benchmark_statistics_{args.label}.ipynb"
     from nbconvert.preprocessors import ExecutePreprocessor
     ep = ExecutePreprocessor(timeout=180, kernel_name="python3")
     ep.preprocess(nb, {"metadata": {"path": str(OUT_DIR)}})
@@ -470,7 +527,7 @@ def main():
 
     from nbconvert import HTMLExporter
     html, _ = HTMLExporter(exclude_input=False).from_notebook_node(nb)
-    html_path = OUT_DIR / "benchmark_statistics.html"
+    html_path = OUT_DIR / f"benchmark_statistics_{args.label}.html"
     html_path.write_text(html, encoding="utf-8")
     print(f"Wrote {html_path.relative_to(ROOT)}")
 
