@@ -16,6 +16,9 @@ Usage:
     from benchmark_dataframe import load_runs
     df = load_runs()                       # L1-L4 formative runs only
     df = load_runs(levels_only=False)      # include legacy --topic runs (level=None)
+    df = load_runs(since="20260705")       # only runs on/after 2026-07-05
+    df = load_runs(since="20260705", until="20260705", dedupe_latest=True)
+                                           # one day's sweep, re-runs collapsed to latest
 
 Run directly for a quick sanity dump:
     python "Code/Testing/benchmark_dataframe.py"
@@ -74,6 +77,43 @@ def _ratio(numer, denom):
         return numer / denom
     except (TypeError, ZeroDivisionError):
         return float("nan")
+
+
+def _normalize_ts(ts) -> str:
+    """Normalize a run timestamp to a fixed-width ``YYYYMMDD_HHMMSS`` digit string.
+
+    The runner writes ``datetime.now().isoformat()`` (e.g.
+    ``'2026-06-08T11:01:19.593485'``, see ``benchmark.py``); some records may
+    instead carry the compact ``'YYYYMMDD_HHMMSS'`` form. Both collapse to a
+    fixed-width string whose lexical order is chronological, so the date-window
+    compare below is a valid ``>=`` / ``<=`` on it regardless of source format.
+    Missing/empty timestamps normalize to ``""`` (sorts below any real value).
+    """
+    # None, "", or a float/pandas NaN (NaN != NaN) all mean "no timestamp". NaN
+    # is truthy, so `not ts` alone wouldn't catch a value pulled from a DataFrame.
+    if not ts or ts != ts:
+        return ""
+    s = str(ts)
+    if "T" in s:  # ISO-8601: 'YYYY-MM-DD[T]HH:MM:SS[.ffffff]'
+        date, _, time = s.partition("T")
+        return date.replace("-", "") + "_" + time[:8].replace(":", "")
+    return s
+
+
+def _in_window(rec: dict, since: str | None, until: str | None) -> bool:
+    """True if ``rec``'s timestamp falls inside the inclusive ``[since, until]`` window.
+
+    ``since`` / ``until`` are ``"YYYYMMDD"`` date bounds. Comparison is on the
+    normalized fixed-width timestamp, so a missing/empty timestamp (which sorts
+    below every real one) is dropped by a ``since`` lower bound but passes an
+    ``until`` upper bound.
+    """
+    ts = _normalize_ts(rec.get("timestamp"))
+    if since is not None and ts < f"{since}_000000":
+        return False
+    if until is not None and ts > f"{until}_235959":
+        return False
+    return True
 
 
 def flatten_record(rec: dict) -> dict:
@@ -209,6 +249,9 @@ def load_runs(
     benchmark_dir: Path = BENCH,
     levels_only: bool = True,
     include_failures: bool = False,
+    since: str | None = None,
+    until: str | None = None,
+    dedupe_latest: bool = False,
 ) -> pd.DataFrame:
     """Flatten benchmark runs into one DataFrame.
 
@@ -219,11 +262,21 @@ def load_runs(
         include_failures: also pull failed runs from ``suite_results_*.json``.
             Default reads only the success-only ``*_metrics.json`` files. Use the
             ``success`` / ``had_usage`` columns to slice the result.
+        since: inclusive ``"YYYYMMDD"`` lower bound; drop runs before this date.
+            A record with no timestamp can't be placed, so a ``since`` bound
+            drops it.
+        until: inclusive ``"YYYYMMDD"`` upper bound; drop runs after this date.
+        dedupe_latest: collapse re-runs of the same config tuple
+            ``(model, spec_type, level, structure, lab_name)`` down to the newest
+            attempt. Use when a reboot-resume produced a second record for a
+            config the first attempt failed on (see issue #36).
     """
     raw = []
     out_dir = benchmark_dir / "Outputs"
     for p in sorted((benchmark_dir / "Metrics").glob("*_metrics.json")):
         rec = json.loads(p.read_text(encoding="utf-8"))
+        if not _in_window(rec, since, until):
+            continue
         # Pair the run with its saved output JSON (same stem, _output suffix) and
         # compute novel-asset counts — no LLM calls, just re-reading what we kept.
         # Novel assets are a json_lab concept (prefabs/textures); ARLEM outputs have
@@ -236,7 +289,11 @@ def load_runs(
         raw.append(rec)
     if include_failures:
         for p in sorted(benchmark_dir.glob("suite_results_*.json")):
-            raw.extend(json.loads(p.read_text(encoding="utf-8")))
+            raw.extend(
+                r
+                for r in json.loads(p.read_text(encoding="utf-8"))
+                if _in_window(r, since, until)
+            )
 
     df = pd.DataFrame(flatten_record(r) for r in raw)
     if df.empty:
@@ -248,6 +305,21 @@ def load_runs(
     df = df.drop_duplicates(
         subset=["model", "spec_type", "level", "structure", "lab_name", "timestamp"]
     ).reset_index(drop=True)
+
+    if dedupe_latest:
+        # Collapse re-runs of the same config (a reboot after a DNS drop can
+        # re-run an interrupted chunk, writing a second record at a new
+        # timestamp). Keep the newest attempt so a later success supersedes an
+        # earlier network failure. The writer emits ISO-8601 timestamps, which
+        # sort chronologically as plain strings.
+        df = (
+            df.sort_values("timestamp")
+            .drop_duplicates(
+                subset=["model", "spec_type", "level", "structure", "lab_name"],
+                keep="last",
+            )
+            .reset_index(drop=True)
+        )
 
     if levels_only:
         df = df[df["level"].isin(LEVELS)].reset_index(drop=True)
