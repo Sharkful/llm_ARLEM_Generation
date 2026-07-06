@@ -27,6 +27,7 @@ from __future__ import annotations
 import getpass
 import json
 import re
+import shutil
 from datetime import date, datetime
 from pathlib import Path
 from typing import Callable, Literal, Optional
@@ -1051,6 +1052,44 @@ def adopt_draft_candidate(
     return draft
 
 
+# ── Discard draft (added 2026-07, "no way to clear/delete" incident) ─────
+#
+# A stuck, wrong, or stale draft previously had no way out at all -- once
+# created, `library/generated/<id>/draft.json` sat there forever, showing
+# up in the drafts grid indefinitely. Deliberately scoped to drafts only
+# (never a saved/approved catalog asset): a draft is this author's own
+# in-progress work, safe to throw away; a saved entry may already be
+# referenced by a scene, so removing one is a separate, more careful
+# operation this function does not perform.
+
+def discard_draft(asset_id: str) -> None:
+    """Delete an in-progress draft and everything it produced (OpenSCAD
+    source/STL/GLB, or a composite's fragment + baked GLB + per-part
+    materials). Raises if the draft was already saved/approved."""
+    draft = load_draft_state(asset_id)
+    if draft is None:
+        raise AssetFactoryError(f"No draft found for {asset_id!r}.")
+    if draft.status == "saved":
+        raise AssetFactoryError(
+            f"{asset_id!r} has already been saved/approved -- discard only removes "
+            "in-progress drafts, not saved catalog assets."
+        )
+
+    draft_dir = _draft_dir(asset_id)
+    if draft_dir.is_dir():
+        shutil.rmtree(draft_dir)
+
+    if draft.composite_id:
+        fragment_path = config.LIBRARY_DIR / "composites" / f"{draft.composite_id}.json"
+        if fragment_path.is_file():
+            fragment_path.unlink()
+        baked_dir = config.LIBRARY_DIR / "composites" / asset_id
+        if baked_dir.is_dir():
+            shutil.rmtree(baked_dir)
+        for mat_path in config.MATERIALS_DIR.glob(f"{draft.composite_id}_*_mat.json"):
+            mat_path.unlink()
+
+
 def approve_asset(asset_id: str) -> AssetCatalogEntry:
     """Record a human approval on an existing catalog entry (who/when)."""
     entries = load_catalog()
@@ -1061,6 +1100,36 @@ def approve_asset(asset_id: str) -> AssetCatalogEntry:
                 update={"modifications": [*entry.provenance.modifications, stamp]}
             )
             entries[i] = entry.model_copy(update={"provenance": prov})
+            save_catalog(entries)
+            return entries[i]
+    raise AssetFactoryError(f"asset_id {asset_id!r} not found in the catalog.")
+
+
+def update_catalog_metadata(
+    asset_id: str,
+    display_name: str | None = None,
+    tags: list[str] | None = None,
+) -> AssetCatalogEntry:
+    """Rename/re-tag a catalog entry (added 2026-07, "easier to search"
+    request) -- edits only display_name/tags, never geometry/provenance/
+    scale. `None` means "leave this field alone" (so editing just the name
+    doesn't blank the tags); pass an empty list to clear tags explicitly.
+    """
+    updates: dict = {}
+    if display_name is not None:
+        stripped = display_name.strip()
+        if not stripped:
+            raise AssetFactoryError("display_name cannot be blank.")
+        updates["display_name"] = stripped
+    if tags is not None:
+        updates["tags"] = [t.strip() for t in tags if t.strip()]
+    if not updates:
+        raise AssetFactoryError("Nothing to update -- provide display_name and/or tags.")
+
+    entries = load_catalog()
+    for i, entry in enumerate(entries):
+        if entry.asset_id == asset_id:
+            entries[i] = entry.model_copy(update=updates)
             save_catalog(entries)
             return entries[i]
     raise AssetFactoryError(f"asset_id {asset_id!r} not found in the catalog.")

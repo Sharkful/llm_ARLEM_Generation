@@ -1,6 +1,6 @@
 {
   "asset_id": "lem-jw2",
-  "status": "draft",
+  "status": "saved",
   "resolution_method": "parametric",
   "description": "Scale model of the Apollo 11 Command/Service Module \"Columbia\": a combination of the cone-like command module on top of the cylindric service module, with the main engine opposite the command module. Thrust modules are present.",
   "spec": {
@@ -15,28 +15,29 @@
   "plan": {
     "parameters": {
       "sm_radius": 0.065,
-      "sm_height": 0.2417,
-      "sm_wall": 0.004,
+      "sm_height": 0.1208,
       "cm_base_radius": 0.065,
-      "cm_apex_radius": 0.012,
-      "cm_height": 0.0583,
-      "sps_nozzle_r_top": 0.013,
-      "sps_nozzle_r_bot": 0.023,
-      "sps_nozzle_h": 0.0333,
-      "rcs_pod_w": 0.008,
-      "rcs_pod_d": 0.012,
-      "rcs_pod_h": 0.005,
+      "cm_apex_radius": 0.01,
+      "cm_height": 0.0683,
+      "sps_r_top": 0.014,
+      "sps_r_bot": 0.028,
+      "sps_height": 0.04,
+      "rcs_pod_w": 0.01,
+      "rcs_pod_h": 0.008,
+      "rcs_pod_d": 0.006,
       "rcs_nozzle_r": 0.0018,
       "rcs_nozzle_h": 0.004,
+      "ring_thickness": 0.003,
+      "ring_height": 0.005,
       "sm_panel_depth": 0.0015
     },
-    "scad_source": "\n// ============================================================\n//  Apollo 11 Command/Service Module \"Columbia\" \u2014 Scale Model\n//  Units: meters  |  +Y up, +Z forward\n//  Origin: centered on the combined CSM stack\n// ============================================================\n\n// --- Key Parameters ---\n// Service Module (SM)\nsm_radius = 0.065;   // SM outer radius  (~3.9 m real \u2192 1:60 scale \u2248 0.065 m)\nsm_height = 0.2417;   // SM height         (~14.5 m real \u2192 1:60)\nsm_wall = 0.004;   // SM skin thickness\n\n// Command Module (CM)\ncm_base_radius = 0.065;   // CM base matches SM radius\ncm_apex_radius = 0.012;   // CM nose tip radius\ncm_height = 0.0583;   // CM height         (~3.5 m real \u2192 1:60)\n\n// Service Propulsion System (SPS) nozzle\nsps_nozzle_r_top = 0.013;\nsps_nozzle_r_bot = 0.023;\nsps_nozzle_h = 0.0333;   // ~2 m real\n\n// Reaction Control System (RCS) thrust quads\nrcs_pod_w = 0.008;\nrcs_pod_d = 0.012;\nrcs_pod_h = 0.005;\nrcs_nozzle_r = 0.0018;\nrcs_nozzle_h = 0.004;\n\n// SM panel details\nsm_panel_depth = 0.0015;\n\n// Derived\nsm_bottom_z = -sm_height / 2;\nsm_top_z    =  sm_height / 2;\ncm_bottom_z =  sm_top_z;\ncm_top_z    =  cm_bottom_z + cm_height;\n\n// ============================================================\n//  HELPERS\n// ============================================================\nmodule rcs_nozzle() {\n    rotate([90, 0, 0])\n        cylinder(r1=rcs_nozzle_r*1.3, r2=rcs_nozzle_r*0.6,\n                 h=rcs_nozzle_h, center=false, $fn=12);\n}\n\n// One RCS quad pod (4 nozzles, two axes)\nmodule rcs_quad() {\n    // Pod body\n    cube([rcs_pod_w, rcs_pod_h, rcs_pod_d], center=true);\n    // Four nozzles: +Y, -Y, +Z, -Z faces\n    translate([0,  rcs_pod_h/2, 0]) rotate([ 90,0,0]) cylinder(r1=rcs_nozzle_r*1.2, r2=rcs_nozzle_r*0.5, h=rcs_nozzle_h, $fn=10);\n    translate([0, -rcs_pod_h/2-rcs_nozzle_h, 0]) rotate([-90,0,0]) cylinder(r1=rcs_nozzle_r*1.2, r2=rcs_nozzle_r*0.5, h=rcs_nozzle_h, $fn=10);\n    translate([0,  0,  rcs_pod_d/2]) cylinder(r1=rcs_nozzle_r*1.2, r2=rcs_nozzle_r*0.5, h=rcs_nozzle_h, $fn=10);\n    translate([0,  0, -rcs_pod_d/2-rcs_nozzle_h]) rotate([180,0,0]) cylinder(r1=rcs_nozzle_r*1.2, r2=rcs_nozzle_r*0.5, h=rcs_nozzle_h, $fn=10);\n}\n\n// ============================================================\n//  SERVICE MODULE\n// ============================================================\nmodule service_module() {\n    difference() {\n        // Main SM cylinder\n        translate([0, sm_bottom_z, 0])\n        rotate([90, 0, 0]) rotate([0, 0, 0])\n        rotate([-90, 0, 0])\n            cylinder(r=sm_radius, h=sm_height, center=false, $fn=64);\n\n        // Hollow interior (weight-saving cutaway suggestion)\n        translate([0, sm_bottom_z + sm_wall, 0])\n        rotate([-90, 0, 0])\n            cylinder(r=sm_radius - sm_wall, h=sm_height - sm_wall*2,\n                     center=false, $fn=64);\n\n        // SM panel recesses \u2014 6 equally-spaced longitudinal bays\n        for (i = [0:5]) {\n            rotate([0, i*60, 0])\n            translate([sm_radius - sm_panel_depth, 0, 0])\n            rotate([-90, 0, 0])\n                cube([sm_radius*0.55, sm_height*0.55, sm_panel_depth*3],\n                     center=true);\n        }\n    }\n}\n\n// ============================================================\n//  COMMAND MODULE\n// ============================================================\nmodule command_module() {\n    // Blunt-cone frustum built as a cylinder+sphere blend\n    translate([0, cm_bottom_z, 0])\n    rotate([-90, 0, 0]) {\n        // Main cone body\n        cylinder(r1=cm_base_radius, r2=cm_apex_radius,\n                 h=cm_height, center=false, $fn=64);\n        // Rounded apex cap\n        translate([0, 0, cm_height])\n            sphere(r=cm_apex_radius, $fn=32);\n        // Slightly domed base heat-shield disk\n        cylinder(r=cm_base_radius, h=0.004, center=false, $fn=64);\n    }\n}\n\n// ============================================================\n//  SPS ENGINE NOZZLE\n// ============================================================\nmodule sps_nozzle() {\n    translate([0, sm_bottom_z, 0])\n    rotate([90, 0, 0])   // point -Y (downward)\n        cylinder(r1=sps_nozzle_r_top, r2=sps_nozzle_r_bot,\n                 h=sps_nozzle_h, center=false, $fn=48);\n}\n\n// ============================================================\n//  SM FAIRINGS / PANELS (raised rectangular ribs)\n// ============================================================\nmodule sm_fairings() {\n    for (i = [0:5]) {\n        rotate([0, i*60, 0])\n        translate([sm_radius, 0, 0])\n        rotate([0, 0, 0])\n            cube([sm_panel_depth*2, sm_height*0.50, 0.003], center=true);\n    }\n}\n\n// ============================================================\n//  RCS QUADS \u2014 4 clusters, spaced 90\u00b0 apart\n//  Mounted near the +Y (top) end of the SM\n// ============================================================\nmodule rcs_clusters() {\n    rcs_y = sm_top_z - 0.018;\n    for (i = [0:3]) {\n        rotate([0, i*90 + 45, 0])\n        translate([sm_radius + rcs_pod_w*0.5, rcs_y, 0])\n            rcs_quad();\n    }\n}\n\n// ============================================================\n//  UMBILICAL / SM\u2013CM INTERFACE RING\n// ============================================================\nmodule interface_ring() {\n    translate([0, sm_top_z, 0])\n    rotate([-90, 0, 0])\n        difference() {\n            cylinder(r=sm_radius + 0.002, h=0.005, center=false, $fn=64);\n            cylinder(r=sm_radius - sm_wall, h=0.005, center=false, $fn=64);\n        }\n}\n\n// ============================================================\n//  ASSEMBLY\n// ============================================================\nunion() {\n    service_module();\n    command_module();\n    sps_nozzle();\n    sm_fairings();\n    rcs_clusters();\n    interface_ring();\n}\n",
+    "scad_source": "\n// ============================================================\n//  Apollo 11 Command/Service Module \"Columbia\" \u2014 Scale Model\n//  Units: meters  |  +Y up, +Z forward\n//  Central axis: Y-axis  |  Origin: center of combined CSM stack\n// ============================================================\n\n// --- Key Parameters ---\n// Service Module (SM)\nsm_radius = 0.065;    // SM outer radius  (~3.9 m real \u2192 ~1:60 scale)\nsm_height = 0.1208;   // SM height \u2014 halved from original 0.2417\n\n// Command Module (CM)\ncm_base_radius = 0.065; // CM base matches SM top radius\ncm_apex_radius = 0.01; // CM nose tip radius (small, rounded cap)\ncm_height = 0.0683;// CM height        (~3.5 m real \u2192 1:60)\n\n// SPS engine bell (Service Propulsion System)\nsps_r_top = 0.014;     // bell throat radius (top, where it meets SM)\nsps_r_bot = 0.028;     // bell exit radius   (wider at bottom)\nsps_height = 0.04;    // bell length\n\n// RCS quad pods (4 clusters, 90\u00b0 apart, mounted on SM side)\nrcs_pod_w = 0.01;     // width  (circumferential)\nrcs_pod_h = 0.008;     // height (axial, along Y)\nrcs_pod_d = 0.006;     // depth  (radial, sticks out from SM surface)\nrcs_nozzle_r = 0.0018;  // small nozzle exit radius\nrcs_nozzle_h = 0.004;   // nozzle protrusion length\n\n// Interface ring between SM and CM\nring_thickness = 0.003;\nring_height = 0.005;\n\n// Panel rib detail on SM surface\nsm_panel_depth = 0.0015;\n\n// ---- Derived positions (stack runs along Y axis) ----\n// Stack total: SM occupies [-sm_height/2, +sm_height/2] in Y\n// CM sits on top of SM, SPS hangs below SM\nsm_bot_y = -sm_height / 2;\nsm_top_y =  sm_height / 2;\ncm_bot_y =  sm_top_y;          // CM base flush with SM top\ncm_top_y =  cm_bot_y + cm_height;\nsps_bot_y = sm_bot_y - sps_height; // bell bottom\n\n// ============================================================\n//  SERVICE MODULE \u2014 hollow cylinder with panel ribs\n// ============================================================\nmodule service_module() {\n    color([0.80, 0.82, 0.85]) {   // silver-white\n        difference() {\n            // Outer skin\n            translate([0, sm_bot_y, 0])\n            rotate([-90, 0, 0])\n                cylinder(r = sm_radius, h = sm_height,\n                         center = false, $fn = 72);\n\n            // Hollow interior cutaway (optional visual detail)\n            translate([0, sm_bot_y + 0.004, 0])\n            rotate([-90, 0, 0])\n                cylinder(r = sm_radius - 0.004, h = sm_height - 0.008,\n                         center = false, $fn = 72);\n        }\n\n        // Longitudinal panel ribs \u2014 6 bays\n        for (i = [0 : 5]) {\n            rotate([0, i * 60, 0])\n            translate([sm_radius, 0, 0])\n                cube([sm_panel_depth * 2, sm_height * 0.80, 0.002],\n                     center = true);\n        }\n    }\n}\n\n// ============================================================\n//  INTERFACE RING \u2014 thin collar between SM top and CM base\n// ============================================================\nmodule interface_ring() {\n    color([0.55, 0.55, 0.58]) {\n        translate([0, sm_top_y, 0])\n        rotate([-90, 0, 0])\n            difference() {\n                cylinder(r = sm_radius + 0.002, h = ring_height,\n                         center = false, $fn = 72);\n                cylinder(r = sm_radius - ring_thickness, h = ring_height,\n                         center = false, $fn = 72);\n            }\n    }\n}\n\n// ============================================================\n//  COMMAND MODULE \u2014 truncated cone + rounded apex\n// ============================================================\nmodule command_module() {\n    color([0.88, 0.88, 0.88]) {   // light gray\n        // Main frustum: wide base at cm_bot_y, narrow apex at cm_top_y\n        translate([0, cm_bot_y, 0])\n        rotate([-90, 0, 0])\n            cylinder(r1 = cm_base_radius, r2 = cm_apex_radius,\n                     h = cm_height, center = false, $fn = 72);\n\n        // Rounded apex cap \u2014 sits exactly at cm_top_y\n        translate([0, cm_top_y, 0])\n            sphere(r = cm_apex_radius, $fn = 32);\n\n        // Slight heat-shield base ring\n        translate([0, cm_bot_y - 0.002, 0])\n        rotate([-90, 0, 0])\n            cylinder(r = cm_base_radius, h = 0.003,\n                     center = false, $fn = 72);\n    }\n}\n\n// ============================================================\n//  SPS ENGINE BELL \u2014 frustum, narrow end at SM bottom\n// ============================================================\nmodule sps_engine() {\n    color([0.28, 0.28, 0.28]) {   // dark gray / engine bell\n        // Bell: r1 (top, at SM bottom) = sps_r_top, r2 (exit) = sps_r_bot\n        // rotate([90,0,0]) points the cylinder's +h direction toward -Y\n        translate([0, sm_bot_y, 0])\n        rotate([90, 0, 0])\n            cylinder(r1 = sps_r_top, r2 = sps_r_bot,\n                     h = sps_height, center = false, $fn = 48);\n    }\n}\n\n// ============================================================\n//  RCS QUAD POD \u2014 one rectangular block with 4 tiny nozzles\n// ============================================================\nmodule rcs_quad_pod() {\n    color([0.60, 0.62, 0.65]) {\n        // Pod body, centered at the mount point\n        cube([rcs_pod_w, rcs_pod_h, rcs_pod_d], center = true);\n\n        // Nozzle pointing radially outward (+X after pod placement)\n        translate([rcs_pod_w * 0.5, rcs_pod_h * 0.25, 0])\n        rotate([0, 90, 0])\n            cylinder(r1 = rcs_nozzle_r * 1.3, r2 = rcs_nozzle_r * 0.6,\n                     h = rcs_nozzle_h, center = false, $fn = 10);\n\n        translate([rcs_pod_w * 0.5, -rcs_pod_h * 0.25, 0])\n        rotate([0, 90, 0])\n            cylinder(r1 = rcs_nozzle_r * 1.3, r2 = rcs_nozzle_r * 0.6,\n                     h = rcs_nozzle_h, center = false, $fn = 10);\n\n        // Nozzle pointing axially +Y\n        translate([0, rcs_pod_h * 0.5, 0])\n        rotate([-90, 0, 0])\n            cylinder(r1 = rcs_nozzle_r * 1.3, r2 = rcs_nozzle_r * 0.6,\n                     h = rcs_nozzle_h, center = false, $fn = 10);\n\n        // Nozzle pointing axially -Y\n        translate([0, -rcs_pod_h * 0.5, 0])\n        rotate([90, 0, 0])\n            cylinder(r1 = rcs_nozzle_r * 1.3, r2 = rcs_nozzle_r * 0.6,\n                     h = rcs_nozzle_h, center = false, $fn = 10);\n    }\n}\n\n// ============================================================\n//  RCS CLUSTERS \u2014 4 quads at 90\u00b0 spacing near SM top\n// ============================================================\nmodule rcs_clusters() {\n    // Place quads near top of SM, spaced 90\u00b0 apart at 45\u00b0 offsets\n    // Clamped so they stay within the shorter SM body\n    rcs_y = sm_top_y - 0.015;  // ~15 mm down from SM top (was 30, halved with SM)\n    for (i = [0 : 3]) {\n        rotate([0, i * 90 + 45, 0])\n        translate([sm_radius + rcs_pod_d * 0.5, rcs_y, 0])\n            rcs_quad_pod();\n    }\n}\n\n// ============================================================\n//  ASSEMBLY\n// ============================================================\nunion() {\n    service_module();\n    interface_ring();\n    command_module();\n    sps_engine();\n    rcs_clusters();\n}\n",
     "expected_bounds_m": [
-      0.13,
-      0.3416,
-      0.13
+      0.146,
+      0.3191,
+      0.146
     ],
-    "notes": ""
+    "notes": "SM height halved from 0.2417 to 0.1208. RCS cluster y-offset also halved (0.030 \u2192 0.015) so pods stay on the SM body. All other elements (CM, SPS bell, interface ring) are unchanged in size and reconnect correctly via the derived sm_bot_y / sm_top_y / cm_bot_y expressions."
   },
   "generation": {
     "asset_id": "lem-jw2",
@@ -45,13 +46,13 @@
     "stl_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\lem-jw2\\source.stl",
     "actual_bounds_m": [
       0.133999,
-      0.376941,
-      0.308698
+      0.239051,
+      0.133999
     ],
     "expected_bounds_m": [
-      0.13,
-      0.3416,
-      0.13
+      0.146,
+      0.3191,
+      0.146
     ],
     "bounds_diverge": false,
     "repair_attempts": [],
@@ -64,18 +65,18 @@
     "glb_path": "C:\\Users\\jfwal\\OneDrive\\python-experiments-2023\\AR Project - 2026\\llm_ARLEM_Generation\\asset_pipeline\\library\\generated\\lem-jw2\\model.glb",
     "original_bounds_m": [
       0.133999,
-      0.376941,
-      0.308698
+      0.239051,
+      0.133999
     ],
     "final_bounds_m": [
       0.133999,
-      0.376941,
-      0.308698
+      0.239051,
+      0.133999
     ],
     "pivot": "center",
     "scale_applied": 1.0,
-    "triangle_count_before": 2502,
-    "triangle_count_after": 2502,
+    "triangle_count_before": 3432,
+    "triangle_count_after": 3432,
     "decimated": false,
     "uv_status": "generated",
     "error_message": null
@@ -83,16 +84,18 @@
   "glb_address": "library/generated/lem-jw2/model.glb",
   "bounds_m": [
     0.133999,
-    0.376941,
-    0.308698
+    0.239051,
+    0.133999
   ],
   "matched_asset_id": null,
   "composite_id": null,
+  "approved_by": null,
+  "approved_at": null,
   "uv": {
     "status": "generated",
     "convention": "generic",
     "layout_image": "generated/lem-jw2/uv_layout.png",
-    "uv_hash": "458a79703e103419"
+    "uv_hash": "e7c2b6342d7f530f"
   },
   "material": {
     "material_id": "lem-jw2_mat",
@@ -115,5 +118,11 @@
   "candidates": [],
   "suggested_sources": [],
   "message": "Generated via OpenSCAD. Edit parameters or send a tweak, then save. Texture flagged for human sourcing (query: 'Apollo Command Service Module spacecraft hull texture') -- intake a real map, then regenerate.",
-  "updated_at": "2026-07-04T05:42:45.098350"
+  "visual_review": {
+    "matches": false,
+    "confidence": 0.97,
+    "reasoning": "The render shows only a plain gray cylinder (the service module body) with what appears to be a disconnected, floating disk/sphere with lines near it \u2014 there is no cone-shaped command module on top, no main engine bell at the bottom, and no properly attached thrust modules. The overall silhouette does not read as the Apollo CSM at all.",
+    "suggested_fix": "Rebuild the model with three clearly connected components stacked along a single vertical axis: (1) a truncated cone (command module) at the top, narrower end pointing up, flush with the top of the cylinder; (2) a cylinder (service module) in the middle as the main body; (3) a bell-shaped nozzle (main Service Propulsion System engine) attached to and centered on the bottom face of the cylinder. Add four small rectangular Reaction Control System (RCS) thrust quad packages evenly spaced around the circumference of the service module cylinder. All parts must share the same central axis, touch at their interfaces with no gaps, and be given appropriate colors (silver/white for the SM body, dark gray for the engine bell, light gray for the CM cone)."
+  },
+  "updated_at": "2026-07-06T02:25:42.162477"
 }

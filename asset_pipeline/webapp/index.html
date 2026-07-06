@@ -56,6 +56,7 @@
   .params input { padding:4px 6px; }
   .status-pending { color:var(--dim); } .status-in_progress { color:var(--warn); }
   .status-saved { color:var(--ok); } .status-skipped { color:var(--dim); text-decoration:line-through; }
+  .status-failed { color:var(--err); font-weight:600; }
   .wl-item { padding:6px 8px; border-radius:6px; display:flex; gap:8px; align-items:baseline; }
   .wl-item.current { background:#e8eefc; }
   .filters { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
@@ -97,10 +98,17 @@
         <div class="row">
           <input type="text" id="c-id" placeholder="asset_id (optional)" style="max-width:220px">
           <button class="action" id="c-generate">Generate</button>
+          <button class="secondary" id="c-clear">Clear current draft</button>
         </div>
       </div>
       <div class="card" id="draft-panel" hidden>
         <h3>Draft: <span id="d-id"></span> <span class="badge" id="d-method"></span></h3>
+        <div style="color:var(--dim); font-size:12px; margin-bottom:4px">
+          Every action below (Regenerate, Save, the override buttons, the composite
+          editor) acts on THIS draft (<b id="d-id-note"></b>) — not on whatever is
+          currently typed above. Click <i>Clear current draft</i> first if you want
+          to generate something new from scratch.
+        </div>
         <div id="d-message" style="color:var(--dim); margin-bottom:8px"></div>
         <div id="d-candidates" hidden>
           <b style="font-size:12px">Sourcing candidates (approve one to download &amp; intake)</b>
@@ -140,6 +148,7 @@
           <div class="row">
             <button class="secondary" id="d-regenerate">Regenerate (LLM)</button>
             <button class="action" id="d-save">Save to catalog</button>
+            <button class="secondary" id="d-discard" style="color:var(--err)">Discard this draft</button>
           </div>
         </div>
         <div style="margin-top:10px">
@@ -176,6 +185,13 @@
     <iframe id="viewport" src="/webapp/asset_preview.html"></iframe>
     <div class="card">
       <h3 id="inspect-title">Nothing loaded</h3>
+      <div id="inspect-metadata" hidden style="margin-bottom:8px">
+        <input type="text" id="m-display-name" placeholder="display name" style="margin-bottom:6px">
+        <div class="row">
+          <input type="text" id="m-tags" placeholder="tags, comma, separated" style="flex:1">
+          <button class="secondary" id="m-save">Save name/tags</button>
+        </div>
+      </div>
       <div class="row" id="inspect-actions" hidden>
         <button class="secondary" id="a-approve">Approve (record who/when)</button>
         <button class="secondary" id="a-edit-params" hidden>Edit parameters</button>
@@ -229,6 +245,9 @@ const bust = (url) => url + '?t=' + Date.now();
 function showAsset(entry) {
   $('inspect-title').textContent = `${entry.asset_id} — ${entry.asset_class}, review ${entry.review_level}`;
   $('inspect-actions').hidden = false;
+  $('inspect-metadata').hidden = false;
+  $('m-display-name').value = entry.display_name;
+  $('m-tags').value = entry.tags.join(', ');
   currentInspectId = entry.asset_id;
   // Saved parametric/composite assets keep their draft (OpenSCAD script +
   // parameters, or the composite parts list) forever -- offer the editor
@@ -252,10 +271,15 @@ function showAsset(entry) {
 }
 
 // ── Mode switching ────────────────────────────────────────────────────
+// Re-fetch the catalog/drafts on every visit to Library -- otherwise a
+// change made elsewhere (discard, save, a CLI edit, another browser tab)
+// keeps showing the stale in-memory copy until a full page reload
+// (2026-07, "deleted draft still appears until reload" report).
 document.querySelectorAll('header button').forEach(btn => btn.onclick = () => {
   document.querySelectorAll('header button').forEach(b => b.classList.toggle('active', b === btn));
   for (const mode of ['library', 'create', 'worklist'])
     $('mode-' + mode).hidden = (btn.dataset.mode !== mode);
+  if (btn.dataset.mode === 'library') refreshCatalog();
 });
 
 // ── Library ───────────────────────────────────────────────────────────
@@ -301,13 +325,13 @@ function renderCatalog() {
   $('catalog-grid').innerHTML = '';
   for (const e of catalog) {
     if (cls && e.asset_class !== cls) continue;
-    if (text && !(e.asset_id + ' ' + e.tags.join(' ')).toLowerCase().includes(text)) continue;
+    if (text && !(e.asset_id + ' ' + e.display_name + ' ' + e.tags.join(' ')).toLowerCase().includes(text)) continue;
     const tile = document.createElement('div');
     tile.className = 'tile';
     tile.innerHTML = (e.preview_url
         ? `<img src="${e.preview_url}" loading="lazy">`
         : `<div class="noimg">no preview</div>`)
-      + `<b>${e.asset_id}</b><br><small>${e.asset_class} · r${e.review_level}</small>`;
+      + `<b>${e.display_name}</b><br><small>${e.asset_id} · ${e.asset_class} · r${e.review_level}</small>`;
     tile.onclick = () => showAsset(e);
     $('catalog-grid').appendChild(tile);
   }
@@ -326,12 +350,23 @@ $('a-approve').onclick = async () => {
   } catch (e) { log('approve failed: ' + e.message); }
 };
 
+$('m-save').onclick = () => runGuarded($('m-save'), async () => {
+  if (!currentInspectId) { log('select a catalog asset (Library grid) first'); return; }
+  const display_name = $('m-display-name').value.trim();
+  const tags = $('m-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+  const { entry } = await api('/api/catalog/' + currentInspectId + '/metadata', { display_name, tags });
+  log(`updated ${entry.asset_id}: name="${entry.display_name}", tags=[${entry.tags.join(', ')}]`);
+  await refreshCatalog();
+  showAsset(entry);
+});
+
 // ── Create / iterate ──────────────────────────────────────────────────
 let draft = null;
 function showDraft(d) {
   draft = d;
   $('draft-panel').hidden = false;
   $('d-id').textContent = d.asset_id;
+  $('d-id-note').textContent = d.asset_id;
   $('d-method').textContent = d.resolution_method + ' · ' + d.status;
   $('d-message').textContent = d.message || '';
   renderCandidates(d);
@@ -368,6 +403,7 @@ function showDraft(d) {
   $('inspect-title').textContent = `draft ${d.asset_id} (${d.status})`
     + (d.texture_pending ? ' — texture awaiting human sourcing' : '');
   $('inspect-actions').hidden = true;
+  $('inspect-metadata').hidden = true;
 }
 
 function renderCandidates(d) {
@@ -574,6 +610,28 @@ $('d-save').onclick = () => runGuarded($('d-save'), async () => {
   if (worklist.items.length) markCurrent('saved');
 });
 
+// "Start over" escape hatches (added 2026-07, "no way to clear/delete"
+// incident): c-clear resets the in-memory draft pointer so stale state
+// from a previous click can't silently receive the next action; d-discard
+// deletes an in-progress draft's files outright (never a saved asset).
+$('c-clear').onclick = () => {
+  draft = null;
+  $('draft-panel').hidden = true;
+  $('inspect-title').textContent = 'Nothing loaded';
+  log('cleared the current draft — Generate will start fresh from the text above.');
+};
+
+$('d-discard').onclick = () => runGuarded($('d-discard'), async () => {
+  if (!draft) return;
+  if (!confirm(`Discard draft "${draft.asset_id}" and delete everything it produced? This cannot be undone.`)) return;
+  await api('/api/draft/' + draft.asset_id + '/discard', {});
+  log(`discarded draft ${draft.asset_id}.`);
+  draft = null;
+  $('draft-panel').hidden = true;
+  $('inspect-title').textContent = 'Nothing loaded';
+  await refreshDrafts();
+});
+
 function redirectDraft(button, target, manualQuery) {
   return runGuarded(button, async () => {
     log(`overriding: rebuilding ${draft.asset_id} as ${target}${manualQuery ? ' (custom search)' : ''}...`);
@@ -613,7 +671,9 @@ function renderWorklist() {
     const div = document.createElement('div');
     div.className = 'wl-item' + (i === worklist.cursor ? ' current' : '');
     div.style.cursor = 'pointer';
-    div.innerHTML = `<span class="status-${item.status}">[${item.status}]</span> <span>${item.description}</span>`;
+    div.innerHTML = `<span class="status-${item.status}">[${item.status}]</span> <span>${item.description}</span>`
+      + (item.status === 'failed' && item.error
+          ? `<br><small style="color:var(--err)">${item.error}</small>` : '');
     div.onclick = async () => { worklist.cursor = i; await persistWorklist(); };
     el.appendChild(div);
   });
@@ -624,14 +684,28 @@ async function generateWorklistItem(index) {
   if (!item) return;
   worklist.cursor = index;
   item.status = 'in_progress';
+  delete item.error;
   await persistWorklist();
   log(`worklist ${index + 1}/${worklist.items.length}: ${item.description}`);
-  const job = await runJob('/api/generate', {
-    description: item.description, asset_id: item.asset_id || '',
-  });
-  showDraft(job.draft);
-  await refreshDrafts();
-  document.querySelector('header button[data-mode=create]').click();
+  // A failed job must NOT leave the item stuck at 'in_progress' forever --
+  // that left "Generate next pending" unable to ever find it again, with
+  // no visible indication anything was wrong (2026-07 incident: a
+  // max_tokens truncation on a complex molecule silently orphaned a
+  // worklist item this way). Mark it 'failed', with the error attached,
+  // so it's visibly retryable (select it, click Regenerate).
+  try {
+    const job = await runJob('/api/generate', {
+      description: item.description, asset_id: item.asset_id || '',
+    });
+    showDraft(job.draft);
+    await refreshDrafts();
+    document.querySelector('header button[data-mode=create]').click();
+  } catch (e) {
+    item.status = 'failed';
+    item.error = e.message;
+    await persistWorklist();
+    log(`worklist item ${index + 1} FAILED: ${e.message}`);
+  }
 }
 
 async function persistWorklist() {
@@ -656,7 +730,13 @@ $('w-load').onclick = () => runGuarded($('w-load'), async () => {
 
 $('w-next').onclick = () => runGuarded($('w-next'), async () => {
   const idx = worklist.items.findIndex(it => it.status === 'pending');
-  if (idx < 0) { log('worklist: nothing pending — click an item and Regenerate for an alternative'); return; }
+  if (idx < 0) {
+    const failed = worklist.items.filter(it => it.status === 'failed').length;
+    log(failed
+      ? `worklist: nothing pending — ${failed} item(s) FAILED; click one and Regenerate to retry`
+      : 'worklist: nothing pending — click an item and Regenerate for an alternative');
+    return;
+  }
   await generateWorklistItem(idx);
 });
 

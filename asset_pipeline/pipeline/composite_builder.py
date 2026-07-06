@@ -223,7 +223,9 @@ def _call_decompose(client: instructor.Instructor, llm_model: str, spec: AssetSp
                 f"Maximum parts: {max_parts}"
             )},
         ],
-        max_tokens=1024,
+        # See classifier.py's identical comment -- up to 12 full
+        # CompositePartPlans plus reasoning does not reliably fit in 1024.
+        max_tokens=16384,
     )
 
 
@@ -338,5 +340,8 @@ def _call_revise(
                 f"Maximum parts: {max_parts}"
             )},
         ],
-        max_tokens=1536,
+        # Output alone can be as large as the decompose call's (see above);
+        # this call also echoes the current parts back in the prompt, but
+        # that's input tokens, not output -- max_tokens governs the output.
+        max_tokens=16384,
     )

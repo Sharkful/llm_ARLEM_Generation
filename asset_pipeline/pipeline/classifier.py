@@ -180,7 +180,13 @@ def _call_with_usage(
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": _build_user_prompt(spec, top_candidates)},
         ],
-        max_tokens=1024,
+        # A composite classification can list up to 12 CompositePartPlans
+        # (description/color_hint/label/bond_between/bond_thickness/position/
+        # scale each) plus reasoning -- 1024 truncated mid-response for
+        # larger molecules (2026-07, "ethyl group" incident: the response
+        # cut off with an instructor "output incomplete due to max_tokens"
+        # error, silently failing the whole classification).
+        max_tokens=16384,
     )
 
 

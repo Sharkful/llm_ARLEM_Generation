@@ -337,6 +337,58 @@ def test_approve_unknown_asset_raises(sandbox):
         asset_factory.approve_asset("ghost")
 
 
+# ── update_catalog_metadata (added 2026-07, "easier to search" request) ───
+
+def test_update_catalog_metadata_renames_and_retags(sandbox, monkeypatch):
+    monkeypatch.setattr(asset_factory, "render_previews", lambda entries, force: ([], []))
+    _seed_draft()
+    asset_factory.save_draft("bracket")
+
+    entry = asset_factory.update_catalog_metadata(
+        "bracket", display_name="Mounting Bracket v2", tags=["bracket", "mount", "6cm"]
+    )
+
+    assert entry.display_name == "Mounting Bracket v2"
+    assert entry.tags == ["bracket", "mount", "6cm"]
+    [in_catalog] = load_catalog()
+    assert in_catalog.display_name == "Mounting Bracket v2"
+
+
+def test_update_catalog_metadata_partial_update_leaves_other_field_alone(sandbox, monkeypatch):
+    monkeypatch.setattr(asset_factory, "render_previews", lambda entries, force: ([], []))
+    _seed_draft()
+    asset_factory.save_draft("bracket")
+    asset_factory.update_catalog_metadata("bracket", tags=["original"])
+
+    entry = asset_factory.update_catalog_metadata("bracket", display_name="Renamed Only")
+
+    assert entry.display_name == "Renamed Only"
+    assert entry.tags == ["original"]  # untouched by the name-only edit
+
+
+def test_update_catalog_metadata_rejects_blank_name(sandbox, monkeypatch):
+    monkeypatch.setattr(asset_factory, "render_previews", lambda entries, force: ([], []))
+    _seed_draft()
+    asset_factory.save_draft("bracket")
+
+    with pytest.raises(asset_factory.AssetFactoryError, match="cannot be blank"):
+        asset_factory.update_catalog_metadata("bracket", display_name="   ")
+
+
+def test_update_catalog_metadata_requires_some_field(sandbox, monkeypatch):
+    monkeypatch.setattr(asset_factory, "render_previews", lambda entries, force: ([], []))
+    _seed_draft()
+    asset_factory.save_draft("bracket")
+
+    with pytest.raises(asset_factory.AssetFactoryError, match="Nothing to update"):
+        asset_factory.update_catalog_metadata("bracket")
+
+
+def test_update_catalog_metadata_unknown_asset_raises(sandbox):
+    with pytest.raises(asset_factory.AssetFactoryError, match="not found"):
+        asset_factory.update_catalog_metadata("ghost", display_name="X")
+
+
 # ── regenerate ────────────────────────────────────────────────────────────
 
 def test_regenerate_with_parameters_recompiles_without_llm(sandbox, monkeypatch):
@@ -877,6 +929,49 @@ def test_review_and_repair_skips_repair_when_auto_repair_false(sandbox, monkeypa
     assert review.matches is False
     assert "MISMATCH" in draft.message
     assert len(logs) == 1
+
+
+def test_discard_draft_removes_parametric_draft_dir(sandbox):
+    _seed_draft()
+    assert asset_factory.draft_path("bracket").exists()
+
+    asset_factory.discard_draft("bracket")
+
+    assert not asset_factory._draft_dir("bracket").exists()
+    assert asset_factory.load_draft_state("bracket") is None
+
+
+def test_discard_draft_removes_composite_fragment_and_bake(sandbox):
+    from pipeline.composite_builder import composite_path
+
+    _seed_composite_draft(sandbox)
+    frag_path = composite_path("molecule_composite")
+    assert frag_path.exists()
+    baked_dir = config.LIBRARY_DIR / "composites" / "molecule"
+    baked_dir.mkdir(parents=True, exist_ok=True)
+    (baked_dir / "model.glb").write_bytes(b"glb")
+
+    asset_factory.discard_draft("molecule")
+
+    assert not asset_factory._draft_dir("molecule").exists()
+    assert not frag_path.exists()
+    assert not baked_dir.exists()
+
+
+def test_discard_draft_refuses_saved_draft(sandbox, monkeypatch):
+    monkeypatch.setattr(asset_factory, "render_previews", lambda entries, force: ([], []))
+    _seed_draft()
+    asset_factory.save_draft("bracket")
+
+    with pytest.raises(asset_factory.AssetFactoryError, match="already been saved"):
+        asset_factory.discard_draft("bracket")
+
+    assert asset_factory.draft_path("bracket").exists()  # untouched
+
+
+def test_discard_draft_requires_existing_draft(sandbox):
+    with pytest.raises(asset_factory.AssetFactoryError, match="No draft found"):
+        asset_factory.discard_draft("ghost")
 
 
 def test_review_and_repair_requires_glb(sandbox):

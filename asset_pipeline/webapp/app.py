@@ -31,6 +31,7 @@ from pipeline.asset_factory import (
     adopt_draft_candidate,
     approve_asset,
     create_from_description,
+    discard_draft,
     edit_composite,
     get_composite_fragment,
     load_draft_state,
@@ -38,6 +39,7 @@ from pipeline.asset_factory import (
     regenerate,
     review_and_repair,
     save_draft,
+    update_catalog_metadata,
 )
 from pipeline.catalog_writer import load_catalog
 from pipeline.mesh_processor import MeshProcessingError
@@ -284,6 +286,18 @@ def api_review(asset_id: str):
     return jsonify({"job_id": _start_job(run)}), 202
 
 
+@app.post("/api/draft/<asset_id>/discard")
+def api_discard_draft(asset_id: str):
+    """Delete an in-progress draft and everything it produced -- the
+    'start over' escape hatch for a stuck/wrong/stale draft. Refuses a
+    draft that's already saved/approved (see discard_draft's docstring)."""
+    try:
+        discard_draft(asset_id)
+    except AssetFactoryError as exc:
+        return _error(str(exc), 400)
+    return jsonify({"ok": True})
+
+
 @app.post("/api/save")
 def api_save():
     payload = request.get_json(silent=True) or {}
@@ -297,6 +311,22 @@ def api_save():
             tags=payload.get("tags"),
         )
     except (AssetFactoryError, ValueError) as exc:
+        return _error(str(exc), 400)
+    return jsonify({"entry": entry.model_dump(mode="json")})
+
+
+@app.post("/api/catalog/<asset_id>/metadata")
+def api_catalog_metadata(asset_id: str):
+    """Rename/re-tag a catalog entry so it's easier to find later --
+    metadata only, never geometry/provenance/scale."""
+    payload = request.get_json(silent=True) or {}
+    display_name = payload.get("display_name")
+    tags = payload.get("tags")
+    if tags is not None and not isinstance(tags, list):
+        return _error("tags must be a list of strings")
+    try:
+        entry = update_catalog_metadata(asset_id, display_name=display_name, tags=tags)
+    except AssetFactoryError as exc:
         return _error(str(exc), 400)
     return jsonify({"entry": entry.model_dump(mode="json")})
 
