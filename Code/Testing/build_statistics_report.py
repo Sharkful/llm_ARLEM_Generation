@@ -470,15 +470,18 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--since",
         default=today,
-        metavar="YYYYMMDD",
-        help="Inclusive lower date bound (default: today). "
+        metavar="YYYYMMDD[_HHMMSS]",
+        help="Inclusive lower bound (default: today's 00:00). Accepts a date "
+        "(YYYYMMDD) or an exact second (YYYYMMDD_HHMMSS): pass the moment the "
+        "sweep started to exclude earlier same-day test runs. "
         "Use 00000000 to include all history.",
     )
     parser.add_argument(
         "--until",
         default=None,
-        metavar="YYYYMMDD",
-        help="Optional inclusive upper date bound (default: no upper bound).",
+        metavar="YYYYMMDD[_HHMMSS]",
+        help="Optional inclusive upper bound, YYYYMMDD or YYYYMMDD_HHMMSS "
+        "(default: no upper bound).",
     )
     parser.add_argument(
         "--label",

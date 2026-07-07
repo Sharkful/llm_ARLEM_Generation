@@ -27,6 +27,7 @@ Run directly for a quick sanity dump:
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -100,18 +101,40 @@ def _normalize_ts(ts) -> str:
     return s
 
 
-def _in_window(rec: dict, since: str | None, until: str | None) -> bool:
-    """True if ``rec``'s timestamp falls inside the inclusive ``[since, until]`` window.
+def _normalize_bound(bound: str, *, is_upper: bool) -> str:
+    """Normalize a user date/datetime bound to a 15-char ``YYYYMMDD_HHMMSS`` key.
 
-    ``since`` / ``until`` are ``"YYYYMMDD"`` date bounds. Comparison is on the
-    normalized fixed-width timestamp, so a missing/empty timestamp (which sorts
-    below every real one) is dropped by a ``since`` lower bound but passes an
-    ``until`` upper bound.
+    Accepts a date (``"YYYYMMDD"``) or a datetime (``"YYYYMMDD_HHMMSS"``, or any
+    form whose digits spell ``YYYYMMDDHHMMSS`` — separators like ``-``/``_``/``:``
+    are ignored). A date-only bound spans the whole day: a lower bound starts at
+    ``00:00:00``, an upper bound ends at ``23:59:59``. Supplying a time lets a
+    ``since`` cut at a moment mid-day (e.g. the instant a sweep started, to
+    exclude earlier same-day test runs). The result lexically compares against a
+    ``_normalize_ts`` timestamp, so ``>=`` / ``<=`` on it is chronological.
+    """
+    digits = re.sub(r"\D", "", bound)  # strip - _ T : etc.
+    if len(digits) == 8:
+        digits += "235959" if is_upper else "000000"
+    elif len(digits) != 14:
+        raise ValueError(
+            f"date bound must be YYYYMMDD or YYYYMMDD_HHMMSS, got {bound!r}"
+        )
+    return f"{digits[:8]}_{digits[8:14]}"
+
+
+def _in_window(rec: dict, since_key: str | None, until_key: str | None) -> bool:
+    """True if ``rec``'s timestamp falls inside the inclusive window.
+
+    ``since_key`` / ``until_key`` are already-normalized ``YYYYMMDD_HHMMSS`` keys
+    (see ``_normalize_bound``), so this is a direct compare against the
+    normalized record timestamp. A missing/empty timestamp (which sorts below
+    every real one) is dropped by a ``since`` lower bound but passes an ``until``
+    upper bound.
     """
     ts = _normalize_ts(rec.get("timestamp"))
-    if since is not None and ts < f"{since}_000000":
+    if since_key is not None and ts < since_key:
         return False
-    if until is not None and ts > f"{until}_235959":
+    if until_key is not None and ts > until_key:
         return False
     return True
 
@@ -262,20 +285,26 @@ def load_runs(
         include_failures: also pull failed runs from ``suite_results_*.json``.
             Default reads only the success-only ``*_metrics.json`` files. Use the
             ``success`` / ``had_usage`` columns to slice the result.
-        since: inclusive ``"YYYYMMDD"`` lower bound; drop runs before this date.
-            A record with no timestamp can't be placed, so a ``since`` bound
-            drops it.
-        until: inclusive ``"YYYYMMDD"`` upper bound; drop runs after this date.
+        since: inclusive lower bound, ``"YYYYMMDD"`` (start of day) or
+            ``"YYYYMMDD_HHMMSS"`` (exact second — e.g. the moment a sweep began,
+            to exclude earlier same-day test runs); drop runs before it. A record
+            with no timestamp can't be placed, so a ``since`` bound drops it.
+        until: inclusive upper bound, ``"YYYYMMDD"`` (end of day) or
+            ``"YYYYMMDD_HHMMSS"``; drop runs after it.
         dedupe_latest: collapse re-runs of the same config tuple
             ``(model, spec_type, level, structure, lab_name)`` down to the newest
             attempt. Use when a reboot-resume produced a second record for a
             config the first attempt failed on (see issue #36).
     """
+    # Normalize the date/datetime bounds once (validates the format up front).
+    since_key = _normalize_bound(since, is_upper=False) if since is not None else None
+    until_key = _normalize_bound(until, is_upper=True) if until is not None else None
+
     raw = []
     out_dir = benchmark_dir / "Outputs"
     for p in sorted((benchmark_dir / "Metrics").glob("*_metrics.json")):
         rec = json.loads(p.read_text(encoding="utf-8"))
-        if not _in_window(rec, since, until):
+        if not _in_window(rec, since_key, until_key):
             continue
         # Pair the run with its saved output JSON (same stem, _output suffix) and
         # compute novel-asset counts — no LLM calls, just re-reading what we kept.
@@ -292,7 +321,7 @@ def load_runs(
             raw.extend(
                 r
                 for r in json.loads(p.read_text(encoding="utf-8"))
-                if _in_window(r, since, until)
+                if _in_window(r, since_key, until_key)
             )
 
     df = pd.DataFrame(flatten_record(r) for r in raw)
