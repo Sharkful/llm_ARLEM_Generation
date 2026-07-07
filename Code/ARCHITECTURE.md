@@ -260,6 +260,14 @@ Per successful run, base name `{model}_{spec}[_{level}]_{timestamp}` (dots → d
 successful runs**. Failed runs survive only inside `suite_results_*.json` arrays.
 `benchmark_dataframe.load_runs(include_failures=True)` unions both and dedupes.
 
+**Quarantine:** `quarantine_infra_failures.py` moves failure records whose retry
+attempts died on infra signatures (billing-quota 429 / connection / 503 burst /
+bad-model-id 404) out of `suite_results_*.json` into `Benchmark/quarantine/`
+(paired `_errors.txt` files go to `quarantine/errors/`), so loaders and
+failure-rate stats never count them against a model (issue #45). Retry-death
+400s (#44) and schema-validation failures are deliberately left in place — they
+are model/plumbing signal. Dry-run by default; `--apply` executes; idempotent.
+
 ---
 
 ## 9. Reporting layer
