@@ -73,10 +73,13 @@ MODELS = {
     "claude-haiku-4.5": ModelConfig("claude-haiku-4-5-20251001", Provider.ANTHROPIC, "Claude Haiku 4.5", ModelSize.SMALL),
 
     # ── Google Gemini ─────────────────────────────────────────────────────
-    "gemini-3.1-pro":        ModelConfig("gemini-3.1-pro",        Provider.GOOGLE, "Gemini 3.1 Pro",        ModelSize.LARGE),
-    "gemini-3.5-flash":      ModelConfig("gemini-3.5-flash",      Provider.GOOGLE, "Gemini 3.5 Flash",      ModelSize.MEDIUM),
-    "gemini-3.1-flash-lite": ModelConfig("gemini-3.1-flash-lite", Provider.GOOGLE, "Gemini 3.1 Flash Lite", ModelSize.SMALL),
-    "gemini-2.5-flash-lite": ModelConfig("gemini-2.5-flash-lite", Provider.GOOGLE, "Gemini 2.5 Flash Lite", ModelSize.SMALL),
+    # Registry key (CLI alias) stays "gemini-3.1-pro"; model_id is the -preview id
+    # because generativelanguage v1beta only serves gemini-3.1-pro-preview, not the
+    # GA-renamed plain id (issue #42). Precedent: claude-opus-4.8 → claude-opus-4-8.
+    "gemini-3.1-pro":        ModelConfig("gemini-3.1-pro-preview", Provider.GOOGLE, "Gemini 3.1 Pro",        ModelSize.LARGE),
+    "gemini-3.5-flash":      ModelConfig("gemini-3.5-flash",       Provider.GOOGLE, "Gemini 3.5 Flash",      ModelSize.MEDIUM),
+    "gemini-3.1-flash-lite": ModelConfig("gemini-3.1-flash-lite",  Provider.GOOGLE, "Gemini 3.1 Flash Lite", ModelSize.SMALL),
+    "gemini-2.5-flash-lite": ModelConfig("gemini-2.5-flash-lite",  Provider.GOOGLE, "Gemini 2.5 Flash Lite", ModelSize.SMALL),
 }
 
 

@@ -52,15 +52,15 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
 
     # ── Google Gemini ─────────────────────────────────────────────────────
     # Pro models are context-tiered; our runs are well under 200k so the <=200k tier applies.
-    "gemini-3.1-pro":        {"input": 2.00,  "output": 12.00},  # verified 2026-07 (GA'd 2026-02-19, renamed from -preview; <=200k tier)
-    "gemini-3.1-flash-lite": {"input": 0.25,  "output":  1.50},  # verified 2026-07 (GA'd 2026-05-07, renamed from -preview)
-    "gemini-3.5-flash":      {"input": 1.50,  "output":  9.00},  # verified 2026-07 (current text flash)
-    "gemini-2.5-pro":        {"input": 1.25,  "output": 10.00},  # verified 2026-07 (<=200k tier; current but dropped from roster)
-    "gemini-2.5-flash":      {"input": 0.30,  "output":  2.50},  # verified 2026-07 (current but dropped from roster)
-    "gemini-2.5-flash-lite": {"input": 0.10,  "output":  0.40},  # verified 2026-07 (cheapest; kept in roster)
-    "gemini-2.0-flash":      {"input": 0.10,  "output":  0.40},
-    "gemini-1.5-pro":        {"input": 1.25,  "output":  5.00},
-    "gemini-1.5-flash":      {"input": 0.075, "output":  0.30},
+    "gemini-3.1-pro-preview": {"input": 2.00,  "output": 12.00},  # verified 2026-07 (keyed by model_id; v1beta serves only -preview, not the GA-renamed plain id — issue #42; <=200k tier)
+    "gemini-3.1-flash-lite":  {"input": 0.25,  "output":  1.50},  # verified 2026-07 (GA'd 2026-05-07, renamed from -preview)
+    "gemini-3.5-flash":       {"input": 1.50,  "output":  9.00},  # verified 2026-07 (current text flash)
+    "gemini-2.5-pro":         {"input": 1.25,  "output": 10.00},  # verified 2026-07 (<=200k tier; current but dropped from roster)
+    "gemini-2.5-flash":       {"input": 0.30,  "output":  2.50},  # verified 2026-07 (current but dropped from roster)
+    "gemini-2.5-flash-lite":  {"input": 0.10,  "output":  0.40},  # verified 2026-07 (cheapest; kept in roster)
+    "gemini-2.0-flash":       {"input": 0.10,  "output":  0.40},
+    "gemini-1.5-pro":         {"input": 1.25,  "output":  5.00},
+    "gemini-1.5-flash":       {"input": 0.075, "output":  0.30},
 
     # ── Mistral ───────────────────────────────────────────────────────────
     "mistral-large":  {"input": 2.00, "output": 6.00},
