@@ -63,9 +63,16 @@ def fail_mode(err: str | None) -> str:
     # Check schema validation before the 404 signature: discriminated-union
     # failures contain "union_tag_not_found", whose "not_found" must NOT be read
     # as a model-not-found 404. Use the specific 404 signature, not a substring.
+    # (OpenAI: "not_found_error"; Anthropic: "error code: 404"; Gemini:
+    # "404 NOT_FOUND." — all three anchor "not_found"/"404" so union_tag_not_found
+    # can't leak through.)
     if "validation error" in e:
         return "schema validation"
-    if "not_found_error" in e or "error code: 404" in e:
+    if (
+        "not_found_error" in e
+        or "error code: 404" in e
+        or "404 not_found" in e
+    ):
         return "404 model-not-found"
     return "other"
 
