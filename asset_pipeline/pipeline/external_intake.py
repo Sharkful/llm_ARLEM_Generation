@@ -41,6 +41,14 @@ _LICENSE_ALLOWLIST = {
     "cc-by",
     "cc-by-3.0",
     "cc-by-4.0",
+    # Share-alike (2026-07, user decision via the review app's license-tier
+    # pull-down): allowed at intake, but note the obligation -- distributed
+    # derivatives (this pipeline's normalized copies) must carry the same
+    # CC-BY-SA license. The startswith("cc-by") attribution plumbing below
+    # covers these too.
+    "cc-by-sa",
+    "cc-by-sa-3.0",
+    "cc-by-sa-4.0",
     "public-domain",
     "internal",
     "proprietary-cleared",

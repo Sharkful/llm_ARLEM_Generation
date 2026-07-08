@@ -15,6 +15,11 @@ ANTHROPIC_API_KEY: str | None = (os.getenv("ANTHROPIC_API_KEY") or "").strip() o
 OPENAI_API_KEY: str | None = (os.getenv("OPENAI_API_KEY") or "").strip() or None
 GEMINI_API_KEY: str | None = (os.getenv("GEMINI_API_KEY") or "").strip() or None
 
+# Thingiverse's developer API requires an app token (register at
+# thingiverse.com/developers) -- Poly Haven/NASA3D need no key at all, so
+# this is the first allowlisted source that does.
+THINGIVERSE_APP_TOKEN: str | None = (os.getenv("THINGIVERSE_APP_TOKEN") or "").strip() or None
+
 # ── LLM defaults (config-level choice, never hardcoded in pipeline code) ─
 DEFAULT_LLM_PROVIDER = os.getenv("ASSET_PIPELINE_LLM_PROVIDER", "anthropic")
 DEFAULT_LLM_MODEL = os.getenv("ASSET_PIPELINE_LLM_MODEL", "claude-sonnet-4-6")

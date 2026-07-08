@@ -55,7 +55,7 @@ def _patch_stage_1_2(monkeypatch, record):
     from pipeline.source_assist import SourcingAssist
     monkeypatch.setattr(
         asset_factory, "assist_imported",
-        lambda spec, intake_id, keywords=None, manual_query=None, provider=None, model=None: (
+        lambda spec, intake_id, keywords=None, manual_query=None, provider=None, model=None, license_tier=None: (
             SourcingAssist(
                 query="stub", search_urls=["Poly Haven (CC0): https://polyhaven.com/all?s=stub"],
                 note="stubbed",
@@ -105,6 +105,67 @@ def test_create_routes_catalog_match_to_existing(sandbox, monkeypatch):
     assert draft.status == "existing"
     assert draft.matched_asset_id == "sphere_basic"
     assert draft.bounds_m == [1, 1, 1]
+
+
+def test_create_existing_match_skips_material_bind_for_imported_asset(sandbox, monkeypatch):
+    """Regression (2026-07, 'lunar module comes back gray' incident): an
+    'imported' catalog match already carries its own real, baked textures --
+    binding a synthetic material over it would silently replace those with a
+    flat procedural color, which is what happened once the catalog matcher
+    was fixed to correctly resolve to a real imported asset instead of a
+    wrong primitive/parametric one."""
+    entry = AssetCatalogEntry(
+        asset_id="lunar_excursion_module", display_name="Apollo Lunar Module",
+        asset_class="imported", address="library/imported/lunar_excursion_module/model.glb",
+        canonical_bounds_m=[0.15, 0.15, 0.12],
+        provenance=ProvenanceInfo(source_type="external_approved"),
+    )
+    save_catalog([entry])
+    record = ResolutionRecord(
+        object_id="lm", requested_asset_spec=_spec(),
+        resolved_asset=ResolvedAssetRef(
+            asset_id="lunar_excursion_module", resolution_method="catalog_match", confidence=0.93
+        ),
+    )
+    _patch_stage_1_2(monkeypatch, record)
+    calls = []
+    monkeypatch.setattr(
+        asset_factory, "_bind_material",
+        lambda draft, provider, model, progress=None: (calls.append(draft.asset_id), [])[1],
+    )
+
+    draft, logs = asset_factory.create_from_description("a lunar module")
+
+    assert draft.status == "existing"
+    assert draft.material is None
+    assert calls == []  # _bind_material must never run for an imported match
+
+
+def test_create_existing_match_binds_material_for_primitive_asset(sandbox, monkeypatch):
+    """A bare primitive match (no baked texture of its own) still needs a
+    bound material to become identifiable (the moon = sphere + moon texture)."""
+    entry = AssetCatalogEntry(
+        asset_id="sphere_basic", display_name="Sphere", asset_class="primitive",
+        address="Primitives/Sphere", canonical_bounds_m=[1, 1, 1],
+        provenance=ProvenanceInfo(source_type="core"),
+    )
+    save_catalog([entry])
+    record = ResolutionRecord(
+        object_id="moon", requested_asset_spec=_spec(),
+        resolved_asset=ResolvedAssetRef(
+            asset_id="sphere_basic", resolution_method="catalog_match", confidence=0.95
+        ),
+    )
+    _patch_stage_1_2(monkeypatch, record)
+    calls = []
+    monkeypatch.setattr(
+        asset_factory, "_bind_material",
+        lambda draft, provider, model, progress=None: (calls.append(draft.asset_id), [])[1],
+    )
+
+    draft, logs = asset_factory.create_from_description("the moon")
+
+    assert calls == [draft.asset_id]  # _bind_material must run for a primitive match
 
 
 def test_create_routes_parametric_through_generate_and_normalize(sandbox, monkeypatch):
@@ -166,6 +227,176 @@ def test_create_routes_imported_to_needs_human(sandbox, monkeypatch):
     assert draft.resolution_method == "imported"
     assert draft.suggested_sources  # never "go search" without links
     assert asset_factory.draft_path(draft.asset_id).exists()  # persisted for the app
+
+
+# ── create_from_spec forced_route (added 2026-07) ─────────────────────────
+# Lets a human pick the creation route up front -- for A/B testing which
+# route gives the best result for the same description -- instead of only
+# being able to redirect a stuck draft after the fact (redirect_draft below).
+# Each branch mirrors its automatic-routing counterpart above / its
+# redirect_draft counterpart below, just entered directly.
+
+def _assert_never_classifies(monkeypatch):
+    def boom(*a, **k):
+        raise AssertionError("resolve()/classify() should not run for a forced route")
+    monkeypatch.setattr(asset_factory, "resolve", boom)
+
+
+def test_forced_route_existing_matches_catalog_without_llm_classification(sandbox, monkeypatch):
+    entry = AssetCatalogEntry(
+        asset_id="sphere_basic", display_name="Sphere", asset_class="primitive",
+        address="Primitives/Sphere", canonical_bounds_m=[1, 1, 1],
+        provenance=ProvenanceInfo(source_type="core"),
+    )
+    save_catalog([entry])
+    monkeypatch.setattr(asset_factory, "_bind_material", lambda draft, provider, model, progress=None: [])
+    _assert_never_classifies(monkeypatch)
+
+    spec = AssetSpec(object_id="sphere_basic", description="a sphere")
+    draft, logs = asset_factory.create_from_spec(spec, forced_route="existing")
+
+    assert draft.status == "existing"
+    assert draft.matched_asset_id == "sphere_basic"
+    assert draft.resolution_method == "catalog_match"
+
+
+def test_forced_route_existing_skips_material_bind_for_imported_asset(sandbox, monkeypatch):
+    entry = AssetCatalogEntry(
+        asset_id="lunar_excursion_module", display_name="Apollo Lunar Module",
+        asset_class="imported", address="library/imported/lunar_excursion_module/model.glb",
+        canonical_bounds_m=[0.15, 0.15, 0.12],
+        provenance=ProvenanceInfo(source_type="external_approved"),
+    )
+    save_catalog([entry])
+    _assert_never_classifies(monkeypatch)
+    calls = []
+    monkeypatch.setattr(
+        asset_factory, "_bind_material",
+        lambda draft, provider, model, progress=None: (calls.append(draft.asset_id), [])[1],
+    )
+
+    spec = AssetSpec(object_id="lm", description="a lunar module")
+    draft, logs = asset_factory.create_from_spec(spec, forced_route="existing")
+
+    assert draft.status == "existing"
+    assert draft.material is None
+    assert calls == []
+
+
+def test_forced_route_existing_with_no_match_is_needs_human(sandbox):
+    spec = AssetSpec(object_id="unicorn", description="a unicorn")
+    draft, logs = asset_factory.create_from_spec(spec, forced_route="existing")
+
+    assert draft.status == "needs_human"
+    assert draft.resolution_method == "existing"
+    assert "no catalog match" in draft.message.lower()
+
+
+def test_forced_route_parametric_bypasses_classification(sandbox, monkeypatch):
+    _assert_never_classifies(monkeypatch)
+
+    def fake_generate(spec, asset_id, generate_plan_fn=None):
+        stl = asset_factory._draft_dir(asset_id) / "source.stl"
+        stl.parent.mkdir(parents=True, exist_ok=True)
+        stl.write_bytes(b"stl")
+        return (
+            GenerationResult(
+                asset_id=asset_id, success=True, scad_path="x.scad", stl_path=str(stl),
+                actual_bounds_m=[0.06, 0.04, 0.005], expected_bounds_m=[0.06, 0.04, 0.005],
+                repair_attempts=[{"attempt_number": 1, "scad_source": _SCAD, "success": True}],
+            ),
+            [_log("openscad_generation")],
+        )
+
+    def fake_normalize(asset_id, source_path, source_format, glb_path, target_size_m, pivot):
+        glb_path.parent.mkdir(parents=True, exist_ok=True)
+        glb_path.write_bytes(b"glb")
+        return MeshNormalizationResult(
+            asset_id=asset_id, success=True, glb_path=str(glb_path),
+            final_bounds_m=[0.06, 0.04, 0.005], pivot=pivot, scale_applied=1.0,
+            triangle_count_before=12, triangle_count_after=12,
+        )
+
+    monkeypatch.setattr(asset_factory, "generate_parametric_asset", fake_generate)
+    monkeypatch.setattr(asset_factory, "normalize_mesh", fake_normalize)
+    monkeypatch.setattr(asset_factory, "_bind_material", lambda draft, provider, model, progress=None: [])
+
+    draft, logs = asset_factory.create_from_spec(_spec("bracket"), forced_route="parametric")
+
+    assert draft.status == "draft"
+    assert draft.resolution_method == "parametric"
+    assert draft.glb_address == f"library/generated/{draft.asset_id}/model.glb"
+
+
+def test_forced_route_composite_decomposes_and_bakes(sandbox, monkeypatch):
+    from models.classification_models import CompositePartPlan
+
+    forced_parts = [
+        CompositePartPlan(description="large white sphere", color_hint="white"),
+        CompositePartPlan(description="small white sphere", color_hint="white"),
+    ]
+    monkeypatch.setattr(
+        asset_factory, "decompose_into_primitives",
+        lambda spec, max_parts=12, provider=None, model=None: (forced_parts, _log("composite_decomposition")),
+    )
+    captured = {}
+
+    def fake_resolve(spec, catalog, forced_composite_parts=None):
+        captured["parts"] = forced_composite_parts
+        return (
+            ResolutionRecord(
+                object_id=spec.object_id, requested_asset_spec=spec,
+                requires_author_review=False,
+                review_reason=f"Resolved as composite: {spec.object_id}_composite",
+            ),
+            [],
+        )
+
+    monkeypatch.setattr(asset_factory, "resolve", fake_resolve)
+
+    baked = asset_factory.DraftAsset(
+        asset_id="frosty", status="draft", resolution_method="composite",
+        description="a friendly snowman", spec=_spec("frosty"),
+        composite_id="frosty_composite", glb_address="library/composites/frosty/model.glb",
+        bounds_m=[0.2, 0.3, 0.2],
+    )
+    monkeypatch.setattr(
+        asset_factory, "_materialize_and_bake_composite",
+        lambda composite_id, asset_id, target_size_m, provider, model, progress: (baked, [_log("material_generation")]),
+    )
+
+    draft, logs = asset_factory.create_from_spec(_spec("frosty"), forced_route="composite")
+
+    assert draft.glb_address == "library/composites/frosty/model.glb"
+    assert captured["parts"] == forced_parts
+
+
+def test_forced_route_imported_searches_without_classification(sandbox, monkeypatch):
+    from pipeline.source_assist import SourcingAssist
+
+    _assert_never_classifies(monkeypatch)
+    captured = {}
+
+    def fake_assist(spec, intake_id, keywords=None, manual_query=None, provider=None, model=None, license_tier=None):
+        captured["keywords"] = keywords
+        return SourcingAssist(query="couch", note="stubbed"), []
+
+    monkeypatch.setattr(asset_factory, "assist_imported", fake_assist)
+
+    draft, logs = asset_factory.create_from_spec(_spec("couch"), forced_route="imported")
+
+    assert draft.status == "needs_human"
+    assert draft.resolution_method == "imported"
+    assert captured["keywords"] is None  # no classifier ran, so no LLM keywords exist yet
+
+
+def test_forced_route_blender_is_a_tbd_stub(sandbox):
+    draft, logs = asset_factory.create_from_spec(_spec("widget"), forced_route="blender")
+
+    assert draft.status == "needs_human"
+    assert draft.resolution_method == "blender"
+    assert "not implemented" in draft.message.lower()
+    assert logs == []
 
 
 def test_bind_material_attaches_material_and_pending_flag(sandbox, monkeypatch):
@@ -541,7 +772,7 @@ def test_redirect_to_imported_passes_manual_query(sandbox, monkeypatch):
     _seed_stuck_draft()
     captured = {}
 
-    def fake_assist(spec, intake_id, keywords=None, manual_query=None, provider=None, model=None):
+    def fake_assist(spec, intake_id, keywords=None, manual_query=None, provider=None, model=None, license_tier=None):
         captured["manual_query"] = manual_query
         return (
             SourcingAssist(query=manual_query or "x", note="2 candidate(s) found"),

@@ -48,7 +48,9 @@ from models.generation_models import GenerationResult, OpenSCADPlan
 from models.log_models import LLMCallEntry
 from models.spec_models import AssetSpec
 from pipeline import uv_tools
+from pipeline.catalog_matcher import find_candidates
 from pipeline.catalog_writer import load_catalog, save_catalog
+from pipeline.classifier import VARIANT_FLOOR
 from pipeline.composite_baker import CompositeBakeError, bake_composite
 from pipeline.composite_builder import (
     CompositeFragment,
@@ -170,6 +172,21 @@ def _record_uv(asset_id: str, glb_path: Path, uv_status: str) -> UVInfo:
     )
 
 
+def _existing_match_needs_material_bind(matched: AssetCatalogEntry | None) -> bool:
+    """An 'existing' match only needs a NEW bound material when it's a bare
+    primitive/variant becoming identifiable through it (the moon = sphere +
+    moon texture). An 'imported' match already carries its own real,
+    non-regeneratable textures baked into the GLB -- binding a synthetic
+    material over it silently replaces those real colors with a flat
+    procedural one (2026-07, 'lunar module comes back gray' incident: fixing
+    the catalog matcher to correctly resolve to lunar_excursion_module then
+    surfaced this pre-existing bug, previously masked because most matches
+    were bare primitives). Mirrors the "no bind" comment on the sourcing
+    assist's auto-adopted-imported branch below, which never had this bug.
+    """
+    return matched is not None and matched.asset_class != "imported"
+
+
 def _bind_material(
     draft: DraftAsset,
     provider: str | None,
@@ -287,21 +304,45 @@ def _materialize_and_bake_composite(
     return draft, logs
 
 
+# A human can pick the creation route up front instead of trusting
+# resolve()'s catalog-match/LLM-classification decision tree -- added so the
+# same description can be A/B tested across routes (does this snowman look
+# better hand-composited or parametric?) without first having to land on a
+# stuck/wrong draft to redirect. "existing" mirrors classify()'s own
+# catalog-match/variant check but skips the LLM classification fallback
+# when nothing matches; "imported"/"parametric"/"composite" mirror
+# redirect_draft()'s post-hoc override paths below, run up front instead.
+# "blender" is a placeholder for a planned native-Blender-script generation
+# route (analogous to how "parametric" has the LLM write an OpenSCAD script)
+# that does not exist yet -- forcing it returns a needs_human draft that
+# says so, rather than silently falling back to another route.
+ForcedRoute = Literal["existing", "imported", "parametric", "composite", "blender"]
+
+
 def create_from_description(
     description: str,
     asset_id: str | None = None,
     provider: str | None = None,
     model: str | None = None,
     progress: ProgressFn | None = None,
+    forced_route: ForcedRoute | None = None,
+    license_tier: str | None = None,
 ) -> tuple[DraftAsset, list[LLMCallEntry]]:
-    """One-shot flow: free text -> routed, generated (if parametric), normalized draft."""
+    """One-shot flow: free text -> routed, generated (if parametric), normalized draft.
+
+    forced_route: bypass automatic routing and build via this route instead
+    (see ForcedRoute above).
+    license_tier: source_assist.LICENSE_TIERS key from the review app's
+    pull-down; governs which licenses the imported route's search shows.
+    """
     progress = progress or _noop_progress
     progress("Parsing description into a structured asset spec (LLM)...")
     spec, entry = parse_description(description, provider=provider, model=model)
     if asset_id:
         spec = spec.model_copy(update={"object_id": asset_id})
     draft, logs = create_from_spec(
-        spec, asset_id=asset_id, provider=provider, model=model, progress=progress
+        spec, asset_id=asset_id, provider=provider, model=model, progress=progress,
+        forced_route=forced_route, license_tier=license_tier,
     )
     return draft, [entry, *logs]
 
@@ -312,13 +353,27 @@ def create_from_spec(
     provider: str | None = None,
     model: str | None = None,
     progress: ProgressFn | None = None,
+    forced_route: ForcedRoute | None = None,
+    license_tier: str | None = None,
 ) -> tuple[DraftAsset, list[LLMCallEntry]]:
     """Same flow starting from an already-parsed AssetSpec (Stage 9 batch
-    input, or a worklist of pre-authored specs -- skips the Stage 1 call)."""
+    input, or a worklist of pre-authored specs -- skips the Stage 1 call).
+
+    forced_route: bypass automatic routing and build via this route instead
+    (see ForcedRoute above).
+    license_tier: see create_from_description.
+    """
     progress = progress or _noop_progress
+    final_id = asset_id or _slug(spec.object_id)
+
+    if forced_route is not None:
+        return _create_via_forced_route(
+            spec, final_id, forced_route, provider, model, progress,
+            license_tier=license_tier,
+        )
+
     logs: list[LLMCallEntry] = []
     description = spec.description
-    final_id = asset_id or _slug(spec.object_id)
 
     catalog = load_catalog()
     progress(
@@ -354,7 +409,8 @@ def create_from_spec(
                 f"confidence {record.resolved_asset.confidence:.2f})."
             ),
         )
-        logs.extend(_bind_material(draft, provider, model, progress=progress))
+        if _existing_match_needs_material_bind(matched):
+            logs.extend(_bind_material(draft, provider, model, progress=progress))
         save_draft_state(draft)
         return draft, logs
 
@@ -414,7 +470,8 @@ def create_from_spec(
             "(Poly Haven, NASA 3D Resources)..."
         )
         assist, assist_logs = assist_imported(
-            spec, final_id, keywords=record.search_keywords, provider=provider, model=model
+            spec, final_id, keywords=record.search_keywords, provider=provider, model=model,
+            license_tier=license_tier,
         )
         logs.extend(assist_logs)
         progress("Reviewing candidates for relevance to the request...")
@@ -452,6 +509,167 @@ def create_from_spec(
     return draft, logs
 
 
+def _create_via_forced_route(
+    spec: AssetSpec,
+    final_id: str,
+    route: ForcedRoute,
+    provider: str | None,
+    model: str | None,
+    progress: ProgressFn,
+    license_tier: str | None = None,
+) -> tuple[DraftAsset, list[LLMCallEntry]]:
+    """Build final_id via a human-chosen route, skipping resolve()'s own
+    catalog-match/LLM-classification decision for this call. Each branch
+    mirrors the corresponding automatic-routing branch in create_from_spec
+    (or redirect_draft's post-hoc override, for parametric/composite/
+    imported), just entered directly instead of via a classifier verdict.
+    """
+    logs: list[LLMCallEntry] = []
+    description = spec.description
+
+    if route == "existing":
+        progress("Forced route: existing -- checking the catalog for a match only (no LLM fallback)...")
+        catalog = load_catalog()
+        candidates = find_candidates(spec, catalog)
+        if not candidates or candidates[0].confidence < VARIANT_FLOOR:
+            best = candidates[0].confidence if candidates else 0.0
+            draft = DraftAsset(
+                asset_id=final_id, status="needs_human", resolution_method="existing",
+                description=description, spec=spec,
+                message=(
+                    f"Forced route 'existing' found no catalog match (best confidence "
+                    f"{best:.2f}, need >= {VARIANT_FLOOR:.2f})."
+                ),
+            )
+            save_draft_state(draft)
+            return draft, logs
+        top = candidates[0]
+        method = (
+            "catalog_match" if top.confidence >= config.CATALOG_MATCH_CONFIDENCE_THRESHOLD
+            else "variant"
+        )
+        progress(
+            f"Matched existing catalog asset {top.entry.asset_id!r} "
+            f"({method}, confidence {top.confidence:.2f})."
+        )
+        draft = DraftAsset(
+            asset_id=final_id, status="existing", resolution_method=method,
+            description=description, spec=spec,
+            matched_asset_id=top.entry.asset_id,
+            glb_address=top.entry.address if top.entry.address.startswith("library/") else None,
+            bounds_m=list(top.entry.canonical_bounds_m),
+            uv=top.entry.uv,
+            message=(
+                f"Resolved to existing catalog asset {top.entry.asset_id!r} "
+                f"({method}, confidence {top.confidence:.2f})."
+            ),
+        )
+        if _existing_match_needs_material_bind(top.entry):
+            logs.extend(_bind_material(draft, provider, model, progress=progress))
+        save_draft_state(draft)
+        return draft, logs
+
+    if route == "parametric":
+        progress(
+            "Forced route: parametric -- generating an OpenSCAD script (LLM) and "
+            "compiling it (up to 3 repair attempts)..."
+        )
+        generation, gen_logs = generate_parametric_asset(spec, final_id)
+        logs.extend(gen_logs)
+        if not generation.success:
+            draft = DraftAsset(
+                asset_id=final_id, status="needs_human", resolution_method="parametric",
+                description=description, spec=spec, generation=generation,
+                message=generation.error_message,
+            )
+            save_draft_state(draft)
+            return draft, logs
+        plan = OpenSCADPlan(
+            parameters={},
+            scad_source=generation.repair_attempts[-1].scad_source,
+            expected_bounds_m=generation.expected_bounds_m or [0, 0, 0],
+        )
+        draft = DraftAsset(
+            asset_id=final_id, status="draft", resolution_method="parametric",
+            description=description, spec=spec, plan=plan, generation=generation,
+            message="Generated via OpenSCAD (forced route). Edit parameters or send a tweak, then save.",
+        )
+        progress("Compile succeeded -- normalizing mesh in Blender (scale/pivot/UVs)...")
+        draft.plan.parameters = extract_scad_parameters(plan.scad_source)
+        draft = _normalize_draft_mesh(draft)
+        logs.extend(_bind_material(draft, provider, model, progress=progress))
+        save_draft_state(draft)
+        return draft, logs
+
+    if route == "composite":
+        progress("Forced route: composite -- decomposing into primitive parts (LLM)...")
+        parts, decomp_entry = decompose_into_primitives(
+            spec, max_parts=12, provider=provider, model=model
+        )
+        logs.append(decomp_entry)
+        progress(
+            f"Decomposed into {len(parts)} primitive part(s): "
+            f"{', '.join(p.description for p in parts)}"
+        )
+        catalog = load_catalog()
+        record, resolve_logs = resolve(spec, catalog, forced_composite_parts=parts)
+        logs.extend(resolve_logs)
+        composite_id = f"{spec.object_id}_composite"
+        draft, bake_logs = _materialize_and_bake_composite(
+            composite_id, final_id, spec.desired_size_m, provider, model, progress
+        )
+        logs.extend(bake_logs)
+        return draft, logs
+
+    if route == "imported":
+        progress(
+            "Forced route: imported -- searching allowlisted sources "
+            "(Poly Haven, NASA 3D Resources)..."
+        )
+        assist, assist_logs = assist_imported(
+            spec, final_id, provider=provider, model=model, license_tier=license_tier,
+        )
+        logs.extend(assist_logs)
+        progress(assist.note or "Source search finished.")
+        if assist.auto_adopted is not None and assist.auto_adopted.success:
+            entry = assist.auto_adopted.catalog_entry
+            draft = DraftAsset(
+                asset_id=final_id, status="existing", resolution_method="imported",
+                description=description, spec=spec,
+                matched_asset_id=entry.asset_id,
+                glb_address=entry.address,
+                bounds_m=list(entry.canonical_bounds_m),
+                uv=entry.uv,
+                message=assist.note,
+            )
+            save_draft_state(draft)
+            return draft, logs
+        draft = DraftAsset(
+            asset_id=final_id, status="needs_human", resolution_method="imported",
+            description=description, spec=spec,
+            candidates=assist.candidates,
+            suggested_sources=assist.search_urls,
+            message=assist.note,
+        )
+        save_draft_state(draft)
+        return draft, logs
+
+    # route == "blender": no native-Blender-script generation route exists
+    # yet (Blender today only normalizes meshes and bakes composites, both
+    # as an implementation detail of the other routes) -- surfaced
+    # explicitly as a TBD stub so a test run never mistakes this for a real
+    # result, while the wiring (CLI/webapp route selector) is ready for when
+    # the route is actually implemented.
+    progress("Forced route: blender -- not yet implemented (TBD).")
+    draft = DraftAsset(
+        asset_id=final_id, status="needs_human", resolution_method="blender",
+        description=description, spec=spec,
+        message="Blender procedural route is TBD -- not implemented yet, this is a wiring placeholder.",
+    )
+    save_draft_state(draft)
+    return draft, logs
+
+
 # ── Manual redirect (added 2026-07) ───────────────────────────────────────
 #
 # A stuck draft (needs_human: imported with bad/no candidates, or
@@ -471,6 +689,7 @@ def redirect_draft(
     provider: str | None = None,
     model: str | None = None,
     progress: ProgressFn | None = None,
+    license_tier: str | None = None,
 ) -> tuple[DraftAsset, list[LLMCallEntry]]:
     """Rebuild an existing draft via a human-chosen path, bypassing
     classify()/resolve()'s original verdict for this asset_id.
@@ -533,7 +752,8 @@ def redirect_draft(
     # human's own search words instead of whatever produced bad results.
     progress(f"Searching allowlisted sources again{' with your keywords' if manual_query else ''}...")
     assist, assist_logs = assist_imported(
-        spec, asset_id, manual_query=manual_query, provider=provider, model=model
+        spec, asset_id, manual_query=manual_query, provider=provider, model=model,
+        license_tier=license_tier,
     )
     logs.extend(assist_logs)
     progress(assist.note or "Source search finished.")

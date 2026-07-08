@@ -46,6 +46,48 @@ def test_generate_requires_description(client):
     assert "description" in res.get_json()["error"]
 
 
+def test_generate_rejects_unknown_route(client):
+    res = client.post("/api/generate", json={"description": "a bracket", "route": "bogus"})
+    assert res.status_code == 400
+    assert "route" in res.get_json()["error"]
+
+
+def test_generate_rejects_unknown_license_tier(client):
+    res = client.post("/api/generate", json={"description": "a bracket", "license_tier": "bogus"})
+    assert res.status_code == 400
+    assert "license_tier" in res.get_json()["error"]
+
+
+def test_license_tiers_endpoint_lists_tiers_with_descriptions(client):
+    data = client.get("/api/license-tiers").get_json()
+
+    tier_ids = [t["id"] for t in data["tiers"]]
+    assert tier_ids == ["cc0", "cc-by", "cc-by-sa"]
+    assert data["default"] in tier_ids
+    assert all(t["label"] and t["description"] for t in data["tiers"])
+
+
+def test_generate_forwards_route_to_create_from_description(client, monkeypatch):
+    from models.spec_models import AssetSpec
+    from pipeline.asset_factory import DraftAsset
+
+    captured = {}
+
+    def fake_create(description, asset_id=None, provider=None, model=None, progress=None, forced_route=None, license_tier=None):
+        captured["forced_route"] = forced_route
+        return DraftAsset(
+            asset_id="bracket_01", status="draft", resolution_method="parametric",
+            description=description, spec=AssetSpec(object_id="bracket_01", description=description),
+        ), []
+
+    monkeypatch.setattr(webapp_app, "create_from_description", fake_create)
+    res = client.post("/api/generate", json={"description": "a bracket", "route": "parametric"})
+
+    assert res.status_code == 202
+    _poll_job(client, res.get_json()["job_id"])
+    assert captured["forced_route"] == "parametric"
+
+
 def _poll_job(client, job_id, timeout_s=5.0):
     import time
 
@@ -62,7 +104,7 @@ def test_generate_runs_as_job_with_progress_events(client, monkeypatch):
     from models.spec_models import AssetSpec
     from pipeline.asset_factory import DraftAsset
 
-    def fake_create(description, asset_id=None, provider=None, model=None, progress=None):
+    def fake_create(description, asset_id=None, provider=None, model=None, progress=None, forced_route=None, license_tier=None):
         progress("Checking local library for possible matches...")
         progress("Matched existing catalog asset 'sphere_basic'...")
         return DraftAsset(
@@ -82,7 +124,7 @@ def test_generate_runs_as_job_with_progress_events(client, monkeypatch):
 
 
 def test_generate_reports_pipeline_errors_cleanly(client, monkeypatch):
-    def boom(description, asset_id=None, provider=None, model=None, progress=None):
+    def boom(description, asset_id=None, provider=None, model=None, progress=None, forced_route=None, license_tier=None):
         raise RuntimeError("no API key configured")
 
     monkeypatch.setattr(webapp_app, "create_from_description", boom)
@@ -172,7 +214,7 @@ def test_redirect_runs_as_job_and_forwards_manual_query(client, monkeypatch):
 
     captured = {}
 
-    def fake_redirect(asset_id, target, manual_query=None, provider=None, model=None, progress=None):
+    def fake_redirect(asset_id, target, manual_query=None, provider=None, model=None, progress=None, license_tier=None):
         captured.update(asset_id=asset_id, target=target, manual_query=manual_query)
         progress("Searching allowlisted sources again with your keywords...")
         return DraftAsset(

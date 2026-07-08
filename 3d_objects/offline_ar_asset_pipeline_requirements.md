@@ -533,6 +533,84 @@ Example:
 
 No asset with unknown or unapproved licensing should enter a deployable scene or lab bundle.
 
+### 11.1 Keyed Third-Party Source Mode (Thingiverse)
+
+Sources that require an API key and carry mixed per-item licensing (currently
+Thingiverse) are subject to stricter handling than blanket-license sources
+such as Poly Haven (all CC0) or NASA 3D Resources (all public domain).
+
+Key handling:
+
+- The API key should be stored only in the local `.env` file or the server
+  environment.
+- No key should ever appear in client-side JavaScript; all source API calls
+  are made server-side by the pipeline.
+- No key should ever be committed to git (`.env` is git-ignored;
+  `.env.example` contains only empty placeholders).
+- The system should not expose a public endpoint that proxies arbitrary
+  Thingiverse searches; search runs only from the internal review app, which
+  binds to the loopback interface.
+
+Search and candidate presentation:
+
+- Search results are shown only inside the internal review app.
+- Each candidate should be clearly labeled with its source (Thingiverse).
+- For every candidate, the title, creator, URL, license, and source page
+  should be saved.
+
+Adoption and licensing:
+
+- No automatic adoption: every Thingiverse download requires explicit human
+  approval, regardless of match confidence.
+- NC, ND, and unknown licenses are rejected by default. License labels are
+  mapped through a fail-closed table: only labels that map with confidence to
+  the intake allowlist (CC0, CC-BY with a recorded author, public domain)
+  may enter the library; everything else is rejected at intake.
+- An imported model is stored in the library only after its license passes
+  the intake gate (license approval precedes storage, not the reverse).
+
+Cleanup and distribution:
+
+- The raw API/download cache (the intake drop folder contents) should be
+  deleted after a successful intake or a failed review, so unapproved
+  downloads do not accumulate on disk.
+- An attribution file should be generated for every synced XR bundle,
+  covering all included assets whose license requires attribution.
+
+### 11.2 Search Candidate License Policy and Link-Only Sources
+
+The author selects a license tier in the review app (Create and Worklist
+modes, a pull-down with a plain-language description of each tier's
+obligations). Tiers are cumulative:
+
+- CC0 / public domain only — no conditions at all.
+- CC0 + CC-BY (default) — adds attribution licenses; the creator must be
+  credited. Attribution is captured at intake and flagged on the catalog
+  entry.
+- CC0 + CC-BY + CC-BY-SA — adds share-alike; distributed derivatives (the
+  pipeline's normalized copies) must carry the same CC-BY-SA license.
+
+NC, ND, and unknown licenses are never offered at any tier. Hits outside
+the selected tier are hidden from candidate lists. (The default was chosen
+after a 2026-07 survey of Thingiverse's top "human heart" results found 0
+of 30 CC0 but 15 of 30 CC-BY — organic/anatomy content is effectively
+never published CC0 there. Because restricted licenses dominate, the
+search walks a deeper hit pool and filters by license inside the search,
+so the candidate list is not starved by post-filtering only the top few
+hits.)
+
+Hits hidden by this policy should be counted and reported in the sourcing
+message, so a license-filtered search is never indistinguishable from an
+empty one.
+
+Approved link-only sources (no usable API; presented as clickable search or
+browse URLs, never contacted programmatically):
+
+- Smithsonian 3D (mixed licenses; check per item)
+- Kenney (all assets CC0; site search runs client-side)
+- Quaternius (all assets CC0; no site search — browse packs)
+- OpenGameArt (mixed licenses; the link pre-filters to CC0-licensed 3D art)
+
 ## 12. Validation Requirements
 
 The pipeline should produce validation reports before deployment.
@@ -863,4 +941,3 @@ The central architectural choice is to separate:
 This allows the LLM and development tools to provide flexible, intelligent assistance while keeping the runtime AR application deterministic and reliable.
 
 The initial implementation should emphasize canonical scale, strict validation, curated assets, material overrides, preview generation, and clear human author review. Advanced generation, external asset retrieval, and image-model visual review can be added later without changing the core architecture.
-

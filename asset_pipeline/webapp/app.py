@@ -44,10 +44,17 @@ from pipeline.asset_factory import (
 from pipeline.catalog_writer import load_catalog
 from pipeline.mesh_processor import MeshProcessingError
 from pipeline.openscad_generator import OpenSCADGenerationError
+from pipeline.source_assist import DEFAULT_LICENSE_TIER, LICENSE_TIERS
 from pipeline.spec_parser import SpecParsingError
 
 WEBAPP_DIR = Path(__file__).parent
 WORKLIST_PATH = WEBAPP_DIR / "worklist.json"
+
+# Valid values for /api/generate's optional "route" field (create_from_*'s
+# forced_route) -- lets a human pick the creation route up front instead of
+# trusting automatic catalog-match/LLM classification, for A/B testing which
+# route gives the best result for the same description.
+FORCED_ROUTES = {"existing", "imported", "parametric", "composite", "blender"}
 
 app = Flask(__name__)
 
@@ -124,17 +131,48 @@ def api_catalog():
     return jsonify({"assets": entries})
 
 
+@app.get("/api/license-tiers")
+def api_license_tiers():
+    """Options for the Create/Worklist license pull-down: which source
+    licenses the imported route's search may show, with a human-readable
+    description of each tier's obligations."""
+    return jsonify({
+        "default": DEFAULT_LICENSE_TIER,
+        "tiers": [
+            {"id": tier_id, "label": tier["label"], "description": tier["description"]}
+            for tier_id, tier in LICENSE_TIERS.items()
+        ],
+    })
+
+
+def _license_tier_or_error(payload):
+    """Returns (tier_or_None, error_response_or_None) for an optional
+    license_tier field."""
+    tier = (payload.get("license_tier") or "").strip() or None
+    if tier is not None and tier not in LICENSE_TIERS:
+        return None, _error(f"license_tier must be one of {sorted(LICENSE_TIERS)} (or omitted)")
+    return tier, None
+
+
 @app.post("/api/generate")
 def api_generate():
     payload = request.get_json(silent=True) or {}
     description = (payload.get("description") or "").strip()
     if not description:
         return _error("description is required")
+    route = (payload.get("route") or "").strip() or None
+    if route is not None and route not in FORCED_ROUTES:
+        return _error(f"route must be one of {sorted(FORCED_ROUTES)} (or omitted for automatic)")
+    license_tier, err = _license_tier_or_error(payload)
+    if err:
+        return err
     job_id = _start_job(lambda progress: create_from_description(
         description,
         asset_id=(payload.get("asset_id") or "").strip() or None,
         provider=payload.get("provider"),
         model=payload.get("model"),
+        forced_route=route,
+        license_tier=license_tier,
         progress=progress,
     ))
     return jsonify({"job_id": job_id}), 202
@@ -219,8 +257,11 @@ def api_redirect():
     if not asset_id or target not in ("parametric", "composite", "imported"):
         return _error("asset_id and target ('parametric'|'composite'|'imported') are required")
     manual_query = (payload.get("manual_query") or "").strip() or None
+    license_tier, err = _license_tier_or_error(payload)
+    if err:
+        return err
     job_id = _start_job(lambda progress: redirect_draft(
-        asset_id, target, manual_query=manual_query,
+        asset_id, target, manual_query=manual_query, license_tier=license_tier,
         provider=payload.get("provider"), model=payload.get("model"), progress=progress,
     ))
     return jsonify({"job_id": job_id}), 202

@@ -6,6 +6,7 @@ from pipeline import source_assist
 from pipeline.external_intake import IntakeResult
 from pipeline.polyhaven import PolyHavenResult, PolyHavenSearchError
 from pipeline.source_relevance import CandidateReview
+from pipeline.thingiverse import ThingiverseResult
 
 
 def _spec(**overrides):
@@ -40,6 +41,15 @@ def _entry(asset_id):
 def _no_nasa_network(monkeypatch):
     """Default the NASA source to empty; tests that exercise it override."""
     monkeypatch.setattr(source_assist, "search_nasa3d", lambda q, limit: [])
+
+
+@pytest.fixture(autouse=True)
+def _no_thingiverse_network(monkeypatch):
+    """Default the Thingiverse source to empty; tests that exercise it override."""
+    monkeypatch.setattr(
+        source_assist, "search_thingiverse",
+        lambda q, limit, allowed_licenses=None: ([], 0),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -146,6 +156,112 @@ def test_nasa3d_candidates_merge_and_rank(monkeypatch):
     assert result.candidates[0].name == "Apollo Lunar Module"
 
 
+def test_thingiverse_candidates_merge_and_rank(monkeypatch):
+    monkeypatch.setattr(source_assist, "search_models",
+                        lambda q, limit, asset_type: [_hit("bar_stool", score=2)])
+    monkeypatch.setattr(source_assist, "search_thingiverse", lambda q, limit, allowed_licenses=None: ([
+        ThingiverseResult(
+            thing_id="12345", name="Wooden Stool",
+            license="Creative Commons - Public Domain Dedication",
+            creator="Carol", thumbnail_url="https://cdn.example/thing.png",
+            public_url="https://www.thingiverse.com/thing:12345", download_count=42, score=6,
+        )
+    ], 0))
+    monkeypatch.setattr(source_assist, "adopt_candidate",
+                        lambda *a, **k: pytest.fail("must not auto-adopt a thingiverse candidate here"))
+
+    result, logs = source_assist.assist_imported(_spec(), "wooden_stool")
+
+    thingiverse_candidates = [c for c in result.candidates if c.source == "thingiverse"]
+    assert len(thingiverse_candidates) == 1
+    assert thingiverse_candidates[0].source_id == "12345"
+    assert thingiverse_candidates[0].license == "cc0"  # mapped from the raw label
+
+
+def test_restricted_license_hits_are_hidden_and_counted(monkeypatch):
+    """Display policy (2026-07): out-of-tier hits (share-alike/NC/unknown at
+    the default cc-by tier) are hidden inside search_thingiverse, which
+    reports how many -- the note must say hits were hidden so this doesn't
+    read as an empty search."""
+    monkeypatch.setattr(source_assist, "search_models", lambda q, limit, asset_type: [])
+    monkeypatch.setattr(source_assist, "search_thingiverse", lambda q, limit, allowed_licenses=None: ([
+        ThingiverseResult(
+            thing_id="777", name="Wooden Stool", license="Creative Commons - Attribution",
+            creator="Carol", public_url="https://www.thingiverse.com/thing:777",
+            download_count=42, score=6,
+        ),
+    ], 2))
+    monkeypatch.setattr(source_assist, "adopt_candidate",
+                        lambda *a, **k: pytest.fail("thingiverse candidates must never auto-adopt"))
+
+    result, logs = source_assist.assist_imported(_spec(), "wooden_stool")
+
+    assert [c.source_id for c in result.candidates] == ["777"]
+    assert result.candidates[0].license == "cc-by"  # mapped from the raw label
+    assert result.license_filtered == 2
+    assert "2 hit(s) hidden by the license policy" in result.note
+
+
+def test_license_tier_is_passed_to_thingiverse_search(monkeypatch):
+    """The review app's pull-down choice must reach the search as the
+    allowed-license set; unknown/None tiers fall back to the default."""
+    captured = {}
+
+    def fake_search(q, limit, allowed_licenses=None):
+        captured["allowed"] = allowed_licenses
+        return [], 0
+
+    monkeypatch.setattr(source_assist, "search_models", lambda q, limit, asset_type: [])
+    monkeypatch.setattr(source_assist, "search_thingiverse", fake_search)
+
+    source_assist.assist_imported(_spec(), "wooden_stool", license_tier="cc0")
+    assert captured["allowed"] == source_assist.LICENSE_TIERS["cc0"]["licenses"]
+    assert "cc-by" not in captured["allowed"]
+
+    source_assist.assist_imported(_spec(), "wooden_stool", license_tier="cc-by-sa")
+    assert "cc-by-sa" in captured["allowed"]
+
+    source_assist.assist_imported(_spec(), "wooden_stool")  # default tier
+    assert captured["allowed"] == source_assist.LICENSE_TIERS[source_assist.DEFAULT_LICENSE_TIER]["licenses"]
+
+
+def test_new_cc0_sites_appear_in_search_urls(monkeypatch):
+    monkeypatch.setattr(source_assist, "search_models", lambda q, limit, asset_type: [])
+
+    result, logs = source_assist.assist_imported(_spec(), "wooden_stool")
+
+    assert any("kenney.nl/assets?q=" in u for u in result.search_urls)
+    assert any("quaternius.com" in u for u in result.search_urls)
+    # OpenGameArt link must carry the CC0 + 3D-art filters, not a raw search.
+    oga = [u for u in result.search_urls if "opengameart.org" in u]
+    assert len(oga) == 1
+    assert "field_art_licenses_tid%5B%5D=4" in oga[0]
+    assert "field_art_type_tid%5B%5D=10" in oga[0]
+
+
+def test_thingiverse_never_auto_adopts_even_with_high_confidence_and_size(monkeypatch):
+    """Policy (2026-07): only Poly Haven auto-adopts. A Thingiverse candidate
+    that would otherwise clear every auto-adopt bar (confidence, identity
+    hits, relevance match, size known) must still fall to manual approval."""
+    monkeypatch.setattr(source_assist, "search_models", lambda q, limit, asset_type: [])
+    monkeypatch.setattr(source_assist, "search_thingiverse", lambda q, limit, allowed_licenses=None: ([
+        ThingiverseResult(
+            thing_id="99", name="wooden stool", license="Creative Commons - Public Domain Dedication",
+            creator="Dana", public_url="https://www.thingiverse.com/thing:99",
+            download_count=9000, score=6,
+        )
+    ], 0))
+    monkeypatch.setattr(source_assist, "adopt_candidate",
+                        lambda *a, **k: pytest.fail("thingiverse must never auto-adopt"))
+
+    result, logs = source_assist.assist_imported(_spec(), "wooden_stool")
+
+    assert result.auto_adopted is None
+    assert len(result.candidates) == 1
+    assert result.candidates[0].auto_downloadable is False
+    assert "manual approval" in result.note
+
+
 def test_junk_confidence_candidates_are_suppressed(monkeypatch):
     """Moon rocks must not be offered for a lunar lander -- below the noise
     floor only the search links remain."""
@@ -226,6 +342,22 @@ def test_adopt_dispatches_by_source(monkeypatch):
     )
     source_assist.adopt_candidate(nasa, "x", target_size_m=1.0)
     assert calls == {"nasa": "3D Models/X/X.glb"}
+
+
+def test_adopt_dispatches_thingiverse(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(source_assist, "fetch_thingiverse_to_intake",
+                        lambda thing_id, intake_id, target_size_m: calls.update(tv=thing_id))
+    monkeypatch.setattr(source_assist, "intake_asset",
+                        lambda intake_id: IntakeResult(asset_id=intake_id, success=True,
+                                                       catalog_entry=_entry(intake_id)))
+
+    tv = source_assist.SourceCandidate(
+        source="thingiverse", source_id="12345", name="X",
+        license="Creative Commons - Attribution", url="u", auto_downloadable=False,
+    )
+    source_assist.adopt_candidate(tv, "x", target_size_m=1.0)
+    assert calls == {"tv": "12345"}
 
 
 def test_network_failure_degrades_to_search_urls(monkeypatch):

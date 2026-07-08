@@ -32,11 +32,32 @@ grid/gradient/rust via numpy+Pillow -- via `cli.py generate-material`), and
 Stage 6a (manual external intake: license-gated, provenance-recorded
 normalization of a human-provided model file from `intake/<asset_id>/`
 into `library/imported/` + the catalog, via `cli.py intake` -- see
-`intake/README.md` for the drop-folder workflow), and Stage 6b (Poly Haven
-search assist: `cli.py search-external` lists CC0 models read-only,
-`cli.py fetch-external <id>` downloads only the one asset a human
-explicitly names into the intake folder with a pre-filled source.json --
-Poly Haven is the entire source allowlist by design), and Stage 7
+`intake/README.md` for the drop-folder workflow), and Stage 6b (external
+source search assist, `pipeline/source_assist.py`: searches every
+allowlisted source and auto-downloads only when confidence, a
+machine-verified unrestricted license, and a known real-world size all
+hold; otherwise presents one-click-approve candidates or, with no usable
+hits, direct search links -- `cli.py search-external` / `fetch-external <id>`
+remain for a fully manual Poly Haven lookup/download. The allowlist is
+**Poly Haven** (CC0, no key needed), **NASA 3D Resources** (public domain,
+no key needed), and **Thingiverse** (`pipeline/thingiverse.py`, added
+2026-07 -- mixed per-item CC licenses, requires `THINGIVERSE_APP_TOKEN`,
+STL/OBJ geometry only with no baked color/texture; its per-item license is
+mapped through a fail-closed table and its candidates are never
+auto-adopted regardless of confidence, unlike Poly Haven). Candidate
+licenses are gated by an author-selected tier (`LICENSE_TIERS` in
+`pipeline/source_assist.py`; a pull-down in the review app's Create and
+Worklist modes): CC0-only, +CC-BY (default), or +CC-BY-SA -- NC/ND/unknown
+are never offered. Out-of-tier hits are hidden but counted in
+the sourcing note, and the Thingiverse search walks a deeper hit pool
+(license-filtering inside the search) since restricted licenses dominate
+its top results. Link-only browse sources shown as search URLs (no
+usable API, never contacted programmatically): Smithsonian 3D, Kenney
+(all CC0), Quaternius (all CC0), and OpenGameArt (link pre-filtered to
+CC0 3D art). TurboSquid,
+CGTrader, Sketchfab/Fab, and Free3D were evaluated and deferred -- see the
+module docstring in `pipeline/source_assist.py` for why, and re-verify
+before revisiting any of them), and Stage 7
 (executable validation of the catalog + library per req. doc section 12:
 schema, completeness, scale/geometry, licensing/provenance, and runtime
 readiness via `cli.py validate`, with colorized screen output or `--json`,
@@ -112,7 +133,9 @@ When moving to a new machine, run `python cli.py doctor` first: it reports
 which tool binaries were detected (and actually runs each one, since a
 binary can exist on disk but be unlaunchable -- e.g. the MS Store Blender's
 `blender.exe` is blocked by WindowsApps ACLs and cannot be used headless;
-install the desktop build instead) and which LLM API keys are set.
+install the desktop build instead), which LLM API keys are set, and whether
+`THINGIVERSE_APP_TOKEN` is set (optional -- only the Thingiverse allowlisted
+source needs it; Poly Haven/NASA3D need no key at all).
 
 ## Running tests
 

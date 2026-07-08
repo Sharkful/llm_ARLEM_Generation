@@ -97,9 +97,19 @@
         <textarea id="c-desc" rows="3" placeholder="e.g. an L-shaped mounting bracket with two screw holes, about 6cm wide"></textarea>
         <div class="row">
           <input type="text" id="c-id" placeholder="asset_id (optional)" style="max-width:220px">
+          <select id="c-route" title="Force a specific creation route instead of automatic catalog-match/LLM classification -- useful for testing which route gives the best result for the same description.">
+            <option value="">Route: automatic</option>
+            <option value="existing">Route: existing (catalog only)</option>
+            <option value="imported">Route: online resources</option>
+            <option value="parametric">Route: OpenSCAD</option>
+            <option value="composite">Route: composite</option>
+            <option value="blender">Route: Blender (TBD, not implemented)</option>
+          </select>
+          <select id="c-license" title="Which source licenses the online-resources search may show. Every option is free; the tiers differ in what you must do in return."></select>
           <button class="action" id="c-generate">Generate</button>
           <button class="secondary" id="c-clear">Clear current draft</button>
         </div>
+        <div id="c-license-hint" style="color:var(--dim); font-size:12px; margin-top:4px"></div>
       </div>
       <div class="card" id="draft-panel" hidden>
         <h3>Draft: <span id="d-id"></span> <span class="badge" id="d-method"></span></h3>
@@ -171,7 +181,9 @@
           <button class="secondary" id="w-prev">◀ Back</button>
           <button class="secondary" id="w-regen">Regenerate current (alternative)</button>
           <button class="secondary" id="w-skip">Skip current</button>
+          <select id="w-license" title="Which source licenses the online-resources search may show. Every option is free; the tiers differ in what you must do in return."></select>
         </div>
+        <div id="w-license-hint" style="color:var(--dim); font-size:12px; margin-top:4px"></div>
         <div style="color:var(--dim); font-size:12px; margin-top:6px">
           Click any item to select it; Regenerate produces a fresh alternative
           for the selected item even if it was already saved.
@@ -474,10 +486,37 @@ async function runGuarded(button, fn) {
   button.disabled = false;
 }
 
+// ── License tier pull-downs (Create + Worklist) ───────────────────────
+// Options come from /api/license-tiers (source_assist.LICENSE_TIERS) so
+// labels/descriptions live in one place server-side; the hint line under
+// each select explains what the selected tier obliges you to do.
+let licenseTierDescriptions = {};
+
+async function initLicenseTiers() {
+  try {
+    const data = await api('/api/license-tiers');
+    for (const [selectId, hintId] of [['c-license', 'c-license-hint'], ['w-license', 'w-license-hint']]) {
+      const sel = $(selectId);
+      sel.innerHTML = '';
+      for (const t of data.tiers) {
+        licenseTierDescriptions[t.id] = t.description;
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = `Licenses: ${t.label}`;
+        sel.appendChild(opt);
+      }
+      sel.value = data.default;
+      sel.onchange = () => { $(hintId).textContent = licenseTierDescriptions[sel.value] || ''; };
+      sel.onchange();
+    }
+  } catch (e) { log('could not load license tiers: ' + e.message); }
+}
+
 $('c-generate').onclick = () => runGuarded($('c-generate'), async () => {
   log('generating from description…');
   const job = await runJob('/api/generate', {
-    description: $('c-desc').value, asset_id: $('c-id').value,
+    description: $('c-desc').value, asset_id: $('c-id').value, route: $('c-route').value,
+    license_tier: $('c-license').value,
   });
   showDraft(job.draft);
   await refreshDrafts();
@@ -637,6 +676,7 @@ function redirectDraft(button, target, manualQuery) {
     log(`overriding: rebuilding ${draft.asset_id} as ${target}${manualQuery ? ' (custom search)' : ''}...`);
     const job = await runJob('/api/redirect', {
       asset_id: draft.asset_id, target, manual_query: manualQuery || undefined,
+      license_tier: $('c-license').value || undefined,
     });
     showDraft(job.draft);
     await refreshDrafts();
@@ -696,6 +736,7 @@ async function generateWorklistItem(index) {
   try {
     const job = await runJob('/api/generate', {
       description: item.description, asset_id: item.asset_id || '',
+      license_tier: $('w-license').value,
     });
     showDraft(job.draft);
     await refreshDrafts();
@@ -756,6 +797,7 @@ $('w-skip').onclick = () => runGuarded($('w-skip'), () => markCurrent('skipped')
 
 // ── Init ──────────────────────────────────────────────────────────────
 (async () => {
+  await initLicenseTiers();
   await refreshCatalog();
   try {
     const saved = await api('/api/worklist');

@@ -43,6 +43,25 @@ def test_generic_category_semantic_type_does_not_shortcut():
     assert match.confidence < 0.5  # falls through to token scoring
 
 
+def test_generic_spacecraft_semantic_type_does_not_shortcut():
+    """Regression (2026-07, 'lunar module' incident): semantic_type
+    'spacecraft' must not score 1.0 against any entry whose display_name
+    happens to tokenize to include the word "spacecraft" -- 'a lunar
+    module' false-matched apollo11_command_module (display_name
+    'spacecraft_command_module') this way, hiding the real match
+    (lunar_excursion_module) entirely."""
+    lunar_module = AssetSpec(
+        object_id="lunar_module", description="a lunar module",
+        kind="composite", semantic_type="spacecraft",
+    )
+    command_module = _entry(
+        "apollo11_command_module", ["spacecraft_command_module", "composite"],
+        display_name="spacecraft_command_module",
+    )
+    match = score_entry(lunar_module, command_module)
+    assert match.confidence < 0.5  # falls through to token scoring
+
+
 def test_unrelated_entry_scores_low():
     spec = AssetSpec(object_id="moon", description="a small gray moon with craters")
     match = score_entry(spec, _entry("lab_table_01", ["furniture", "table", "lab"]))

@@ -8,6 +8,8 @@ from the repo root once __main__ wiring is added in a later stage):
     python cli.py spec "a small gray moon..." --out spec_moon.json --provider openai
     python cli.py resolve "a small gray moon with visible crater texture"
     python cli.py resolve --spec-file spec_moon.json
+    python cli.py create "a small gray moon with visible crater texture, 15cm across"
+    python cli.py create "a snowman" --route composite --asset-id snowman_01
     python cli.py generate-parametric bracket_01 "an L-shaped mounting bracket, 5cm wide"
     python cli.py normalize-mesh bracket_01 library/generated/bracket_01/source.stl --format stl --size 0.05
     python cli.py generate-material "rough red rust with visible texture"
@@ -26,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import config
 from models.spec_models import AssetSpec
+from pipeline.asset_factory import AssetFactoryError, create_from_description
 from pipeline.catalog_writer import load_catalog
 from pipeline.classifier import ClassificationError
 from pipeline.external_intake import IntakeError, intake_asset
@@ -140,6 +143,39 @@ def cmd_resolve(args: argparse.Namespace) -> int:
     if record.requires_author_review:
         print(f"\nFLAGGED FOR REVIEW: {record.review_reason}", file=sys.stderr)
     return 0
+
+
+def cmd_create(args: argparse.Namespace) -> int:
+    route = None if args.route == "auto" else args.route
+    try:
+        draft, log_entries = create_from_description(
+            args.description,
+            asset_id=args.asset_id,
+            provider=args.provider,
+            model=args.model,
+            forced_route=route,
+            progress=lambda message: print(f"... {message}", file=sys.stderr),
+        )
+    except AssetFactoryError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except RuntimeError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    print(json.dumps(draft.model_dump(mode="json"), indent=2))
+    for entry in log_entries:
+        print(
+            f"[{entry.provider}/{entry.model}] {entry.purpose} "
+            f"{entry.input_tokens}in/{entry.output_tokens}out tokens, {entry.duration_seconds}s",
+            file=sys.stderr,
+        )
+    print(
+        f"\n{draft.asset_id!r}: status={draft.status} resolution_method={draft.resolution_method}"
+        + (f" -- {draft.message}" if draft.message else ""),
+        file=sys.stderr,
+    )
+    return 1 if draft.status == "needs_human" else 0
 
 
 def cmd_generate_parametric(args: argparse.Namespace) -> int:
@@ -525,6 +561,18 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "LLM stages (spec/resolve/generate-parametric) will fail until it is set in .env"
         )
 
+    print("\nAllowlisted source keys (Poly Haven/NASA3D need none):")
+    print(
+        f"  [{'OK' if config.THINGIVERSE_APP_TOKEN else '--'}]      thingiverse: "
+        f"{'set' if config.THINGIVERSE_APP_TOKEN else 'not set'}"
+    )
+    if not config.THINGIVERSE_APP_TOKEN:
+        print(
+            "  NOTE: without THINGIVERSE_APP_TOKEN, the imported route's sourcing assist "
+            "silently skips Thingiverse (Poly Haven/NASA3D still work). Register an app at "
+            "https://www.thingiverse.com/developers and add the token to .env."
+        )
+
     print(f"\nCatalog: {config.CATALOG_PATH}"
           f" ({'exists' if config.CATALOG_PATH.exists() else 'missing -- run `catalog seed`'})")
     print(f"Library: {config.LIBRARY_DIR}")
@@ -573,6 +621,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     resolve_parser.add_argument("--model", default=None, help="Override the default model for this call")
     resolve_parser.set_defaults(func=cmd_resolve)
+
+    create_parser = sub.add_parser(
+        "create",
+        help="Full create pipeline: description -> routed -> generated/normalized draft "
+        "(same flow the webapp's Create tab drives, runnable headlessly)",
+    )
+    create_parser.add_argument("description", help="Free-text description of the object to create")
+    create_parser.add_argument(
+        "--asset-id", default=None, help="asset_id to use (default: derived from the parsed spec)"
+    )
+    create_parser.add_argument(
+        "--route", choices=["auto", "existing", "imported", "parametric", "composite", "blender"],
+        default="auto",
+        help="Force a specific creation route instead of automatic catalog-match/LLM "
+        "classification -- useful for testing which route gives the best result for the "
+        "same description. 'blender' is a wiring placeholder, not implemented yet. "
+        "Default: auto (the normal classify/resolve decision tree).",
+    )
+    create_parser.add_argument(
+        "--provider", choices=["anthropic", "openai", "google"], default=None,
+        help="Override the default LLM provider for this call",
+    )
+    create_parser.add_argument("--model", default=None, help="Override the default model for this call")
+    create_parser.set_defaults(func=cmd_create)
 
     gen_parser = sub.add_parser(
         "generate-parametric", help="Generate an OpenSCAD-based parametric asset from a description"
