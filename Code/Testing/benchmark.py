@@ -73,6 +73,39 @@ from tracking import InstructorTracker, BenchmarkExporter
 
 # ── Client Factory ───────────────────────────────────────────────────
 
+def _patch_genai_parallel_call_retry():
+    """Make Gemini parallel-function-call responses retryable again (issue #44).
+
+    When Gemini returns two functionCall parts in one response, instructor's
+    ``parse_genai_tools`` raises a bare AssertionError ("Instructor does not
+    support multiple function calls"). instructor 1.14.4 retried that, giving
+    the model corrective feedback; 1.15.4's retry loop only retries
+    ValidationError / JSONDecodeError / ResponseParsingError, so the same
+    response now kills the run on attempt 1 — retries=0 for exactly the
+    fairness reason #44 exists. Re-raising as ResponseParsingError (retryable,
+    and its message is fed back to the model on reask) restores 1.14.4
+    behavior. Remove if upstream makes the parse error retryable.
+    """
+    import instructor.v2.providers.genai.handlers as genai_handlers
+    from instructor.v2.core.errors import ResponseParsingError
+
+    original_parse = genai_handlers.parse_genai_tools
+    if getattr(original_parse, "_arlem_retryable_patch", False):
+        return
+
+    def parse_genai_tools_retryable(*args, **kwargs):
+        try:
+            return original_parse(*args, **kwargs)
+        except AssertionError as e:
+            raise ResponseParsingError(str(e)) from e
+
+    parse_genai_tools_retryable._arlem_retryable_patch = True
+    genai_handlers.parse_genai_tools = parse_genai_tools_retryable
+
+
+_patch_genai_parallel_call_retry()
+
+
 def decode_mode_for(model_config: ModelConfig, spec_type: SpecType):
     """Return the instructor decode Mode used for this provider × spec.
 
@@ -87,6 +120,12 @@ def decode_mode_for(model_config: ModelConfig, spec_type: SpecType):
     ``GENAI_STRUCTURED_OUTPUTS`` path were retired once the ARLEM schemas accepted
     the same const->enum treatment as json_lab (see issue #29). ``spec_type`` no
     longer changes the mode; it is kept for interface stability.
+
+    instructor 1.15 deprecates the provider-prefixed modes (normalized internally
+    to ``Mode.TOOLS``; removal in v3.0, DeprecationWarning until then). We keep
+    them deliberately: metrics records store ``decode_mode`` as the enum value
+    ("anthropic_tools"/"genai_tools"), and switching to TOOLS would fork that
+    column mid-matrix. Revisit when the instructor pin moves past 2.x (#44).
     """
     import instructor
 
@@ -258,6 +297,17 @@ def run_single_benchmark(
     # Anthropic client with an explicit timeout, which disables that guard.
     if model_config.provider == Provider.ANTHROPIC:
         create_kwargs["max_tokens"] = 32000
+        # Forbid parallel tool calls: under instructor a parallel call always
+        # fails parsing, and its reask replays the assistant turn with only one
+        # tool_result, which the API 400s (issue #44 — Haiku 4.5 retry-death;
+        # unfixed upstream as of 1.15.4). Requires instructor>=1.15: earlier
+        # versions overwrite a caller-supplied tool_choice. The name must match
+        # the tool instructor registers, which is the response model's name.
+        create_kwargs["tool_choice"] = {
+            "type": "tool",
+            "name": response_model.__name__,
+            "disable_parallel_tool_use": True,
+        }
 
     # Execute generation
     print(f"\n  Generating with {model_config.display_name}...")
