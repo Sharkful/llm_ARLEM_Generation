@@ -456,22 +456,26 @@ class Activity(ConstToEnumSchemaMixin):
             )
         
         # Check that each Action sub field is referencing other actions correctly
+        # enter and its command lists are Optional; a raw None here must not escape
+        # as TypeError/AttributeError or the LLM gets useless retry feedback (#49)
         for act_num, action in enumerate(self.actions):
-            # check activate augmentation of type 'action'
             en = action.enter
-            for idx, act in enumerate(en.activates):
+            if en is None:
+                continue
+            # check activate augmentation of type 'action'
+            for idx, act in enumerate(en.activates or []):
                 if act.type == 'action' and act.augmentation not in valid_action_ids:
                     raise ValueError(
                         f"Action {act_num} referenced an invalid action id in activate {idx}"
                     )
             # Check deactivate augmentations of type 'action'
-            for idx, deact in enumerate(en.deactivate):
+            for idx, deact in enumerate(en.deactivate or []):
                 if deact.type == 'action' and deact.augmentation not in valid_action_ids:
                     raise ValueError(
                         f"Action {act_num} referenced an invalid action id in deactivate {idx}"
                     )
             # Check messages with launch ids
-            for idx, msg in enumerate(en.messages):
+            for idx, msg in enumerate(en.messages or []):
                 if msg.launch and msg.launch not in valid_action_ids:
                     raise ValueError(
                         f"Action {act_num} referenced an invalid action id in message {idx}"
@@ -603,7 +607,8 @@ class ARLEMScenario(ConstToEnumSchemaMixin):
                     # Check POI (Only if target is tangible)
                     if act.poi and act.poi != "default":
                         target_obj = tangible_map[act.target]
-                        valid_pois = {p.id for p in target_obj.pois}
+                        # pois is Optional; explicit null must fail the POI check, not crash (#49)
+                        valid_pois = {p.id for p in target_obj.pois or []}
                         if act.poi not in valid_pois:
                             raise ValueError(f"{err_ctx}: POI '{act.poi}' not found on target '{act.target}'.")
 
@@ -645,7 +650,7 @@ class ARLEMScenario(ConstToEnumSchemaMixin):
                     # If specific target, validate POI existence
                     if deact.target in tangible_map:
                         target_obj = tangible_map[deact.target]
-                        valid_pois = {p.id for p in target_obj.pois}
+                        valid_pois = {p.id for p in target_obj.pois or []}
                         if deact.poi != "default" and deact.poi not in valid_pois:
                             raise ValueError(f"{err_ctx}: POI '{deact.poi}' not found on '{deact.target}'.")
 

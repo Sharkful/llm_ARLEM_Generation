@@ -357,7 +357,8 @@ class ARLEMScenario(ConstToEnumSchemaMixin):
                     # Check POI (Only if target is tangible)
                     if act.poi and act.poi != "default":
                         target_obj = tangible_map[act.target]
-                        valid_pois = {p.id for p in target_obj.pois}
+                        # pois is Optional; explicit null must fail the POI check, not crash (#49)
+                        valid_pois = {p.id for p in target_obj.pois or []}
                         if act.poi not in valid_pois:
                             raise ValueError(f"{err_ctx}: POI '{act.poi}' not found on target '{act.target}'.")
 
@@ -397,7 +398,7 @@ class ARLEMScenario(ConstToEnumSchemaMixin):
                     # If specific target, validate POI existence
                     if deact.target in tangible_map:
                         target_obj = tangible_map[deact.target]
-                        valid_pois = {p.id for p in target_obj.pois}
+                        valid_pois = {p.id for p in target_obj.pois or []}
                         if deact.poi != "default" and deact.poi not in valid_pois:
                             raise ValueError(f"{err_ctx}: POI '{deact.poi}' not found on '{deact.target}'.")
 
