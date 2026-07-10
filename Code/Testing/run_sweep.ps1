@@ -38,7 +38,8 @@
 
 .NOTES
     FAILURE SEMANTICS
-    benchmark.py does NOT retry network/API errors: it swallows the exception,
+    benchmark.py retries transient network/API errors (429/5xx/timeouts) at most
+    twice in-run (issue #54); if the outage persists it swallows the exception,
     records success:false, and STILL EXITS 0. So a DNS drop that hits *after* a
     chunk's preflight passed silently turns the rest of that chunk into logged-but-
     lost failures - and because the exit code is always 0, this driver cannot tell
