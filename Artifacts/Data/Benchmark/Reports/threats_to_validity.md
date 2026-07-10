@@ -154,13 +154,23 @@ Two further era-boundary shifts ride along with the pin:
   always failed — e.g. an action with `enter: null` — now validate. So a slice
   of the post-2026-07-09 success-rate lift is our own loosened validation, not
   Gemini/Anthropic self-correction.
-- **Narrower retry set.** 1.15.4 retries only parse errors, where 1.14.4 used an
-  unfiltered tenacity loop that consumed an attempt for *any* exception. Transient
-  API errors (e.g. the gemini-2.5-flash-lite 503 "high demand" bursts that
-  self-healed within the July budget) and `max_tokens` truncation
-  (`IncompleteOutputException`, which rich L4 labs approach) are now re-raised on
-  attempt 1 instead of being blind-retried — which can *lower* apparent success
-  on the re-runs, relative to the 1.14.4 era, for exactly those failure modes.
+- **Narrower retry set, partly recompensated (#54).** 1.15.4 retries only parse
+  errors, where 1.14.4 used an unfiltered tenacity loop that consumed an attempt
+  for *any* exception. Two failure modes lost their blind retry:
+  - *Transient API errors* (e.g. the gemini-2.5-flash-lite 503 "high demand"
+    bursts that self-healed within the July budget). **Restored** for the re-runs
+    by a bounded, transient-only retry around `create()`
+    (`benchmark.py::_transient_retryer`, 3 attempts, 429/5xx/connection only),
+    distinct from instructor's parse-retry loop. These re-sends are recorded in a
+    separate `transient_retries` metric field, *not* in `tracking.retries`, so
+    they do not inflate the self-correction count. So the re-runs are roughly at
+    1.14.4 parity for transient errors, but on gemini specifically the count of
+    infra retries is now observable where before it was hidden.
+  - *`max_tokens` truncation* (`IncompleteOutputException`, which rich L4 labs
+    approach at ~18–22K against the 32000 cap). **Deliberately not retried** —
+    re-sending the same request just re-truncates — so this stays a hard fail on
+    attempt 1 and can still *lower* apparent success on the re-runs, relative to
+    the 1.14.4 era, for those L4 cells (review F9).
 
 **Caveat status:** the retries=0 caveat applies until the 79 affected cells are
 re-run on 1.15.4 (list in issue #44). Once the re-runs supersede the dead

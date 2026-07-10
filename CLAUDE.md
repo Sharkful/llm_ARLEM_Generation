@@ -39,11 +39,6 @@ python "Code/Data Processing/convert_lab_json.py"
 # Run Jupyter notebooks
 jupyter notebook "Code/Examples/ARLEM_Test.ipynb"
 
-# Generate a single JSON Lab for AR headset use (saves to Artifacts/Data/Generated Labs/)
-python "Code/Testing/generate_lab.py" --model claude-sonnet-4.6 --topic "Photosynthesis"
-python "Code/Testing/generate_lab.py" --model gpt-4o-mini --topic "DNA Replication" --name dna_lab
-python "Code/Testing/generate_lab.py" --list-models
-
 # Benchmark with a free-form topic (legacy path, single prompt template)
 python "Code/Testing/benchmark.py" --model gpt-4o-mini
 python "Code/Testing/benchmark.py" --model gpt-4o-mini claude-haiku-4.5 gemini-2.5-flash \
@@ -86,10 +81,6 @@ There is no test runner or linter configured. Validation is done via Pydantic mo
 Original moon lab reference data:
   Artifacts/Data/Original Moon Lab/Raw/       ← raw Unity transmission JSON
   Artifacts/Data/Original Moon Lab/Processed/ ← manually optimized versions
-
-Lab generation:
-  generate_lab.py → instructor → json_lab.py (Pydantic)
-  → Artifacts/Data/Generated Labs/  ← clean output JSON for headset
 
 Benchmark runs:
   Artifacts/Lab Descriptions/*.yaml   ← topic source-of-truth (six fields)
@@ -186,7 +177,7 @@ Use `instructor.from_provider("provider/model-id")` — this is the unified API.
 
 **Gemini limitation (resolved for all specs)**: Gemini's function-calling schema validator rejects discriminated unions (`oneOf` + `discriminator`) and `const` tags. This is now resolved on the models themselves for **every** spec — `json_lab.py`, `arlem_full.py`, and `arlem_simplified.py` all inherit `ConstToEnumSchemaMixin` (`const`→`enum`, shared from `Code/Schemas/_schema_helpers.py`) and carry no field-level discriminated unions, so one provider-agnostic schema per spec runs on every provider via the free-decode `GENAI_TOOLS` path. All Gemini twins (`json_lab_gemini.py`, `arlem_full_gemini.py`, `arlem_simplified_gemini.py`) were retired (issues #26, #29), along with the constrained `GENAI_STRUCTURED_OUTPUTS` path and its response-schema-token estimation. `decode_mode_for()` in `benchmark.py` is the single source of truth for the per-run decode mode (recorded as `decode_mode` in metrics). Shared schema helpers (`ConstToEnumSchemaMixin`, `clamp_number`, `_coerce_number_list`) live in `_schema_helpers.py`.
 
-**Gemini retryability caveat (issue #44)**: the schema story above is resolved, but Gemini *retry* fairness is not intrinsic — it depends on the `instructor==1.15.4` pin (`requirements.txt`) plus a monkeypatch. `benchmark.py::_patch_genai_parallel_call_retry()` (applied lazily inside `create_instructor_client`, guarded by `try/except ImportError` so it degrades on other instructor versions) re-raises instructor's `parse_genai_tools` `AssertionError` as a retryable `ResponseParsingError`, restoring retryability for the *text + single-functionCall* response shape only. True ≥2-functionCall responses still hard-fail on reask (upstream bug), and 1.15.4 no longer blind-retries transient API errors or `max_tokens` truncation. Following only the "resolved" story above in a new entry point (e.g. `generate_lab.py`) reintroduces the Gemini retry-death.
+**Gemini retryability caveat (issue #44)**: the schema story above is resolved, but Gemini *retry* fairness is not intrinsic — it depends on the `instructor==1.15.4` pin (`requirements.txt`) plus a monkeypatch. `benchmark.py::_patch_genai_parallel_call_retry()` (applied lazily inside `create_instructor_client`, guarded by `try/except ImportError` so it degrades on other instructor versions) re-raises instructor's `parse_genai_tools` `AssertionError` as a retryable `ResponseParsingError`, restoring retryability for the *text + single-functionCall* response shape only. True ≥2-functionCall responses still hard-fail on reask (upstream bug). 1.15.4 also no longer blind-retries transient API errors or `max_tokens` truncation; the benchmark restores a bounded, transient-only retry around `create()` (`_transient_retryer`, 429/5xx/connection, issue #54) counted separately in `transient_retries`, while truncation stays a hard fail (review F9). Any new entry point must build its client through `create_instructor_client` (which applies the patch) *and* the Anthropic `tool_choice` guard, or it reintroduces the Gemini/Anthropic retry-death — the standalone `generate_lab.py` entry point was removed for exactly this reason rather than re-guarded (issue #55).
 
 ## Code Patterns
 

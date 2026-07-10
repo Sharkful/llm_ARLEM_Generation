@@ -104,7 +104,7 @@ def ph_component(original_name: str) -> str:
 # These mirror the forward direction in
 # `Code/Data Processing/convert_lab_json.py`. We need to revert because the
 # AR headset prototype consumes only the old `Transmission`-wrapped format,
-# but `generate_lab.py` produces the new v2.0 format from the LLM.
+# but the LLM generation path produces the new v2.0 format.
 #
 # After reverting we still need to re-inject the navigation buttons that
 # `convert_lab_json.py` strips out (see EXCLUDED_OBJECT_NAMES there).

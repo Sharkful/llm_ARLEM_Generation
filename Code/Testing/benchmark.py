@@ -133,6 +133,68 @@ def _patch_genai_parallel_call_retry():
     genai_handlers.parse_genai_tools = parse_genai_tools_retryable
 
 
+# ── bounded transient-error retry (issue #54 / review F5) ──────────────
+#
+# instructor 1.15.4 retries only parse errors (ValidationError / JSONDecodeError /
+# ResponseParsingError) and re-raises everything else on attempt 1, dropping the
+# blind transient-retry that 1.14.4's unfiltered tenacity loop provided. google-genai
+# has no transport-level retry of its own, so a self-healing 503 "high demand" burst
+# (seen live on gemini-2.5-flash-lite in the July sweep) would otherwise kill a cell
+# that a re-send would have completed. We wrap create() in a bounded, transient-ONLY
+# retry, kept distinct from instructor's parse-retry loop.
+_TRANSIENT_ATTEMPTS = 3          # 1 initial try + 2 retries
+_TRANSIENT_STATUS = {429, 500, 502, 503, 504}
+# Provider-SDK exception class names that denote a transient transport condition
+# with no HTTP status to inspect, plus 5xx/429 name backups. Matched by name so we
+# don't hard-import anthropic/openai/google-genai/httpx just to build a tuple.
+# NOTE: google's ``ClientError`` is intentionally excluded — it also covers 4xx
+# (e.g. 400 bad request), which must not be retried; google 429/5xx is caught by the
+# status-code check below via its int ``code`` attribute.
+_TRANSIENT_EXC_NAMES = {
+    "APIConnectionError", "APITimeoutError",
+    "ConnectError", "ConnectTimeout", "ReadTimeout", "PoolTimeout",
+    "RemoteProtocolError", "TransportError", "TimeoutException",
+    "InternalServerError", "ServiceUnavailableError", "ServerError",
+    "RateLimitError",
+}
+
+
+def _is_transient_api_error(exc: BaseException) -> bool:
+    """True for retryable transport / 5xx / 429 errors from any provider SDK.
+
+    Deliberately does NOT match instructor's ``IncompleteOutputException``
+    (``max_tokens`` truncation, review F9): re-sending the same request just
+    re-truncates against the same cap, so that stays a hard fail documented in
+    ``threats_to_validity.md`` §7. Parse errors are handled by instructor's own
+    retry loop and never reach here.
+    """
+    # anthropic / openai expose `status_code`; google-genai errors expose `code`.
+    for attr in ("status_code", "code"):
+        val = getattr(exc, attr, None)
+        if isinstance(val, int) and val in _TRANSIENT_STATUS:
+            return True
+    return type(exc).__name__ in _TRANSIENT_EXC_NAMES
+
+
+def _transient_retryer():
+    """A bounded ``tenacity.Retrying`` that retries transient API errors only.
+
+    Read ``.statistics['attempt_number']`` after the call to recover how many
+    transient re-sends happened (attempts - 1). ``reraise=True`` surfaces the
+    underlying provider error (not tenacity's ``RetryError``) once attempts are
+    exhausted, so the caller's error handling and fail-mode classification are
+    unchanged.
+    """
+    import tenacity
+
+    return tenacity.Retrying(
+        retry=tenacity.retry_if_exception(_is_transient_api_error),
+        stop=tenacity.stop_after_attempt(_TRANSIENT_ATTEMPTS),
+        wait=tenacity.wait_exponential(multiplier=2, min=2, max=20),
+        reraise=True,
+    )
+
+
 def decode_mode_for(model_config: ModelConfig, spec_type: SpecType):
     """Return the instructor decode Mode used for this provider × spec.
 
@@ -375,12 +437,24 @@ def run_single_benchmark(
     start_time = time.time()
     result = None
     generation_error = None
+    transient_retries = 0
 
+    # Bounded retry on transient API errors only (429/5xx/connection), separate
+    # from instructor's parse-retry loop; see _is_transient_api_error (issue #54).
+    # Read the count in `finally` so it is captured on both success and failure.
+    retryer = _transient_retryer()
     try:
-        result = tracked_client.create(**create_kwargs)
+        result = retryer(tracked_client.create, **create_kwargs)
     except Exception as e:
         generation_error = str(e)
         print(f"  ERROR: {type(e).__name__}: {generation_error[:200]}")
+    finally:
+        transient_retries = retryer.statistics.get("attempt_number", 1) - 1
+    if transient_retries:
+        print(f"  (recovered after {transient_retries} transient-error retr"
+              f"{'y' if transient_retries == 1 else 'ies'})"
+              if result is not None else
+              f"  (failed after {transient_retries} transient-error retries)")
 
     wall_time_s = time.time() - start_time
 
@@ -428,6 +502,10 @@ def run_single_benchmark(
         "errors_file": errors_file_rel,
         "success": result is not None,
         "error": generation_error,
+        # Transient API-error re-sends (429/5xx/connection), tracked separately from
+        # tracking.retries (instructor parse-error self-correction) so infra noise
+        # does not inflate the self-correction signal (issue #54).
+        "transient_retries": transient_retries,
         "wall_time_seconds": round(wall_time_s, 2),
         "tracking": tracker_summary,
         "lab_metrics": lab_metrics,
