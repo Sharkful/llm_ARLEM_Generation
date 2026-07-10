@@ -284,9 +284,16 @@ class Activity(ConstToEnumSchemaMixin):
                     raise ValueError(
                         f"Action {act_num} referenced an invalid action id in activate {idx}"
                     )
-            # Check deactivate augmentations of type 'action'
+            # Check deactivate augmentations of type 'action'. augmentation is
+            # Optional (default None) and may be the documented '*' wildcard
+            # ("all augmentations on tangible"); only a concrete, non-wildcard
+            # value has to name a real action. This mirrors the scenario-level
+            # validate_deactivate_list, which already encodes the same rule but
+            # was unreachable behind this stricter check (review F3).
             for idx, deact in enumerate(en.deactivate or []):
-                if deact.type == 'action' and deact.augmentation not in valid_action_ids:
+                if (deact.type == 'action'
+                        and deact.augmentation not in (None, '*')
+                        and deact.augmentation not in valid_action_ids):
                     raise ValueError(
                         f"Action {act_num} referenced an invalid action id in deactivate {idx}"
                     )

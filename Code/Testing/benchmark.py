@@ -73,6 +73,66 @@ from tracking import InstructorTracker, BenchmarkExporter
 
 # ── Client Factory ───────────────────────────────────────────────────
 
+_GENAI_PATCH_WARNED = False
+
+
+def _patch_genai_parallel_call_retry():
+    """Make Gemini's ``parse_genai_tools`` assertion failures retryable (issue #44).
+
+    ``parse_genai_tools`` guards its parse with four asserts. The one that fires
+    in practice is a *text part + one functionCall* response, where the count
+    guard ("Instructor does not support multiple function calls") trips even
+    though there is a single call to decode. instructor 1.15.4's retry loop only
+    retries ValidationError / JSONDecodeError / ResponseParsingError and re-raises
+    the AssertionError, so that shape kills the run on attempt 1 — retries=0, the
+    exact fairness problem #44 exists to fix. Re-raising as ResponseParsingError
+    (retryable, message fed back to the model on reask) restores retryability for
+    it.
+
+    Scope: this only rescues the 1:1 (text + single functionCall) shape. A *true*
+    ≥2-functionCall response is still a hard fail — instructor's reask replays N
+    functionCall parts with a single functionResponse, which Gemini 400s
+    (INVALID_ARGUMENT); see review F2 / threats §7. It is *not* a re-creation of
+    1.14.4 behavior: 1.14.4 did not give corrective feedback for this shape — its
+    generic branch blind-replayed the request unchanged (reask feedback existed
+    only for ValidationError / JSONDecodeError / InstructorValidationError).
+    Remove if upstream makes the parse error retryable.
+    """
+    import instructor.v2.providers.genai.handlers as genai_handlers
+    from instructor.v2.core.errors import ResponseParsingError
+
+    original_parse = genai_handlers.parse_genai_tools
+    if getattr(original_parse, "_arlem_retryable_patch", False):
+        return
+
+    def parse_genai_tools_retryable(*args, **kwargs):
+        try:
+            return original_parse(*args, **kwargs)
+        except AssertionError as e:
+            # Three of the four asserts in parse_genai_tools are bare (empty
+            # text): a content-free ResponseParsingError yields an uninformative
+            # reask and an empty error string that fail-mode/quarantine
+            # classification can't match — substitute a concrete message. The one
+            # messaged assert steers the model toward "use List[Model] instead",
+            # advice it can't act on inside a single-object response schema; swap
+            # that clause for feedback it can (review F8).
+            msg = str(e).strip()
+            if not msg:
+                msg = (
+                    "The model's response could not be parsed as a single function "
+                    "call. Return exactly one function call matching the requested "
+                    "schema."
+                )
+            else:
+                msg = msg.replace(
+                    "use List[Model] instead", "return exactly one function call"
+                )
+            raise ResponseParsingError(msg) from e
+
+    parse_genai_tools_retryable._arlem_retryable_patch = True
+    genai_handlers.parse_genai_tools = parse_genai_tools_retryable
+
+
 def decode_mode_for(model_config: ModelConfig, spec_type: SpecType):
     """Return the instructor decode Mode used for this provider × spec.
 
@@ -87,6 +147,12 @@ def decode_mode_for(model_config: ModelConfig, spec_type: SpecType):
     ``GENAI_STRUCTURED_OUTPUTS`` path were retired once the ARLEM schemas accepted
     the same const->enum treatment as json_lab (see issue #29). ``spec_type`` no
     longer changes the mode; it is kept for interface stability.
+
+    instructor 1.15 deprecates the provider-prefixed modes (normalized internally
+    to ``Mode.TOOLS``; removal in v3.0, DeprecationWarning until then). We keep
+    them deliberately: metrics records store ``decode_mode`` as the enum value
+    ("anthropic_tools"/"genai_tools"), and switching to TOOLS would fork that
+    column mid-matrix. Revisit when the instructor pin moves past 2.x (#44).
     """
     import instructor
 
@@ -107,6 +173,28 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
     alike.
     """
     import instructor
+
+    # Apply the Gemini parse-retry patch lazily, here, rather than at import time.
+    # It reaches into instructor's private ``v2`` genai handler module, which only
+    # exists on the pinned ``instructor==1.15.4`` (see requirements.txt / issue
+    # #44). Guarding the import keeps a different instructor version — and cheap
+    # entry points like ``--list-models``, which never build a client — from
+    # crashing with a raw ModuleNotFoundError, and keeps the ~1.6s instructor+genai
+    # import chain out of every invocation. The patch is idempotent, so calling it
+    # per-run is free.
+    try:
+        _patch_genai_parallel_call_retry()
+    except ImportError:
+        global _GENAI_PATCH_WARNED
+        if not _GENAI_PATCH_WARNED:
+            print(
+                "  WARNING: Gemini parallel-call retry patch not applied — it "
+                "targets instructor==1.15.4's private v2 genai handlers (issue "
+                "#44); Gemini single-functionCall parse failures will not be "
+                "retried on this instructor version.",
+                file=sys.stderr,
+            )
+            _GENAI_PATCH_WARNED = True
 
     provider_prefix = {
         Provider.OPENAI: "openai",
@@ -258,6 +346,21 @@ def run_single_benchmark(
     # Anthropic client with an explicit timeout, which disables that guard.
     if model_config.provider == Provider.ANTHROPIC:
         create_kwargs["max_tokens"] = 32000
+        # Forbid parallel tool calls: under instructor a parallel call always
+        # fails parsing, and its reask replays the assistant turn with only one
+        # tool_result, which the API 400s (issue #44 — Haiku 4.5 retry-death;
+        # unfixed upstream as of 1.15.4). Requires instructor>=1.15: earlier
+        # versions overwrite a caller-supplied tool_choice. The name must equal
+        # the tool instructor registers, which is model_json_schema()["title"];
+        # that equals __name__ only while no response model sets a custom title
+        # (ConfigDict(title=...)). None of our five response models do, so this
+        # holds today — but a future custom title would 400 every Anthropic run
+        # (latent; review F13).
+        create_kwargs["tool_choice"] = {
+            "type": "tool",
+            "name": response_model.__name__,
+            "disable_parallel_tool_use": True,
+        }
 
     # Execute generation
     print(f"\n  Generating with {model_config.display_name}...")
