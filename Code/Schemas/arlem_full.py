@@ -1,7 +1,7 @@
 from typing import List, Optional, Literal, Union, Set, Dict, Annotated
 from pydantic import Field, field_validator, model_validator, BeforeValidator, AliasChoices
 
-from _schema_helpers import ConstToEnumSchemaMixin, clamp_number
+from _schema_helpers import ConstToEnumSchemaMixin, clamp_number, none_to_empty_list
 
 # Clamped scalar types: coerce numeric strings / int<->float and silently clamp
 # *subjective* bounded values (positions, rotations, sizes, scale, volume) rather than
@@ -12,6 +12,12 @@ _AngleDeg = Annotated[float, BeforeValidator(clamp_number(0.0, 360.0))]
 _SizeCm = Annotated[float, BeforeValidator(clamp_number(0.01, 1000.0))]
 _Scale = Annotated[float, BeforeValidator(clamp_number(0.01, 1000.0))]
 _Volume = Annotated[int, BeforeValidator(clamp_number(0.0, 100.0, as_int=True))]
+
+# None -> [] coercer for Optional list fields: an explicit `null` from the LLM
+# becomes `[]` before any validator iterates the field, so no per-site `or []`
+# guard is needed and a newly added Optional list field can't reintroduce the
+# raw-TypeError crash from #49 / review F1 (see _schema_helpers.none_to_empty_list).
+_EmptyIfNone = BeforeValidator(none_to_empty_list)
 
 # ==========================================
 # PART 1: WORKPLACE MODEL (The Environment)
@@ -61,7 +67,7 @@ class Tangible(ConstToEnumSchemaMixin):
     id: str = Field(..., max_length=100, description="Unique identifier for the tangible")
     name: str = Field(..., max_length=1000, description="human-readable short description of place or thing; or name of the person")
     detectable: str = Field(None, max_length=100, description="ID of the Detectable for this tangible")
-    pois: Optional[List[POI]] = Field(default_factory=list, description="List of Points of Interest for this tangible")
+    pois: Annotated[Optional[List[POI]], _EmptyIfNone] = Field(default_factory=list, description="List of Points of Interest for this tangible")
 
 class Person(Tangible):
     """
@@ -162,9 +168,9 @@ class Workplace(ConstToEnumSchemaMixin):
     things: List[Tangible] = Field(default_factory=list, description="Physical tools, machines, or materials")
     places: List[Tangible] = Field(default_factory=list, description="Locations or zones in the workplace")
     persons: List[Person] = Field(default_factory=list, min_length=1, description="Users involved in the scenario")
-    sensors: Optional[List[Sensor]] = Field(default_factory=list, description="Connected IoT devices")
+    sensors: Annotated[Optional[List[Sensor]], _EmptyIfNone] = Field(default_factory=list, description="Connected IoT devices")
     devices: List[Device] = Field(default_factory=list, min_length=1, description="AR hardware used for delivery")
-    apps: Optional[List[App]] = Field(default_factory=list, description="External widgets or apps")
+    apps: Annotated[Optional[List[App]], _EmptyIfNone] = Field(default_factory=list, description="External widgets or apps")
     detectables: List[Detectable] = Field(default_factory=list, min_length=1, description="Markers or Anchors used for tracking")
     primitives: List[Primitive] = Field(default_factory=list, min_length=1, description="Supported media types for predicates")
     predicates: List[Predicate] = Field(default_factory=list, min_length=1, description="A specific media primitive augmentation that corresponds to a verb or action")
@@ -329,14 +335,14 @@ class ActionFlow(ConstToEnumSchemaMixin):
     The set of commands executed when entering or exiting a step.
     """
     remove_self: bool = Field(False, alias="removeSelf", description="For Enter: True means Exit is immidiately executed, For Exit: True deactivates instructions and augmentations from current step")
-    activates: Optional[List[Activate]] = Field(default_factory=list, description="List of items to display.")
-    deactivate: Optional[List[Deactivate]] = Field(
+    activates: Annotated[Optional[List[Activate]], _EmptyIfNone] = Field(default_factory=list, description="List of items to display.")
+    deactivate: Annotated[Optional[List[Deactivate]], _EmptyIfNone] = Field(
         default_factory=list,
         validation_alias=AliasChoices("deactivate", "deactivates"),
         description="List of items to hide.",
     )
-    messages: Optional[List[Message]] = Field(default_factory=list, description="Messages to send.")
-    if_logic: Optional[List[IfLogic]] = Field(default_factory=list, alias="if", description="Conditional logic checks.")
+    messages: Annotated[Optional[List[Message]], _EmptyIfNone] = Field(default_factory=list, description="Messages to send.")
+    if_logic: Annotated[Optional[List[IfLogic]], _EmptyIfNone] = Field(default_factory=list, alias="if", description="Conditional logic checks.")
 
 class Action(ConstToEnumSchemaMixin):
     """
@@ -463,15 +469,16 @@ class Activity(ConstToEnumSchemaMixin):
                 f"The start field of the activity references an invalid action.id : {self.start}"
             )
         
-        # Check that each Action sub field is referencing other actions correctly
-        # enter and its command lists are Optional; a raw None here must not escape
-        # as TypeError/AttributeError or the LLM gets useless retry feedback (#49)
+        # Check that each Action sub field is referencing other actions correctly.
+        # `enter` itself is Optional (None = no flow, skipped below); its command
+        # lists carry the _EmptyIfNone coercer, so they are always lists here and
+        # need no per-site `or []` guard (#49, review F14).
         for act_num, action in enumerate(self.actions):
             en = action.enter
             if en is None:
                 continue
             # check activate augmentation of type 'action'
-            for idx, act in enumerate(en.activates or []):
+            for idx, act in enumerate(en.activates):
                 if act.type == 'action' and act.augmentation not in valid_action_ids:
                     raise ValueError(
                         f"Action {act_num} referenced an invalid action id in activate {idx}"
@@ -482,7 +489,7 @@ class Activity(ConstToEnumSchemaMixin):
             # value has to name a real action. This mirrors the scenario-level
             # validate_deactivate_list, which already encodes the same rule but
             # was unreachable behind this stricter check (review F3).
-            for idx, deact in enumerate(en.deactivate or []):
+            for idx, deact in enumerate(en.deactivate):
                 if (deact.type == 'action'
                         and deact.augmentation not in (None, '*')
                         and deact.augmentation not in valid_action_ids):
@@ -490,7 +497,7 @@ class Activity(ConstToEnumSchemaMixin):
                         f"Action {act_num} referenced an invalid action id in deactivate {idx}"
                     )
             # Check messages with launch ids
-            for idx, msg in enumerate(en.messages or []):
+            for idx, msg in enumerate(en.messages):
                 if msg.launch and msg.launch not in valid_action_ids:
                     raise ValueError(
                         f"Action {act_num} referenced an invalid action id in message {idx}"
@@ -569,9 +576,9 @@ class ARLEMScenario(ConstToEnumSchemaMixin):
         ids_warnings   = {w.id for w in self.workplace.warnings}
         ids_persons    = {p.id for p in self.workplace.persons}
         ids_devices    = {d.id for d in self.workplace.devices}
-        # sensors is Optional; an explicit null must not crash sensor-target
-        # validation with a raw TypeError (same #49 failure mode as pois below).
-        ids_sensors    = {s.id for s in self.workplace.sensors or []}
+        # sensors carries the _EmptyIfNone coercer, so an explicit null is already
+        # [] here — no per-site guard needed (was the #49/F1 raw-TypeError site).
+        ids_sensors    = {s.id for s in self.workplace.sensors}
 
         # =========================================================
         # 2. HELPER: Validate 'Messages'
@@ -628,8 +635,9 @@ class ARLEMScenario(ConstToEnumSchemaMixin):
                 # Check POI (target is a tangible)
                 if act.poi and act.poi != "default":
                     target_obj = tangible_map[act.target]
-                    # pois is Optional; explicit null must fail the POI check, not crash (#49)
-                    valid_pois = {p.id for p in target_obj.pois or []}
+                    # pois carries the _EmptyIfNone coercer (null -> [] before validation),
+                    # so a POI check against an empty list fails cleanly, never crashes (#49)
+                    valid_pois = {p.id for p in target_obj.pois}
                     if act.poi not in valid_pois:
                         raise ValueError(f"{err_ctx}: POI '{act.poi}' not found on target '{act.target}'.")
 
@@ -674,7 +682,7 @@ class ARLEMScenario(ConstToEnumSchemaMixin):
                     # If specific target, validate POI existence
                     if deact.target in tangible_map:
                         target_obj = tangible_map[deact.target]
-                        valid_pois = {p.id for p in target_obj.pois or []}
+                        valid_pois = {p.id for p in target_obj.pois}
                         if deact.poi != "default" and deact.poi not in valid_pois:
                             raise ValueError(f"{err_ctx}: POI '{deact.poi}' not found on '{deact.target}'.")
 

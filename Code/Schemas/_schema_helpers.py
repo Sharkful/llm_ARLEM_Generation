@@ -59,6 +59,30 @@ class ConstToEnumSchemaMixin(BaseModel):
         return schema
 
 
+# ── Optional-list None-safety ─────────────────────────────────────────
+
+def none_to_empty_list(v):
+    """BeforeValidator: coerce an explicit ``None`` into ``[]``.
+
+    Optional list fields (``sensors``, ``pois``, ``activates``, ``deactivate``,
+    ``messages``, ``if_logic`` …) accept an explicit ``null`` from the LLM, which
+    lands as ``None`` and makes any validator that iterates the field raise a raw
+    ``TypeError`` unless it remembers a per-site ``or []`` guard. Those guards
+    leaked twice — issue #49, then review F1 on ``sensors``, a field the earlier
+    guards missed. Attaching this coercer to the field fixes it once: ``None``
+    becomes ``[]`` before any validator runs, so a newly added Optional list field
+    can't reintroduce the crash (review F14).
+
+    Only ``None`` is remapped; every other value (a real list, or an invalid
+    scalar) is passed through untouched so the list validator still raises a clean
+    error. This normalizes ``model_dump`` of an explicit null to ``[]``; that is
+    safe here because every consumer treats absent / null / ``[]`` as empty —
+    outputs are saved with ``exclude_none=True`` and ``analyze_arlem`` reads each
+    list via ``.get(key, [])``.
+    """
+    return [] if v is None else v
+
+
 # ── numeric coercion helpers ──────────────────────────────────────────
 
 def _coerce_number_list(v):
