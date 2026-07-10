@@ -353,28 +353,31 @@ class ARLEMScenario(ConstToEnumSchemaMixin):
             for i, act in enumerate(activates):
                 err_ctx = f"Action '{action_id}' (Activate[{i}])"
 
-                # Check Target (Must be Action ID or Tangible ID)
-                if act.type == 'action':
-                    if act.target not in ids_actions:
-                        raise ValueError(f"{err_ctx}: Target '{act.target}' is not a valid Action ID.")
-                else:
-                    if act.target not in tangible_map:
-                        raise ValueError(f"{err_ctx}: Target '{act.target}' not found in Workplace.")
+                # Check Target — always a tangible (Thing/Place/Person), for every
+                # type including 'action'. When type='action' the launched action id
+                # lives in `augmentation`, not `target`; this aligns with the
+                # per-Activity check and the Deactivate convention from PR #51
+                # (review F4). Mirrors the arlem_full fix.
+                if act.target not in tangible_map:
+                    raise ValueError(f"{err_ctx}: Target '{act.target}' not found in Workplace.")
 
-                    # Check POI (Only if target is tangible)
-                    if act.poi and act.poi != "default":
-                        target_obj = tangible_map[act.target]
-                        # pois is Optional; explicit null must fail the POI check, not crash (#49)
-                        valid_pois = {p.id for p in target_obj.pois or []}
-                        if act.poi not in valid_pois:
-                            raise ValueError(f"{err_ctx}: POI '{act.poi}' not found on target '{act.target}'.")
+                # Check POI (target is a tangible)
+                if act.poi and act.poi != "default":
+                    target_obj = tangible_map[act.target]
+                    # pois is Optional; explicit null must fail the POI check, not crash (#49)
+                    valid_pois = {p.id for p in target_obj.pois or []}
+                    if act.poi not in valid_pois:
+                        raise ValueError(f"{err_ctx}: POI '{act.poi}' not found on target '{act.target}'.")
 
-                # Check Augmentation ID
+                # Check Augmentation ID against the workspace resource of the matching
+                # type, or — for type='action' — another action in this Activity.
                 if act.augmentation:
                     if act.type == 'primitive' and act.augmentation not in ids_primitives:
                         raise ValueError(f"{err_ctx}: Primitive '{act.augmentation}' not found.")
                     elif act.type == 'predicate' and act.augmentation not in ids_predicates:
                         raise ValueError(f"{err_ctx}: Predicate '{act.augmentation}' not found.")
+                    elif act.type == 'action' and act.augmentation not in ids_actions:
+                        raise ValueError(f"{err_ctx}: Action '{act.augmentation}' not found.")
 
         # =========================================================
         # 4. HELPER: Validate 'Deactivate' (Handles Wildcards '*')

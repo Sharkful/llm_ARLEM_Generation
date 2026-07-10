@@ -299,7 +299,15 @@ class IfLogic(ConstToEnumSchemaMixin):
     else_action: str = Field(..., alias="else", max_length=100, description="Action ID to trigger if condition is NOT met (query has zero results)")
     min_results: Optional[int] = Field(None, alias="min", ge=0, le=65535, description="Minimum number of statements required.")
     max_results: Optional[int] = Field(None, alias="max", ge=0, le=65535, description="Maximum number of statements allowed.")
-    # Need to validate then and else for valid action ids at the activity level
+    # NOTE: then/else are action ids, but they are intentionally NOT validated
+    # against the Activity's action set. Every other action reference (activate,
+    # deactivate, message.launch, trigger.id) is checked, so this is a conscious
+    # exception: adding the check would be a strictness increase that puts the
+    # post-2026-07-09 re-runs under a stricter validator than the earlier runs they
+    # are compared against, confounding the success-rate comparison (issue #52 /
+    # review F12). IfLogic branch refs are therefore left unchecked to preserve
+    # comparability — a dangling then/else validates cleanly and only surfaces at
+    # runtime. Revisit once the #44 re-run wave is complete.
 
 ### STILL NEEDS REVIEW
 class Trigger(ConstToEnumSchemaMixin):
@@ -605,23 +613,28 @@ class ARLEMScenario(ConstToEnumSchemaMixin):
             for i, act in enumerate(activates):
                 err_ctx = f"Action '{action_id}' (Activate[{i}])"
 
-                # Check Target (Must be Action ID or Tangible ID)
-                if act.type == 'action':
-                    if act.target not in ids_actions:
-                        raise ValueError(f"{err_ctx}: Target '{act.target}' is not a valid Action ID.")
-                else:
-                    if act.target not in tangible_map:
-                        raise ValueError(f"{err_ctx}: Target '{act.target}' not found in Workplace.")
+                # Check Target — always a tangible (Thing/Place/Person), for every
+                # type including 'action'. The field docs say target is the tangible
+                # "to apply this to"; when type='action' the launched action id lives
+                # in `augmentation`, not `target`. This aligns the scenario-level check
+                # with the per-Activity check (Activity.validate_activity) and the
+                # Deactivate convention standardized in PR #51 — previously this layer
+                # alone demanded target itself be an action id, rejecting the
+                # docs-conformant shape and forcing the action id into both fields
+                # (review F4).
+                if act.target not in tangible_map:
+                    raise ValueError(f"{err_ctx}: Target '{act.target}' not found in Workplace.")
 
-                    # Check POI (Only if target is tangible)
-                    if act.poi and act.poi != "default":
-                        target_obj = tangible_map[act.target]
-                        # pois is Optional; explicit null must fail the POI check, not crash (#49)
-                        valid_pois = {p.id for p in target_obj.pois or []}
-                        if act.poi not in valid_pois:
-                            raise ValueError(f"{err_ctx}: POI '{act.poi}' not found on target '{act.target}'.")
+                # Check POI (target is a tangible)
+                if act.poi and act.poi != "default":
+                    target_obj = tangible_map[act.target]
+                    # pois is Optional; explicit null must fail the POI check, not crash (#49)
+                    valid_pois = {p.id for p in target_obj.pois or []}
+                    if act.poi not in valid_pois:
+                        raise ValueError(f"{err_ctx}: POI '{act.poi}' not found on target '{act.target}'.")
 
-                # Check Augmentation ID
+                # Check Augmentation ID against the workspace resource of the matching
+                # type, or — for type='action' — another action in this Activity.
                 if act.augmentation:
                     if act.type == 'primitive' and act.augmentation not in ids_primitives:
                         raise ValueError(f"{err_ctx}: Primitive '{act.augmentation}' not found.")
@@ -629,6 +642,8 @@ class ARLEMScenario(ConstToEnumSchemaMixin):
                         raise ValueError(f"{err_ctx}: Predicate '{act.augmentation}' not found.")
                     elif act.type == 'warning' and act.augmentation not in ids_warnings:
                         raise ValueError(f"{err_ctx}: Warning '{act.augmentation}' not found.")
+                    elif act.type == 'action' and act.augmentation not in ids_actions:
+                        raise ValueError(f"{err_ctx}: Action '{act.augmentation}' not found.")
 
         # =========================================================
         # 4. HELPER: Validate 'Deactivate' (Handles Wildcards '*')
