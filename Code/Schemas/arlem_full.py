@@ -468,9 +468,16 @@ class Activity(ConstToEnumSchemaMixin):
                     raise ValueError(
                         f"Action {act_num} referenced an invalid action id in activate {idx}"
                     )
-            # Check deactivate augmentations of type 'action'
+            # Check deactivate augmentations of type 'action'. augmentation is
+            # Optional (default None) and may be the documented '*' wildcard
+            # ("all augmentations on tangible"); only a concrete, non-wildcard
+            # value has to name a real action. This mirrors the scenario-level
+            # validate_deactivate_list, which already encodes the same rule but
+            # was unreachable behind this stricter check (review F3).
             for idx, deact in enumerate(en.deactivate or []):
-                if deact.type == 'action' and deact.augmentation not in valid_action_ids:
+                if (deact.type == 'action'
+                        and deact.augmentation not in (None, '*')
+                        and deact.augmentation not in valid_action_ids):
                     raise ValueError(
                         f"Action {act_num} referenced an invalid action id in deactivate {idx}"
                     )
@@ -554,7 +561,9 @@ class ARLEMScenario(ConstToEnumSchemaMixin):
         ids_warnings   = {w.id for w in self.workplace.warnings}
         ids_persons    = {p.id for p in self.workplace.persons}
         ids_devices    = {d.id for d in self.workplace.devices}
-        ids_sensors    = {s.id for s in self.workplace.sensors}
+        # sensors is Optional; an explicit null must not crash sensor-target
+        # validation with a raw TypeError (same #49 failure mode as pois below).
+        ids_sensors    = {s.id for s in self.workplace.sensors or []}
 
         # =========================================================
         # 2. HELPER: Validate 'Messages'

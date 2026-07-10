@@ -141,8 +141,26 @@ cannot occur in the first place. Note this means Anthropic models are decoding
 under a slightly tighter tool-choice constraint than other providers; the
 freedom it removes could only ever produce a failed attempt, but flag it when
 comparing attempt-1 failure rates. A third fallback restores retryability of
-Gemini parallel-function-call responses (instructor 1.15.4 made that shape a
-non-retryable hard fail; `benchmark.py::_patch_genai_parallel_call_retry`).
+Gemini's **text + single-functionCall** responses, which instructor 1.15.4 made
+a non-retryable hard fail (`benchmark.py::_patch_genai_parallel_call_retry`);
+**true ≥2-functionCall responses still die on reask** — instructor replays N
+functionCall parts with a single functionResponse, which Gemini rejects with a
+400 (INVALID_ARGUMENT) — so the patch narrows, not eliminates, this failure mode.
+
+Two further era-boundary shifts ride along with the pin:
+
+- **Leniency shift (#50).** The same-era fix to our ARLEM None-guards is itself a
+  validator change, not only an instructor change: payloads that previously
+  always failed — e.g. an action with `enter: null` — now validate. So a slice
+  of the post-2026-07-09 success-rate lift is our own loosened validation, not
+  Gemini/Anthropic self-correction.
+- **Narrower retry set.** 1.15.4 retries only parse errors, where 1.14.4 used an
+  unfiltered tenacity loop that consumed an attempt for *any* exception. Transient
+  API errors (e.g. the gemini-2.5-flash-lite 503 "high demand" bursts that
+  self-healed within the July budget) and `max_tokens` truncation
+  (`IncompleteOutputException`, which rich L4 labs approach) are now re-raised on
+  attempt 1 instead of being blind-retried — which can *lower* apparent success
+  on the re-runs, relative to the 1.14.4 era, for exactly those failure modes.
 
 **Caveat status:** the retries=0 caveat applies until the 79 affected cells are
 re-run on 1.15.4 (list in issue #44). Once the re-runs supersede the dead
