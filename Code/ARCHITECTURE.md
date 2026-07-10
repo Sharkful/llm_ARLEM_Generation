@@ -63,8 +63,8 @@ sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Schemas"))  # makes `json_lab` e
 Consequences:
 - `from json_lab import Lab`, `from tracking import InstructorTracker` are flat
   imports that only resolve because of those inserts. They will look "unresolved"
-  to a static tool but work at runtime when entered through `benchmark.py` /
-  `generate_lab.py` (both do the same surgery).
+  to a static tool but work at runtime when entered through `benchmark.py`
+  (which does the `sys.path` surgery).
 - Response models are imported lazily inside functions (`get_response_model`,
   `prompt_builder.build_prompt`) so a schema module loads only when used. There are
   no longer per-provider variants — one schema serves every provider.
