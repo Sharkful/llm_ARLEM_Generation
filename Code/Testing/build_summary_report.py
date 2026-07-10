@@ -40,6 +40,15 @@ def fail_mode(err: str) -> str:
     e = err.lower()
     if "incomplete" in e or "max_tokens length" in e:
         return "truncation (max_tokens)"
+    # Gemini's reask for a *true* ≥2-functionCall response is malformed upstream
+    # (all N functionCall parts replayed against a single functionResponse), so the
+    # retry 400s on a functionCall/functionResponse count mismatch — the one #44
+    # retry-death that 1.15.4 does not fix and mode=ANY does not prevent (issue #53
+    # / review F2). Surface it as its own mode; it would otherwise hide in "other".
+    # Signature is Gemini's canonical count-mismatch message (no live sample was
+    # captured, so revisit if Gemini rewords it).
+    if "function response part" in e and "function call part" in e:
+        return "gemini parallel-call reask 400"
     # Check schema validation before the 404 signature: discriminated-union
     # failures contain "union_tag_not_found", whose "not_found" must NOT be read
     # as a model-not-found 404. Use the specific 404 signature, not a substring.
