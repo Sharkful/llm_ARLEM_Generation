@@ -27,8 +27,11 @@ Usage:
 """
 
 import argparse
+import importlib.metadata
 import json
 import os
+import platform
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -333,6 +336,50 @@ def get_response_model(spec_type: SpecType):
     return ARLEMScenario
 
 
+# ── Run Provenance ───────────────────────────────────────────────────
+#
+# Environment fingerprint stamped into every metrics record. The formative
+# 2026-06/07 dataset mixed three validator eras and two retry regimes that are
+# distinguishable only by run timestamp against remembered cutoff dates;
+# stamping the repo SHA and library versions makes the era an explicit,
+# queryable column instead.
+
+_PROVENANCE_PACKAGES = ("instructor", "anthropic", "openai", "google-genai", "pydantic")
+_PROVENANCE_CACHE: Optional[dict] = None
+
+
+def get_provenance() -> dict:
+    """Repo + library fingerprint for metrics records; computed once per process."""
+    global _PROVENANCE_CACHE
+    if _PROVENANCE_CACHE is None:
+        try:
+            sha = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT,
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            # Untracked files excluded: dirty means the *tracked* code the run
+            # executed differs from what git_sha says it was.
+            dirty = bool(subprocess.run(
+                ["git", "status", "--porcelain", "--untracked-files=no"],
+                cwd=PROJECT_ROOT, capture_output=True, text=True, check=True,
+            ).stdout.strip())
+        except Exception:
+            sha, dirty = None, None
+        versions: dict[str, Optional[str]] = {}
+        for pkg in _PROVENANCE_PACKAGES:
+            try:
+                versions[pkg] = importlib.metadata.version(pkg)
+            except importlib.metadata.PackageNotFoundError:
+                versions[pkg] = None
+        _PROVENANCE_CACHE = {
+            "git_sha": sha,
+            "git_dirty": dirty,
+            "python": platform.python_version(),
+            "packages": versions,
+        }
+    return _PROVENANCE_CACHE
+
+
 # ── Single Run ───────────────────────────────────────────────────────
 
 def run_single_benchmark(
@@ -520,6 +567,7 @@ def run_single_benchmark(
         # does not inflate the self-correction signal (issue #54).
         "transient_retries": transient_retries,
         "wall_time_seconds": round(wall_time_s, 2),
+        "provenance": get_provenance(),
         "tracking": tracker_summary,
         "lab_metrics": lab_metrics,
     }
