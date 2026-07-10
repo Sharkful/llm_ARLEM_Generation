@@ -90,13 +90,26 @@ def _patch_genai_parallel_call_retry():
     it.
 
     Scope: this only rescues the 1:1 (text + single functionCall) shape. A *true*
-    ≥2-functionCall response is still a hard fail — instructor's reask replays N
-    functionCall parts with a single functionResponse, which Gemini 400s
-    (INVALID_ARGUMENT); see review F2 / threats §7. It is *not* a re-creation of
-    1.14.4 behavior: 1.14.4 did not give corrective feedback for this shape — its
-    generic branch blind-replayed the request unchanged (reask feedback existed
-    only for ValidationError / JSONDecodeError / InstructorValidationError).
-    Remove if upstream makes the parse error retryable.
+    ≥2-functionCall response is still a hard fail, and the root cause is upstream in
+    ``instructor.v2.providers.genai.handlers.reask_genai_tools`` (~L75-82 in
+    1.15.4): the reask replays the model turn with all N functionCall parts but
+    appends a single functionResponse, and Gemini requires the counts to match, so
+    it 400s (INVALID_ARGUMENT). This is not fixable here — the malformed request is
+    built inside the reask handler, after this patch runs — and not preventable by
+    config: instructor already forces the strongest constraint the API offers,
+    ``FunctionCallingConfig(mode=ANY, allowed_function_names=[<tool>])`` (same
+    module, ~L400-409), yet Gemini can still emit parallel calls to that one tool,
+    and google-genai exposes no "disable parallel calls" flag (unlike Anthropic's
+    ``disable_parallel_tool_use``). So it stays a documented hard-fail (issue #53 /
+    review F2 / threats §7), tracked upstream, and is *detected* in the run stats
+    as the ``fail_mode`` "gemini parallel-call reask 400"
+    (``benchmark_dataframe.fail_mode``) so a re-run wave can spot it when it occurs.
+
+    It is *not* a re-creation of 1.14.4 behavior: 1.14.4 did not give corrective
+    feedback for this shape — its generic branch blind-replayed the request
+    unchanged (reask feedback existed only for ValidationError / JSONDecodeError /
+    InstructorValidationError). Remove this patch if upstream makes the parse error
+    retryable.
     """
     import instructor.v2.providers.genai.handlers as genai_handlers
     from instructor.v2.core.errors import ResponseParsingError
