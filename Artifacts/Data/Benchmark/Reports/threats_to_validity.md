@@ -1,14 +1,17 @@
 # Benchmark — Threats to Validity
 
 *Standalone methodology note. Applies to all benchmark findings docs in this
-folder (the formative summary, the statistics report, and any future lab-findings
-docs). Last updated 2026-07-09.*
+folder (the summary, the statistics report, and any future lab-findings docs).
+Last updated 2026-07-13.*
 
-> **Scope note (2026-07-09):** sections 1–6 describe the June 2026 json_lab runs.
+> **Scope note (2026-07-13):** sections 1–6 describe the June 2026 json_lab runs.
 > The decode-mode/schema asymmetry they document was resolved before the July
 > formative sweep: every provider now runs the same free-decode tool-call path
 > (`GENAI_TOOLS` for Gemini) on one unified schema per spec (Gemini twins
-> retired, issues #26/#29). Section 7 covers the July sweep's own confound.
+> retired, issues #26/#29). Section 7's retry-fairness confound was itself
+> superseded for the **wave-2** dataset (2026-07-10, the full clean re-run,
+> issue #60) — see the updated caveat status at the end of §7. It still applies
+> to the archived formative data.
 
 This note records known confounds in the cross-provider / cross-model comparison
 so that individual findings docs can link here instead of restating it. It is
@@ -172,11 +175,29 @@ Two further era-boundary shifts ride along with the pin:
     attempt 1 and can still *lower* apparent success on the re-runs, relative to
     the 1.14.4 era, for those L4 cells (review F9).
 
-**Caveat status:** the retries=0 caveat applies until the 79 affected cells are
-re-run on 1.15.4 (list in issue #44). Once the re-runs supersede the dead
-records (`load_runs(dedupe_latest=True)`), drop this caveat for those cells;
-records are distinguishable by their `instructor` behavior era via run
-timestamps (re-runs are ≥ 2026-07-09).
+**Caveat status (updated 2026-07-13 — superseded by wave 2).** The formative
+2026-07-05/08 sweep was *not* patched cell-by-cell; the whole matrix was instead
+regenerated as **wave 2** (2026-07-10, issue #60) on a single frozen stack —
+instructor 1.15.4, one git SHA, `git_dirty=false` and `transient_retries=0` on
+all 351 wave-2 success records. For **wave-2 data the mixed-era caveats above do
+not apply**: every record shares one instructor/validator era, so the retries=0
+fairness gap (1.14.4), the #50 leniency shift, and the #54 retry-set change are
+no longer *intra-dataset* confounds — they only ever biased cross-era
+comparisons within the formative data. The formative records that still carry the
+caveat are archived read-only at `Artifacts/Data/Benchmark_formative_202606-07/`
+and are treated as a pilot/shakedown, not part of the reported dataset.
+
+**One residual, by design.** The Gemini multi-function-call retry-death (issue
+#53) is still unfixed upstream, so wave-2 cells whose model emitted a *true*
+≥2-functionCall response hard-fail on the first reask (effectively one attempt).
+This is a documented, reproducible fail-mode — surfaced as its own `gemini
+parallel-call reask 400` mode, or folded into `other` when it manifests as the
+terminal `'NoneType' … parts` — **not** transient contamination. Wave 2 hit it
+on a small number of Gemini cells; they are legitimate failures, left in the
+dataset rather than re-rolled (re-running a nondeterministic fail-mode would bias
+success rates). So for wave-2 data the retry-fairness note narrows to *just*
+these Gemini ≥2-functionCall cells, rather than applying to all Haiku 4.5 /
+Gemini 3.x records as it did for the formative sweep.
 
 ## Status
 
@@ -186,4 +207,4 @@ timestamps (re-runs are ≥ 2026-07-09).
 | (a) `GEMINI_JSON` re-test | ☐ obsolete — uniform free-decode landed instead (#26/#29) |
 | (b) Gemini decode-mode A/B | ☐ not started |
 | (c) Record mode + variant in metrics | ✅ `decode_mode` recorded per run |
-| Retry-fairness caveat (§7) | ⏳ active until #44 re-runs land |
+| Retry-fairness caveat (§7) | ✅ retired for wave-2 data (full clean re-run, #60); ⏳ still applies to archived formative data; narrow #53 Gemini ≥2-functionCall residual remains |
