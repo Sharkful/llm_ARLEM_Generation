@@ -1,0 +1,29 @@
+% Prompt specificity levels: Code/Benchmark/prompt_builder.py (Level enum, build_prompt).
+% Paper-facing renumbering for readability: Level 1 = code L1, Level 2 = code L3,
+% Level 3 = code L4. Code skips L2 (retired, issue #31) because level numbers encode
+% *input specificity*, not a contiguous ordinal. "Information included" is additive:
+% each level's input is the previous level's input plus the row shown.
+% L1 always returns the spec-agnostic LabOutline; Levels 2-3 dispatch on --spec to
+% one of the three full-spec models (see build_prompt() in prompt_builder.py).
+% Requires: \usepackage{booktabs} \usepackage{multirow}
+\begin{table}[htbp]
+    \centering
+    \small
+    \caption{Prompt specificity levels used in the benchmark: input provided (additive across levels) and target output format(s) generated at each.}
+    \label{tab:prompt-levels}
+    \begin{tabular}{@{} c l l @{}}
+        \toprule
+        \textbf{Level} & \textbf{Information included} & \textbf{Target format} \\
+        \midrule
+        1 & Field, course context, topic description & Outline \\
+        \midrule
+        \multirow{3}{*}{2} & \multirow{3}{*}{+ Learning objectives} & ARLEM \\
+         & & ARLEM Simplified \\
+         & & JSON Lab \\
+        \midrule
+        \multirow{3}{*}{3} & \multirow{3}{*}{+ Detailed script} & ARLEM \\
+         & & ARLEM Simplified \\
+         & & JSON Lab \\
+        \bottomrule
+    \end{tabular}
+\end{table}
