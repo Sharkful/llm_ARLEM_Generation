@@ -7,8 +7,9 @@
 % The sweep ran strictly serially (zero overlap between consecutive runs),
 % so wall-clock time carries no concurrency contention.
 %
-% Numbers below are the L3/L4 slice, 30 runs per model: L1 returns the
-% spec-agnostic LabOutline, a much cheaper task, and is excluded for the
+% Numbers below are the Objectives/Script slice, 30 runs per model: the
+% Outline level returns the spec-agnostic LabOutline, a much cheaper task,
+% and is excluded for the
 % same reason as in generation_cost_tables.tex. Throughput uses OUTPUT
 % tokens only -- prompt tokens are 47-85% of totals here and are prefilled
 % far faster than they are decoded, so a total-token rate would mostly
@@ -26,7 +27,7 @@
 % -------------------------------------------------------------------------
 \begin{table}[htbp]
   \centering
-  \caption{Generation time by model. Median and interquartile range are over the successful runs of 30 L3/L4 requests per model; throughput and total are pooled over the same runs.}
+  \caption{Generation time by model. Median and interquartile range are over the successful runs of 30 Objectives and Script requests per model; throughput and total are pooled over the same runs.}
   \label{tab:generation-time}
   \small
   \begin{tabular}{llrrrrrr}
@@ -80,7 +81,7 @@
      & GPT-5.4 & 2 & 98 & 0 & 1/30 & 30 \\
      & GPT-5.5 & 33 & 67 & 0 & 18/30 & 68 \\
     \midrule
-    \multicolumn{7}{l}{\footnotesize Sweep total: 6.57~h over the L3/L4 slice; 6.80~h including L1.} \\
+    \multicolumn{7}{l}{\footnotesize Sweep total: 6.57~h over the Objectives and Script slice; 6.80~h including the Outline level.} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -94,7 +95,7 @@
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\linewidth]{Figures/wave2_latency_throughput.pdf}
-  \caption{Generation time and output throughput per request, by model. Bars are medians over the 30 L3/L4 runs per model; whiskers give the interquartile range. Time is measured end to end and includes every schema-repair retry, so it is time to a valid specification rather than single-call latency. Runs executed serially, so wall-clock time carries no concurrency contention. Throughput counts output tokens only.}
+  \caption{Generation time and output throughput per request, by model. Bars are medians over the 30 Objectives and Script runs per model; whiskers give the interquartile range. Time is measured end to end and includes every schema-repair retry, so it is time to a valid specification rather than single-call latency. Runs executed serially, so wall-clock time carries no concurrency contention. Throughput counts output tokens only.}
   \label{fig:generation-time}
 \end{figure}
 
@@ -115,6 +116,6 @@
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\linewidth]{Figures/wave2_time_by_level_spec.pdf}
-  \caption{Generation time by prompt specificity level and by target specification. Boxes pool all eleven models; dots mark each model's median. Median time rises from 15~s at L1 to 44~s at L3 and 63~s at L4, and the reduced ARLEM specification generates in 39~s against 67~s for full ARLEM and 68~s for the Lab JSON. The panels use different slices by necessity: L1 runs exist only under \texttt{json\_lab}, so including them in the right-hand panel would drag that spec's median down to 37~s and make the most expensive target look like the cheapest.}
+  \caption{Generation time by prompt specificity level and by target specification. Boxes pool all eleven models; dots mark each model's median. Median time rises from 15~s at the Outline level to 44~s at Objectives and 63~s at Script, and the reduced ARLEM specification generates in 39~s against 67~s for full ARLEM and 68~s for the Lab JSON. The panels use different slices by necessity: Outline runs exist only under \texttt{json\_lab}, so including them in the right-hand panel would drag that spec's median down to 37~s and make the most expensive target look like the cheapest.}
   \label{fig:time-by-level-spec}
 \end{figure}

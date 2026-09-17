@@ -26,11 +26,16 @@ comparison legitimate at all, and it belongs in the caption.
 
 Slice
 -----
-Figures 1-3 use the **L3/L4 slice** (30 runs per model), matching the exclusion
-in ``cost_by_model_figures.py``: L1 returns the spec-agnostic ``LabOutline``, a
-much shorter task (15 s mean vs 56 s / 88 s), so folding it in dilutes any
-per-request number. Figure 4 is the deliberate exception -- comparing levels is
-its entire subject, so it runs over all 385 rows and says so on the figure.
+Figures 1-3 use the **Objectives/Script slice** (30 runs per model), matching
+the exclusion in ``cost_by_model_figures.py``: the Outline level returns the
+spec-agnostic ``LabOutline``, a much shorter task (15 s mean vs 56 s / 88 s), so
+folding it in dilutes any per-request number. Figure 4 is the deliberate
+exception -- comparing levels is its entire subject, so it runs over all 385
+rows and says so on the figure.
+
+Level names are Outline / Objectives / Script throughout the paper; the run
+CSVs still store them as ``L1`` / ``L3`` / ``L4``, so those remain the lookup
+keys in code. ``figure_style.LEVEL_NAME`` is the one place the mapping lives.
 
 Why output tokens, never total tokens, as the time denominator
 --------------------------------------------------------------
@@ -95,6 +100,8 @@ from figure_style import (
     INK,
     INK_MUTED,
     INK_SOFT,
+    LEVEL_GLOSS,
+    LEVEL_NAME,
     MODEL_ORDER,
     PROVIDER_COLOR,
     PROVIDER_LABEL,
@@ -123,8 +130,9 @@ OUTCOME_LABEL = {
     "failed": "Never valid (run failed)",
 }
 
-LEVEL_LABEL = {"L1": "L1\noutline only", "L3": "L3\n+ objectives",
-               "L4": "L4\n+ full script"}
+# Display name over the prompt contents. Keys stay L1/L3/L4 -- that is what the
+# `level` column holds -- while the printed name comes from figure_style.
+LEVEL_LABEL = {k: f"{LEVEL_NAME[k]}\n{LEVEL_GLOSS[k]}" for k in ("L1", "L3", "L4")}
 SPEC_LABEL = {
     "json_lab": "json_lab\n(Lab JSON)",
     "arlem_simple": "arlem_simple\n(reduced ARLEM)",
@@ -147,7 +155,7 @@ def load_runs(runs_csv: Path) -> pd.DataFrame:
 
 
 def base_slice(df: pd.DataFrame) -> pd.DataFrame:
-    """L3/L4 only: L1's LabOutline is a different, much cheaper task."""
+    """Objectives/Script only: Outline's LabOutline is a much cheaper task."""
     return df[df["level"] != "L1"]
 
 
@@ -282,8 +290,8 @@ def fig_latency_throughput(df: pd.DataFrame) -> plt.Figure:
 
     titles(fig,
            "Generation time and output throughput per request, by model",
-           "Wave-2 benchmark, 2026-07-10 \u00b7 30 L3/L4 runs per model \u00b7 "
-           "successful runs only\nTime is measured end to end and includes every "
+           "Wave-2 benchmark, 2026-07-10 \u00b7 30 Objectives/Script runs per "
+           "model \u00b7 successful runs only\nTime is measured end to end and includes every "
            "schema-repair retry, so it is time to a valid spec,\nnot single-call "
            f"latency \u00b7 {SERIAL_NOTE}")
     return fig
@@ -369,8 +377,8 @@ def fig_time_decomposition(df: pd.DataFrame) -> plt.Figure:
 
     titles(fig,
            "Where the sweep's compute time went, by model",
-           "Wave-2 benchmark, 2026-07-10 \u00b7 30 L3/L4 runs per model \u00b7 "
-           "6.6 h total\nRuns are bucketed whole: a run needing one schema repair "
+           "Wave-2 benchmark, 2026-07-10 \u00b7 30 Objectives/Script runs per "
+           "model \u00b7 6.6 h total\nRuns are bucketed whole: a run needing one schema repair "
            "contributes all of its time to the repair band")
     return fig
 
@@ -452,8 +460,8 @@ def fig_time_vs_tokens(df: pd.DataFrame) -> plt.Figure:
 
     titles(fig,
            "Generation time is linear in output tokens, at a rate set by the model",
-           "Wave-2 benchmark, 2026-07-10 \u00b7 successful L3/L4 runs \u00b7 shared "
-           "axes, so a steeper line is a slower model\nThe per-model slope is what "
+           "Wave-2 benchmark, 2026-07-10 \u00b7 successful Objectives/Script runs \u00b7 "
+           "shared axes, so a steeper line is a slower model\nThe per-model slope is what "
            "licenses summarising a model's speed as one tokens-per-second number")
     return fig
 
@@ -499,11 +507,11 @@ def _box_panel(ax, df, key, order, labels, xlabel):
 
 def fig_time_by_level_spec(df: pd.DataFrame) -> plt.Figure:
     ok = df[df["ok"]]
-    # The two panels deliberately run over different slices. Levels need L1 --
-    # comparing levels is the panel's subject. Specs must NOT have it: L1 exists
-    # only under json_lab (every level returns LabOutline there), so pooling it
-    # in drags json_lab's median from 68 s down to 37 s and makes the most
-    # expensive target spec look like the cheapest.
+    # The two panels deliberately run over different slices. Levels need the
+    # Outline level -- comparing levels is the panel's subject. Specs must NOT
+    # have it: Outline exists only under json_lab (every level returns
+    # LabOutline there), so pooling it in drags json_lab's median from 68 s down
+    # to 37 s and makes the most expensive target spec look like the cheapest.
     ok_spec = ok[ok["level"] != "L1"]
 
     fig, (ax_l, ax_s) = plt.subplots(1, 2, figsize=(7.4, 4.8), sharey=True)
@@ -514,7 +522,7 @@ def fig_time_by_level_spec(df: pd.DataFrame) -> plt.Figure:
                "Prompt specificity level (all runs)")
     _box_panel(ax_s, ok_spec, "spec_type", ["json_lab", "arlem_simple", "arlem"],
                [SPEC_LABEL[k] for k in ("json_lab", "arlem_simple", "arlem")],
-               "Target specification (L3/L4 only)")
+               "Target specification (Objectives/Script)")
     ax_l.set_ylabel("Time to a valid spec (seconds)", fontsize=9.5, color=INK,
                     labelpad=6)
 
@@ -536,9 +544,9 @@ def fig_time_by_level_spec(df: pd.DataFrame) -> plt.Figure:
     titles(fig,
            "Generation time by prompt specificity and target specification",
            "Wave-2 benchmark, 2026-07-10 \u00b7 successful runs \u00b7 boxes pool "
-           "all 11 models, whiskers to 1.5\u00d7IQR, outliers omitted\nL1 appears "
-           "only in the left panel: it exists solely under json_lab, so pooling it "
-           "into the spec comparison would bias it")
+           "all 11 models, whiskers to 1.5\u00d7IQR, outliers omitted\nThe Outline "
+           "level appears only in the left panel: it exists solely under json_lab, "
+           "so pooling it into the spec comparison would bias it")
     return fig
 
 
@@ -549,7 +557,8 @@ PROV_TEX = {"anthropic": "Anthropic", "google": "Google", "openai": "OpenAI"}
 FIGURE_BLOCKS = [
     ("wave2_latency_throughput", "fig:generation-time",
      "Generation time and output throughput per request, by model. Bars are "
-     "medians over the 30 L3/L4 runs per model; whiskers give the interquartile "
+     "medians over the 30 Objectives and Script runs per model; whiskers give "
+     "the interquartile "
      "range. Time is measured end to end and includes every schema-repair retry, "
      "so it is time to a valid specification rather than single-call latency. "
      "Runs executed serially, so wall-clock time carries no concurrency "
@@ -572,9 +581,10 @@ FIGURE_BLOCKS = [
     ("wave2_time_by_level_spec", "fig:time-by-level-spec",
      "Generation time by prompt specificity level and by target specification. "
      "Boxes pool all eleven models; dots mark each model's median. Median time "
-     "rises from 15~s at L1 to 44~s at L3 and 63~s at L4, and the reduced ARLEM "
+     "rises from 15~s at the Outline level to 44~s at Objectives and 63~s at "
+     "Script, and the reduced ARLEM "
      "specification generates in 39~s against 67~s for full ARLEM and 68~s for "
-     "the Lab JSON. The panels use different slices by necessity: L1 "
+     "the Lab JSON. The panels use different slices by necessity: Outline "
      "runs exist only under \\texttt{json\\_lab}, so including them in the "
      "right-hand panel would drag that spec's median down to 37~s and make the "
      "most expensive target look like the cheapest."),
@@ -596,8 +606,9 @@ def write_tex(df: pd.DataFrame, suffix: str, out: Path) -> None:
         "% The sweep ran strictly serially (zero overlap between consecutive runs),",
         "% so wall-clock time carries no concurrency contention.",
         "%",
-        "% Numbers below are the L3/L4 slice, 30 runs per model: L1 returns the",
-        "% spec-agnostic LabOutline, a much cheaper task, and is excluded for the",
+        "% Numbers below are the Objectives/Script slice, 30 runs per model: the",
+        "% Outline level returns the spec-agnostic LabOutline, a much cheaper task,",
+        "% and is excluded for the",
         "% same reason as in generation_cost_tables.tex. Throughput uses OUTPUT",
         "% tokens only -- prompt tokens are 47-85% of totals here and are prefilled",
         "% far faster than they are decoded, so a total-token rate would mostly",
@@ -616,8 +627,8 @@ def write_tex(df: pd.DataFrame, suffix: str, out: Path) -> None:
         "\\begin{table}[htbp]",
         "  \\centering",
         "  \\caption{Generation time by model. Median and interquartile range are "
-        "over the successful runs of 30 L3/L4 requests per model; throughput and "
-        "total are pooled over the same runs.}",
+        "over the successful runs of 30 Objectives and Script requests per model; "
+        "throughput and total are pooled over the same runs.}",
         "  \\label{tab:generation-time}",
         "  \\small",
         "  \\begin{tabular}{llrrrrrr}",
@@ -677,7 +688,8 @@ def write_tex(df: pd.DataFrame, suffix: str, out: Path) -> None:
     L += [
         "    \\midrule",
         f"    \\multicolumn{{7}}{{l}}{{\\footnotesize Sweep total: "
-        f"{slice_h:.2f}~h over the L3/L4 slice; {all_h:.2f}~h including L1.}} \\\\",
+        f"{slice_h:.2f}~h over the Objectives and Script slice; {all_h:.2f}~h "
+        f"including the Outline level.}} \\\\",
         "    \\bottomrule",
         "  \\end{tabular}",
         "\\end{table}",

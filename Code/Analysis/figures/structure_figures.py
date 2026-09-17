@@ -11,7 +11,7 @@ Five figures, two LaTeX tables, written to Artifacts/Paper/.
     wave2_json_lab_size          size against the human-authored moon lab
     wave2_authoring_burden       novel assets + prefab reuse collapse
     wave2_arlem_validity         the OpenAI zero-activate defect
-    wave2_specificity_elasticity how much L4's script buys, per spec family
+    wave2_specificity_elasticity how much the Script level buys, per spec family
     wave2_arlem_floor            how often models stop at the stated minimum
 
 Regenerate:
@@ -20,11 +20,15 @@ Regenerate:
 
 Slices, and why they are not optional
 -------------------------------------
-**L1 is excluded from every structural figure.** L1 returns the spec-agnostic
-``LabOutline``, which has no modules, clips, objects or components -- so all 55
-L1 rows record structural zeros. They are 35% of the json_lab rows and would
-halve every median. The json_lab slice is therefore the 104 successful L3/L4
-runs, matching the cost and timing figures.
+Level names are Outline / Objectives / Script throughout the paper; the run CSVs
+still store them as ``L1`` / ``L3`` / ``L4``, so those remain the lookup keys in
+code. ``figure_style.LEVEL_NAME`` is the one place the mapping lives.
+
+**The Outline level is excluded from every structural figure.** It returns the
+spec-agnostic ``LabOutline``, which has no modules, clips, objects or components
+-- so all 55 Outline rows record structural zeros. They are 35% of the json_lab
+rows and would halve every median. The json_lab slice is therefore the 104
+successful Objectives and Script runs, matching the cost and timing figures.
 
 **arlem and arlem_simple are pooled only where the schemas agree.** The
 simplified schema has no persons, sensors, devices, apps, warnings, messages,
@@ -35,7 +39,7 @@ two prompts carry identical minimum-count wording. Figure 4 uses full ARLEM
 alone, since it walks fields the simplified schema drops.
 
 **Gemini 2.5 Flash-Lite is kept, with an explicit n.** It has 0 successful full-
-ARLEM runs, 3 arlem_simple and 4 json_lab L3/L4. Dropping it would hide the
+ARLEM runs, 3 arlem_simple and 4 json_lab Objectives/Script. Dropping it would hide the
 fact that it barely produced anything; plotting it unmarked would present a
 4-run median as equal evidence to a 10-run one. Every figure carries a counts
 row so the thin support is visible where the mark is.
@@ -97,8 +101,9 @@ from matplotlib.patches import PathPatch
 from matplotlib.path import Path as MplPath
 
 from figure_style import (
-    BAR_WIDTH, CORNER_PT, GRID, INK, INK_MUTED, INK_SOFT, MODEL_ORDER,
-    PROVIDER_COLOR, SURFACE, draw_provider_brackets, rounded_bar, set_style,
+    BAR_WIDTH, CORNER_PT, GRID, INK, INK_MUTED, INK_SOFT, LEVEL_NAME,
+    MODEL_ORDER, PROVIDER_COLOR, SURFACE, draw_provider_brackets, rounded_bar,
+    set_style,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -111,7 +116,11 @@ TEX_DIR = ROOT / "Artifacts" / "Paper" / "tables"
 
 # Ordered ramps -- see module docstring for validator results.
 LEVEL_COLOR = {"L3": "#6b9ed8", "L4": "#123a75"}
-LEVEL_LABEL = {"L3": "L3  \u2014 objectives only", "L4": "L4  \u2014 + full script"}
+# Keys stay L1/L3/L4 -- that is what the `level` column holds. The printed name
+# comes from figure_style.LEVEL_NAME; the gloss says what the prompt carried,
+# since these two figures turn entirely on the difference between them.
+LEVEL_LABEL = {"L3": f"{LEVEL_NAME['L3']}  \u2014 objectives, no script",
+               "L4": f"{LEVEL_NAME['L4']}  \u2014 objectives + full script"}
 # Three ordinal blues for degrees of compliance, plus the status red for an
 # outright violation -- a run BELOW the stated minimum is a different kind of
 # thing from a run that merely met it, so it does not belong on the ramp.
@@ -124,7 +133,7 @@ VALID_COLOR = {"renderable": "#4a3aa7", "empty": "#d03b3b"}
 VALID_LABEL = {"renderable": "Activates \u22651 augmentation",
                "empty": "Activates nothing (renders empty)"}
 
-# The minimum counts stated in every L3/L4 ARLEM prompt, full and simplified
+# The minimum counts stated in every Objectives/Script ARLEM prompt, full and simplified
 # alike (prompt_builder.build_prompt defaults; verified in the saved prompt
 # artefacts under Artifacts/Data/Benchmark/prompts/).
 ARLEM_FLOORS = [("num_things", 3, "things"),
@@ -153,10 +162,10 @@ def load_runs(runs_csv: Path) -> pd.DataFrame:
 
 
 def json_lab_slice(df: pd.DataFrame) -> pd.DataFrame:
-    """Successful json_lab L3/L4 runs, with the two derived asset ratios.
+    """Successful json_lab Objectives/Script runs, with the derived asset ratios.
 
-    L1 is dropped here, not filtered per figure: LabOutline has no structure to
-    measure, so every structural column is 0 for those runs.
+    The Outline level is dropped here, not filtered per figure: LabOutline has no
+    structure to measure, so every structural column is 0 for those runs.
     """
     jl = df[(df["spec_type"] == "json_lab") & (df["level"] != "L1")].copy()
     uniq = jl["num_unique_prefabs"].replace(0, np.nan)
@@ -351,8 +360,8 @@ def fig_json_lab_size(df: pd.DataFrame) -> plt.Figure:
     fig, axes = plt.subplots(len(A_PANELS), 1, figsize=(10.4, 11.0), sharex=True)
     for ax, (col, label) in zip(axes, A_PANELS):
         style_panel(ax, n)
-        # Paired bars: pooling L3 and L4 would report the midpoint of a
-        # bimodal distribution, since L4 roughly doubles every count here.
+        # Paired bars: pooling the two levels would report the midpoint of a
+        # bimodal distribution, since Script roughly doubles every count here.
         for x, row in enumerate(tbl.itertuples()):
             for k, lv in enumerate(("L3", "L4")):
                 runs = jl[jl["ok"] & (jl["display_name"] == row.display)
@@ -381,7 +390,7 @@ def fig_json_lab_size(df: pd.DataFrame) -> plt.Figure:
     draw_provider_brackets(axes[-1], tbl, -0.30, -0.34, rule_color=INK_MUTED)
 
     titles(fig, "Generated lab size against the hand-authored reference",
-           "Median over successful L3/L4 runs per model. The reference lab is "
+           "Median over successful Objectives and Script runs per model. The reference lab is "
            "the hand-authored Unity moon lab the schema was derived from.\n"
            "Models come closest on objects and modules and fall furthest short "
            "on clips — the reference lab's 76 steps are more than double the "
@@ -467,7 +476,7 @@ def fig_authoring_burden(df: pd.DataFrame) -> plt.Figure:
     draw_provider_brackets(ax_reuse, tbl, -0.34, -0.375)
 
     titles(fig, "Authoring burden left behind by each generated lab",
-           "Successful L3/L4 json_lab runs. \u201cInvented\u201d means the asset is "
+           "Successful Objectives and Script json_lab runs. \u201cInvented\u201d means the asset is "
            "not in the moon-lab library the schema documents \u2014 someone would "
            "have to model or paint it.\nThe share is near-flat across models, "
            "levels and topics: library grounding fails uniformly, not just on "
@@ -597,8 +606,9 @@ def fig_specificity_elasticity(df: pd.DataFrame) -> plt.Figure:
                       "arlem  \u2014  full ARLEM scenario")
 
     titles(fig, "What the detailed script buys, by target specification",
-           "Mean count per specification at L3 (objectives only) and L4 (plus "
-           "the full script), pooled over all models. On a log axis the slope "
+           "Mean count per specification at the Objectives level (no script) and "
+           "the Script level (plus the full lesson script), pooled over all "
+           "models. On a log axis the slope "
            "is the growth ratio, printed at the right.\nThe script roughly "
            "doubles a Lab JSON but barely moves an ARLEM workplace: it lands "
            "almost entirely in predicates and actions, leaving the environment "
@@ -672,11 +682,12 @@ FIGURE_BLOCKS = [
     ("wave2_json_lab_size", "fig:json-lab-size",
      "Size of the generated Lab JSON against the hand-authored moon lab the "
      "schema was derived from. Bars are per-model medians over the successful "
-     "L3 and L4 runs, shown separately because the detailed script roughly "
-     "doubles every count. The dashed rule is the reference lab. Models come "
-     "closest on objects and modules and fall furthest short on clips: the "
+     "Objectives and Script runs, shown separately because the detailed script "
+     "roughly doubles every count. The dashed rule is the reference lab. Models "
+     "come closest on objects and modules and fall furthest short on clips: the "
      "reference lab's 76 steps are more than double the best model median of "
-     "35. L1 is excluded throughout \\textemdash{} it returns a \\texttt{LabOutline}, "
+     "35. The Outline level is excluded throughout \\textemdash{} it returns a "
+     "\\texttt{LabOutline}, "
      "which has no modules, clips, objects or components to count."),
     ("wave2_authoring_burden", "fig:authoring-burden",
      "Authoring work implied by each generated lab. Top: the share of distinct "
@@ -700,7 +711,8 @@ FIGURE_BLOCKS = [
      "field, at a median of 5 to 26 activations per run. The defect is "
      "invisible to success rate, token cost and generation time alike."),
     ("wave2_specificity_elasticity", "fig:specificity-elasticity",
-     "Growth from L3 (learning objectives only) to L4 (plus the full lesson "
+     "Growth from the Objectives level (learning objectives, no script) to the "
+     "Script level (plus the full lesson "
      "script), pooled over all models. Counts are means; the axis is "
      "logarithmic, so an equal slope is an equal growth ratio and the printed "
      "multiplier reads directly off the line. The Lab JSON is elastic to "
@@ -795,9 +807,13 @@ def write_tex(df: pd.DataFrame, suffix: str, out: Path) -> None:
         "% Output-structure tables and figures -- wave-2 benchmark.",
         "% GENERATED by Code/Analysis/figures/structure_figures.py -- edit that, not this.",
         "%",
-        "% SLICES. json_lab numbers are the 104 successful L3/L4 runs. L1 is",
+        "% LEVELS. Outline / Objectives / Script are the paper-facing names for the",
+        "% L1 / L3 / L4 keys the run CSVs still store.",
+        "%",
+        "% SLICES. json_lab numbers are the 104 successful Objectives and Script",
+        "% runs. The Outline level is",
         "% excluded because it returns the spec-agnostic LabOutline, which has no",
-        "% modules, clips, objects or components -- all 55 L1 rows record",
+        "% modules, clips, objects or components -- all 55 Outline rows record",
         "% structural zeros and would halve every median. ARLEM numbers pool the",
         "% full and simplified schemas (192 successful runs), which is valid only",
         "% for fields both schemas define; persons, sensors, devices, apps,",
@@ -812,7 +828,7 @@ def write_tex(df: pd.DataFrame, suffix: str, out: Path) -> None:
         "% evidence that a human author invents fewer assets.",
         "%",
         "% Gemini 2.5 Flash-Lite has 0 successful full-ARLEM runs, 3 simplified",
-        "% and 4 json_lab L3/L4. Its n column is the caveat; medians over 3-4",
+        "% and 4 json_lab Objectives/Script. Its n column is the caveat; medians over 3-4",
         "% runs are not comparable to medians over 10.",
         "%",
         "% Required packages:",
@@ -828,7 +844,8 @@ def write_tex(df: pd.DataFrame, suffix: str, out: Path) -> None:
     ]
     L += _tex_table(
         "Structure of the generated Lab JSON, by model. Values are medians over "
-        "the successful L3/L4 runs; \\emph{novel} counts prefabs absent from the "
+        "the successful Objectives and Script runs; \\emph{novel} counts prefabs "
+        "absent from the "
         "documented asset library, and \\emph{reuse} is scene objects per distinct "
         "prefab.",
         "tab:json-lab-structure",

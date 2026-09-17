@@ -7,19 +7,26 @@ than ``benchmark_dataframe.load_runs()``, since the per-run ``*_metrics.json``
 files that loader depends on are gitignored and not present in this checkout —
 the CSV export is what survives.
 
+Level names are Outline / Objectives / Script throughout the paper; the run CSVs
+still store them as ``L1`` / ``L3`` / ``L4``, so those remain the lookup keys in
+code (and in the ``_L1`` output filename, kept stable for the LaTeX that already
+includes it). ``figure_style.LEVEL_NAME`` is the one place the mapping lives.
+
 Produces two figures over two different slices of the same data:
 
-  - ``cost_tokens_by_model.pdf/png`` — the L3/L4 base dataset (excludes the 55
-    ``level == "L1"`` rows tagged ``spec_type == "json_lab"``: L1 always
-    returns the spec-agnostic ``LabOutline``, a much shorter/cheaper task than
-    L3/L4's full spec, so it isn't a fair "cost of generating a lab" data
-    point — same exclusion used throughout the wave-two failure tables).
+  - ``cost_tokens_by_model.pdf/png`` — the Objectives/Script base dataset
+    (excludes the 55 ``level == "L1"`` rows tagged ``spec_type == "json_lab"``:
+    the Outline level always returns the spec-agnostic ``LabOutline``, a much
+    shorter/cheaper task than a full spec, so it isn't a fair "cost of
+    generating a lab" data point — same exclusion used throughout the wave-two
+    failure tables).
     30 runs/model, 330 total, includes failed runs (which still burn tokens).
 
-  - ``cost_tokens_by_model_L1.pdf/png`` — L1 runs only (5 runs/model, 55
-    total). L1 never failed in this dataset, so this slice exists to compare
-    against the base figure and decide whether L1's (cheap, always-succeeds)
-    cost is worth folding into an overall cost figure or reporting separately.
+  - ``cost_tokens_by_model_L1.pdf/png`` — Outline runs only (5 runs/model, 55
+    total). Outline never failed in this dataset, so this slice exists to
+    compare against the base figure and decide whether its (cheap,
+    always-succeeds) cost is worth folding into an overall cost figure or
+    reporting separately.
 
 Figures are sized at 8x7in so that scaling down to a ~6.5in \\textwidth (a
 typical single-column article) only shrinks text by ~0.8x; font sizes below
@@ -39,6 +46,7 @@ Usage:
 """
 
 import argparse
+import textwrap
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -81,11 +89,18 @@ GROUP_GAP = 0.9  # extra x-spacing inserted between provider clusters
 # Font sizes target legibility at ~0.8x (8in design width -> ~6.5in textwidth),
 # not at native resolution — see module docstring.
 FS_TITLE = 17
+FS_SUBTITLE = 12
 FS_LEGEND = 13
 FS_AXIS_LABEL = 14
 FS_TICK = 12
 FS_VALUE = 10.5
 FS_FOOTNOTE = 9.5
+
+# Neither the title nor the footnote is drawn inside an axes, so matplotlib will
+# happily run them off an 8in canvas rather than shrink or wrap them. The slice
+# therefore gets its own subtitle line instead of a parenthetical on the title,
+# and the footnote is hard-wrapped at the widest column that still fits.
+FOOTNOTE_COLS = 110
 
 
 def load_df(csv_path: Path = CSV_PATH) -> pd.DataFrame:
@@ -93,7 +108,7 @@ def load_df(csv_path: Path = CSV_PATH) -> pd.DataFrame:
 
 
 def base_slice(df: pd.DataFrame) -> pd.DataFrame:
-    """L3/L4 runs only — excludes L1 rows (tagged spec_type='json_lab')."""
+    """Objectives/Script runs only — excludes the Outline rows (spec_type='json_lab')."""
     is_l1_json_lab = (df["spec_type"] == "json_lab") & (df["level"] == "L1")
     return df[~is_l1_json_lab].copy()
 
@@ -136,7 +151,8 @@ def bar_labels(ax, bars, values, fmt):
         )
 
 
-def make_figure(df_slice: pd.DataFrame, *, title: str, footnote: str, out_stem: str):
+def make_figure(df_slice: pd.DataFrame, *, title: str, subtitle: str,
+                footnote: str, out_stem: str):
     means = df_slice.groupby("model")[["prompt_tokens", "completion_tokens", "total_tokens", "cost_usd"]].mean()
 
     order_ids = [m for m, _, _ in MODEL_ORDER]
@@ -183,13 +199,18 @@ def make_figure(df_slice: pd.DataFrame, *, title: str, footnote: str, out_stem: 
     # Outside the axes (a row between title and plot) so it never competes
     # with a bar or its value label for space.
     fig.legend(
-        handles=legend_handles, loc="upper center", bbox_to_anchor=(0.5, 0.93),
+        handles=legend_handles, loc="upper center", bbox_to_anchor=(0.5, 0.905),
         ncol=3, frameon=False, fontsize=FS_LEGEND, handlelength=1.2, handleheight=1.2,
         columnspacing=1.8,
     )
 
-    fig.suptitle(title, fontsize=FS_TITLE, y=0.99)
-    fig.text(0.5, 0.015, footnote, ha="center", fontsize=FS_FOOTNOTE, color="#3a3835")
+    fig.suptitle(title, fontsize=FS_TITLE, y=0.985)
+    fig.text(0.5, 0.947, subtitle, ha="center", va="top", fontsize=FS_SUBTITLE,
+             color="#3a3835")
+    # Anchored by its bottom edge, so the wrapped lines grow up toward the
+    # x tick labels rather than off the bottom of the page.
+    fig.text(0.5, 0.018, textwrap.fill(footnote, FOOTNOTE_COLS), ha="center",
+             va="bottom", fontsize=FS_FOOTNOTE, color="#3a3835", linespacing=1.4)
 
     fig.subplots_adjust(left=0.13, right=0.97, top=0.85, bottom=0.24, hspace=0.1)
 
@@ -241,9 +262,10 @@ def main(argv=None):
     make_figure(
         base_df,
         title="Mean Token Consumption and Generation Cost per Run, by Model",
+        subtitle="Objectives and Script prompt levels — full specification generation",
         footnote=(
-            f"n = {int(n_base.iloc[0])} runs/model, {int(n_base.sum())} total "
-            "(L3/L4 only; includes failed runs, which still consume tokens)."
+            f"n = {int(n_base.iloc[0])} runs/model, {int(n_base.sum())} total; "
+            "includes failed runs, which still consume tokens."
             + source
         ),
         out_stem=f"cost_tokens_by_model{args.suffix}",
@@ -254,10 +276,11 @@ def main(argv=None):
     n_l1_failed = int((~l1_df["success"]).sum())
     make_figure(
         l1_df,
-        title="Mean Token Consumption and Generation Cost per Run, by Model (L1 only)",
+        title="Mean Token Consumption and Generation Cost per Run, by Model",
+        subtitle="Outline prompt level — outline generation only, not a full specification",
         footnote=(
-            f"n = {int(n_l1.iloc[0])} runs/model, {int(n_l1.sum())} total "
-            f"(L1 outline generation only; {n_l1_failed} of {int(n_l1.sum())} failed)."
+            f"n = {int(n_l1.iloc[0])} runs/model, {int(n_l1.sum())} total; "
+            f"{n_l1_failed} of {int(n_l1.sum())} failed."
             + source
         ),
         out_stem=f"cost_tokens_by_model_L1{args.suffix}",

@@ -55,6 +55,21 @@ MODEL_ORDER = [
     ("GPT-5.5", "5.5", "openai"),
 ]
 
+# Prompt specificity levels. Run artefacts -- and the `level` column of every
+# exported CSV -- still carry the original L1/L3/L4 keys, so those stay the
+# lookup keys everywhere; these are the paper-facing names, and no figure
+# should ever print a bare "L3" at a reader. Rename here and every figure,
+# legend and generated caption moves together.
+LEVEL_NAME = {"L1": "Outline", "L3": "Objectives", "L4": "Script"}
+# What each level's prompt carries, phrased as what it *adds* to the one before.
+# Kept terse: these sit under a three-column tick row, where the spelled-out
+# "+ learning objectives" / "+ full lesson script" run into each other.
+LEVEL_GLOSS = {
+    "L1": "description only",
+    "L3": "+ objectives",
+    "L4": "+ full script",
+}
+
 BAR_WIDTH = 0.66
 CORNER_PT = 2.0  # rounded data-end radius, in points
 
