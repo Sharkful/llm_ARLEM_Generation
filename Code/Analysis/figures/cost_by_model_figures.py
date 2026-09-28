@@ -1,37 +1,28 @@
 """
 Publication-ready figures: mean token consumption and generation cost per
-run, by model, colored by provider.
+run, by model, coloured and patterned by provider.
 
-Reads the deduped run-level CSV directly (``benchmark_runs_wave2.csv``) rather
-than ``benchmark_dataframe.load_runs()``, since the per-run ``*_metrics.json``
-files that loader depends on are gitignored and not present in this checkout —
-the CSV export is what survives.
+Drawn in the shared house style (``figure_style``) so it sits alongside the
+``wave2_tokens_cost_*`` and timing figures. Bars also carry a per-provider fill
+pattern (``PROVIDER_HATCH``) so provider identity survives greyscale print.
 
 Level names are Outline / Objectives / Script throughout the paper; the run CSVs
 still store them as ``L1`` / ``L3`` / ``L4``, so those remain the lookup keys in
 code (and in the ``_L1`` output filename, kept stable for the LaTeX that already
 includes it). ``figure_style.LEVEL_NAME`` is the one place the mapping lives.
 
-Produces two figures over two different slices of the same data:
+Produces two figures over two different slices of the same run table:
 
   - ``cost_tokens_by_model.pdf/png`` — the Objectives/Script base dataset
-    (excludes the 55 ``level == "L1"`` rows tagged ``spec_type == "json_lab"``:
+    (excludes the ``level == "L1"`` rows tagged ``spec_type == "json_lab"``:
     the Outline level always returns the spec-agnostic ``LabOutline``, a much
     shorter/cheaper task than a full spec, so it isn't a fair "cost of
     generating a lab" data point — same exclusion used throughout the wave-two
-    failure tables).
-    30 runs/model, 330 total, includes failed runs (which still burn tokens).
+    failure tables). Means include failed runs, which still burn tokens.
 
-  - ``cost_tokens_by_model_L1.pdf/png`` — Outline runs only (5 runs/model, 55
-    total). Outline never failed in this dataset, so this slice exists to
-    compare against the base figure and decide whether its (cheap,
-    always-succeeds) cost is worth folding into an overall cost figure or
-    reporting separately.
-
-Figures are sized at 8x7in so that scaling down to a ~6.5in \\textwidth (a
-typical single-column article) only shrinks text by ~0.8x; font sizes below
-are chosen so they stay legible (roughly caption-sized or larger) after that
-shrink, not just at native resolution.
+  - ``cost_tokens_by_model_L1.pdf/png`` — Outline runs only, to compare against
+    the base figure and decide whether its (cheap) cost is worth folding into
+    an overall cost figure or reporting separately.
 
 Outputs: Artifacts/Paper/figures/
 
@@ -46,66 +37,37 @@ Usage:
 """
 
 import argparse
-import textwrap
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
 import pandas as pd
+
+from figure_style import (
+    BAR_WIDTH,
+    GRID,
+    INK,
+    INK_MUTED,
+    INK_SOFT,
+    LEVEL_NAME,
+    MODEL_ORDER,
+    PROVIDER_COLOR,
+    PROVIDER_HATCH,
+    draw_provider_brackets,
+    rounded_bar,
+    set_style,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 REPORTS = ROOT / "Artifacts" / "Data" / "Benchmark" / "Reports"
 FIGURES = ROOT / "Artifacts" / "Paper" / "figures"
 CSV_PATH = REPORTS / "benchmark_runs_wave2.csv"
 
-# Dataviz-skill categorical hues (validated for adjacent-pair CVD separation
-# in this exact left-to-right order — see conversation notes; orange and
-# green must stay separated by blue, which this model order guarantees).
-PROVIDER_COLOR = {
-    "anthropic": "#eb6834",  # orange
-    "google":    "#2a78d6",  # blue
-    "openai":    "#008300",  # green
-}
-PROVIDER_LABEL = {"anthropic": "Anthropic", "google": "Google", "openai": "OpenAI"}
 
-# Fixed model order: alphabetical by provider, then small -> medium -> large
-# within a provider (matches generation_cost_tables.tex's billing-rate table).
-MODEL_ORDER = [
-    ("claude-haiku-4-5-20251001", "Claude Haiku 4.5",      "anthropic"),
-    ("claude-sonnet-5",           "Claude Sonnet 5",        "anthropic"),
-    ("claude-opus-4-8",           "Claude Opus 4.8",        "anthropic"),
-    ("gemini-2.5-flash-lite",     "Gemini 2.5 Flash-Lite",  "google"),
-    ("gemini-3.1-flash-lite",     "Gemini 3.1 Flash-Lite",  "google"),
-    ("gemini-3.5-flash",          "Gemini 3.5 Flash",       "google"),
-    ("gemini-3.1-pro-preview",    "Gemini 3.1 Pro Preview", "google"),
-    ("gpt-5.4-nano",              "GPT-5.4 Nano",           "openai"),
-    ("gpt-5.4-mini",              "GPT-5.4 Mini",           "openai"),
-    ("gpt-5.4",                   "GPT-5.4",                "openai"),
-    ("gpt-5.5",                   "GPT-5.5",                "openai"),
-]
-
-GROUP_GAP = 0.9  # extra x-spacing inserted between provider clusters
-
-# Font sizes target legibility at ~0.8x (8in design width -> ~6.5in textwidth),
-# not at native resolution — see module docstring.
-FS_TITLE = 17
-FS_SUBTITLE = 12
-FS_LEGEND = 13
-FS_AXIS_LABEL = 14
-FS_TICK = 12
-FS_VALUE = 10.5
-FS_FOOTNOTE = 9.5
-
-# Neither the title nor the footnote is drawn inside an axes, so matplotlib will
-# happily run them off an 8in canvas rather than shrink or wrap them. The slice
-# therefore gets its own subtitle line instead of a parenthetical on the title,
-# and the footnote is hard-wrapped at the widest column that still fits.
-FOOTNOTE_COLS = 110
-
-
-def load_df(csv_path: Path = CSV_PATH) -> pd.DataFrame:
-    return pd.read_csv(csv_path)
-
+# ── Data ─────────────────────────────────────────────────────────────
 
 def base_slice(df: pd.DataFrame) -> pd.DataFrame:
     """Objectives/Script runs only — excludes the Outline rows (spec_type='json_lab')."""
@@ -117,117 +79,112 @@ def l1_slice(df: pd.DataFrame) -> pd.DataFrame:
     return df[df["level"] == "L1"].copy()
 
 
-def compute_positions() -> list[float]:
-    positions, pos, prev_provider = [], 0.0, None
-    for _, _, provider in MODEL_ORDER:
-        if prev_provider is not None and provider != prev_provider:
-            pos += GROUP_GAP
-        positions.append(pos)
-        pos += 1.0
-        prev_provider = provider
-    return positions
+def load_table(df_slice: pd.DataFrame) -> pd.DataFrame:
+    """One row per model in display order: mean tokens / cost over all runs."""
+    rows = []
+    for display, tick, provider in MODEL_ORDER:
+        runs = df_slice[df_slice["display_name"] == display]
+        if runs.empty:
+            raise SystemExit(f"No runs found for {display!r} in this slice")
+        rows.append({
+            "display": display,
+            "tick": tick,
+            "provider": provider,
+            "n_ok": int(runs["success"].sum()),
+            "n_runs": int(len(runs)),
+            "tokens": runs["total_tokens"].mean(),
+            "cost": runs["cost_usd"].mean(),
+        })
+    return pd.DataFrame(rows)
 
 
-def style_axis(ax):
+# ── Formatting ───────────────────────────────────────────────────────
+
+def fmt_cost(v: float) -> str:
+    if v >= 0.01:
+        return f"${v:.3f}"
+    return f"${v:.4f}"
+
+
+def draw_panel(ax, tbl, values, labels, ylabel, headroom=1.16):
+    xs = range(len(tbl))
     ax.set_axisbelow(True)
-    ax.yaxis.grid(True, color="#d5d3ca", linewidth=1.1, zorder=0)
+    ax.yaxis.grid(True, color=GRID, linewidth=0.6, zorder=0)
     ax.xaxis.grid(False)
-    for side in ("top", "right"):
+    for side in ("top", "right", "bottom"):
         ax.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
-        ax.spines[side].set_color("#8a877e")
-        ax.spines[side].set_linewidth(1.3)
-    ax.tick_params(colors="#3a3835", labelsize=FS_TICK, width=1.1, length=4.5)
+    ax.spines["left"].set_color(GRID)
+
+    ax.set_xlim(-0.62, len(tbl) - 0.38)
+    ax.set_ylim(0, max(values) * headroom)
+    # Patches need final limits before the points->data conversion is meaningful.
+    ax.figure.canvas.draw()
+    for x, v, row in zip(xs, values, tbl.itertuples()):
+        rounded_bar(ax, x, v, BAR_WIDTH, PROVIDER_COLOR[row.provider],
+                    hatch=PROVIDER_HATCH[row.provider])
+
+    for x, v, lab in zip(xs, values, labels):
+        ax.annotate(lab, (x, v), xytext=(0, 3), textcoords="offset points",
+                    ha="center", va="bottom", fontsize=8, color=INK)
+
+    ax.set_ylabel(ylabel, fontsize=9.5, color=INK, labelpad=6)
+    ax.tick_params(axis="y", labelsize=8.5, pad=2)
+    ax.set_xticks(list(xs))
 
 
-def bar_labels(ax, bars, values, fmt):
-    for bar, v in zip(bars, values):
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height(),
-            fmt(v),
-            ha="center", va="bottom",
-            fontsize=FS_VALUE, color="#0b0b0b",
-        )
-
-
-def make_figure(df_slice: pd.DataFrame, *, title: str, subtitle: str,
-                footnote: str, out_stem: str):
-    means = df_slice.groupby("model")[["prompt_tokens", "completion_tokens", "total_tokens", "cost_usd"]].mean()
-
-    order_ids = [m for m, _, _ in MODEL_ORDER]
-    missing = set(order_ids) - set(means.index)
-    if missing:
-        raise ValueError(f"models in MODEL_ORDER not found in this slice: {missing}")
-
-    token_vals = [means.loc[m, "total_tokens"] for m in order_ids]
-    cost_vals = [means.loc[m, "cost_usd"] for m in order_ids]
-    colors = [PROVIDER_COLOR[p] for _, _, p in MODEL_ORDER]
-    labels = [d for _, d, _ in MODEL_ORDER]
-    x = compute_positions()
+def build_figure(df_slice: pd.DataFrame, *, title: str, sub: str) -> plt.Figure:
+    tbl = load_table(df_slice)
 
     fig, (ax_tok, ax_cost) = plt.subplots(
-        2, 1, figsize=(8, 7), sharex=True,
-        gridspec_kw={"height_ratios": [1, 1], "hspace": 0.1},
+        2, 1, figsize=(7.4, 6.2), sharex=True,
+        gridspec_kw={"height_ratios": [1, 1], "hspace": 0.13},
     )
+    # Fix the axes geometry before any bars are drawn: rounded_bar converts a
+    # point radius through transData, so a later subplots_adjust would silently
+    # rescale corners that were computed against the old axes box.
+    fig.subplots_adjust(left=0.115, right=0.985, top=0.885, bottom=0.165)
 
-    bars_tok = ax_tok.bar(x, token_vals, width=0.62, color=colors, zorder=3)
-    bars_cost = ax_cost.bar(x, cost_vals, width=0.62, color=colors, zorder=3)
+    draw_panel(ax_tok, tbl, list(tbl["tokens"]),
+               [f"{v / 1e3:.1f}k" for v in tbl["tokens"]],
+               "Mean tokens per run\n(thousands)")
+    draw_panel(ax_cost, tbl, list(tbl["cost"]),
+               [fmt_cost(v) for v in tbl["cost"]],
+               "Mean cost per run\n(USD)")
 
-    style_axis(ax_tok)
-    style_axis(ax_cost)
-    ax_tok.tick_params(axis="x", bottom=False)
-    ax_tok.set_ylim(0, max(token_vals) * 1.18)  # headroom so value labels clear the top spine
-    ax_cost.set_ylim(0, max(cost_vals) * 1.18)
+    ax_tok.yaxis.set_major_formatter(lambda v, _: f"{v / 1e3:.0f}")
+    cost_dp = 3 if tbl["cost"].max() < 0.05 else 2
+    ax_cost.yaxis.set_major_formatter(lambda v, _: f"{v:,.{cost_dp}f}" if v else "0")
 
-    ax_tok.set_ylabel("Mean tokens / run", fontsize=FS_AXIS_LABEL, color="#0b0b0b")
-    ax_cost.set_ylabel("Mean cost / run (USD)", fontsize=FS_AXIS_LABEL, color="#0b0b0b")
-    ax_tok.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:,.0f}"))
-    ax_cost.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"${v:,.3f}"))
+    ax_tok.set_xticklabels([])
+    ax_cost.set_xticklabels(list(tbl["tick"]), fontsize=9, color=INK)
+    ax_cost.tick_params(axis="x", pad=4)
 
-    bar_labels(ax_tok, bars_tok, token_vals, lambda v: f"{v:,.0f}")
-    bar_labels(ax_cost, bars_cost, cost_vals, lambda v: f"${v:.4f}")
+    # Runs-OK row, then the provider brackets, in axes-fraction space below the
+    # tick labels. Tick labels are 1-2 lines, so the row sits clear of both.
+    trans = ax_cost.get_xaxis_transform()
+    y_n = -0.235
+    for x, row in enumerate(tbl.itertuples()):
+        weak = row.n_ok < row.n_runs
+        ax_cost.text(x, y_n, f"{row.n_ok}/{row.n_runs}", transform=trans,
+                     ha="center", va="top", fontsize=7.5,
+                     color=INK_SOFT if weak else INK_MUTED,
+                     fontweight="bold" if weak else "normal", clip_on=False)
+    ax_cost.text(-0.78, y_n, "runs OK", transform=trans, ha="right", va="top",
+                 fontsize=7.5, color=INK_MUTED, style="italic", clip_on=False)
 
-    ax_cost.set_xticks(x)
-    ax_cost.set_xticklabels(labels, rotation=32, ha="right", fontsize=FS_TICK, color="#0b0b0b")
-    ax_cost.set_xlim(min(x) - 0.7, max(x) + 0.7)
+    draw_provider_brackets(ax_cost, tbl, y_rule=-0.30, y_label=-0.325)
 
-    legend_handles = [
-        plt.Rectangle((0, 0), 1, 1, color=PROVIDER_COLOR[p], label=PROVIDER_LABEL[p])
-        for p in ("anthropic", "google", "openai")
-    ]
-    # Outside the axes (a row between title and plot) so it never competes
-    # with a bar or its value label for space.
-    fig.legend(
-        handles=legend_handles, loc="upper center", bbox_to_anchor=(0.5, 0.905),
-        ncol=3, frameon=False, fontsize=FS_LEGEND, handlelength=1.2, handleheight=1.2,
-        columnspacing=1.8,
-    )
-
-    fig.suptitle(title, fontsize=FS_TITLE, y=0.985)
-    fig.text(0.5, 0.947, subtitle, ha="center", va="top", fontsize=FS_SUBTITLE,
-             color="#3a3835")
-    # Anchored by its bottom edge, so the wrapped lines grow up toward the
-    # x tick labels rather than off the bottom of the page.
-    fig.text(0.5, 0.018, textwrap.fill(footnote, FOOTNOTE_COLS), ha="center",
-             va="bottom", fontsize=FS_FOOTNOTE, color="#3a3835", linespacing=1.4)
-
-    fig.subplots_adjust(left=0.13, right=0.97, top=0.85, bottom=0.24, hspace=0.1)
-
-    FIGURES.mkdir(parents=True, exist_ok=True)
-    pdf_path = FIGURES / f"{out_stem}.pdf"
-    png_path = FIGURES / f"{out_stem}.png"
-    fig.savefig(pdf_path)
-    fig.savefig(png_path, dpi=200)
-    plt.close(fig)
-    print(f"wrote {pdf_path}")
-    print(f"wrote {png_path}")
+    fig.suptitle(title, fontsize=11.5, fontweight="bold", color=INK,
+                 x=0.055, ha="left", y=0.985)
+    fig.text(0.055, 0.945, sub, fontsize=8.5, color=INK_SOFT, ha="left", va="top")
+    return fig
 
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
+    ap.add_argument("--formats", nargs="+", default=["pdf", "png"])
     ap.add_argument(
         "--runs-csv", type=Path, default=CSV_PATH,
         help="Run-level CSV to plot (default: the wave-2 export).",
@@ -243,48 +200,42 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     csv_path = args.runs_csv if args.runs_csv.is_absolute() else ROOT / args.runs_csv
-
-    plt.rcParams["font.family"] = ["serif"]
-    plt.rcParams["font.serif"] = ["Times New Roman", "DejaVu Serif", "Georgia", "serif"]
-
-    df = load_df(csv_path)
+    df = pd.read_csv(csv_path)
 
     # A repriced table carries the as-recorded figure alongside the recomputed
-    # one; say so in the footnote, since the cost panel then reflects the current
+    # one; say so on the figure, since the cost axis then reflects the current
     # price table rather than what was billed at run time.
     rate_note = ""
     if "cost_usd_recorded" in df.columns:
-        rate_note = " Costs recomputed at current published rates (tracking/pricing.py)."
-    source = f" Source: {csv_path.name}.{rate_note}"
+        rate_note = "\nCosts recomputed at current published rates (see tracking/pricing.py)"
+
+    set_style()
+    FIGURES.mkdir(parents=True, exist_ok=True)
 
     base_df = base_slice(df)
-    n_base = base_df.groupby("model").size()
-    make_figure(
-        base_df,
-        title="Mean Token Consumption and Generation Cost per Run, by Model",
-        subtitle="Objectives and Script prompt levels — full specification generation",
-        footnote=(
-            f"n = {int(n_base.iloc[0])} runs/model, {int(n_base.sum())} total; "
-            "includes failed runs, which still consume tokens."
-            + source
-        ),
-        out_stem=f"cost_tokens_by_model{args.suffix}",
-    )
-
+    n_base = base_df.groupby("display_name").size()
     l1_df = l1_slice(df)
-    n_l1 = l1_df.groupby("model").size()
-    n_l1_failed = int((~l1_df["success"]).sum())
-    make_figure(
-        l1_df,
-        title="Mean Token Consumption and Generation Cost per Run, by Model",
-        subtitle="Outline prompt level — outline generation only, not a full specification",
-        footnote=(
-            f"n = {int(n_l1.iloc[0])} runs/model, {int(n_l1.sum())} total; "
-            f"{n_l1_failed} of {int(n_l1.sum())} failed."
-            + source
-        ),
-        out_stem=f"cost_tokens_by_model_L1{args.suffix}",
-    )
+    n_l1 = l1_df.groupby("display_name").size()
+
+    specs = [
+        (base_df, f"cost_tokens_by_model{args.suffix}",
+         "Mean token usage and cost per run, by model",
+         f"Wave-2 benchmark · {LEVEL_NAME['L3']} and {LEVEL_NAME['L4']} levels · "
+         f"{int(n_base.iloc[0])} runs per model, {int(n_base.sum())} total · "
+         "means include failed runs, which still consume tokens"),
+        (l1_df, f"cost_tokens_by_model_L1{args.suffix}",
+         f"Mean token usage and cost per run, by model ({LEVEL_NAME['L1']} level only)",
+         f"Wave-2 benchmark · {LEVEL_NAME['L1']} level · {int(n_l1.iloc[0])} runs per model, "
+         f"{int(n_l1.sum())} total · means include failed runs"),
+    ]
+    for df_slice, stem, title, sub in specs:
+        fig = build_figure(df_slice, title=title, sub=sub + rate_note)
+        for ext in args.formats:
+            out = FIGURES / f"{stem}.{ext}"
+            fig.savefig(out, dpi=400 if ext == "png" else None,
+                        bbox_inches="tight", pad_inches=0.06)
+            print(f"wrote {out.relative_to(ROOT)}")
+        plt.close(fig)
 
 
 if __name__ == "__main__":

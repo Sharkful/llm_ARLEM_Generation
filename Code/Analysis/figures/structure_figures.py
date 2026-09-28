@@ -97,12 +97,13 @@ import matplotlib.patheffects as pe
 import numpy as np
 import pandas as pd
 
-from matplotlib.patches import PathPatch
+from matplotlib.patches import Patch, PathPatch
 from matplotlib.path import Path as MplPath
 
 from figure_style import (
-    BAR_WIDTH, CORNER_PT, GRID, INK, INK_MUTED, INK_SOFT, LEVEL_NAME,
-    MODEL_ORDER, PROVIDER_COLOR, SURFACE, draw_provider_brackets, rounded_bar,
+    BAR_WIDTH, CORNER_PT, GRID, HATCH_COLOR, INK, INK_MUTED, INK_SOFT, LEVEL_NAME,
+    MODEL_ORDER, PROVIDER_COLOR, PROVIDER_HATCH, SURFACE, draw_provider_brackets,
+    rounded_bar,
     set_style,
 )
 
@@ -116,11 +117,14 @@ TEX_DIR = ROOT / "Artifacts" / "Paper" / "tables"
 
 # Ordered ramps -- see module docstring for validator results.
 LEVEL_COLOR = {"L3": "#6b9ed8", "L4": "#123a75"}
+# Pattern on the light step, so the two levels survive greyscale print
+# independent of how the printer renders the lightness gap (see PROVIDER_HATCH).
+LEVEL_HATCH = {"L3": "///", "L4": ""}
 # Keys stay L1/L3/L4 -- that is what the `level` column holds. The printed name
 # comes from figure_style.LEVEL_NAME; the gloss says what the prompt carried,
 # since these two figures turn entirely on the difference between them.
-LEVEL_LABEL = {"L3": f"{LEVEL_NAME['L3']}  \u2014 objectives, no script",
-               "L4": f"{LEVEL_NAME['L4']}  \u2014 objectives + full script"}
+LEVEL_LABEL = {"L3": f"{LEVEL_NAME['L3']}  — objectives, no script",
+               "L4": f"{LEVEL_NAME['L4']}  — objectives + full script"}
 # Three ordinal blues for degrees of compliance, plus the status red for an
 # outright violation -- a run BELOW the stated minimum is a different kind of
 # thing from a run that merely met it, so it does not belong on the ramp.
@@ -273,11 +277,12 @@ def titles(fig, title, sub, y=0.985, ysub=0.945):
 
 
 def level_legend(fig, y=0.945):
-    handles = [plt.Line2D([], [], marker="s", linestyle="none", markersize=7,
-                          markerfacecolor=LEVEL_COLOR[lv], markeredgecolor="none",
-                          label=LEVEL_LABEL[lv]) for lv in ("L3", "L4")]
+    handles = [Patch(facecolor=LEVEL_COLOR[lv], hatch=LEVEL_HATCH[lv] or None,
+                     edgecolor=HATCH_COLOR, linewidth=0, label=LEVEL_LABEL[lv])
+               for lv in ("L3", "L4")]
     fig.legend(handles=handles, loc="upper right", bbox_to_anchor=(0.97, y),
                ncols=2, frameon=False, fontsize=8.5, handletextpad=0.5,
+               handlelength=1.8, handleheight=1.2,
                columnspacing=1.6)
 
 
@@ -370,7 +375,8 @@ def fig_json_lab_size(df: pd.DataFrame) -> plt.Figure:
                     continue
                 med = runs[col].median()
                 bx = x + (k - 0.5) * 0.34
-                rounded_bar(ax, bx, med, 0.31, LEVEL_COLOR[lv])
+                rounded_bar(ax, bx, med, 0.31, LEVEL_COLOR[lv],
+                            hatch=LEVEL_HATCH[lv])
                 if med == 0:
                     # No bar can be drawn at zero; say so rather than leaving a
                     # gap that reads as a failed run.
@@ -421,7 +427,8 @@ def fig_authoring_burden(df: pd.DataFrame) -> plt.Figure:
         if runs.empty:
             continue
         rounded_bar(ax_share, x, runs.median(), SLIM_WIDTH,
-                    PROVIDER_COLOR[row.provider])
+                    PROVIDER_COLOR[row.provider],
+                    hatch=PROVIDER_HATCH[row.provider])
         ring = [pe.withStroke(linewidth=3.1, foreground=SURFACE)]
         ax_share.plot([x, x], [runs.quantile(0.25), runs.quantile(0.75)],
                       color=INK, linewidth=1.1, solid_capstyle="butt",
@@ -464,7 +471,8 @@ def fig_authoring_burden(df: pd.DataFrame) -> plt.Figure:
         if runs.empty:
             continue
         rounded_bar(ax_reuse, x, runs.median(), SLIM_WIDTH,
-                    PROVIDER_COLOR[row.provider])
+                    PROVIDER_COLOR[row.provider],
+                    hatch=PROVIDER_HATCH[row.provider])
     reference_rule(ax_reuse, ref["reuse"],
                    f"{REF_LINE}: {ref['reuse']:.0f}\u00d7")
     ax_reuse.set_ylim(0, ref["reuse"] * 1.16)

@@ -97,6 +97,7 @@ from figure_style import (
     BAR_WIDTH,
     CORNER_PT,
     GRID,
+    HATCH_COLOR,
     INK,
     INK_MUTED,
     INK_SOFT,
@@ -104,6 +105,7 @@ from figure_style import (
     LEVEL_NAME,
     MODEL_ORDER,
     PROVIDER_COLOR,
+    PROVIDER_HATCH,
     PROVIDER_LABEL,
     SURFACE,
     draw_provider_brackets,
@@ -123,6 +125,12 @@ OUTCOME_COLOR = {
     "clean": "#4a3aa7",     # violet -- valid first try
     "repair": "#eda100",    # amber  -- valid after >=1 schema repair
     "failed": "#d03b3b",    # red    -- never produced a valid spec
+}
+# Redundant patterns so the bands survive greyscale print (see PROVIDER_HATCH).
+OUTCOME_HATCH = {
+    "clean": "",
+    "repair": "///",
+    "failed": "xxx",
 }
 OUTCOME_LABEL = {
     "clean": "Valid on first attempt",
@@ -248,7 +256,8 @@ def fig_latency_throughput(df: pd.DataFrame) -> plt.Figure:
     ax_lat.set_ylim(0, tbl["q3_s"].max() * 1.18)
     fig.canvas.draw()
     for x, row in enumerate(tbl.itertuples()):
-        rounded_bar(ax_lat, x, row.med_s, BAR_WIDTH, PROVIDER_COLOR[row.provider])
+        rounded_bar(ax_lat, x, row.med_s, BAR_WIDTH, PROVIDER_COLOR[row.provider],
+                    hatch=PROVIDER_HATCH[row.provider])
     # IQR whisker. A 2px surface ring keeps the below-median half legible where
     # it crosses its own bar, per the overlapping-mark spec.
     ring = [pe.withStroke(linewidth=3.1, foreground=SURFACE)]
@@ -274,7 +283,8 @@ def fig_latency_throughput(df: pd.DataFrame) -> plt.Figure:
     ax_tps.set_ylim(0, tbl["out_tps"].max() * 1.16)
     fig.canvas.draw()
     for x, row in enumerate(tbl.itertuples()):
-        rounded_bar(ax_tps, x, row.out_tps, BAR_WIDTH, PROVIDER_COLOR[row.provider])
+        rounded_bar(ax_tps, x, row.out_tps, BAR_WIDTH, PROVIDER_COLOR[row.provider],
+                    hatch=PROVIDER_HATCH[row.provider])
         ax_tps.annotate(f"{row.out_tps:.0f}", (x, row.out_tps), xytext=(0, 3),
                         textcoords="offset points", ha="center", va="bottom",
                         fontsize=8, color=INK)
@@ -299,7 +309,7 @@ def fig_latency_throughput(df: pd.DataFrame) -> plt.Figure:
 
 # ---- Figure 2: where the time went ----------------------------------
 
-def stack_segment(ax, x, y0, y1, width, color, round_top):
+def stack_segment(ax, x, y0, y1, width, color, round_top, hatch=None):
     """One segment of a stacked column, square at its base."""
     if y1 <= y0:
         return
@@ -321,7 +331,9 @@ def stack_segment(ax, x, y0, y1, width, color, round_top):
                  MplPath.LINETO, MplPath.CURVE3, MplPath.CURVE3, MplPath.LINETO,
                  MplPath.CLOSEPOLY]
     ax.add_patch(PathPatch(MplPath(verts, codes), facecolor=color,
-                           edgecolor="none", zorder=3))
+                           hatch=hatch or None,
+                           edgecolor=HATCH_COLOR if hatch else "none",
+                           linewidth=0, zorder=3))
 
 
 def fig_time_decomposition(df: pd.DataFrame) -> plt.Figure:
@@ -347,7 +359,8 @@ def fig_time_decomposition(df: pd.DataFrame) -> plt.Figure:
             top = y + v
             last = i == len(drawn) - 1
             stack_segment(ax, x, y, top - (0 if last else gap), BAR_WIDTH,
-                          OUTCOME_COLOR[key], round_top=last)
+                          OUTCOME_COLOR[key], round_top=last,
+                          hatch=OUTCOME_HATCH[key])
             y = top
         ax.annotate(f"{row.total_min:.0f} min", (x, row.total_min), xytext=(0, 4),
                     textcoords="offset points", ha="center", va="bottom",
@@ -367,11 +380,12 @@ def fig_time_decomposition(df: pd.DataFrame) -> plt.Figure:
                            rule_color=INK_MUTED)
 
     ax.legend(
-        handles=[Patch(facecolor=OUTCOME_COLOR[k], edgecolor="none")
+        handles=[Patch(facecolor=OUTCOME_COLOR[k], hatch=OUTCOME_HATCH[k] or None,
+                       edgecolor=HATCH_COLOR, linewidth=0)
                  for k in ("clean", "repair", "failed")],
         labels=[OUTCOME_LABEL[k] for k in ("clean", "repair", "failed")],
         loc="lower left", bbox_to_anchor=(0.0, 1.005), ncol=3, frameon=False,
-        fontsize=8.5, handlelength=1.1, handleheight=1.1, labelcolor=INK_SOFT,
+        fontsize=8.5, handlelength=1.8, handleheight=1.2, labelcolor=INK_SOFT,
         columnspacing=1.4, borderpad=0.0,
     )
 

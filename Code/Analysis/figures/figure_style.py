@@ -32,6 +32,16 @@ PROVIDER_LABEL = {
     "openai": "OpenAI — GPT",
     "anthropic": "Anthropic — Claude",
 }
+# Redundant fill pattern per provider, for figures that must survive greyscale
+# print (the three hues collapse to similar greys). Solid / diagonal /
+# cross-hatch are the most distinct trio at bar widths this narrow. Opt-in via
+# rounded_bar(..., hatch=PROVIDER_HATCH[provider]).
+PROVIDER_HATCH = {
+    "google": "///",
+    "openai": "xxx",
+    "anthropic": "",
+}
+HATCH_COLOR = "#ffffff"  # drawn over the fill; reads on both the hue and its grey
 INK = "#0b0b0b"
 INK_SOFT = "#52514e"
 INK_MUTED = "#7a7975"
@@ -91,6 +101,7 @@ def set_style() -> None:
         "figure.facecolor": SURFACE,
         "axes.facecolor": SURFACE,
         "savefig.facecolor": SURFACE,
+        "hatch.linewidth": 1.0,
         "pdf.fonttype": 42,   # embed TrueType, not Type3 -- most venues require it
         "ps.fonttype": 42,
     })
@@ -98,12 +109,15 @@ def set_style() -> None:
 
 # ── Marks ────────────────────────────────────────────────────────────
 
-def rounded_bar(ax, x, height, width, color):
+def rounded_bar(ax, x, height, width, color, hatch=None):
     """A bar with rounded top corners, square-anchored to the baseline.
 
     Radius is specified in points and converted per-axes, so it stays visually
     constant across panels with very different data ranges. Clamped on short
     bars so a hairline never turns into a lozenge.
+
+    ``hatch`` overlays a pattern in HATCH_COLOR (matplotlib draws hatches in the
+    edgecolor; linewidth=0 keeps the outline itself invisible).
     """
     if height <= 0:
         return
@@ -131,7 +145,9 @@ def rounded_bar(ax, x, height, width, color):
         MplPath.LINETO, MplPath.CLOSEPOLY,
     ]
     ax.add_patch(PathPatch(MplPath(verts, codes), facecolor=color,
-                           edgecolor="none", zorder=3))
+                           hatch=hatch or None,
+                           edgecolor=HATCH_COLOR if hatch else "none",
+                           linewidth=0, zorder=3))
 
 
 def draw_provider_brackets(ax, tbl, y_rule, y_label, rule_color=None):

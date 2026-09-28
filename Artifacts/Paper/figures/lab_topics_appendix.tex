@@ -1,0 +1,424 @@
+% Appendix: lab topics, learning objectives, and one complete prompt/output pair.
+% Sources: Artifacts/Lab Descriptions/<topic>_lab.yaml (verbatim, after the
+% prompt builder's load-time stripping of `*` flags and [REVIEW] markers),
+% Code/Benchmark/benchmark_config.py::SYSTEM_PROMPT,
+% Artifacts/Data/Benchmark/prompts/apparent_retrograde_motion_L4_json_lab_multi-module.txt, and
+% Artifacts/Data/Benchmark/Outputs/claude-sonnet-5_json_lab_L4_20260710_190347_output.json
+% (modules[1]). Paper "Script" level = code L4 (see tables/prompt_levels_table.tex).
+% Drafted 2026-09-16 as hand-editable LaTeX; no script regenerates this file.
+%
+% Requires: \usepackage{booktabs} \usepackage{longtable} \usepackage{array}
+%           \usepackage{listings} \usepackage{xcolor} \usepackage{textcomp}
+\lstdefinestyle{arlemlisting}{
+    basicstyle=\ttfamily\scriptsize,
+    columns=fullflexible,
+    keepspaces=true,
+    breaklines=true,
+    breakatwhitespace=true,
+    frame=single,
+    rulecolor=\color{black!30},
+    backgroundcolor=\color{black!3},
+    xleftmargin=4pt, xrightmargin=4pt,
+    framexleftmargin=2pt, framexrightmargin=2pt,
+    aboveskip=10pt, belowskip=10pt,
+    captionpos=t,
+    upquote=true,
+    escapeinside={(*@}{@*)},
+}
+
+\section{Lab Topics}
+\label{app:lab-topics}
+
+The benchmark uses five lab topics spanning astronomy, biology, anatomy,
+physics, and chemistry. Each topic is authored once as a structured
+description: field, course context, topic description, learning objectives,
+and a detailed scene-by-scene script. Outline-level prompts include the
+field, course context, and topic description (Table~\ref{tab:lab-topics}); the
+Objectives level adds the learning objectives (Table~\ref{tab:lab-objectives});
+the Script level adds the detailed script. Section~\ref{app:example-pair} shows one complete
+input/output pair.
+
+{\small
+\begin{longtable}{@{} >{\raggedright\arraybackslash}p{0.23\linewidth} p{0.73\linewidth} @{}}
+    \caption{Lab topics. The topic description is included verbatim in the prompt at every level. Script length refers to the detailed script added at the Script level; the scene count includes the closing recap.}
+    \label{tab:lab-topics} \\
+    \toprule
+    \textbf{Topic} & \textbf{Topic description} \\
+    \midrule
+    \endfirsthead
+    \multicolumn{2}{@{}l}{\textit{Table~\thetable{} (continued)}} \\
+    \toprule
+    \textbf{Topic} & \textbf{Topic description} \\
+    \midrule
+    \endhead
+    \bottomrule
+    \endfoot
+    \textbf{Apparent Retrograde Motion} \newline \emph{Astronomy} \newline {\footnotesize Introduction to Astronomy, 100-level undergraduate non-majors course} \newline {\footnotesize Script: 8 scenes, 884 words}
+        & An exploration of apparent retrograde motion --- the puzzle of why outer planets like Mars appear to periodically reverse direction in the night sky. Over the course of weeks, Mars normally drifts slowly eastward against the background stars, but roughly every 26 months it slows, reverses into a westward loop for about two months, then resumes its eastward motion. This retrograde behavior was the central observation that drove the shift from the geocentric model, in which Mars's loop required awkward epicycles to explain, to the heliocentric model, in which the loop falls out naturally from the relative motion of Earth and Mars on their separate orbits. Students view the same retrograde event from two perspectives: first from Earth's surface, watching Mars trace its loop across the constellations night after night, and then from a viewpoint outside the solar system, watching Earth and Mars both move in smooth heliocentric orbits around the Sun. From the outside view, students see that the apparent loop is produced when Earth, moving faster on its inner orbit, overtakes the slower-moving Mars --- the same effect that makes a car in the next lane appear to drift backward when your car passes it. The lab also lets students compare Mars's retrograde behavior to that of Jupiter and Saturn, which loop less dramatically because they are farther from the Sun and the relative-motion effect is smaller. \\
+    \addlinespace[6pt]
+    \textbf{DNA Structure and Replication} \newline \emph{Biology} \newline {\footnotesize Introductory Molecular Biology, 200-level undergraduate course (biology and biochemistry majors)} \newline {\footnotesize Script: 11 scenes, 1,361 words}
+        & An exploration of the three-dimensional structure of DNA and the semiconservative process by which it replicates. Students examine the double helix and identify its components: two antiparallel sugar-phosphate backbones spiraling around a common axis, with the four nitrogenous bases (adenine, thymine, guanine, cytosine) projecting inward and pairing across the helix according to the complementary base-pairing rules --- adenine with thymine via two hydrogen bonds, guanine with cytosine via three. Students see how the antiparallel orientation arises from the directionality of the sugar-phosphate backbone, with one strand running 5\textquotesingle{} to 3\textquotesingle{} and the complementary strand running 3\textquotesingle{} to 5\textquotesingle{}. The lab then walks through DNA replication: helicase unwinds the double helix at the replication fork, single-strand binding proteins stabilize the exposed strands, and DNA polymerase synthesizes new strands using each parental strand as a template. Because DNA polymerase can only extend a strand in the 5\textquotesingle{} to 3\textquotesingle{} direction, the two new strands are synthesized differently --- the leading strand continuously following the replication fork, the lagging strand discontinuously in Okazaki fragments that are later joined by DNA ligase. Students see how the antiparallel structure of the double helix forces this asymmetry, and why the process is called semiconservative: each daughter molecule contains one original parental strand and one newly-synthesized strand. \\
+    \addlinespace[6pt]
+    \textbf{Heart Anatomy and Blood Flow} \newline \emph{Anatomy} \newline {\footnotesize Human Anatomy and Physiology I, 200-level undergraduate course (nursing, kinesiology, and pre-health majors)} \newline {\footnotesize Script: 9 scenes, 1,149 words}
+        & An exploration of the structural anatomy of the human heart and the path that blood takes through it. Students identify the four chambers (right atrium, right ventricle, left atrium, left ventricle), the four valves (tricuspid, pulmonary, mitral/bicuspid, aortic), and the major vessels entering and leaving the heart (superior and inferior vena cava, pulmonary arteries and veins, aorta). The lab then traces the dual-loop circulation that the heart drives: deoxygenated blood returning from the body enters the right atrium, passes through the tricuspid valve into the right ventricle, is pumped through the pulmonary valve and pulmonary arteries to the lungs, returns oxygenated via the pulmonary veins to the left atrium, passes through the mitral valve into the left ventricle, and is pumped through the aortic valve and aorta out to the systemic circulation. Students see why the left ventricle has a substantially thicker myocardium than the right --- it must pump blood through the entire body rather than just to the lungs --- and how the valves prevent backflow during the cardiac cycle. \\
+    \addlinespace[6pt]
+    \textbf{Vectors and Projectile Motion} \newline \emph{Physics} \newline {\footnotesize General Physics I (Mechanics), 100-level algebra-based undergraduate course} \newline {\footnotesize Script: 9 scenes, 1,528 words}
+        & An exploration of vectors as the mathematical tool for representing quantities with both magnitude and direction, and the application of vector operations to two-dimensional projectile motion. Students work first with vectors as abstract objects: they see how two vectors add tip-to-tail to produce a resultant, how a single vector can be decomposed into components along chosen axes (typically the horizontal x-axis and vertical y-axis), and how the magnitude and direction of a vector relate to its components through right-triangle trigonometry. The lab then applies these operations to projectile motion. A projectile launched at an arbitrary angle has an initial velocity vector that can be decomposed into a horizontal component (which remains constant throughout the flight, since no horizontal force acts on the projectile) and a vertical component (which changes steadily under the influence of gravity, decreasing during ascent and increasing in the downward direction during descent). Students see that the horizontal and vertical motions are independent of one another --- a counterintuitive but central insight of classical mechanics --- and that the parabolic trajectory of the projectile emerges from the combination of constant horizontal velocity and uniformly accelerated vertical motion. Students manipulate the initial launch angle and speed and observe how these choices change the trajectory, range, and maximum height of the projectile. \\
+    \addlinespace[6pt]
+    \textbf{VSEPR Molecular Geometry} \newline \emph{Chemistry} \newline {\footnotesize General Chemistry I, 100-level undergraduate course (majors and non-majors)} \newline {\footnotesize Script: 9 scenes, 955 words}
+        & An exploration of VSEPR theory and how it predicts the three-dimensional geometry of covalent molecules. Students start from a Lewis structure and apply the central idea of VSEPR --- that electron pairs around a central atom arrange themselves to minimize mutual repulsion --- to determine the arrangement of bonding and lone pairs in space. The lab walks through the five fundamental electron-domain geometries (linear, trigonal planar, tetrahedral, trigonal bipyramidal, octahedral) and shows how lone pairs modify the molecular geometry within each, producing the full set of common shapes: bent, trigonal pyramidal, seesaw, T-shaped, square planar, and square pyramidal. Students manipulate electron domains around a central atom and watch the geometry settle into its minimum-repulsion configuration, then compare to real molecules --- water, ammonia, methane, PF5, SF6, XeF4 --- to see VSEPR predictions matched against observed structures. The lab also addresses why lone pairs occupy more angular space than bonding pairs, producing the slight bond-angle deviations from the idealized geometries (the 104.5\textdegree{} angle in water versus 109.5\textdegree{} in methane). \\
+\end{longtable}
+}
+
+{\small
+\begin{longtable}{@{} r p{0.93\linewidth} @{}}
+    \caption{Learning objectives, added to the prompt at the Objectives and Script levels. Every objective begins ``Students will\ldots''; that stem is omitted here.}
+    \label{tab:lab-objectives} \\
+    \toprule
+    \endfirsthead
+    \multicolumn{2}{@{}l}{\textit{Table~\thetable{} (continued)}} \\
+    \toprule
+    \endhead
+    \bottomrule
+    \endfoot
+    \multicolumn{2}{@{}l}{\textbf{Apparent Retrograde Motion}} \\
+    1. & Describe the apparent path of Mars across the night sky during a retrograde episode, including the eastward drift, westward loop, and return to eastward motion. \\
+    2. & Explain why apparent retrograde motion occurs in the heliocentric model as a consequence of Earth overtaking a slower-moving outer planet. \\
+    3. & Contrast the geocentric and heliocentric explanations of retrograde motion and articulate why the heliocentric model is preferred on grounds of parsimony. \\
+    4. & Predict when retrograde motion will occur for a given outer planet based on the relative orbital positions of Earth and that planet. \\
+    5. & Compare the apparent retrograde loops of Mars, Jupiter, and Saturn, and explain why more distant planets produce smaller loops. \\
+    \addlinespace[6pt]
+    \multicolumn{2}{@{}l}{\textbf{DNA Structure and Replication}} \\
+    1. & Identify the structural components of DNA --- the sugar-phosphate backbone, the four nitrogenous bases, and the hydrogen bonds between base pairs --- and describe how they assemble into the double helix. \\
+    2. & Apply the complementary base-pairing rules (A with T, G with C) to determine the sequence of one strand given the sequence of the other, and explain why these specific pairings occur (two hydrogen bonds for A-T, three for G-C). \\
+    3. & Describe the antiparallel orientation of the two strands of DNA and explain how the 5\textquotesingle{}-to-3\textquotesingle{} directionality of each sugar-phosphate backbone determines this arrangement. \\
+    4. & Trace the action of helicase, single-strand binding proteins, DNA polymerase, and DNA ligase at the replication fork, identifying which enzyme performs which function. \\
+    5. & Explain why DNA replication produces a leading strand synthesized continuously and a lagging strand synthesized discontinuously as Okazaki fragments, relating this asymmetry to the unidirectional 5\textquotesingle{}-to-3\textquotesingle{} activity of DNA polymerase on antiparallel templates. \\
+    6. & Articulate why DNA replication is described as semiconservative, and predict the composition of daughter molecules after one and two rounds of replication. \\
+    \addlinespace[6pt]
+    \multicolumn{2}{@{}l}{\textbf{Heart Anatomy and Blood Flow}} \\
+    1. & Identify and name the four chambers of the heart, the four heart valves, and the major vessels entering and leaving the heart. \\
+    2. & Trace the path of blood through the heart's dual circulation, naming each chamber, valve, and vessel in order. \\
+    3. & Distinguish the pulmonary circuit from the systemic circuit and explain why the right and left sides of the heart serve different circulatory functions. \\
+    4. & Explain why the left ventricle has a substantially thicker myocardium than the right ventricle, relating wall thickness to the pressure required to perfuse the systemic versus pulmonary circuits. \\
+    5. & Describe the function of the atrioventricular and semilunar valves in preventing backflow, and identify which valves separate which chambers or chamber-vessel pairs. \\
+    \addlinespace[6pt]
+    \multicolumn{2}{@{}l}{\textbf{Vectors and Projectile Motion}} \\
+    1. & Represent a two-dimensional vector by its magnitude and direction, and equivalently by its horizontal and vertical components. \\
+    2. & Add two or more vectors graphically using the tip-to-tail method and identify the resultant vector. \\
+    3. & Decompose a vector into components along the x- and y-axes using right-triangle trigonometry, and reconstruct the original vector from its components. \\
+    4. & Explain why the horizontal and vertical motions of a projectile are independent of one another, given that gravity acts only in the vertical direction. \\
+    5. & Describe how the horizontal velocity, vertical velocity, and position of a projectile change over the course of its flight, and identify the moment of maximum height as the point where the vertical velocity is zero. \\
+    6. & Predict how changes in initial launch angle and launch speed affect the trajectory, range, and maximum height of a projectile, and identify the launch angle that produces maximum range for a given speed. \\
+    \addlinespace[6pt]
+    \multicolumn{2}{@{}l}{\textbf{VSEPR Molecular Geometry}} \\
+    1. & Determine the steric number of a central atom from its Lewis structure by counting bonding pairs and lone pairs. \\
+    2. & Predict the electron-domain geometry of a molecule from its steric number, identifying the linear, trigonal planar, tetrahedral, trigonal bipyramidal, or octahedral arrangement. \\
+    3. & Distinguish electron-domain geometry from molecular geometry, and identify the molecular shape produced when one or more domains is a lone pair. \\
+    4. & Explain why lone pairs occupy more angular space than bonding pairs, and predict the direction of bond-angle deviations from idealized values. \\
+    5. & Apply VSEPR predictions to specific molecules and compare predicted geometries to experimentally observed structures. \\
+\end{longtable}
+}
+
+\subsection{Example Prompt and Generated Output}
+\label{app:example-pair}
+
+Listing~\ref{lst:example-prompt} is the complete input for a Script-level JSON
+Lab run on \emph{Apparent Retrograde Motion}: the system prompt shared by
+every run, followed by the user prompt assembled from the topic's
+description. The user prompt opens with the structural requirements for the
+JSON Lab format, then carries the Outline-level fields, the Objectives-level
+learning objectives, and the Script-level detailed script, in which each paragraph
+describes one scene.
+
+\begin{lstlisting}[style=arlemlisting, caption={Complete Script-level JSON Lab input for \emph{Apparent Retrograde Motion}: system prompt, then user prompt.}, label={lst:example-prompt}]
+=== SYSTEM PROMPT ===
+You are an expert educational content designer specializing in Augmented Reality (AR) learning experiences. You create structured, pedagogically sound AR lab specifications that follow strict schemas.
+
+Your designs should:
+- Be scientifically accurate and age-appropriate for university students
+- Include clear learning objectives tied to each module/action
+- Use realistic 3D object placements with sensible positions, scales, and rotations
+- Create a logical progression of steps that builds understanding incrementally
+- Include descriptive audio clip names and meaningful text labels
+- Reference plausible prefab names and textures for the subject matter
+
+=== USER PROMPT ===
+Create a complete AR lab specification for the topic described below.
+
+Structural requirements:
+- Create a Lab containing one "demo" type module per scene described in the input.
+  Each module owns its own set of scene objects and runs through clips that
+  cover that scene's content.
+- Modules should appear in the same order as the scenes appear in the input.
+- Across the whole lab, include at least 4 total scene objects and
+  at least 5 total clips, distributed across the modules.
+- Each clip should use sparse object changes to animate/update the scene
+- Objects should have realistic positions (within a ~3m workspace centered on the user)
+- Scales should be appropriate for a tabletop AR experience (objects typically 0.02-0.5 units)
+- Include educational objectives for the lab as a whole and for each module
+- Use descriptive prefab names (e.g., 'heartPrefab', 'moleculePrefab') for the topic
+- Reference plausible texture names where appropriate
+- Add behavioral components (rotation, orbit, text labels) where they enhance learning
+
+The lab should feel like a sequence of guided scenes, each with its own staging,
+where a narrator explains the topic while 3D objects appear, move, and change.
+
+## Field
+astronomy
+
+## Course context
+Introduction to Astronomy, 100-level undergraduate non-majors course
+
+## Topic description
+An exploration of apparent retrograde motion (*@\textemdash{}@*) the puzzle of why outer
+planets like Mars appear to periodically reverse direction in the night
+sky. Over the course of weeks, Mars normally drifts slowly eastward
+against the background stars, but roughly every 26 months it slows,
+reverses into a westward loop for about two months, then resumes its
+eastward motion. This retrograde behavior was the central observation
+that drove the shift from the geocentric model, in which Mars's loop
+required awkward epicycles to explain, to the heliocentric model, in
+which the loop falls out naturally from the relative motion of Earth
+and Mars on their separate orbits. Students view the same retrograde
+event from two perspectives: first from Earth's surface, watching Mars
+trace its loop across the constellations night after night, and then
+from a viewpoint outside the solar system, watching Earth and Mars both
+move in smooth heliocentric orbits around the Sun. From the outside
+view, students see that the apparent loop is produced when Earth,
+moving faster on its inner orbit, overtakes the slower-moving Mars (*@\textemdash{}@*)
+the same effect that makes a car in the next lane appear to drift
+backward when your car passes it. The lab also lets students compare
+Mars's retrograde behavior to that of Jupiter and Saturn, which loop
+less dramatically because they are farther from the Sun and the
+relative-motion effect is smaller.
+
+## Learning objectives
+- Students will describe the apparent path of Mars across the night sky during a retrograde episode, including the eastward drift, westward loop, and return to eastward motion.
+- Students will explain why apparent retrograde motion occurs in the heliocentric model as a consequence of Earth overtaking a slower-moving outer planet.
+- Students will contrast the geocentric and heliocentric explanations of retrograde motion and articulate why the heliocentric model is preferred on grounds of parsimony.
+- Students will predict when retrograde motion will occur for a given outer planet based on the relative orbital positions of Earth and that planet.
+- Students will compare the apparent retrograde loops of Mars, Jupiter, and Saturn, and explain why more distant planets produce smaller loops.
+
+## Detailed script
+The lab opens with a night-sky observation scene. Students stand on a
+virtual Earth at night, looking up at a starfield with the constellations
+of the ecliptic (Leo, Virgo, Libra, Scorpio) labeled around them. Mars
+appears as a distinct red point against the stars. The scene fast-forwards
+through time, showing Mars's position over the course of about six months.
+For the first two months Mars drifts slowly eastward against the background
+stars. Then it slows, halts, and begins moving westward for about two
+months, tracing a loop of roughly 15 degrees in angular extent. Finally it
+slows again, reverses, and resumes eastward motion. A trail behind Mars
+marks the complete path so students see the full loop. Narration introduces
+this as the central puzzle of pre-modern astronomy: why would a planet move
+backward?
+
+The next activity presents the geocentric explanation. Earth sits at the
+center of the scene; Mars rides on a small circle (the epicycle, labeled)
+that itself rides on a larger circle (the deferent, labeled) centered on
+Earth. Students watch the machinery run and see that when Mars reaches the
+inner part of its epicycle (*@\textemdash{}@*) the side closest to Earth (*@\textemdash{}@*) its combined
+motion on the two circles makes it appear to move backward as seen from
+Earth. Narration notes that this model produces the observed loop, but it
+requires carefully tuned epicycle size, deferent size, and orbital speeds
+for each planet, and that as Greek and medieval astronomers gathered better
+observational data, more epicycles had to be stacked on top to keep
+predictions accurate.
+
+The third scene switches to the heliocentric view. The viewpoint lifts up
+out of the ecliptic plane to a vantage point above the solar system. The
+Sun sits at the center; Earth orbits at 1 AU with a period of one year,
+and Mars orbits at 1.52 AU with a period of 1.88 years. Students watch the
+two planets run their orbits at correct relative speeds and see that Earth
+catches up to and overtakes Mars roughly every 26 months. The retrograde
+event from the opening scene is replayed here from this outside vantage
+point; students see Earth swing past Mars on its inner, faster orbit. No
+epicycles are needed (*@\textemdash{}@*) the loop is gone, just two smooth ellipses.
+
+The fourth scene links the two perspectives. A side-by-side view shows
+both the heliocentric model and Earth's night sky simultaneously. As Earth
+approaches Mars in the outside view, a line is drawn from Earth through
+Mars and extended out to the background starfield. Students watch this
+line-of-sight sweep eastward through the constellations during Mars's
+normal motion. Then, as Earth begins to overtake Mars, the line reverses
+direction and sweeps westward (*@\textemdash{}@*) and at that moment in the night-sky view,
+Mars's apparent position retraces its path. After Earth has passed Mars,
+the line resumes its eastward sweep. Narration emphasizes that the
+retrograde loop is a real apparent motion produced by the geometry, not an
+artifact of perception or a flaw in the eye.
+
+The fifth scene is an embodied overtaking activity. Students stand at the
+center of a large starfield, with a stationary virtual Mars placed several
+feet in front of them. They walk slowly around a small circle on the floor
+representing Earth's orbit, while keeping their gaze on Mars against the
+distant stars. As they traverse the inner orbit, they see Mars's apparent
+position drift across the constellations. When they pass the point of
+closest approach to Mars, they see Mars appear to move backward against
+the stars (*@\textemdash{}@*) the retrograde effect, produced by their own motion. After
+completing a full loop they have personally generated the retrograde
+pattern.
+
+The sixth scene compares the outer planets. The heliocentric view returns,
+now showing Earth, Mars, Jupiter (at 5.2 AU), and Saturn (at 9.5 AU).
+Students step through a retrograde event for each planet and observe that
+Mars's loop is about 15 degrees across, Jupiter's about 10 degrees, and
+Saturn's about 7 degrees. Narration explains that more distant planets
+show smaller loops because Earth's orbital motion subtends a smaller angle
+when viewed from farther away (*@\textemdash{}@*) the same parallax-style geometry that
+makes nearby objects shift more than distant ones when you move your head.
+
+The seventh scene is a prediction challenge. The heliocentric view appears
+with Earth fixed at a position on its orbit and Mars freely movable around
+its own orbit. A small inset window shows what an observer on Earth would
+see at the current configuration. Students drag Mars to the position where
+retrograde motion would be observed from Earth (*@\textemdash{}@*) near opposition, where
+Earth is poised to overtake Mars on the inside track. As students move
+Mars, the inset updates in real time; when Mars is placed within the
+correct arc, the inset shows the retrograde loop and the configuration is
+confirmed. The challenge then repeats with Earth at a different orbital
+position, reinforcing that it is the relative geometry between Earth and
+Mars (*@\textemdash{}@*) not their absolute positions (*@\textemdash{}@*) that produces retrograde motion.
+
+The lab closes with a recap. A summary screen lists the five concept areas
+covered (*@\textemdash{}@*) the observed phenomenon, the geocentric explanation with
+epicycles, the heliocentric resolution, the linkage between the two
+viewpoints, and the comparison across outer planets (*@\textemdash{}@*) with each area
+highlighted in turn as the narration reviews it.
+\end{lstlisting}
+
+Listing~\ref{lst:example-output} is the module Claude Sonnet~5 generated
+for the second scene of that script (the geocentric explanation), one of the
+8 modules in its lab. Scene objects are declared once with a
+prefab, transform, optional texture or color, and behavior components
+(e.g., text labels, orbits). Clips carry the narration and apply sparse
+\texttt{changes} to those objects, listing only the fields that change.
+
+\begin{lstlisting}[style=arlemlisting, caption={Module 2 of 8 from Claude Sonnet~5's JSON Lab output for the prompt in Listing~\ref{lst:example-prompt}. Numeric arrays are collapsed onto one line; content is otherwise unchanged.}, label={lst:example-output}]
+{
+  "moduleType": "demo",
+  "prefab": "demoPrefab",
+  "moduleName": "The Geocentric Machinery: Epicycles and Deferents",
+  "description": "Students examine the geocentric explanation of retrograde motion, watching Mars ride an epicycle upon a deferent centered on Earth, and learn why this model requires increasingly complex adjustments.",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "dateCreated": "2026-07-10",
+  "educationalObjectives": [
+    "Explain the geocentric epicycle-deferent model as an explanation for retrograde motion.",
+    "Contrast the geocentric and heliocentric explanations and articulate why the heliocentric model is preferred on grounds of parsimony."
+  ],
+  "instructions": [
+    "Watch how Mars's combined motion on the epicycle and deferent produces an apparent backward loop as seen from Earth."
+  ],
+  "objects": [
+    {
+      "prefab": "earthPrefab",
+      "name": "earthCenter",
+      "position": [0, 0.9, 0],
+      "scale": [0.15, 0.15, 0.15],
+      "texture": "2k_earth_daymap"
+    },
+    {
+      "prefab": "orbitRingPrefab",
+      "name": "deferentRing",
+      "position": [0, 0.9, 0],
+      "scale": [1.6, 1.6, 1.6],
+      "color": [180, 180, 255, 150],
+      "components": [
+        {
+          "componentType": "textMeshPro",
+          "text": "Deferent",
+          "color": [180, 180, 255, 255],
+          "fontSize": 26
+        }
+      ]
+    },
+    {
+      "prefab": "orbitRingPrefab",
+      "name": "epicycleRing",
+      "position": [0.8, 0.9, 0],
+      "scale": [0.35, 0.35, 0.35],
+      "color": [255, 180, 120, 180],
+      "components": [
+        {
+          "componentType": "textMeshPro",
+          "text": "Epicycle",
+          "color": [255, 180, 120, 255],
+          "fontSize": 24
+        }
+      ]
+    },
+    {
+      "prefab": "marsPrefab",
+      "name": "marsEpicycle",
+      "position": [0.95, 0.9, 0],
+      "scale": [0.05, 0.05, 0.05],
+      "texture": "2k_mars",
+      "components": [
+        {
+          "componentType": "simpleOrbit",
+          "initialPosition": [0.15, 0, 0],
+          "orbitalPeriod": 6.0,
+          "timeRate": 1.0,
+          "orbitalScale": 1.0,
+          "synchronousRotation": false
+        }
+      ]
+    }
+  ],
+  "clips": [
+    {
+      "clipName": "clip4",
+      "audioClip": "geocentric_intro",
+      "autoAdvance": true,
+      "changeMeaning": "Introduces the geocentric scene with Earth centered, the labeled deferent and epicycle rings visible, and Mars positioned on the epicycle before motion begins.",
+      "narration": "In the geocentric model, Earth sits fixed at the center. Mars rides on a small circle called the epicycle, which itself rides on a larger circle called the deferent, centered on Earth."
+    },
+    {
+      "clipName": "clip5",
+      "audioClip": "geocentric_machinery_runs",
+      "autoAdvance": true,
+      "changes": [
+        {
+          "target": "deferentRing",
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 18
+            }
+          ]
+        },
+        {
+          "target": "epicycleRing",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [0.8, 0, 0],
+              "orbitalPeriod": 18.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": false
+            }
+          ]
+        }
+      ],
+      "changeMeaning": "Sets the deferent ring rotating to carry the epicycle around Earth, while Mars continues its faster orbit on the epicycle itself, combining two motions.",
+      "narration": "Watch as the machinery runs. The epicycle carries Mars around while the whole system also revolves along the deferent."
+    },
+    {
+      "clipName": "clip6",
+      "audioClip": "geocentric_retrograde_moment",
+      "autoAdvance": false,
+      "changes": [
+        {
+          "target": "marsEpicycle",
+          "color": [255, 255, 0, 255]
+        }
+      ],
+      "changeMeaning": "Highlights Mars at the inner point of the epicycle closest to Earth, the moment that produces the apparent backward motion, emphasizing the model's complexity.",
+      "narration": "Notice that when Mars reaches the inner part of its epicycle (*@\textemdash{}@*) the side closest to Earth (*@\textemdash{}@*) its combined motion makes it appear to move backward as seen from Earth. This model works, but requires carefully tuned circle sizes and speeds, and more epicycles had to be stacked on top as observations improved."
+    }
+  ]
+}
+\end{lstlisting}
