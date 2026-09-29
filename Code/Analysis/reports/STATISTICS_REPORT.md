@@ -22,17 +22,34 @@ Two pieces:
 Run from the project root with the virtual environment active:
 
 ```bash
+# Default: today's runs only, labelled with today's date
 python "Code/Analysis/reports/build_statistics_report.py"
+
+# A specific sweep window (e.g. the wave 2 matrix)
+python "Code/Analysis/reports/build_statistics_report.py" --since 20260710 --until 20260710 --label wave2
+
+# From a run CSV instead of Metrics/ (e.g. the repriced wave 2 table)
+python "Code/Analysis/reports/build_statistics_report.py" \
+    --runs-csv "Artifacts/Data/Benchmark/Reports/benchmark_runs_wave2_repriced.csv" --label wave2_repriced
 ```
 
-No arguments — it loads every run under `Artifacts/Data/Benchmark/Metrics/`. It
-produces, under `Artifacts/Data/Benchmark/Reports/`:
+`--since` / `--until` take `YYYYMMDD` or `YYYYMMDD_HHMMSS`, and `00000000`
+includes all history. `--label` sets the filename suffix so successive reports
+never overwrite each other. `--runs-csv` ignores the date window, because the
+CSV defines it. The script produces, under `Artifacts/Data/Benchmark/Reports/`:
 
-- **`benchmark_statistics.ipynb`** — a fully *executed*, self-contained notebook
-  (per-run data embedded inline; re-runs without the source JSON).
-- **`benchmark_statistics.html`** — standalone HTML export. For a PDF, open it and
-  **Print → Save as PDF**.
-- **`benchmark_runs.csv`** — the full flat table, for slicing in any other tool.
+- **`benchmark_statistics_<label>.ipynb`** is a fully *executed*, self-contained
+  notebook. The per-run data is embedded inline, so it re-runs without the
+  source JSON.
+- **`benchmark_statistics_<label>.html`** is a standalone HTML export. For a PDF,
+  open it and choose **Print → Save as PDF**.
+- **`benchmark_runs_<label>.csv`** is the full flat table, for slicing in any
+  other tool.
+
+The committed wave 2 outputs are `benchmark_statistics_wave2{,_repriced}.*` and
+`benchmark_runs_wave2{,_repriced}.csv`. `benchmark_runs.csv` (June 2026) and
+`benchmark_runs_final.csv` (the July formative sweep) are from earlier eras.
+Keep them apart from wave 2.
 
 ## Slicing the DataFrame yourself
 
@@ -42,8 +59,8 @@ The loader is useful on its own:
 import sys; sys.path.insert(0, "Code/Analysis")
 from benchmark_dataframe import load_runs
 
-df = load_runs()                         # successful L1–L4 runs (the formative sweep)
-df = load_runs(include_failures=True)    # also pull failed runs from suite_results
+df = load_runs()                         # successful runs in Benchmark/ (wave 2)
+df = load_runs(include_failures=True)    # also pull failed runs from suite_results (gitignored)
 df = load_runs(levels_only=False)        # also include legacy --topic runs
 
 df[df.provider == "anthropic"].wall_s.mean()    # avg generation time, one provider
@@ -130,13 +147,14 @@ invented names for a given lab — e.g. to spot-check or build an authoring back
 
 ```python
 import json, sys
-sys.path.insert(0, "Code/Analysis")
+sys.path.insert(0, "Code/Benchmark")
 from lab_metrics import analyze_assets
 
-out = "Artifacts/Data/Benchmark/Outputs/claude-opus-4-8_json_lab_L2_20260608_171853_output.json"
+# Claude Opus 4.8, heart_anatomy_and_blood_flow, L4 (wave 2)
+out = "Artifacts/Data/Benchmark/Outputs/claude-opus-4-8_json_lab_L4_20260710_183321_output.json"
 assets = analyze_assets(json.loads(open(out, encoding="utf-8").read()))
-print(assets["novel_prefab_names"])   # ['heartCutawayPrefab', 'heartPrefab', 'valveDiscPrefab', 'vesselTubePrefab']
-print(assets["novel_texture_names"])  # ['heart_muscle_texture']
+print(assets["novel_prefab_names"])   # ['bloodStreamPrefab', 'heartCutawayPrefab', 'heartIntactPrefab', ...]
+print(assets["novel_texture_names"])  # ['heart_exterior_texture', 'heart_interior_texture', ...]
 ```
 
 `analyze_assets` returns the counts (`novel_prefabs`, `novel_textures`,
@@ -184,6 +202,10 @@ not the one-row-per-run table.
   cost/token and structural sections aggregate successes; the *Failed runs* section
   handles the rest. For the success/failure-by-provider picture, see
   `build_summary_report.py`.
+- **Failures in a fresh clone.** `Metrics/` and `Outputs/` are committed, but
+  `suite_results_*.json` is gitignored. A clone therefore has no failed-run
+  records except those in the exported run CSVs, so build wave 2 reports with
+  `--runs-csv` to include the 34 failures.
 
 ## Dependencies
 
@@ -194,9 +216,10 @@ rather than shipping a broken report.
 
 ## Regenerating after a new sweep
 
-Just re-run `build_statistics_report.py` — it picks up every `*_metrics.json`
-currently in `Artifacts/Data/Benchmark/Metrics/`, so new runs are included automatically.
-The `.ipynb`, `.html`, and `.csv` are overwritten in place.
+Re-run `build_statistics_report.py` with a `--since` / `--until` window that
+covers the sweep and a new `--label`. It reads the matching `*_metrics.json`
+records from `Artifacts/Data/Benchmark/Metrics/` plus any local
+`suite_results_*.json`. Outputs with the same label are overwritten in place.
 
 ## Repricing after a provider rate change
 
@@ -224,11 +247,11 @@ python "Code/Analysis/reports/build_statistics_report.py" --runs-csv "$CSV" --la
 python "Code/Analysis/reports/build_summary_report.py"    --runs-csv "$CSV" --label wave2_repriced
 ```
 
-It works off the run CSV rather than `load_runs()` on purpose: `Metrics/` is
-gitignored, so for any sweep older than the current one the CSV export is the only
-surviving record — repricing has to work on what survives. `--runs-csv` on the two
-report builders exists for the same reason, and ignores `--since`/`--until` (the
-CSV defines the window).
+It works off the run CSV rather than `load_runs()` on purpose. The CSV is the
+only committed record that includes failed runs, because `suite_results_*.json`
+is gitignored. `--runs-csv` on the two
+report builders exists for the same reason, and it ignores `--since`/`--until`
+because the CSV defines the window.
 
 **Integrity check.** Models whose rate did *not* change must reproduce their
 recorded cost to the cent; if any doesn't, the stored cost and stored tokens

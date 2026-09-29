@@ -40,26 +40,27 @@ python "Code/Data Processing/convert_lab_json.py"
 jupyter notebook "Code/Examples/ARLEM_Test.ipynb"
 
 # Benchmark with a free-form topic (legacy path, single prompt template)
-python "Code/Benchmark/benchmark.py" --model gpt-4o-mini
-python "Code/Benchmark/benchmark.py" --model gpt-4o-mini claude-haiku-4.5 gemini-2.5-flash \
+python "Code/Benchmark/benchmark.py" --model gpt-5.4-mini
+python "Code/Benchmark/benchmark.py" --model gpt-5.4-mini claude-haiku-4.5 gemini-3.5-flash \
     --topic "Human Heart Anatomy"
 
-# Benchmark with a YAML lab description at a specificity level (L1, L3, L4; L2 retired)
-python "Code/Benchmark/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L3
-python "Code/Benchmark/benchmark.py" --model gpt-4o-mini --lab vsepr_molecular_geometry --level L4
+# Benchmark with a YAML lab description at a specificity level (L1, L3, L4; L2 retired).
+# --lab only discovers top-level YAMLs; Example/phases_of_the_moon_lab.yaml is not runnable.
+python "Code/Benchmark/benchmark.py" --model claude-haiku-4.5 --lab apparent_retrograde_motion --level L3
+python "Code/Benchmark/benchmark.py" --model gpt-5.4-mini --lab vsepr_molecular_geometry --level L4
 
 # Switch output structure for L3-L4 (L1 ignores this)
 #   single-module           - one DemoModule, many clips
 #   multi-module (default)  - Lab with one DemoModule per scene
 #   module-only             - bare DemoModule, no Lab wrapper
-python "Code/Benchmark/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon \
+python "Code/Benchmark/benchmark.py" --model gpt-5.4-mini --lab apparent_retrograde_motion \
     --level L3 --structure multi-module
 
-# Benchmark ARLEM specs via the YAML path (L1, L3, L4)
-python "Code/Benchmark/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L3 --spec arlem
+# Benchmark ARLEM specs via the YAML path (L3, L4; L1 returns LabOutline for every spec)
+python "Code/Benchmark/benchmark.py" --model claude-haiku-4.5 --lab apparent_retrograde_motion --level L3 --spec arlem
 
 # Sweep multiple output formats together (--spec takes 1, 2, or all 3 formats)
-python "Code/Benchmark/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon --level L3 \
+python "Code/Benchmark/benchmark.py" --model gpt-5.4-mini --lab apparent_retrograde_motion --level L3 \
     --spec json_lab arlem arlem_simple
 
 # Run a pre-defined suite (quick = cheap models, full = all models)
@@ -113,7 +114,7 @@ Benchmark runs:
   → Artifacts/Data/Benchmark/ (output + metrics JSON)
   → Artifacts/Data/Benchmark/prompts/ (deduped prompt artifacts, one per
                                        lab × level × spec × structure tuple)
-  → Artifacts/Data/Errors/   ← instructor error logs
+  → Artifacts/Data/Errors/   ← instructor error logs (gitignored)
 
 Analysis (everything below reads run artifacts; nothing here calls an LLM):
   Artifacts/Data/Benchmark/Metrics/ + Outputs/
@@ -122,6 +123,12 @@ Analysis (everything below reads run artifacts; nothing here calls an LLM):
   → Code/Analysis/figures/   → Artifacts/Paper/figures/ (pdf, png)
                              → Artifacts/Paper/tables/  (tex)
 ```
+
+**Committed run data**: `Artifacts/Data/Benchmark/` holds only the wave 2 sweep
+(2026-07-10, 385 runs, one provenance-stamped stack), which is the paper's dataset.
+`Artifacts/Data/Benchmark_formative_202606-07/` is the frozen earlier archive;
+never pool the two. `suite_results_*.json` is gitignored, so in a clone failed
+runs survive only in the `Reports/` CSVs. `README.md` is the data guide.
 
 **Reports/ vs Paper/**: `Artifacts/Data/Benchmark/Reports/` is the exploration
 layer (notebooks, HTML, CSV). `Artifacts/Paper/` is the publication layer —
@@ -132,7 +139,7 @@ tables alike, hand-authored and generated together.
 
 **`Code/Schemas/json_lab.py`** — Lab JSON models (Claude/OpenAI):
 - `Lab` → `DemoModule` → `Clip` → `SceneObject` → components
-- Components use discriminated unions on `componentType` field
+- Components are a plain (smart) `Union` resolved on the LLM-facing `type` Literal (no `discriminator=`, which Gemini rejects); the headset-facing `componentType` is hidden from the schema and auto-filled
 - `ObjectChange` uses sparse delta format (only changed fields per clip)
 - `DemoModule` is also a valid top-level response model (used by the
   `--structure module-only` mode of the prompt builder)
@@ -145,7 +152,9 @@ tables alike, hand-authored and generated together.
 **`Code/Schemas/arlem_full.py`** — Full ARLEM specification:
 - `ARLEMScenario` contains a `Workplace` (static environment) + `Activity` (logic/workflow)
 - Cross-validation: `ARLEMScenario.validate_activity_flows()` checks activity actions against workplace resources
-- `Tangible` subtypes (Thing/Place/Person) use discriminated unions on `type` field
+- `things` / `places` are plain `List[Tangible]` (`Person` subclasses `Tangible`); no discriminated unions
+
+**`Code/Schemas/arlem_simplified.py`** — Reduced ARLEM subset, same `ARLEMScenario` shape (`--spec arlem_simple`)
 
 ### Benchmark System (`Code/Benchmark/`)
 
@@ -216,10 +225,13 @@ See `STATISTICS_REPORT.md` / `SUMMARY_REPORT.md` alongside them.
 - `cost_figures.py` — `wave2_tokens_cost_{mean,total}`: stacked tokens-over-cost panels
 - `timing_figures.py` — the four `wave2_time_*` / `wave2_latency_*` figures, plus
   `generation_time_tables.tex`
+- `structure_figures.py` — `wave2_json_lab_size`, `wave2_authoring_burden`,
+  `wave2_arlem_validity`, `wave2_specificity_elasticity`, `wave2_arlem_floor`
+  (what the generated labs contain), plus `structure_tables.tex`
 - `cost_by_model_figures.py` — `cost_tokens_by_model{,_L1}`: per-model means over
   the L3/L4 base slice and the L1 slice
 
-All three figure scripts take `--runs-csv` / `--suffix` so a repriced table can be
+All four figure scripts take `--runs-csv` / `--suffix` so a repriced table can be
 rendered as `_repriced` siblings without disturbing the originals.
 
 ### Data Processing Transformations (`Code/Data Processing/`)
@@ -253,6 +265,6 @@ Use `instructor.from_provider("provider/model-id")` — this is the unified API.
 
 ## Code Patterns
 
-- **Discriminated unions**: Use `Literal` + `Field(discriminator="fieldName")` for polymorphic models. New component/module/tangible types follow this pattern.
+- **Polymorphic models**: Give each member a single-value `Literal` tag and combine them in a *plain* `Union` (no `Field(discriminator=...)`, which Gemini rejects). Inherit `ConstToEnumSchemaMixin` so the tag emits as `enum`, not `const`. New component types define both the `type` and `componentType` literals and join the `Component` union.
 - **Sparse deltas**: `ObjectChange` only serializes fields with non-None values — use `model_dump(exclude_none=True)` when serializing.
 - **Vec3 / Color4**: These are `Annotated` list types (not custom classes) — `list[float]` with length constraints.
