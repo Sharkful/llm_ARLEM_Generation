@@ -1,0 +1,1121 @@
+{
+  "version": "2.0",
+  "labId": "bio101-dna-structure-replication-AR001",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Introductory Molecular Biology (200-level)",
+  "estimatedLength": "35 minutes",
+  "objectives": [
+    "Identify the three-dimensional components of DNA\u2014two antiparallel sugar-phosphate backbones and inward-projecting nitrogenous bases\u2014and describe how they assemble into a double helix.",
+    "Apply complementary base-pair rules (A\u2013T with two hydrogen bonds; G\u2013C with three hydrogen bonds) to infer one strand from the other.",
+    "Explain how antiparallel orientation and backbone directionality create 5'\u21923' synthesis constraints.",
+    "Trace the replication fork sequence (helicase, SSBs, DNA polymerase, DNA ligase) and match each step to its function.",
+    "Explain why leading synthesis is continuous while lagging synthesis is discontinuous (Okazaki fragments) based on polymerase 5'\u21923' directionality on antiparallel templates.",
+    "Explain semiconservative replication and predict daughter-molecule composition after one and two rounds. "
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1 \u2014 Double Helix Architecture",
+      "description": "Build and visualize the DNA double helix: two antiparallel sugar-phosphate backbones, inward-projecting bases, and base-pair hydrogen-bond pairing rules.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Name DNA structural components and locate them in a double-helix model.",
+        "Use complementary base pairing to determine which base pairs across the helix.",
+        "Explain antiparallel organization using 5'\u21923' directionality on each strand."
+      ],
+      "instructions": [
+        "Observe two spiraling sugar-phosphate backbones.",
+        "Look for bases projecting inward and forming paired hydrogen bonds.",
+        "Use the 5'/3' direction labels to infer antiparallel orientation."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaBackboneStrandPrefab",
+          "name": "strandA_backbone",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.35,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0,
+            25,
+            0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.22
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "dnaBackboneStrandPrefab",
+          "name": "strandB_backbone",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.35,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0,
+            205,
+            0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.22
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "dnaBasePairPrefab",
+          "name": "basePair_AT",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.02,
+            0.12
+          ],
+          "eulerAngles": [
+            0,
+            90,
+            0
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "enabled": false,
+          "texture": "dnaBase_AT_texture"
+        },
+        {
+          "prefab": "dnaBasePairPrefab",
+          "name": "basePair_GC",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.02,
+            -0.12
+          ],
+          "eulerAngles": [
+            0,
+            90,
+            0
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "enabled": false,
+          "texture": "dnaBase_GC_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "directionLabels_5to3",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.16,
+            0.0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.003,
+            0.003,
+            0.003
+          ],
+          "enabled": true
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_intro_helix",
+          "audioClip": "dna_lab_scene1_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "directionLabels_5to3"
+            },
+            {
+              "target": "basePair_AT"
+            },
+            {
+              "target": "basePair_GC"
+            },
+            {
+              "target": "directionLabels_5to3"
+            }
+          ],
+          "changeMeaning": "Backbones are visible in a double-helix arrangement, while base-pair examples and hydrogen-bond visuals are initially hidden. A direction label appears to prime students to interpret antiparallel orientation later.",
+          "narration": "Welcome! In this scene you\u2019ll explore DNA\u2019s three-dimensional structure\u2014the double helix. Watch the two sugar-phosphate backbones and note that nitrogenous bases project inward to form specific base pairs."
+        },
+        {
+          "clipName": "clip2_add_AT_pair",
+          "audioClip": "dna_lab_scene1_at_pair",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "basePair_AT"
+            },
+            {
+              "target": "basePair_AT"
+            },
+            {
+              "target": "basePair_AT"
+            }
+          ],
+          "changeMeaning": "An A\u2013T base pair appears at one position along the helix axis and is color-highlighted. The texture indicates adenine\u2013thymine pairing, reinforcing the specificity of base recognition.",
+          "narration": "Here is an A\u2013T base pair. Adenine pairs with thymine through two hydrogen bonds, producing a specific complementary match."
+        },
+        {
+          "clipName": "clip3_add_GC_pair",
+          "audioClip": "dna_lab_scene1_gc_pair",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "basePair_GC"
+            },
+            {
+              "target": "basePair_GC"
+            },
+            {
+              "target": "basePair_GC"
+            }
+          ],
+          "changeMeaning": "A second base-pair example (G\u2013C) appears on the opposite side of the helix axis. Coloring differentiates it from the A\u2013T pair so students can compare the number of hydrogen bonds.",
+          "narration": "Now notice the G\u2013C pair. Guanine and cytosine form three hydrogen bonds, which is why G\u2013C pairing is visually distinguishable from A\u2013T."
+        },
+        {
+          "clipName": "clip4_antiparallel_direction",
+          "audioClip": "dna_lab_scene1_antiparallel_direction",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "strandA_backbone"
+            },
+            {
+              "target": "strandB_backbone"
+            },
+            {
+              "target": "directionLabels_5to3"
+            }
+          ],
+          "changeMeaning": "The direction label is reiterated clearly. The backbones remain aligned but oriented to emphasize that the two strands run opposite directions along the same helix axis.",
+          "narration": "Key idea: the strands are antiparallel. If one backbone runs 5' to 3', the complementary backbone must run 3' to 5'. That geometry is essential for replication."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2 \u2014 Replication Fork Events",
+      "description": "Show a replication fork and stepwise enzyme roles: helicase unwinds, SSBs stabilize, and DNA polymerase synthesizes new DNA using templates.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Identify enzyme roles at the replication fork: helicase, SSBs, DNA polymerase.",
+        "Explain why exposed single strands require stabilization.",
+        "Connect polymerase 5'\u21923' directionality to future leading/lagging asymmetry."
+      ],
+      "instructions": [
+        "Track the sequence: helicase acts first, then SSBs, then polymerase.",
+        "Use the 5'\u21923' cue to anticipate direction-dependent synthesis later.",
+        "Mentally mark which molecules stabilize vs extend templates."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaReplicationForkPrefab",
+          "name": "replicationFork",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0,
+            45,
+            0
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.18
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "helicaseEnzymePrefab",
+          "name": "helicase",
+          "parent": "replicationFork",
+          "position": [
+            0.0,
+            0.06,
+            0.02
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "ssbProteinPrefab",
+          "name": "ssb_left",
+          "parent": "replicationFork",
+          "position": [
+            -0.11,
+            0.01,
+            0.05
+          ],
+          "eulerAngles": [
+            0,
+            30,
+            0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": false,
+          "texture": "ssbProtein_texture"
+        },
+        {
+          "prefab": "ssbProteinPrefab",
+          "name": "ssb_right",
+          "parent": "replicationFork",
+          "position": [
+            0.11,
+            0.01,
+            0.05
+          ],
+          "eulerAngles": [
+            0,
+            330,
+            0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": false,
+          "texture": "ssbProtein_texture"
+        },
+        {
+          "prefab": "dnaPolymerasePrefab",
+          "name": "dnaPolymerase",
+          "parent": "replicationFork",
+          "position": [
+            0.0,
+            0.06,
+            -0.03
+          ],
+          "eulerAngles": [
+            0,
+            180,
+            0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "forkLabels",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.18,
+            0.0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.003,
+            0.003,
+            0.003
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "directionCue_5to3",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            -0.08,
+            0.0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.003,
+            0.003,
+            0.003
+          ],
+          "enabled": true
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_helicase_unwinds",
+          "audioClip": "dna_lab_scene2_helicase",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "ssb_left"
+            },
+            {
+              "target": "ssb_right"
+            },
+            {
+              "target": "dnaPolymerase"
+            },
+            {
+              "target": "helicase"
+            },
+            {
+              "target": "forkLabels"
+            },
+            {
+              "target": "directionCue_5to3"
+            }
+          ],
+          "changeMeaning": "Helicase is emphasized while SSBs and DNA polymerase are hidden. Labels map each player to its function, and a 5'\u21923' cue prepares students for directional constraints.",
+          "narration": "At the replication fork, helicase first unwinds the double helix. This creates two exposed single strands that would otherwise re-anneal."
+        },
+        {
+          "clipName": "clip2_ssb_stabilize",
+          "audioClip": "dna_lab_scene2_ssb_stabilize",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "ssb_left"
+            },
+            {
+              "target": "ssb_right"
+            },
+            {
+              "target": "ssb_left"
+            },
+            {
+              "target": "ssb_right"
+            },
+            {
+              "target": "forkLabels"
+            }
+          ],
+          "changeMeaning": "SSB proteins appear on both separated templates, indicating stabilization of exposed single strands. The label updates to reflect that stabilization has occurred.",
+          "narration": "Single-strand binding proteins\u2014SSBs\u2014stabilize those exposed templates so they remain available for DNA polymerase to copy."
+        },
+        {
+          "clipName": "clip3_polymerase_synthesizes",
+          "audioClip": "dna_lab_scene2_polymerase_synthesizes",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "dnaPolymerase"
+            },
+            {
+              "target": "forkLabels"
+            },
+            {
+              "target": "directionCue_5to3"
+            }
+          ],
+          "changeMeaning": "DNA polymerase is activated in the scene, and the 5'\u21923' cue becomes more prominent via color. Labels focus attention on synthesis along templates.",
+          "narration": "DNA polymerase synthesizes new DNA using each parental strand as a template. It can only extend in the 5' to 3' direction."
+        },
+        {
+          "clipName": "clip4_set_up_leading_lagging_asymmetry",
+          "audioClip": "dna_lab_scene2_leading_lagging_setup",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "replicationFork"
+            },
+            {
+              "target": "directionCue_5to3"
+            },
+            {
+              "target": "forkLabels"
+            }
+          ],
+          "changeMeaning": "The fork is slightly scaled to signal a transition. The updated cue explicitly connects antiparallel template orientation and polymerase directionality, foreshadowing leading/lagging asymmetry.",
+          "narration": "Because the two templates are antiparallel, polymerase must synthesize differently on each side. That forces an asymmetry between leading and lagging strand synthesis."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3 \u2014 Leading vs Lagging & Okazaki Fragments",
+      "description": "Use leading/lagging templates to show continuous synthesis on the leading strand and discontinuous Okazaki-fragment synthesis on the lagging strand, followed by ligation.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Explain why leading synthesis is continuous but lagging synthesis is discontinuous.",
+        "Describe Okazaki fragments as short segments produced on the lagging template.",
+        "Explain ligase function in joining fragments into a continuous strand.",
+        "Relate observed synthesis patterns to antiparallel template geometry and polymerase 5'\u21923' activity."
+      ],
+      "instructions": [
+        "Distinguish which side corresponds to leading vs lagging.",
+        "Observe Okazaki fragments appearing on the lagging side.",
+        "Note when ligase appears to connect fragments."
+      ],
+      "objects": [
+        {
+          "prefab": "leadingLaggingTemplatePrefab",
+          "name": "leadingLaggingSystem",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0,
+            35,
+            0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.22
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "dnaPolymerasePrefab",
+          "name": "polymerase_leading",
+          "parent": "leadingLaggingSystem",
+          "position": [
+            0.02,
+            0.06,
+            -0.03
+          ],
+          "eulerAngles": [
+            0,
+            180,
+            0
+          ],
+          "scale": [
+            0.045,
+            0.045,
+            0.045
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "dnaPolymerasePrefab",
+          "name": "polymerase_lagging",
+          "parent": "leadingLaggingSystem",
+          "position": [
+            -0.02,
+            0.06,
+            -0.03
+          ],
+          "eulerAngles": [
+            0,
+            180,
+            0
+          ],
+          "scale": [
+            0.045,
+            0.045,
+            0.045
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "okazakiFragmentPrefab",
+          "name": "okazaki_fragment_1",
+          "parent": "leadingLaggingSystem",
+          "position": [
+            -0.02,
+            0.02,
+            0.03
+          ],
+          "eulerAngles": [
+            0,
+            90,
+            0
+          ],
+          "scale": [
+            0.04,
+            0.01,
+            0.02
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "okazakiFragmentPrefab",
+          "name": "okazaki_fragment_2",
+          "parent": "leadingLaggingSystem",
+          "position": [
+            -0.02,
+            0.02,
+            0.0
+          ],
+          "eulerAngles": [
+            0,
+            90,
+            0
+          ],
+          "scale": [
+            0.04,
+            0.01,
+            0.02
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "okazakiFragmentPrefab",
+          "name": "okazaki_fragment_3",
+          "parent": "leadingLaggingSystem",
+          "position": [
+            -0.02,
+            0.02,
+            -0.03
+          ],
+          "eulerAngles": [
+            0,
+            90,
+            0
+          ],
+          "scale": [
+            0.04,
+            0.01,
+            0.02
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "dnaLigasePrefab",
+          "name": "dnaLigase",
+          "parent": "leadingLaggingSystem",
+          "position": [
+            0.06,
+            0.04,
+            0.0
+          ],
+          "eulerAngles": [
+            0,
+            20,
+            0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "leadingLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.09,
+            0.15,
+            0.02
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.003,
+            0.003,
+            0.003
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "laggingLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.12,
+            0.15,
+            -0.02
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.003,
+            0.003,
+            0.003
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "polymeraseDirectionAgain",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            -0.12,
+            0.0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.003,
+            0.003,
+            0.003
+          ],
+          "enabled": true
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_leading_continuous",
+          "audioClip": "dna_lab_scene3_leading_continuous",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "leadingLabel"
+            },
+            {
+              "target": "laggingLabel"
+            },
+            {
+              "target": "polymeraseDirectionAgain"
+            },
+            {
+              "target": "okazaki_fragment_1"
+            },
+            {
+              "target": "okazaki_fragment_2"
+            },
+            {
+              "target": "okazaki_fragment_3"
+            },
+            {
+              "target": "dnaLigase"
+            }
+          ],
+          "changeMeaning": "The scene starts with leading and lagging labels visible. Okazaki fragments and ligase are hidden so students can first understand the difference between continuous vs discontinuous synthesis.",
+          "narration": "The leading strand is synthesized continuously because its template orientation lets polymerase move toward the replication fork while extending 5'\u21923'."
+        },
+        {
+          "clipName": "clip2_lagging_okazaki_appears",
+          "audioClip": "dna_lab_scene3_lagging_okazaki",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "okazaki_fragment_1"
+            },
+            {
+              "target": "okazaki_fragment_2"
+            },
+            {
+              "target": "okazaki_fragment_3"
+            },
+            {
+              "target": "dnaLigase"
+            },
+            {
+              "target": "laggingLabel"
+            }
+          ],
+          "changeMeaning": "Multiple Okazaki fragments appear on the lagging side, representing discontinuous synthesis behind the fork. Ligase remains hidden to emphasize that fragments must later be joined.",
+          "narration": "On the lagging strand, polymerase synthesizes discontinuously, producing short DNA segments called Okazaki fragments."
+        },
+        {
+          "clipName": "clip3_ligase_joins_fragments",
+          "audioClip": "dna_lab_scene3_ligase_joins",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "dnaLigase"
+            },
+            {
+              "target": "okazaki_fragment_1"
+            },
+            {
+              "target": "okazaki_fragment_2"
+            },
+            {
+              "target": "okazaki_fragment_3"
+            }
+          ],
+          "changeMeaning": "Ligase is revealed once fragments are present. The fragments are tinted to indicate they are being joined, preparing students to interpret the lagging strand as ultimately continuous after ligation.",
+          "narration": "DNA ligase seals the nicks between Okazaki fragments, joining them into a continuous lagging strand."
+        },
+        {
+          "clipName": "clip4_explain_asymmetry_from_antiparallel",
+          "audioClip": "dna_lab_scene3_asymmetry_explained",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "polymeraseDirectionAgain"
+            },
+            {
+              "target": "leadingLaggingSystem"
+            },
+            {
+              "target": "polymeraseDirectionAgain"
+            }
+          ],
+          "changeMeaning": "The entire leading/lagging system rotates to better display template orientation mismatch. The directional cue text updates to explicitly attribute the asymmetry to antiparallel geometry plus 5'\u21923' polymerase activity.",
+          "narration": "This asymmetry comes directly from antiparallel structure. Polymerase extends 5' to 3', so one template supports continuous synthesis while the other requires fragment-based synthesis."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 4 \u2014 Semiconservative Replication Rounds",
+      "description": "Predict daughter duplex composition after one and two replication rounds using semiconservative inheritance (each daughter retains one parental strand).",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Define semiconservative replication and infer daughter duplex composition.",
+        "Predict the mixture after one round (all daughters contain one old and one new strand).",
+        "Predict the mixture after two rounds (old/new and new/new duplexes).",
+        "Connect inheritance patterns to strand-by-strand copying and antiparallel templates."
+      ],
+      "instructions": [
+        "Look at the parental duplex and then predict round-1 products.",
+        "Apply the same rule again for round 2.",
+        "Use the color cues to distinguish parental vs newly synthesized strands."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaDuplexPrefab",
+          "name": "parental_duplex_round0",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.05,
+            -0.08
+          ],
+          "eulerAngles": [
+            0,
+            20,
+            0
+          ],
+          "scale": [
+            0.11,
+            0.11,
+            0.18
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "dnaDuplexPrefab",
+          "name": "daughter_duplex_round1_A",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.18,
+            0.0,
+            0.1
+          ],
+          "eulerAngles": [
+            0,
+            20,
+            0
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.16
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "dnaDuplexPrefab",
+          "name": "daughter_duplex_round1_B",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0.0,
+            0.1
+          ],
+          "eulerAngles": [
+            0,
+            20,
+            0
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.16
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "dnaDuplexPrefab",
+          "name": "round2_duplex_1",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.26,
+            0.0,
+            0.26
+          ],
+          "eulerAngles": [
+            0,
+            20,
+            0
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.14
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "dnaDuplexPrefab",
+          "name": "round2_duplex_2",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.26
+          ],
+          "eulerAngles": [
+            0,
+            20,
+            0
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.14
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "dnaDuplexPrefab",
+          "name": "round2_duplex_3",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.26,
+            0.0,
+            0.26
+          ],
+          "eulerAngles": [
+            0,
+            20,
+            0
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.14
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "dnaDuplexPrefab",
+          "name": "round2_duplex_4",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.42
+          ],
+          "eulerAngles": [
+            0,
+            20,
+            0
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.14
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "semiconservativeRuleLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.19,
+            0.0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.003,
+            0.003,
+            0.003
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "predictionPrompt",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            -0.13,
+            0.0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.003,
+            0.003,
+            0.003
+          ],
+          "enabled": true
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_round0_parental",
+          "audioClip": "dna_lab_scene4_round0_parental",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "parental_duplex_round0"
+            },
+            {
+              "target": "parental_duplex_round0"
+            },
+            {
+              "target": "semiconservativeRuleLabel"
+            },
+            {
+              "target": "predictionPrompt"
+            },
+            {
+              "target": "daughter_duplex_round1_A"
+            },
+            {
+              "target": "daughter_duplex_round1_B"
+            }
+          ],
+          "changeMeaning": "The parental duplex is displayed and semiconservative inheritance is stated explicitly. Round-1 daughter duplexes start hidden while a prediction prompt asks students to reason about composition.",
+          "narration": "Start with the original DNA duplex. Semiconservative replication means each daughter molecule keeps one original parental strand."
+        },
+        {
+          "clipName": "clip2_round1_daughter_duplexes",
+          "audioClip": "dna_lab_scene4_round1_daughters",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "daughter_duplex_round1_A"
+            },
+            {
+              "target": "daughter_duplex_round1_B"
+            },
+            {
+              "target": "daughter_duplex_round1_A"
+            },
+            {
+              "target": "daughter_duplex_round1_B"
+            },
+            {
+              "target": "predictionPrompt"
+            }
+          ],
+          "changeMeaning": "Both round-1 daughter duplexes appear. Their color coding indicates that each contains one parental (old) strand paired with one newly synthesized strand.",
+          "narration": "After one round, you get two daughter duplexes. Each one contains one old strand and one newly synthesized strand."
+        },
+        {
+          "clipName": "clip3_round2_update_predict",
+          "audioClip": "dna_lab_scene4_round2_prediction",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "predictionPrompt"
+            },
+            {
+              "target": "round2_duplex_1"
+            },
+            {
+              "target": "round2_duplex_2"
+            },
+            {
+              "target": "round2_duplex_3"
+            },
+            {
+              "target": "round2_duplex_4"
+            }
+          ],
+          "changeMeaning": "Round-2 product slots are revealed and the question shifts from predicting round-1 to classifying duplex compositions after the second replication round.",
+          "narration": "Now replicate again. Because each round-1 duplex still contains one old strand, round 2 produces a mixture of duplex types."
+        },
+        {
+          "clipName": "clip4_interpret_semiconservative_outcome",
+          "audioClip": "dna_lab_scene4_semiconservative_outcome",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "round2_duplex_1"
+            },
+            {
+              "target": "round2_duplex_2"
+            },
+            {
+              "target": "round2_duplex_3"
+            },
+            {
+              "target": "round2_duplex_4"
+            },
+            {
+              "target": "predictionPrompt"
+            }
+          ],
+          "changeMeaning": "Duplexes are color-coded to represent old/new versus new/new composition after two rounds. The final prompt confirms the expected semiconservative inheritance pattern.",
+          "narration": "Interpretation: after two rounds, half of the duplexes contain one old strand and one new strand, while the other half contain two new strands. That is the hallmark semiconservative pattern."
+        }
+      ]
+    }
+  ]
+}

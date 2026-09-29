@@ -1,0 +1,2372 @@
+{
+  "version": "2.0",
+  "labId": "vsepr_theory_lab_001",
+  "author": "AI Chemistry Educator",
+  "courseName": "General Chemistry I",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Understand the core principles of VSEPR theory.",
+    "Predict the electron-domain geometry around a central atom based on the number of electron domains.",
+    "Predict the molecular geometry of simple covalent molecules, considering the presence of lone pairs.",
+    "Explain the variations in bond angles due to lone pair repulsion.",
+    "Visualize the three-dimensional structures of common molecules."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Introduction to VSEPR Theory",
+      "description": "Explore the fundamental concept of VSEPR theory: electron pair repulsion determines molecular geometry.",
+      "author": "AI Chemistry Educator",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Define VSEPR theory and its central premise.",
+        "Identify the central atom and electron domains in a molecule."
+      ],
+      "instructions": [
+        "Observe how electron domains orient themselves to minimize repulsion.",
+        "Interact with the electron domains to see their dynamic movement."
+      ],
+      "objects": [
+        {
+          "prefab": "centralAtomPrefab",
+          "name": "CentralAtom",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "Domain1",
+          "position": [
+            0.0,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            100.0,
+            150.0,
+            250.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "Domain2",
+          "position": [
+            0.0,
+            0.5,
+            1.1
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            100.0,
+            150.0,
+            250.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "IntroText",
+          "position": [
+            0.0,
+            0.8,
+            1.5
+          ],
+          "scale": [
+            0.005,
+            0.005,
+            0.005
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "VSEPR Theory: Electron pairs repel each other!",
+              "fontSize": 5.0,
+              "wrapText": true,
+              "isKinematic": true,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_intro",
+          "audioClip": "vsepr_intro_0",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "IntroText",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Welcome to the VSEPR Theory lab! We'll explore how molecules get their 3D shapes."
+                }
+              ]
+            },
+            {
+              "target": "Domain1",
+              "enabled": false
+            },
+            {
+              "target": "Domain2",
+              "enabled": false
+            },
+            {
+              "target": "CentralAtom",
+              "enabled": false
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_central_atom",
+          "audioClip": "vsepr_intro_1",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "IntroText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "At the heart of VSEPR is the central atom, which bonds to other atoms."
+                }
+              ]
+            },
+            {
+              "target": "CentralAtom",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "simpleRotation",
+                  "rotationTime": 20.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_electron_domains",
+          "audioClip": "vsepr_intro_2",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "IntroText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Around the central atom, we have 'electron domains'. These can be bonding pairs or lone pairs. Try dragging them around!"
+                }
+              ]
+            },
+            {
+              "target": "Domain1",
+              "enabled": true,
+              "color": [
+                100.0,
+                150.0,
+                250.0,
+                255.0
+              ],
+              "components": [
+                {
+                  "componentType": "pointerReceiver",
+                  "draggable": true
+                }
+              ]
+            },
+            {
+              "target": "Domain2",
+              "enabled": true,
+              "color": [
+                100.0,
+                150.0,
+                250.0,
+                255.0
+              ],
+              "components": [
+                {
+                  "componentType": "pointerReceiver",
+                  "draggable": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_repulsion",
+          "audioClip": "vsepr_intro_3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "IntroText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "The core idea is that these electron domains repel each other, arranging themselves as far apart as possible to minimize repulsion."
+                }
+              ]
+            },
+            {
+              "target": "Domain1",
+              "position": [
+                0.0,
+                0.5,
+                0.5
+              ]
+            },
+            {
+              "target": "Domain2",
+              "position": [
+                0.0,
+                0.5,
+                1.1
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Fundamental Electron-Domain Geometries",
+      "description": "Learn the five basic electron-domain geometries: linear, trigonal planar, tetrahedral, trigonal bipyramidal, and octahedral.",
+      "author": "AI Chemistry Educator",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Identify and describe linear, trigonal planar, and tetrahedral electron-domain geometries.",
+        "Visualize the arrangement of electron domains in each geometry."
+      ],
+      "objects": [
+        {
+          "prefab": "centralAtomPrefab",
+          "name": "CentralAtom_F",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "rotationTime": 20.0
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DomainF1",
+          "position": [
+            -0.3,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            100.0,
+            150.0,
+            250.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DomainF2",
+          "position": [
+            0.3,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            100.0,
+            150.0,
+            250.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DomainF3",
+          "position": [
+            0.0,
+            0.5,
+            1.1
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            100.0,
+            150.0,
+            250.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DomainF4",
+          "position": [
+            0.0,
+            0.2,
+            0.8
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            100.0,
+            150.0,
+            250.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DomainF5",
+          "position": [
+            0.0,
+            0.8,
+            0.8
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            100.0,
+            150.0,
+            250.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DomainF6",
+          "position": [
+            0.0,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            100.0,
+            150.0,
+            250.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "GeometryLabel",
+          "position": [
+            0.0,
+            0.8,
+            1.5
+          ],
+          "scale": [
+            0.005,
+            0.005,
+            0.005
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Geometry Name",
+              "fontSize": 5.0,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clipF0_start",
+          "audioClip": "fundamental_geom_0",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "GeometryLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "We'll now look at the five fundamental electron-domain geometries."
+                }
+              ]
+            },
+            {
+              "target": "DomainF3",
+              "enabled": false
+            },
+            {
+              "target": "DomainF4",
+              "enabled": false
+            },
+            {
+              "target": "DomainF5",
+              "enabled": false
+            },
+            {
+              "target": "DomainF6",
+              "enabled": false
+            }
+          ]
+        },
+        {
+          "clipName": "clipF1_linear",
+          "audioClip": "fundamental_geom_1",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "DomainF1",
+              "enabled": true,
+              "color": [
+                100.0,
+                150.0,
+                250.0,
+                255.0
+              ],
+              "components": [
+                {
+                  "componentType": "pointerReceiver",
+                  "draggable": true
+                }
+              ]
+            },
+            {
+              "target": "DomainF2",
+              "enabled": true,
+              "color": [
+                100.0,
+                150.0,
+                250.0,
+                255.0
+              ],
+              "components": [
+                {
+                  "componentType": "pointerReceiver",
+                  "draggable": true
+                }
+              ]
+            },
+            {
+              "target": "CentralAtom_F",
+              "enabled": true
+            },
+            {
+              "target": "DomainF1",
+              "position": [
+                0.0,
+                0.5,
+                0.5
+              ]
+            },
+            {
+              "target": "DomainF2",
+              "position": [
+                0.0,
+                0.5,
+                1.1
+              ]
+            },
+            {
+              "target": "GeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "2 Electron Domains: Linear (180\u00b0)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clipF2_trigonal_planar",
+          "audioClip": "fundamental_geom_2",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "DomainF3",
+              "enabled": true,
+              "color": [
+                100.0,
+                150.0,
+                250.0,
+                255.0
+              ]
+            },
+            {
+              "target": "DomainF1",
+              "position": [
+                -0.25,
+                0.5,
+                0.9
+              ]
+            },
+            {
+              "target": "DomainF2",
+              "position": [
+                0.25,
+                0.5,
+                0.9
+              ]
+            },
+            {
+              "target": "DomainF3",
+              "position": [
+                0.0,
+                0.5,
+                0.6
+              ]
+            },
+            {
+              "target": "GeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "3 Electron Domains: Trigonal Planar (120\u00b0)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clipF3_tetrahedral",
+          "audioClip": "fundamental_geom_3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "DomainF4",
+              "enabled": true,
+              "color": [
+                100.0,
+                150.0,
+                250.0,
+                255.0
+              ]
+            },
+            {
+              "target": "DomainF1",
+              "position": [
+                -0.2,
+                0.35,
+                0.7
+              ]
+            },
+            {
+              "target": "DomainF2",
+              "position": [
+                0.2,
+                0.35,
+                0.7
+              ]
+            },
+            {
+              "target": "DomainF3",
+              "position": [
+                0.0,
+                0.65,
+                0.7
+              ]
+            },
+            {
+              "target": "DomainF4",
+              "position": [
+                0.0,
+                0.45,
+                1.0
+              ]
+            },
+            {
+              "target": "GeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "4 Electron Domains: Tetrahedral (109.5\u00b0)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clipF4_trigonal_bipyramidal",
+          "audioClip": "fundamental_geom_4",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "DomainF5",
+              "enabled": true,
+              "color": [
+                100.0,
+                150.0,
+                250.0,
+                255.0
+              ]
+            },
+            {
+              "target": "DomainF6",
+              "enabled": true,
+              "color": [
+                100.0,
+                150.0,
+                250.0,
+                255.0
+              ]
+            },
+            {
+              "target": "DomainF1",
+              "position": [
+                -0.25,
+                0.5,
+                0.8
+              ]
+            },
+            {
+              "target": "DomainF2",
+              "position": [
+                0.25,
+                0.5,
+                0.8
+              ]
+            },
+            {
+              "target": "DomainF3",
+              "position": [
+                0.0,
+                0.5,
+                1.05
+              ]
+            },
+            {
+              "target": "DomainF4",
+              "position": [
+                0.0,
+                0.75,
+                0.8
+              ]
+            },
+            {
+              "target": "DomainF5",
+              "position": [
+                0.0,
+                0.25,
+                0.8
+              ]
+            },
+            {
+              "target": "GeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "5 Electron Domains: Trigonal Bipyramidal (90\u00b0, 120\u00b0)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clipF5_octahedral",
+          "audioClip": "fundamental_geom_5",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "DomainF6",
+              "enabled": true,
+              "color": [
+                100.0,
+                150.0,
+                250.0,
+                255.0
+              ]
+            },
+            {
+              "target": "DomainF1",
+              "position": [
+                -0.25,
+                0.5,
+                0.8
+              ]
+            },
+            {
+              "target": "DomainF2",
+              "position": [
+                0.25,
+                0.5,
+                0.8
+              ]
+            },
+            {
+              "target": "DomainF3",
+              "position": [
+                0.0,
+                0.5,
+                1.05
+              ]
+            },
+            {
+              "target": "DomainF4",
+              "position": [
+                0.0,
+                0.75,
+                0.8
+              ]
+            },
+            {
+              "target": "DomainF5",
+              "position": [
+                0.0,
+                0.25,
+                0.8
+              ]
+            },
+            {
+              "target": "DomainF6",
+              "position": [
+                0.0,
+                0.5,
+                0.55
+              ]
+            },
+            {
+              "target": "GeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "6 Electron Domains: Octahedral (90\u00b0)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Lone Pairs and Molecular Geometry",
+      "description": "Understand how lone pairs modify the molecular geometry, leading to shapes like bent and trigonal pyramidal.",
+      "author": "AI Chemistry Educator",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Distinguish between electron-domain geometry and molecular geometry.",
+        "Predict molecular geometries (e.g., trigonal pyramidal, bent) when lone pairs are present.",
+        "Explain why lone pairs exert greater repulsion than bonding pairs."
+      ],
+      "objects": [
+        {
+          "prefab": "centralAtomPrefab",
+          "name": "CentralAtom_LP",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "BondLP1",
+          "parent": "CentralAtom_LP",
+          "position": [
+            0.0,
+            0.0,
+            0.25
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.3
+          ],
+          "color": [
+            255.0,
+            255.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "BondLP2",
+          "parent": "CentralAtom_LP",
+          "position": [
+            -0.15,
+            0.0,
+            -0.15
+          ],
+          "eulerAngles": [
+            0.0,
+            -120.0,
+            0.0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.3
+          ],
+          "color": [
+            255.0,
+            255.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "BondLP3",
+          "parent": "CentralAtom_LP",
+          "position": [
+            0.15,
+            0.0,
+            -0.15
+          ],
+          "eulerAngles": [
+            0.0,
+            120.0,
+            0.0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.3
+          ],
+          "color": [
+            255.0,
+            255.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "lonePairPrefab",
+          "name": "LonePairLP1",
+          "parent": "CentralAtom_LP",
+          "position": [
+            0.25,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            90.0,
+            0.0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            255.0,
+            0.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "lonePairPrefab",
+          "name": "LonePairLP2",
+          "parent": "CentralAtom_LP",
+          "position": [
+            -0.25,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            -90.0,
+            0.0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            255.0,
+            0.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "MolecularGeometryLabel",
+          "position": [
+            0.0,
+            0.8,
+            1.5
+          ],
+          "scale": [
+            0.005,
+            0.005,
+            0.005
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Molecular Geometry",
+              "fontSize": 5.0,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "BondAngleLabel",
+          "position": [
+            0.0,
+            0.1,
+            1.5
+          ],
+          "scale": [
+            0.004,
+            0.004,
+            0.004
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Bond Angle: 109.5\u00b0",
+              "fontSize": 4.0,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clipLP0_intro",
+          "audioClip": "lonepair_intro_0",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "CentralAtom_LP",
+              "enabled": true
+            },
+            {
+              "target": "BondLP1",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "BondLP2",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "BondLP3",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "LonePairLP1",
+              "enabled": true
+            },
+            {
+              "target": "LonePairLP2",
+              "enabled": true
+            },
+            {
+              "target": "MolecularGeometryLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Now, let's see how lone pairs modify molecular geometry."
+                }
+              ]
+            },
+            {
+              "target": "BondAngleLabel",
+              "enabled": false
+            }
+          ]
+        },
+        {
+          "clipName": "clipLP1_tetrahedral_4bp",
+          "audioClip": "lonepair_intro_1",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "BondLP1",
+              "eulerAngles": [
+                35.26,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ],
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "BondLP2",
+              "eulerAngles": [
+                -35.26,
+                120.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ],
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "BondLP3",
+              "eulerAngles": [
+                -35.26,
+                -120.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ],
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "LonePairLP1",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ],
+              "components": []
+            },
+            {
+              "target": "LonePairLP2",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ],
+              "components": []
+            },
+            {
+              "target": "LonePairLP1",
+              "eulerAngles": [
+                -35.26,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ],
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "LonePairLP2",
+              "eulerAngles": [
+                -35.26,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ],
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "MolecularGeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Starting with a Tetrahedral Electron-Domain Geometry (4 bonding pairs like methane)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clipLP2_trigonal_pyramidal",
+          "audioClip": "lonepair_intro_2",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "LonePairLP1",
+              "enabled": true,
+              "color": [
+                255.0,
+                0.0,
+                0.0,
+                255.0
+              ],
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Lone Pair"
+                }
+              ]
+            },
+            {
+              "target": "BondLP1",
+              "eulerAngles": [
+                55.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondLP2",
+              "eulerAngles": [
+                -15.0,
+                120.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondLP3",
+              "eulerAngles": [
+                -15.0,
+                -120.0,
+                0.0
+              ]
+            },
+            {
+              "target": "LonePairLP1",
+              "eulerAngles": [
+                -60.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "LonePairLP2",
+              "enabled": false
+            },
+            {
+              "target": "MolecularGeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "1 Lone Pair: Trigonal Pyramidal (like ammonia, NH3)"
+                }
+              ]
+            },
+            {
+              "target": "BondAngleLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Bond Angle: ~107\u00b0 (due to lone pair repulsion)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clipLP3_bent",
+          "audioClip": "lonepair_intro_3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "LonePairLP1",
+              "enabled": true,
+              "color": [
+                255.0,
+                0.0,
+                0.0,
+                255.0
+              ],
+              "components": []
+            },
+            {
+              "target": "LonePairLP2",
+              "enabled": true,
+              "color": [
+                255.0,
+                0.0,
+                0.0,
+                255.0
+              ],
+              "components": []
+            },
+            {
+              "target": "BondLP1",
+              "eulerAngles": [
+                50.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondLP2",
+              "eulerAngles": [
+                -50.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondLP3",
+              "enabled": false
+            },
+            {
+              "target": "LonePairLP1",
+              "eulerAngles": [
+                0.0,
+                90.0,
+                0.0
+              ]
+            },
+            {
+              "target": "LonePairLP2",
+              "eulerAngles": [
+                0.0,
+                -90.0,
+                0.0
+              ]
+            },
+            {
+              "target": "MolecularGeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "2 Lone Pairs: Bent (like water, H2O)"
+                }
+              ]
+            },
+            {
+              "target": "BondAngleLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Bond Angle: ~104.5\u00b0 (increased repulsion from two lone pairs)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clipLP4_recap_repulsion",
+          "audioClip": "lonepair_intro_4",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "BondLP1",
+              "enabled": false
+            },
+            {
+              "target": "BondLP2",
+              "enabled": false
+            },
+            {
+              "target": "BondLP3",
+              "enabled": false
+            },
+            {
+              "target": "LonePairLP1",
+              "enabled": false
+            },
+            {
+              "target": "LonePairLP2",
+              "enabled": false
+            },
+            {
+              "target": "CentralAtom_LP",
+              "enabled": false
+            },
+            {
+              "target": "MolecularGeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Remember: Lone pairs occupy more space than bonding pairs, leading to smaller bond angles in actual molecules."
+                }
+              ]
+            },
+            {
+              "target": "BondAngleLabel",
+              "enabled": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Advanced Molecular Geometries",
+      "description": "Explore molecular geometries derived from trigonal bipyramidal and octahedral electron domains with lone pairs.",
+      "author": "AI Chemistry Educator",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Predict and visualize seesaw, T-shaped, and square planar molecular geometries.",
+        "Understand the preference for lone pairs in equatorial positions within trigonal bipyramidal electron domains."
+      ],
+      "objects": [
+        {
+          "prefab": "centralAtomPrefab",
+          "name": "CentralAtom_Adv",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "BondAdv1",
+          "parent": "CentralAtom_Adv",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.2
+          ],
+          "color": [
+            0.0,
+            200.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "BondAdv2",
+          "parent": "CentralAtom_Adv",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.2
+          ],
+          "color": [
+            0.0,
+            200.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "BondAdv3",
+          "parent": "CentralAtom_Adv",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.2
+          ],
+          "color": [
+            0.0,
+            200.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "BondAdv4",
+          "parent": "CentralAtom_Adv",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.2
+          ],
+          "color": [
+            0.0,
+            200.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "BondAdv5",
+          "parent": "CentralAtom_Adv",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.2
+          ],
+          "color": [
+            0.0,
+            200.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "BondAdv6",
+          "parent": "CentralAtom_Adv",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.2
+          ],
+          "color": [
+            0.0,
+            200.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "lonePairPrefab",
+          "name": "LonePairAdv1",
+          "parent": "CentralAtom_Adv",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            255.0,
+            0.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "lonePairPrefab",
+          "name": "LonePairAdv2",
+          "parent": "CentralAtom_Adv",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            255.0,
+            0.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "lonePairPrefab",
+          "name": "LonePairAdv3",
+          "parent": "CentralAtom_Adv",
+          "position": [
+            0.0,
+            0.5,
+            0.8
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            255.0,
+            0.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "AdvGeometryLabel",
+          "position": [
+            0.0,
+            0.8,
+            1.5
+          ],
+          "scale": [
+            0.005,
+            0.005,
+            0.005
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Advanced Geometries",
+              "fontSize": 5.0,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clipA0_intro",
+          "audioClip": "advanced_geom_0",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "AdvGeometryLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Let's explore more complex molecular geometries using higher electron domains."
+                }
+              ]
+            },
+            {
+              "target": "CentralAtom_Adv",
+              "enabled": true
+            },
+            {
+              "target": "BondAdv1",
+              "enabled": false
+            },
+            {
+              "target": "BondAdv2",
+              "enabled": false
+            },
+            {
+              "target": "BondAdv3",
+              "enabled": false
+            },
+            {
+              "target": "BondAdv4",
+              "enabled": false
+            },
+            {
+              "target": "BondAdv5",
+              "enabled": false
+            },
+            {
+              "target": "BondAdv6",
+              "enabled": false
+            },
+            {
+              "target": "LonePairAdv1",
+              "enabled": false
+            },
+            {
+              "target": "LonePairAdv2",
+              "enabled": false
+            },
+            {
+              "target": "LonePairAdv3",
+              "enabled": false
+            }
+          ]
+        },
+        {
+          "clipName": "clipA1_trigonal_bipyramidal_ideal",
+          "audioClip": "advanced_geom_1",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "BondAdv1",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ],
+              "components": []
+            },
+            {
+              "target": "BondAdv2",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ],
+              "components": []
+            },
+            {
+              "target": "BondAdv3",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ],
+              "components": []
+            },
+            {
+              "target": "BondAdv4",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ],
+              "components": []
+            },
+            {
+              "target": "BondAdv5",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ],
+              "components": []
+            },
+            {
+              "target": "BondAdv1",
+              "eulerAngles": [
+                90.0,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ]
+            },
+            {
+              "target": "BondAdv2",
+              "eulerAngles": [
+                -90.0,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ]
+            },
+            {
+              "target": "BondAdv3",
+              "eulerAngles": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ]
+            },
+            {
+              "target": "BondAdv4",
+              "eulerAngles": [
+                0.0,
+                120.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ]
+            },
+            {
+              "target": "BondAdv5",
+              "eulerAngles": [
+                0.0,
+                -120.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ]
+            },
+            {
+              "target": "AdvGeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Trigonal Bipyramidal Electron-Domain Geometry (5 bonding pairs like PF5)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clipA2_seesaw",
+          "audioClip": "advanced_geom_2",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "BondAdv1",
+              "enabled": true
+            },
+            {
+              "target": "BondAdv2",
+              "enabled": true
+            },
+            {
+              "target": "BondAdv3",
+              "enabled": true
+            },
+            {
+              "target": "BondAdv4",
+              "enabled": true
+            },
+            {
+              "target": "BondAdv5",
+              "enabled": false
+            },
+            {
+              "target": "LonePairAdv1",
+              "enabled": true,
+              "color": [
+                255.0,
+                0.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "BondAdv1",
+              "eulerAngles": [
+                90.0,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ]
+            },
+            {
+              "target": "BondAdv2",
+              "eulerAngles": [
+                -90.0,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ]
+            },
+            {
+              "target": "BondAdv3",
+              "eulerAngles": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ]
+            },
+            {
+              "target": "BondAdv4",
+              "eulerAngles": [
+                0.0,
+                120.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ]
+            },
+            {
+              "target": "LonePairAdv1",
+              "eulerAngles": [
+                0.0,
+                -120.0,
+                0.0
+              ]
+            },
+            {
+              "target": "AdvGeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "1 Lone Pair (equatorial): Seesaw (like SF4)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clipA3_t_shaped",
+          "audioClip": "advanced_geom_3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "BondAdv1",
+              "enabled": true
+            },
+            {
+              "target": "BondAdv2",
+              "enabled": true
+            },
+            {
+              "target": "BondAdv3",
+              "enabled": true
+            },
+            {
+              "target": "BondAdv4",
+              "enabled": false
+            },
+            {
+              "target": "BondAdv5",
+              "enabled": false
+            },
+            {
+              "target": "LonePairAdv1",
+              "enabled": true
+            },
+            {
+              "target": "LonePairAdv2",
+              "enabled": true,
+              "color": [
+                255.0,
+                0.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "BondAdv1",
+              "eulerAngles": [
+                90.0,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ]
+            },
+            {
+              "target": "BondAdv2",
+              "eulerAngles": [
+                -90.0,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ]
+            },
+            {
+              "target": "BondAdv3",
+              "eulerAngles": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.2
+              ]
+            },
+            {
+              "target": "LonePairAdv1",
+              "eulerAngles": [
+                0.0,
+                120.0,
+                0.0
+              ]
+            },
+            {
+              "target": "LonePairAdv2",
+              "eulerAngles": [
+                0.0,
+                -120.0,
+                0.0
+              ]
+            },
+            {
+              "target": "AdvGeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "2 Lone Pairs (equatorial): T-shaped (like ClF3)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clipA4_octahedral_ideal",
+          "audioClip": "advanced_geom_4",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "BondAdv1",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "BondAdv2",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "BondAdv3",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "BondAdv4",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "BondAdv5",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "BondAdv6",
+              "enabled": true,
+              "color": [
+                0.0,
+                200.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "LonePairAdv1",
+              "enabled": false
+            },
+            {
+              "target": "LonePairAdv2",
+              "enabled": false
+            },
+            {
+              "target": "BondAdv1",
+              "eulerAngles": [
+                90.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondAdv2",
+              "eulerAngles": [
+                -90.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondAdv3",
+              "eulerAngles": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondAdv4",
+              "eulerAngles": [
+                0.0,
+                90.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondAdv5",
+              "eulerAngles": [
+                0.0,
+                180.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondAdv6",
+              "eulerAngles": [
+                0.0,
+                -90.0,
+                0.0
+              ]
+            },
+            {
+              "target": "AdvGeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Octahedral Electron-Domain Geometry (6 bonding pairs like SF6)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clipA5_square_planar",
+          "audioClip": "advanced_geom_5",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "BondAdv1",
+              "enabled": false
+            },
+            {
+              "target": "BondAdv2",
+              "enabled": false
+            },
+            {
+              "target": "BondAdv3",
+              "enabled": true
+            },
+            {
+              "target": "BondAdv4",
+              "enabled": true
+            },
+            {
+              "target": "BondAdv5",
+              "enabled": true
+            },
+            {
+              "target": "BondAdv6",
+              "enabled": true
+            },
+            {
+              "target": "LonePairAdv1",
+              "enabled": true,
+              "color": [
+                255.0,
+                0.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "LonePairAdv2",
+              "enabled": true,
+              "color": [
+                255.0,
+                0.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "LonePairAdv1",
+              "eulerAngles": [
+                90.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "LonePairAdv2",
+              "eulerAngles": [
+                -90.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondAdv3",
+              "eulerAngles": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondAdv4",
+              "eulerAngles": [
+                0.0,
+                90.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondAdv5",
+              "eulerAngles": [
+                0.0,
+                180.0,
+                0.0
+              ]
+            },
+            {
+              "target": "BondAdv6",
+              "eulerAngles": [
+                0.0,
+                -90.0,
+                0.0
+              ]
+            },
+            {
+              "target": "AdvGeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "2 Lone Pairs (axial): Square Planar (like XeF4)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

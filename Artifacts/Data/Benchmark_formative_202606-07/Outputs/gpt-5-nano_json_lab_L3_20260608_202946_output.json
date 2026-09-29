@@ -1,0 +1,619 @@
+{
+  "version": "2.0",
+  "labId": "retrograde_ar_lab_v2",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Introduction to Astronomy",
+  "estimatedLength": "60 minutes",
+  "objectives": [
+    "Describe the apparent path of Mars across the night sky during a retrograde episode (eastward motion, westward loop, return).",
+    "Explain why apparent retrograde motion occurs in the heliocentric model as Earth overtakes a slower outer planet.",
+    "Contrast geocentric and heliocentric explanations and articulate why heliocentric is preferred on parsimony grounds.",
+    "Predict retrograde timing for an outer planet based on Earth's and the planet's relative positions.",
+    "Compare retrograde loops of Mars, Jupiter, and Saturn and explain why more distant planets produce smaller loops."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Mars retrograde from Earth's night-sky perspective",
+      "description": "Demonstrates Mars apparent retrograde motion as seen from Earth by animating Mars against a star field and illustrating the retrograde loop.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-06-08",
+      "educationalObjectives": [
+        "Describe Mars' apparent path during retrograde; Explain the cause from Earth's perspective; Distinguish between apparent and real motion; Interpret star-field background as the inertial frame; Recognize limitations of geocentric explanations."
+      ],
+      "instructions": [
+        "Use the starfield as background; Observe Mars' path against the constellations; Note the moment when Mars changes direction relative to fixed stars."
+      ],
+      "objects": [
+        {
+          "prefab": "starfieldPrefab",
+          "name": "starfield_bg",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            -2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            3,
+            3,
+            3
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earth_observer",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "enabled": true,
+          "texture": "2k_earth_daymap"
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "mars",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.6,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "enabled": true,
+          "texture": "MarsTexture",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                0.9,
+                0,
+                0
+              ],
+              "orbitalPeriod": 687.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "orbitPathPrefab",
+          "name": "mars_path_earth_view",
+          "parent": "earth_observer",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_mars_earth_view",
+          "parent": "earth_observer",
+          "position": [
+            0.0,
+            0.25,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "enabled": true,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Mars",
+              "color": [
+                255,
+                255,
+                0,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "module1_clip0_intro",
+          "audioClip": "scene1_intro_mars_earth_view",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "mars"
+            },
+            {
+              "target": "mars_path_earth_view"
+            }
+          ],
+          "changeMeaning": "Initial slow eastward motion of Mars against the fixed starfield.",
+          "narration": "From Earth's surface, Mars drifts eastward among the constellations, slowly approaching the retrograde phase."
+        },
+        {
+          "clipName": "module1_clip1_retrograde_loop",
+          "audioClip": "scene1_mars_retrograde",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "mars"
+            }
+          ],
+          "changeMeaning": "Mars executes a retrograde loop as seen from Earth, reversing briefly before resuming prograde motion.",
+          "narration": "Mars slows, halts, and reverses direction briefly, tracing a loop against the background stars before continuing eastward."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Earth-centered vs heliocentric perspective (outside view)",
+      "description": "From outside the solar system, observe Sun-centered orbits for Earth and Mars to illustrate overtaking and the geometric origin of the retrograde loop.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-06-08",
+      "educationalObjectives": [
+        "Visualize heliocentric orbits of Earth and Mars around the Sun.",
+        "Understand how Earth's faster inner orbit creates an apparent loop for outer planets.",
+        "Contrast with the apparent motion seen from Earth and relate to the observed retrograde event."
+      ],
+      "instructions": [
+        "Switch to heliocentric perspective; observe the orbital speeds and paths."
+      ],
+      "objects": [
+        {
+          "prefab": "sunPrefab",
+          "name": "sun_center",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earth_helio",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            1.0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "enabled": true,
+          "texture": "2k_earth_daymap",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                1.0,
+                0,
+                0
+              ],
+              "orbitalPeriod": 365.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "mars_helio",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            1.65,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "enabled": true,
+          "texture": "MarsTexture",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                1.65,
+                0,
+                0
+              ],
+              "orbitalPeriod": 687.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_earth_helio",
+          "parent": "earth_helio",
+          "position": [
+            0.0,
+            0.25,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.35,
+            0.35,
+            0.35
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Earth",
+              "color": [
+                200,
+                230,
+                255,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_mars_helio",
+          "parent": "mars_helio",
+          "position": [
+            0.0,
+            0.25,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.35,
+            0.35,
+            0.35
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Mars",
+              "color": [
+                255,
+                180,
+                120,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "module2_clip0_heliocentric_orbits",
+          "audioClip": "scene2_heliocentric_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "earth_helio"
+            },
+            {
+              "target": "mars_helio"
+            }
+          ],
+          "changeMeaning": "Earth and Mars move along their heliocentric orbits, showing relative motion from an external frame.",
+          "narration": "In a Sun-centered view, Earth completes a faster orbit than Mars, which creates the apparent loop when seen from Earth."
+        },
+        {
+          "clipName": "module2_clip1_overtaking_event",
+          "audioClip": "scene2_overtaking",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "earth_helio"
+            },
+            {
+              "target": "mars_helio"
+            }
+          ],
+          "changeMeaning": "Earth overtakes Mars in its inner orbit, producing the observed retrograde in the geocentric frame.",
+          "narration": "As Earth gains on Mars, the relative motion yields Mars' retrograde appearance from Earth."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Outer planets: Mars vs Jupiter vs Saturn retrograde magnitudes",
+      "description": "Extend the heliocentric view to Jupiter and Saturn to compare loop sizes; farther planets show smaller apparent loops.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-06-08",
+      "educationalObjectives": [
+        "Compare retrograde loop sizes for Mars, Jupiter, Saturn.",
+        "Explain how increased orbital distance reduces the geometric effect causing retrograde.",
+        "Predict relative retrograde magnitudes for outer planets."
+      ],
+      "instructions": [
+        "Observe three outer planets in similar phase and note loop size differences."
+      ],
+      "objects": [
+        {
+          "prefab": "sunPrefab",
+          "name": "sun_centre_3",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "mars_3",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            1.35,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "enabled": true,
+          "texture": "MarsTexture",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                1.35,
+                0,
+                0
+              ],
+              "orbitalPeriod": 687.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "jupiterPrefab",
+          "name": "jupiter",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            2.2,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ],
+          "texture": "JupiterTexture",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                2.2,
+                0,
+                0
+              ],
+              "orbitalPeriod": 4333.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "saturnPrefab",
+          "name": "saturn",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            3.0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.28,
+            0.28,
+            0.28
+          ],
+          "texture": "SaturnTexture",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                3.0,
+                0,
+                0
+              ],
+              "orbitalPeriod": 10759.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_merging",
+          "parent": "mars_3",
+          "position": [
+            0.0,
+            0.3,
+            0
+          ],
+          "scale": [
+            0.35,
+            0.35,
+            0.35
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Mars",
+              "color": [
+                255,
+                255,
+                0,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "module3_clip0_loop_sizes",
+          "audioClip": "scene3_loops_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "mars_3"
+            },
+            {
+              "target": "jupiter"
+            },
+            {
+              "target": "saturn"
+            }
+          ],
+          "changeMeaning": "From heliocentric view, Mars, Jupiter, Saturn each trace orbital loops; outer planets produce smaller loops.",
+          "narration": "As planets are farther from the Sun, their apparent retrograde loops shrink in size due to their slower relative motion."
+        },
+        {
+          "clipName": "module3_clip1_outside_comparison",
+          "audioClip": "scene3_outside_compare",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "mars_3"
+            },
+            {
+              "target": "jupiter"
+            },
+            {
+              "target": "saturn"
+            }
+          ],
+          "changeMeaning": "All three planets continue in their heliocentric orbits; outside view clarifies loop sizes.",
+          "narration": "Jupiter and Saturn's loops are smaller than Mars' due to their greater semi-major axes and slower orbital speeds."
+        }
+      ]
+    }
+  ]
+}

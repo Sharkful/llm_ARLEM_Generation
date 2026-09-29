@@ -1,0 +1,426 @@
+{
+  "version": "2.0",
+  "labId": "anatomy-heart-dual-circulation-AR01-fixed",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Human Anatomy and Physiology I (200-level)",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Identify and name the four heart chambers, the four major valves, and the principal vessels entering and leaving the heart.",
+    "Trace the path of blood through the heart in dual-loop circulation (pulmonary and systemic) in correct sequence.",
+    "Differentiate pulmonary vs systemic circuits based on oxygenation status and vessel directionality.",
+    "Explain the left vs right ventricular myocardium thickness asymmetry using pressure/resistance requirements.",
+    "Describe valve function (atrioventricular vs semilunar) and how valves prevent backflow during the cardiac cycle."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1 \u2014 Heart Exterior & Cutaway (Orientation)",
+      "description": "Introduce two patient-oriented heart models (exterior and cutaway) and guide gross anatomical orientation and mirroring.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Recognize the heart\u2019s apex orientation (downward and slightly to the left from an anatomical view).",
+        "Determine patient right vs patient left when viewed from the learner\u2019s perspective.",
+        "Locate major entering/leaving vessels on the exterior model for later tracing."
+      ],
+      "instructions": [
+        "Rotate your device to inspect labels from different angles.",
+        "Use the apex marker to keep track of anatomical orientation while you trace structures later."
+      ],
+      "objects": [
+        {
+          "prefab": "heartExteriorPrefab",
+          "name": "heartExterior_leftCopy",
+          "position": [
+            -0.55,
+            0.0,
+            0.6
+          ],
+          "eulerAngles": [
+            0,
+            25,
+            0
+          ],
+          "scale": [
+            0.22,
+            0.22,
+            0.22
+          ],
+          "texture": "balldimpled"
+        },
+        {
+          "prefab": "heartCutawayPrefab",
+          "name": "heartCutaway_rightCopy",
+          "position": [
+            0.55,
+            0.0,
+            0.6
+          ],
+          "eulerAngles": [
+            0,
+            25,
+            0
+          ],
+          "scale": [
+            0.22,
+            0.22,
+            0.22
+          ],
+          "texture": "balldimpled"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_orientation",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.65,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.3,
+            0.12,
+            0.02
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Orientation reminder: anatomical right/left is patient-based, so your view is mirrored.",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "tinySphere",
+          "name": "apexMarker",
+          "position": [
+            -0.02,
+            -0.14,
+            0.52
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "color": [
+            255,
+            210,
+            120,
+            255
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "s1_clip0_setup",
+          "audioClip": "heart_lab_scene1_setup_narration",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "heartExterior_leftCopy"
+            },
+            {
+              "target": "heartCutaway_rightCopy"
+            },
+            {
+              "target": "label_orientation"
+            },
+            {
+              "target": "apexMarker"
+            }
+          ],
+          "changeMeaning": "Spawns both heart models with an orientation label and an apex marker to ground anatomical perspective.",
+          "narration": "Welcome! This lab uses two views: an exterior heart model and a cutaway heart model with chambers and valves exposed. Remember: anatomical descriptions use the patient\u2019s orientation, so your view is mirrored."
+        },
+        {
+          "clipName": "s1_clip1_rotation_hint",
+          "audioClip": "heart_lab_scene1_rotation_hint",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartExterior_leftCopy"
+            },
+            {
+              "target": "heartCutaway_rightCopy"
+            }
+          ],
+          "changeMeaning": "Both heart models rotate to a clearer angle for seeing landmarks and internal relationships.",
+          "narration": "Rotate the models together. Notice which side appears to contain the patient\u2019s right atrium and right ventricle."
+        },
+        {
+          "clipName": "s1_clip2_exterior_landmarks",
+          "audioClip": "heart_lab_scene1_exterior_landmarks",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartExterior_leftCopy"
+            },
+            {
+              "target": "apexMarker"
+            }
+          ],
+          "changeMeaning": "Highlights key exterior vessels (SVC, IVC, pulmonary trunk, aorta) while keeping the apex marker aligned.",
+          "narration": "On the intact heart, locate vessels entering and leaving: superior and inferior vena cava, pulmonary trunk, and the aorta. These will anchor the blood-path tracing later."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2 \u2014 Guided Structural Tour (Chambers, Valves, Vessels)",
+      "description": "Sequentially highlight chambers, then valves, then major vessels on the cutaway while mirroring the corresponding exterior landmarks.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Name the four chambers in order: RA \u2192 RV \u2192 LA \u2192 LV.",
+        "Name valves and their chamber relationships: tricuspid, pulmonary, mitral/bicuspid, aortic.",
+        "Recall the major vessels entering/leaving in order for later tracing: SVC, IVC, pulmonary arteries, pulmonary veins, aorta.",
+        "Explain the mitral/bicuspid naming as used in anatomy and clinical contexts."
+      ],
+      "instructions": [
+        "Watch the highlight order and match each cutaway structure to the similar exterior region."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCutawayPrefab",
+          "name": "heartCutaway_tour",
+          "position": [
+            0.0,
+            0.0,
+            0.55
+          ],
+          "eulerAngles": [
+            0,
+            35,
+            0
+          ],
+          "scale": [
+            0.28,
+            0.28,
+            0.28
+          ]
+        },
+        {
+          "prefab": "heartExteriorPrefab",
+          "name": "heartExterior_tourMap",
+          "position": [
+            0.95,
+            0.0,
+            0.55
+          ],
+          "eulerAngles": [
+            0,
+            40,
+            0
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ]
+        },
+        {
+          "prefab": "robotIdle",
+          "name": "guidePointer",
+          "position": [
+            -0.02,
+            0.35,
+            0.45
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_structure",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.2,
+            0.55,
+            0.35
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.28,
+            0.12,
+            0.02
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Structure: (highlighted next)",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "s2_clip0_chambers_RA",
+          "audioClip": "heart_lab_scene2_chambers_right_atrium",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartCutaway_tour"
+            },
+            {
+              "target": "heartExterior_tourMap"
+            },
+            {
+              "target": "label_structure"
+            }
+          ],
+          "changeMeaning": "Highlights the right atrium on the cutaway and mirrors the region on the exterior map, updating the on-screen label.",
+          "narration": "First, the four chambers. We start with the right atrium: the entry chamber receiving blood returning from the body."
+        },
+        {
+          "clipName": "s2_clip1_chambers_RV",
+          "audioClip": "heart_lab_scene2_chambers_right_ventricle",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartCutaway_tour"
+            },
+            {
+              "target": "heartExterior_tourMap"
+            },
+            {
+              "target": "label_structure"
+            }
+          ],
+          "changeMeaning": "Moves highlighting to the right ventricle and updates label text to continue RA \u2192 RV.",
+          "narration": "Next is the right ventricle, which pumps blood onward toward the lungs."
+        },
+        {
+          "clipName": "s2_clip2_chambers_LA",
+          "audioClip": "heart_lab_scene2_chambers_left_atrium",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartCutaway_tour"
+            },
+            {
+              "target": "heartExterior_tourMap"
+            },
+            {
+              "target": "label_structure"
+            }
+          ],
+          "changeMeaning": "Transitions to the left atrium on both models and updates the label to LA.",
+          "narration": "Now the left atrium receives oxygenated blood coming back from the lungs."
+        },
+        {
+          "clipName": "s2_clip3_valve_tricuspid",
+          "audioClip": "heart_lab_scene2_valves_tricuspid",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartCutaway_tour"
+            },
+            {
+              "target": "heartExterior_tourMap"
+            },
+            {
+              "target": "label_structure"
+            }
+          ],
+          "changeMeaning": "Highlights the tricuspid valve between RA and RV and updates the label to anchor valve-chamber relationships.",
+          "narration": "Valves maintain one-way flow. The tricuspid valve sits between the right atrium and right ventricle."
+        },
+        {
+          "clipName": "s2_clip4_valve_pulmonary",
+          "audioClip": "heart_lab_scene2_valves_pulmonary",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartCutaway_tour"
+            },
+            {
+              "target": "heartExterior_tourMap"
+            },
+            {
+              "target": "label_structure"
+            }
+          ],
+          "changeMeaning": "Highlights the pulmonary valve and updates label text to continue valve sequence.",
+          "narration": "The pulmonary valve controls outflow from the right ventricle into the pulmonary trunk."
+        },
+        {
+          "clipName": "s2_clip5_valve_mitral_bicuspid",
+          "audioClip": "heart_lab_scene2_valves_mitral_bicuspid",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartCutaway_tour"
+            },
+            {
+              "target": "heartExterior_tourMap"
+            },
+            {
+              "target": "label_structure"
+            }
+          ],
+          "changeMeaning": "Highlights the mitral (bicuspid) valve and explicitly shows the dual naming on the label.",
+          "narration": "This valve is called the mitral valve or the bicuspid valve\u2014same structure between the left atrium and left ventricle."
+        },
+        {
+          "clipName": "s2_clip6_valve_aortic",
+          "audioClip": "heart_lab_scene2_valves_aortic",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartCutaway_tour"
+            },
+            {
+              "target": "heartExterior_tourMap"
+            },
+            {
+              "target": "label_structure"
+            }
+          ],
+          "changeMeaning": "Highlights the aortic valve between the left ventricle and aorta, completing the valve inventory in sequence.",
+          "narration": "The aortic valve controls outflow from the left ventricle into the aorta."
+        }
+      ]
+    }
+  ]
+}

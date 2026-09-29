@@ -1,0 +1,895 @@
+{
+  "version": "2.0",
+  "labId": "astro-retrograde-motion-101",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Introduction to Astronomy",
+  "estimatedLength": "35 minutes",
+  "objectives": [
+    "Describe the apparent path of Mars across the night sky during a retrograde episode, including the eastward drift, westward loop, and return to eastward motion.",
+    "Explain why apparent retrograde motion occurs in the heliocentric model as a consequence of Earth overtaking a slower-moving outer planet.",
+    "Contrast the geocentric and heliocentric explanations of retrograde motion and articulate why the heliocentric model is preferred on grounds of parsimony.",
+    "Predict when retrograde motion will occur for a given outer planet based on the relative orbital positions of Earth and that planet.",
+    "Compare the apparent retrograde loops of Mars, Jupiter, and Saturn, and explain why more distant planets produce smaller loops."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: The View from Earth",
+      "description": "Students stand on Earth's surface and watch Mars trace its puzzling retrograde loop across the background constellations over several weeks.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Describe the eastward drift of Mars against the background stars over weeks.",
+        "Identify the slowing, westward looping, and return to eastward motion that defines a retrograde episode.",
+        "Recognize that the retrograde loop is an observational puzzle demanding explanation."
+      ],
+      "instructions": [
+        "Face the star field ahead of you.",
+        "Use Next and Previous to advance night by night and watch Mars's position change."
+      ],
+      "objects": [
+        {
+          "prefab": "starFieldDomePrefab",
+          "name": "starDome",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.4,
+            0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "texture": "night_sky_constellations",
+          "color": [
+            10,
+            12,
+            40,
+            255
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "marsSky",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.6,
+            1.5,
+            1.2
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "2k_mars",
+          "color": [
+            200,
+            90,
+            50,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Mars",
+              "color": [
+                255,
+                180,
+                140,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "sceneTitle",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            2.1,
+            1.2
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "The View from Earth",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 40
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "dateLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.7,
+            1.0,
+            1.2
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Week 1",
+              "color": [
+                200,
+                220,
+                255,
+                255
+              ],
+              "fontSize": 28
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "s1_intro_night_sky",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsSky",
+              "position": [
+                -0.6,
+                1.5,
+                1.2
+              ]
+            },
+            {
+              "target": "dateLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Week 1",
+                  "color": [
+                    200,
+                    220,
+                    255,
+                    255
+                  ],
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Introduce the night-sky scene and set Mars at its starting eastern-drift position to orient the student.",
+          "narration": "Imagine you're standing outside on a clear night, watching the planet Mars among the stars. Over weeks, Mars slowly drifts eastward against the background constellations. Let's track it night after night."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "s1_eastward_drift",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsSky",
+              "position": [
+                -0.1,
+                1.55,
+                1.2
+              ]
+            },
+            {
+              "target": "dateLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Week 4",
+                  "color": [
+                    200,
+                    220,
+                    255,
+                    255
+                  ],
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Move Mars further east to show the normal, steady eastward prograde drift across several weeks.",
+          "narration": "As the weeks pass, Mars continues its slow, steady march toward the east, shifting a little further each night relative to the fixed stars."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "s1_retrograde_reversal",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsSky",
+              "position": [
+                0.3,
+                1.65,
+                1.2
+              ],
+              "color": [
+                255,
+                120,
+                70,
+                255
+              ]
+            },
+            {
+              "target": "dateLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Week 8 - Retrograde!",
+                  "color": [
+                    255,
+                    150,
+                    120,
+                    255
+                  ],
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Mars reaches the top of its loop and reverses, drifting westward, to reveal the surprising retrograde motion.",
+          "narration": "But then something strange happens. Mars slows to a stop, and reverses course, now drifting westward, tracing a backward loop against the stars. This is apparent retrograde motion."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "s1_resume_and_puzzle",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsSky",
+              "position": [
+                0.7,
+                1.55,
+                1.2
+              ],
+              "color": [
+                200,
+                90,
+                50,
+                255
+              ]
+            },
+            {
+              "target": "dateLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Week 14 - Loop complete",
+                  "color": [
+                    200,
+                    220,
+                    255,
+                    255
+                  ],
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Mars resumes eastward motion, completing the loop and posing the central question the lab will answer.",
+          "narration": "After about two months, Mars stops again and resumes its normal eastward drift, leaving behind a looping path in the sky. Why would a planet appear to reverse direction? For centuries, this was one of astronomy's great puzzles."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: The View from Outside the Solar System",
+      "description": "Students float above the solar system and watch Earth and Mars orbit the Sun, discovering that the retrograde loop arises naturally when faster-moving Earth overtakes Mars.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Explain retrograde motion as a consequence of Earth overtaking a slower outer planet.",
+        "Contrast the geocentric epicycle explanation with the simpler heliocentric explanation.",
+        "Connect the relative orbital positions of Earth and Mars to the timing of retrograde episodes."
+      ],
+      "instructions": [
+        "Look down on the Sun-centered solar system.",
+        "Advance the clips to watch Earth catch up to and pass Mars."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "sun",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "texture": "2k_sun",
+          "color": [
+            255,
+            220,
+            120,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 20
+            }
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earthOrbit",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.35,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "texture": "2k_earth_daymap",
+          "color": [
+            120,
+            160,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                0.35,
+                0,
+                0
+              ],
+              "orbitalPeriod": 12.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": false
+            },
+            {
+              "componentType": "textMeshPro",
+              "text": "Earth",
+              "color": [
+                180,
+                210,
+                255,
+                255
+              ],
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "marsOrbit",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.6,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "texture": "2k_mars",
+          "color": [
+            200,
+            90,
+            50,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                0.6,
+                0,
+                0
+              ],
+              "orbitalPeriod": 22.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": false
+            },
+            {
+              "componentType": "textMeshPro",
+              "text": "Mars",
+              "color": [
+                255,
+                160,
+                130,
+                255
+              ],
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "sightLinePrefab",
+          "name": "sightLine",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.35,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.005,
+            0.005,
+            0.9
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            255,
+            120,
+            120
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "scene2Title",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            2.0,
+            0.8
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "The View from Outside",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 40
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "s2_heliocentric_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "sun",
+              "enabled": true
+            },
+            {
+              "target": "earthOrbit",
+              "enabled": true
+            },
+            {
+              "target": "marsOrbit",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Reveal the heliocentric layout with Sun, Earth, and Mars in their orbits to reframe the puzzle from outside.",
+          "narration": "Now let's leave Earth behind and view the whole solar system from the outside. At the center is the Sun, with Earth on an inner orbit and Mars on a wider, slower orbit beyond it."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "s2_sight_line",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "sightLine",
+              "enabled": true
+            },
+            {
+              "target": "earthOrbit",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "initialPosition": [
+                    0.35,
+                    0,
+                    0
+                  ],
+                  "orbitalPeriod": 12.0,
+                  "timeRate": 1.0,
+                  "orbitalScale": 1.0,
+                  "synchronousRotation": false
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Draw the sight line from Earth through Mars to the stars, and let the orbits animate, showing how the apparent direction is measured.",
+          "narration": "Watch the line of sight from Earth, through Mars, out to the distant stars. As both planets move, notice how the direction we look changes. Earth, closer to the Sun, moves faster than Mars."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "s2_overtaking",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "sightLine",
+              "color": [
+                255,
+                120,
+                120,
+                200
+              ]
+            },
+            {
+              "target": "marsOrbit",
+              "color": [
+                255,
+                130,
+                80,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the overtaking moment as Earth passes Mars, which is the precise cause of the apparent backward loop.",
+          "narration": "Here is the key moment. Earth, on its faster inner track, catches up to and overtakes Mars. Just like passing a slower car on the highway, Mars briefly appears to slide backward against the distant stars, even though it never actually reverses."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "s2_geocentric_vs_helio",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "sightLine",
+              "enabled": false
+            },
+            {
+              "target": "scene2Title",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Simpler is Better: Heliocentric Wins",
+                  "color": [
+                    200,
+                    255,
+                    200,
+                    255
+                  ],
+                  "fontSize": 36
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Contrast with the geocentric model by updating the title, emphasizing the heliocentric model's parsimony.",
+          "narration": "In the old Earth-centered model, this loop had to be explained by adding an awkward extra circle called an epicycle for each planet. The Sun-centered model needs no such trick, the loop simply falls out of the two planets' motion. Because it explains more with less, we prefer the heliocentric model."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: Comparing Mars, Jupiter, and Saturn",
+      "description": "Students compare the retrograde loops of Mars, Jupiter, and Saturn side by side to see how orbital distance controls the size of the apparent loop.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Predict when retrograde occurs from the relative positions of Earth and an outer planet.",
+        "Compare the apparent retrograde loops of Mars, Jupiter, and Saturn.",
+        "Explain why more distant planets produce smaller retrograde loops."
+      ],
+      "instructions": [
+        "Compare the three loops displayed side by side.",
+        "Advance the clips to see each planet's loop grow or shrink."
+      ],
+      "objects": [
+        {
+          "prefab": "marsPrefab",
+          "name": "marsLoop",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.7,
+            1.4,
+            1.0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "2k_mars",
+          "color": [
+            200,
+            90,
+            50,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Mars",
+              "color": [
+                255,
+                170,
+                140,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "jupiterPrefab",
+          "name": "jupiterLoop",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.4,
+            1.0
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.09
+          ],
+          "texture": "2k_jupiter",
+          "color": [
+            220,
+            190,
+            150,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Jupiter",
+              "color": [
+                255,
+                230,
+                190,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "saturnPrefab",
+          "name": "saturnLoop",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.7,
+            1.4,
+            1.0
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "texture": "2k_saturn",
+          "color": [
+            230,
+            210,
+            160,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Saturn",
+              "color": [
+                255,
+                240,
+                200,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "loopTracePrefab",
+          "name": "marsTrace",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.7,
+            1.1,
+            1.0
+          ],
+          "scale": [
+            0.25,
+            0.15,
+            0.01
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            120,
+            90,
+            200
+          ]
+        },
+        {
+          "prefab": "loopTracePrefab",
+          "name": "jupiterTrace",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.1,
+            1.0
+          ],
+          "scale": [
+            0.14,
+            0.09,
+            0.01
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            220,
+            170,
+            200
+          ]
+        },
+        {
+          "prefab": "loopTracePrefab",
+          "name": "saturnTrace",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.7,
+            1.1,
+            1.0
+          ],
+          "scale": [
+            0.09,
+            0.06,
+            0.01
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            235,
+            190,
+            200
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "scene3Title",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            2.0,
+            1.0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Bigger Loops, Closer Planets",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 38
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "s3_intro_three_planets",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsLoop",
+              "enabled": true
+            },
+            {
+              "target": "jupiterLoop",
+              "enabled": true
+            },
+            {
+              "target": "saturnLoop",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Introduce the three outer planets side by side to set up a comparison of their retrograde loops.",
+          "narration": "All the outer planets show retrograde motion, but not equally. Here are Mars, Jupiter, and Saturn. Let's compare the loops they trace when Earth overtakes each of them."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "s3_mars_big_loop",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsTrace",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Reveal Mars's large loop trace since it is the nearest outer planet and shows the most dramatic reversal.",
+          "narration": "Mars is the closest outer planet, so when Earth passes it the effect is strong, producing a large, obvious retrograde loop."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "s3_jupiter_saturn_small_loops",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "jupiterTrace",
+              "enabled": true
+            },
+            {
+              "target": "saturnTrace",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Reveal Jupiter's and Saturn's progressively smaller traces to show how distance shrinks the apparent loop.",
+          "narration": "Jupiter, much farther away, traces a smaller loop. Saturn, farther still, traces an even smaller one. The more distant the planet, the weaker the relative-motion effect and the tinier the loop."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "s3_summary_and_prediction",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "scene3Title",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Retrograde: Predict It, Explain It",
+                  "color": [
+                    200,
+                    255,
+                    220,
+                    255
+                  ],
+                  "fontSize": 36
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Summarize the principle and prompt prediction of retrograde timing to reinforce the lab's key takeaways.",
+          "narration": "Every outer planet goes retrograde whenever Earth overtakes it, which happens once per synodic cycle, around opposition, when the planet is opposite the Sun in our sky. And the closer the planet, the bigger its backward loop. You can now predict when and how dramatically any outer planet will appear to reverse."
+        }
+      ]
+    }
+  ]
+}

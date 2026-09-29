@@ -1,0 +1,294 @@
+{
+  "workplace": {
+    "id": "dna_lab_workplace",
+    "name": "Molecular Biology Laboratory",
+    "origin": "marker_origin",
+    "things": [
+      {
+        "id": "dna_model_stand",
+        "name": "DNA Structural Model Stand",
+        "detectable": "marker_dna",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "lab_bench_main",
+        "name": "Main Lab Bench for Replication",
+        "detectable": "marker_bench",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "result_display_area",
+        "name": "Results Screen Area",
+        "detectable": "marker_display",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "marker_origin",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_origin.bundle"
+      },
+      {
+        "id": "marker_dna",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_dna.bundle"
+      },
+      {
+        "id": "marker_bench",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_bench.bundle"
+      },
+      {
+        "id": "marker_display",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_display.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "image"
+      },
+      {
+        "id": "animation"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "dna_helix_vis",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/dna_helix.png"
+      },
+      {
+        "id": "base_pairs_vis",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/base_pairs.png"
+      },
+      {
+        "id": "helicase_anim",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/helicase_action.glb"
+      },
+      {
+        "id": "polymerase_anim",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/polymerase_action.glb"
+      },
+      {
+        "id": "final_result_vis",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/semiconservative_result.png"
+      }
+    ]
+  },
+  "activity": {
+    "id": "dna_replication_lab",
+    "name": "Molecular Biology: DNA Replication Lab",
+    "description": "Exploration of DNA structure and the semiconservative replication process.",
+    "workplace": "dna_lab_workplace",
+    "start": "step1_structure",
+    "actions": [
+      {
+        "id": "step1_structure",
+        "instruction": {
+          "title": "The DNA Double Helix",
+          "description": "Examine the 3D double helix model. Identify the sugar-phosphate backbones and the nitrogenous bases (A, T, G, C) in the center."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "dna_model_stand",
+              "type": "predicate",
+              "augmentation": "dna_helix_vis",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step2_pairing"
+          }
+        ]
+      },
+      {
+        "id": "step2_pairing",
+        "instruction": {
+          "title": "Complementary Base Pairing",
+          "description": "Observe the base pairing: Adenine with Thymine (2 bonds) and Guanine with Cytosine (3 bonds). Note the antiparallel orientation (5' to 3' vs 3' to 5')."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "dna_model_stand",
+              "type": "predicate",
+              "augmentation": "base_pairs_vis",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "dna_model_stand",
+              "type": "predicate",
+              "augmentation": "dna_helix_vis"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step3_helicase"
+          }
+        ]
+      },
+      {
+        "id": "step3_helicase",
+        "instruction": {
+          "title": "Initiating Replication",
+          "description": "Watch as Helicase unwinds the double helix at the replication fork. Single-strand binding proteins stabilize the exposed templates."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "lab_bench_main",
+              "type": "predicate",
+              "augmentation": "helicase_anim",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "dna_model_stand",
+              "type": "predicate",
+              "augmentation": "base_pairs_vis"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step4_polymerase"
+          }
+        ]
+      },
+      {
+        "id": "step4_polymerase",
+        "instruction": {
+          "title": "DNA Polymerase Activity",
+          "description": "Observe DNA Polymerase synthesizing the leading strand continuously and the lagging strand in Okazaki fragments."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "lab_bench_main",
+              "type": "predicate",
+              "augmentation": "polymerase_anim",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "lab_bench_main",
+              "type": "predicate",
+              "augmentation": "helicase_anim"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step5_semiconservative"
+          }
+        ]
+      },
+      {
+        "id": "step5_semiconservative",
+        "instruction": {
+          "title": "Semiconservative Replication",
+          "description": "Observe the final two DNA molecules. Each is composed of one original parental strand and one newly synthesized strand, confirming semiconservative replication."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "result_display_area",
+              "type": "predicate",
+              "augmentation": "final_result_vis",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "lab_bench_main",
+              "type": "predicate",
+              "augmentation": "polymerase_anim"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step1_structure"
+          }
+        ]
+      }
+    ]
+  }
+}

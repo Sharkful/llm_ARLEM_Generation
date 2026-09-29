@@ -1,0 +1,682 @@
+{
+  "version": "2.0",
+  "labId": "dna_structure_replication_lab",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Introductory Molecular Biology",
+  "estimatedLength": "25 minutes",
+  "objectives": [
+    "Identify structural components of the DNA double helix, including sugar-phosphate backbones, complementary nitrogenous bases, and hydrogen bonds.",
+    "Explain how the chemical 5'-to-3' antiparallel orientation of DNA strands shapes overall molecule topology and restricts synthesis direction.",
+    "Detail the dynamic molecular processes occurring at the replication fork, highlighting helicase, SSB, DNA polymerase, and ligase.",
+    "Contrast continuous and discontinuous DNA replication, linking the leading and lagging strand synthesis to polymerase directional limits.",
+    "Differentiate semiconservative replication from other potential replication models by inspecting parent vs. daughter strands."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "DNA Structure and Base Pairing",
+      "description": "An examination of the DNA double helix structure, its chemical directionality, and complementary base-pairing rules.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Identify the 3D components of DNA: sugar-phosphate backbone, nitrogenous bases, and hydrogen bonds.",
+        "Explain the antiparallel arrangement of the two complementary strands.",
+        "Apply complementary base pairing rules and explain the difference in hydrogen bonding (A-T vs G-C)."
+      ],
+      "instructions": [
+        "Look at the rotating DNA model on your tabletop.",
+        "Examine the labels highlighting the 5' and 3' ends.",
+        "Observe the specific hydrogen bonding configurations in the close-up base pair models."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaDoubleHelixPrefab",
+          "name": "dnaHelix",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.2,
+            -0.6
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "texture": "dna_backbone_bases_texture",
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 15
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelHelix",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.55,
+            -0.6
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "DNA double helix model",
+              "color": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "fontSize": 30,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "strandLabelLeft",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.15,
+            1.35,
+            -0.55
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "5' -> 3'",
+              "color": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "fontSize": 32
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "strandLabelRight",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.15,
+            1.35,
+            -0.55
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "3' -> 5'",
+              "color": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "fontSize": 32
+            }
+          ]
+        },
+        {
+          "prefab": "atBasePairPrefab",
+          "name": "basePairAT",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            1.15,
+            -0.5
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 25
+            }
+          ]
+        },
+        {
+          "prefab": "gcBasePairPrefab",
+          "name": "basePairGC",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.25,
+            1.15,
+            -0.5
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 25
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_intro",
+          "audioClip": "dna_intro_helix",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "labelHelix",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "DNA Double Helix\n\nThe fundamental blueprint of life is arranged in a double helix. Let's examine its structure.",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 28,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Displays the rotating DNA double helix model with its introductory description.",
+          "narration": "Welcome to the molecular level. Before us is the DNA double helix. It consists of two strands that wind around a common central axis. Note the repeating sugar-phosphate backbone on the outside, and the nitrogenous bases pointing inward, forming pairs that carry genetic information."
+        },
+        {
+          "clipName": "clip2_antiparallel",
+          "audioClip": "dna_antiparallel_directionality",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "dnaHelix",
+              "components": [
+                {
+                  "componentType": "newscript",
+                  "scriptName": "backbonehighlighter",
+                  "scriptDescription": "Applies an emissive glow to specific elements of the DNA prefab (e.g. sugar-phosphate backbones) to highlight their antiparallel directions. Requires backbone ID (1 or 2) and highlight color."
+                }
+              ]
+            },
+            {
+              "target": "labelHelix",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Antiparallel Strands (5' to 3' vs 3' to 5')\n\nLook closely at the chemical direction of each strand. One runs 5' to 3' upwards, while the other runs 3' to 5' upwards.",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 24,
+                  "wrapText": true
+                }
+              ]
+            },
+            {
+              "target": "strandLabelLeft",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "5' -> 3'",
+                  "color": [
+                    1,
+                    0.3,
+                    0.3,
+                    1
+                  ],
+                  "fontSize": 32,
+                  "wrapText": false
+                }
+              ]
+            },
+            {
+              "target": "strandLabelRight",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "3' -> 5'",
+                  "color": [
+                    0.3,
+                    0.3,
+                    1,
+                    1
+                  ],
+                  "fontSize": 32,
+                  "wrapText": false
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlights the antiparallel directionality of the strands by activating a specialized highlight shader and displaying 5' and 3' labels.",
+          "narration": "Observe the directionality of the sugar-phosphate backbones. The carbon atoms of the deoxyribose sugar are numbered 1' to 5'. One strand runs in a 5' to 3' direction, while its complementary partner runs in the opposite, or antiparallel, 3' to 5' direction. This orientation is crucial for replication."
+        },
+        {
+          "clipName": "clip3_basepairing",
+          "audioClip": "dna_base_pairing_details",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "dnaHelix",
+              "enabled": false
+            },
+            {
+              "target": "strandLabelLeft",
+              "enabled": false
+            },
+            {
+              "target": "strandLabelRight",
+              "enabled": false
+            },
+            {
+              "target": "basePairAT",
+              "enabled": true
+            },
+            {
+              "target": "basePairGC",
+              "enabled": true
+            },
+            {
+              "target": "labelHelix",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Complementary Base Pairing\n\nAdenine (A) pairs with Thymine (T) via TWO hydrogen bonds.\nGuanine (G) pairs with Cytosine (C) via THREE hydrogen bonds.",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 24,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Deactivates the main helix and activates detailed individual models of Adenine-Thymine and Guanine-Cytosine base pairs to illustrate hydrogen bonding.",
+          "narration": "Let's examine complementary base pairing. Zooming in, we see Adenine pairing specifically with Thymine, stabilized by two hydrogen bonds. Beside it, Guanine pairs with Cytosine, stabilized by three hydrogen bonds. This highly specific pairing ensures accurate genetic transmission."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "DNA Replication Machinery",
+      "description": "Explore how enzymes coordinate at the replication fork to copy DNA, causing continuous leading strand and discontinuous lagging strand synthesis.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Trace the specific functions of helicase, SSBs, DNA polymerase, and ligase.",
+        "Contrast continuous leading-strand synthesis with discontinuous lagging-strand synthesis.",
+        "Explain why the structure of DNA forces this asymmetry during replication.",
+        "Define the semiconservative replication mechanism and identify the source of each strand in daughter molecules."
+      ],
+      "instructions": [
+        "Observe the molecular actors operating at the replication fork.",
+        "Compare the continuous movement of DNA polymerase on the leading strand with the creation of Okazaki fragments on the lagging strand.",
+        "Examine the resulting daughter helices to understand the semiconservative outcome."
+      ],
+      "objects": [
+        {
+          "prefab": "replicationForkPrefab",
+          "name": "replicationFork",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.15,
+            -0.65
+          ],
+          "scale": [
+            0.32,
+            0.32,
+            0.32
+          ],
+          "components": [
+            {
+              "componentType": "newscript",
+              "scriptName": "repforbbase",
+              "scriptDescription": "Manages the base visual states of the replication fork, including parental template strands, lagging loops, and placeholder active enzymes."
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "replicationInfoText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.55,
+            -0.6
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "DNA Replication Process",
+              "color": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "fontSize": 30,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "helicaseLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.3,
+            1.3,
+            -0.55
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Helicase Unwinding",
+              "color": [
+                1,
+                0.9,
+                0.2,
+                1
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "ssbLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.3,
+            1.05,
+            -0.55
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "SSB Proteins (Stabilizers)",
+              "color": [
+                0.4,
+                0.9,
+                0.4,
+                1
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "polymeraseLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.32,
+            1.35,
+            -0.55
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "DNA Polymerase III",
+              "color": [
+                0.9,
+                0.3,
+                0.3,
+                1
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "okazakiLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.32,
+            1,
+            -0.55
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Okazaki Fragments (Lagging Strand)",
+              "color": [
+                0.9,
+                0.6,
+                0.3,
+                1
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "semiconservativeDaughtersPrefab",
+          "name": "semiconservativeDaughters",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.15,
+            -0.6
+          ],
+          "scale": [
+            0.22,
+            0.22,
+            0.22
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 20
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_rep_intro",
+          "audioClip": "dna_replication_fork_unwinding",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "replicationInfoText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "The Replication Fork\n\nHelicase (yellow ring) unwinds the double helix, while Single-Strand Binding Proteins (SSBs) prevent immediate re-annealing.",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 24,
+                  "wrapText": true
+                }
+              ]
+            },
+            {
+              "target": "helicaseLabel",
+              "enabled": true
+            },
+            {
+              "target": "ssbLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Displays the DNA replication fork. Highlights the Helicase enzyme unwinding the parent DNA strand, and Single-Strand Binding proteins stabilizing it.",
+          "narration": "Now, let's observe DNA replication. Before replication can occur, the double helix must unwind. Here is the replication fork. The enzyme Helicase, represented by the yellow ring structure, breaks the hydrogen bonds, unwinding the strands. Single-Strand Binding Proteins bind to the single strands to stabilize them and keep them template-ready."
+        },
+        {
+          "clipName": "clip2_synthesis",
+          "audioClip": "dna_replication_synthesis",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "replicationInfoText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Asymmetrical Synthesis\n\nDNA Polymerase synthesizes ONLY in the 5' to 3' direction.\nLeading strand: Continuous synthesis.\nLagging strand: Discontinuous (Okazaki fragments), later joined by Ligase.",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 22,
+                  "wrapText": true
+                }
+              ]
+            },
+            {
+              "target": "helicaseLabel",
+              "enabled": false
+            },
+            {
+              "target": "ssbLabel",
+              "enabled": false
+            },
+            {
+              "target": "polymeraseLabel",
+              "enabled": true
+            },
+            {
+              "target": "okazakiLabel",
+              "enabled": true
+            },
+            {
+              "target": "replicationFork",
+              "components": [
+                {
+                  "componentType": "newscript",
+                  "scriptName": "replicationsimulator",
+                  "scriptDescription": "Triggers local motion paths on the DNA replication model to show continuous polymerase progress on the leading strand and episodic assembly on the lagging strand."
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Activates DNA Polymerase and highlights the asymmetry of continuous leading strand synthesis versus discontinuous lagging strand synthesis with Okazaki fragments.",
+          "narration": "DNA polymerase can only add nucleotides to a free 3-prime end, meaning synthesis occurs strictly 5-prime to 3-prime. Because the strands are antiparallel, one new strand, the leading strand, is synthesized continuously into the replication fork. The other, the lagging strand, must be synthesized discontinuously in short stretches called Okazaki fragments. These fragments are subsequently sealed together by DNA ligase."
+        },
+        {
+          "clipName": "clip3_semiconservative",
+          "audioClip": "dna_semiconservative_model",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "replicationFork",
+              "enabled": false
+            },
+            {
+              "target": "polymeraseLabel",
+              "enabled": false
+            },
+            {
+              "target": "okazakiLabel",
+              "enabled": false
+            },
+            {
+              "target": "semiconservativeDaughters",
+              "enabled": true
+            },
+            {
+              "target": "replicationInfoText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Semiconservative Replication\n\nEach daughter DNA molecule consists of one original parental strand (blue) and one newly synthesized strand (red).",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 24,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Removes replication fork, shows the two resulting daughter molecules, emphasizing the semiconservative distribution of original (blue) and newly synthesized (red) strands.",
+          "narration": "Once replication is complete, we are left with two identical DNA double helices. Notice that each daughter molecule contains one preserved original parental strand, shown in blue, and one newly synthesized strand, shown in red. Because half of the original parent material is conserved in each descendant, this process is called semiconservative replication."
+        }
+      ]
+    }
+  ]
+}

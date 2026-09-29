@@ -1,0 +1,207 @@
+{
+  "version": "2.0",
+  "labId": "astro_101_retrograde_motion",
+  "author": "Dr. Sarah Miller",
+  "courseName": "Introduction to Astronomy",
+  "estimatedLength": "20 minutes",
+  "objectives": [
+    "Identify the phenomenon of apparent retrograde motion in outer planets.",
+    "Contrast geocentric and heliocentric explanations for planetary motion.",
+    "Analyze the cause of retrograde motion as an effect of relative orbital velocity."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "The View from Earth",
+      "description": "Visualizing how Mars appears to move against the star background from an observer on Earth.",
+      "author": "Dr. Sarah Miller",
+      "institution": "Department of Physics & Astronomy",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Observe the apparent loop traced by Mars in the night sky.",
+        "Understand the historical confusion this caused for geocentric models."
+      ],
+      "objects": [
+        {
+          "prefab": "marsPrefab",
+          "name": "marsPointer",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.2,
+            1.5
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "texture": "mars_surface_map"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "marsLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.5,
+            1.5
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Mars Pathing",
+              "fontSize": 1.0
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "intro_retrograde",
+          "audioClip": "narrator_intro_retrograde",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "marsPointer",
+              "position": [
+                0.5,
+                1.2,
+                1.5
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "tracing_the_loop",
+          "audioClip": "narrator_tracing_loop",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "marsPointer",
+              "position": [
+                -0.5,
+                1.4,
+                1.5
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "The Heliocentric Reality",
+      "description": "Seeing the solar system from above to understand how Earth passing Mars causes the apparent retrograde loop.",
+      "author": "Dr. Sarah Miller",
+      "institution": "Department of Physics & Astronomy",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Demonstrate how Earth passing Mars creates the illusion of backward motion.",
+        "Relate orbital speed differences to observed planetary motion."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "sun",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earth",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 10.0,
+              "orbitalScale": 1.0
+            }
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "marsOrbiting",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            1.8,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 20.0,
+              "orbitalScale": 1.8
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "orbit_start",
+          "audioClip": "narrator_orbital_explanation",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "earth",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "passing_maneuver",
+          "audioClip": "narrator_passing_effect",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "earth",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 5.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "conclusion",
+          "audioClip": "narrator_summary",
+          "autoAdvance": true
+        }
+      ]
+    }
+  ]
+}

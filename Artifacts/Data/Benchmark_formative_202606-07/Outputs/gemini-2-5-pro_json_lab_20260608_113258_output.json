@@ -1,0 +1,739 @@
+{
+  "version": "2.0",
+  "labId": "VSEPR_Theory_101",
+  "author": "Dr. AR Educator",
+  "courseName": "General Chemistry I",
+  "estimatedLength": "25 minutes",
+  "objectives": [
+    "Explain the core principle of Valence Shell Electron Pair Repulsion (VSEPR) theory.",
+    "Identify the five fundamental electron-domain geometries.",
+    "Predict the three-dimensional molecular geometry based on the number of bonding and non-bonding electron pairs around a central atom.",
+    "Explain how the presence of lone pairs influences bond angles compared to idealized geometries."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Geometries from the Octet Rule",
+      "description": "This module introduces VSEPR theory and covers the linear, trigonal planar, and tetrahedral electron-domain geometries. It then demonstrates how lone pairs modify the tetrahedral arrangement to produce bent and trigonal pyramidal molecular geometries.",
+      "author": "Dr. AR Educator",
+      "institution": "State University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Define an electron domain and relate the number of domains to electron geometry.",
+        "Identify linear, trigonal planar, and tetrahedral geometries.",
+        "Differentiate between electron-domain geometry and molecular geometry.",
+        "Predict the molecular geometry for molecules with 0, 1, or 2 lone pairs in a tetrahedral arrangement."
+      ],
+      "instructions": [
+        "Welcome to the VSEPR Theory lab.",
+        "In this module, we will explore how electron pairs determine the shape of molecules.",
+        "Follow the audio and text prompts to proceed."
+      ],
+      "objects": [
+        {
+          "prefab": "atomPrefab",
+          "name": "centralAtom",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            255.0
+          ],
+          "components": []
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domain1",
+          "parent": "centralAtom",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domain2",
+          "parent": "centralAtom",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domain3",
+          "parent": "centralAtom",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domain4",
+          "parent": "centralAtom",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "infoLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.2,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "VSEPR Theory: Electron Geometries",
+              "fontSize": 0.04,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "orbitalScale": 1.0
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "angleLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            -0.15,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 0.03,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "orbitalScale": 1.0
+            }
+          ]
+        },
+        {
+          "prefab": "methanePrefab",
+          "name": "methaneModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "ammoniaPrefab",
+          "name": "ammoniaModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "waterPrefab",
+          "name": "waterModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_intro_01.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "infoLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "The core idea of VSEPR is that electron domains around a central atom repel each other."
+                }
+              ]
+            },
+            {
+              "target": "centralAtom",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_linear_02.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "domain1",
+              "enabled": true,
+              "color": [
+                180.0,
+                220.0,
+                255.0,
+                200.0
+              ],
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 0.0,
+                  "orbitalScale": 2.0,
+                  "synchronousRotation": true,
+                  "azmTarget": 0,
+                  "altTarget": 0
+                }
+              ]
+            },
+            {
+              "target": "domain2",
+              "enabled": true,
+              "color": [
+                180.0,
+                220.0,
+                255.0,
+                200.0
+              ],
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 0.0,
+                  "orbitalScale": 2.0,
+                  "synchronousRotation": true,
+                  "azmTarget": 180,
+                  "altTarget": 0
+                }
+              ]
+            },
+            {
+              "target": "angleLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Bond Angle: 180\u00b0"
+                }
+              ]
+            },
+            {
+              "target": "infoLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "2 Domains: Linear Geometry"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vsepr_trigonal_03.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "domain1",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "azmTarget": 0
+                }
+              ]
+            },
+            {
+              "target": "domain2",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "azmTarget": 120
+                }
+              ]
+            },
+            {
+              "target": "domain3",
+              "enabled": true,
+              "color": [
+                180.0,
+                220.0,
+                255.0,
+                200.0
+              ],
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 0.0,
+                  "orbitalScale": 2.0,
+                  "synchronousRotation": true,
+                  "azmTarget": 240,
+                  "altTarget": 0
+                }
+              ]
+            },
+            {
+              "target": "angleLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Bond Angle: 120\u00b0"
+                }
+              ]
+            },
+            {
+              "target": "infoLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "3 Domains: Trigonal Planar Geometry"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "vsepr_tetrahedral_04.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "domain1",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "azmTarget": 0,
+                  "altTarget": 109
+                }
+              ]
+            },
+            {
+              "target": "domain2",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "azmTarget": 120,
+                  "altTarget": -19
+                }
+              ]
+            },
+            {
+              "target": "domain3",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "azmTarget": 240,
+                  "altTarget": -19
+                }
+              ]
+            },
+            {
+              "target": "domain4",
+              "enabled": true,
+              "color": [
+                180.0,
+                220.0,
+                255.0,
+                200.0
+              ],
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 0.0,
+                  "orbitalScale": 2.0,
+                  "synchronousRotation": true,
+                  "azmTarget": 0,
+                  "altTarget": -19
+                }
+              ]
+            },
+            {
+              "target": "angleLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Bond Angle: 109.5\u00b0"
+                }
+              ]
+            },
+            {
+              "target": "infoLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "4 Domains: Tetrahedral Geometry\nExample: Methane (CH\u2084)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip4",
+          "audioClip": "vsepr_ammonia_05.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "domain1",
+              "enabled": false
+            },
+            {
+              "target": "domain2",
+              "enabled": false
+            },
+            {
+              "target": "domain3",
+              "enabled": false
+            },
+            {
+              "target": "domain4",
+              "enabled": false
+            },
+            {
+              "target": "centralAtom",
+              "enabled": false
+            },
+            {
+              "target": "ammoniaModel",
+              "enabled": true
+            },
+            {
+              "target": "angleLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Bond Angle: ~107\u00b0"
+                }
+              ]
+            },
+            {
+              "target": "infoLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Electron Geometry: Tetrahedral\nMolecular Geometry: Trigonal Pyramidal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip5",
+          "audioClip": "vsepr_water_06.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "ammoniaModel",
+              "enabled": false
+            },
+            {
+              "target": "waterModel",
+              "enabled": true
+            },
+            {
+              "target": "angleLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Bond Angle: 104.5\u00b0"
+                }
+              ]
+            },
+            {
+              "target": "infoLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Electron Geometry: Tetrahedral\nMolecular Geometry: Bent"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Expanded Octet Geometries",
+      "description": "Explores the trigonal bipyramidal and octahedral electron-domain geometries and the molecular shapes derived from them when lone pairs are present, such as seesaw and square planar.",
+      "author": "Dr. AR Educator",
+      "institution": "State University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Identify trigonal bipyramidal and octahedral electron-domain geometries.",
+        "Distinguish between axial and equatorial positions in a trigonal bipyramidal geometry.",
+        "Predict molecular geometries arising from expanded octets, including seesaw, T-shaped, and square planar."
+      ],
+      "instructions": [
+        "This module explores molecules with more than eight electrons around the central atom.",
+        "We will see how 5 and 6 electron domains arrange themselves in space."
+      ],
+      "objects": [
+        {
+          "prefab": "pf5_Prefab",
+          "name": "pf5_model",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.6
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "sf4_Prefab",
+          "name": "sf4_model",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.6
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "sf6_Prefab",
+          "name": "sf6_model",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.6
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "xeF4_Prefab",
+          "name": "xeF4_model",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.6
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "module2_infoLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.25,
+            0.6
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Expanded Octets",
+              "fontSize": 0.04,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_trigonalbipyramidal_01.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "pf5_model",
+              "enabled": true
+            },
+            {
+              "target": "module2_infoLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "5 Domains: Trigonal Bipyramidal\nAxial (90\u00b0) and Equatorial (120\u00b0) positions."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_seesaw_02.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "pf5_model",
+              "enabled": false
+            },
+            {
+              "target": "sf4_model",
+              "enabled": true
+            },
+            {
+              "target": "module2_infoLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "One lone pair occupies an equatorial position.\nMolecular Geometry: Seesaw"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vsepr_octahedral_03.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "sf4_model",
+              "enabled": false
+            },
+            {
+              "target": "sf6_model",
+              "enabled": true
+            },
+            {
+              "target": "module2_infoLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "6 Domains: Octahedral\nAll positions are equivalent with 90\u00b0 angles."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "vsepr_squareplanar_04.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "sf6_model",
+              "enabled": false
+            },
+            {
+              "target": "xeF4_model",
+              "enabled": true
+            },
+            {
+              "target": "module2_infoLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Two lone pairs occupy opposite positions.\nMolecular Geometry: Square Planar"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

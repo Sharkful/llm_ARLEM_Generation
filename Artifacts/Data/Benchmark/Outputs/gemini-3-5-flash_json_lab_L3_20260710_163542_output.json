@@ -1,0 +1,952 @@
+{
+  "version": "2.0",
+  "labId": "vectors_projectile_motion",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Physics I (Mechanics)",
+  "estimatedLength": "20 minutes",
+  "objectives": [
+    "Represent a 2D vector by magnitude/direction, and equivalently by horizontal and vertical components.",
+    "Perform vector addition graphically using the tip-to-tail technique.",
+    "Calculate component values using trigonometric functions.",
+    "Explain the physics principle of independence of perpendicular motions in projectile kinematics.",
+    "Describe kinematic variables (position, velocity) at critical path points such as launch, apex, and landing.",
+    "Predict how changes in launch angles and velocity affect range and maximum height."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Vector Fundamentals & Decomposition",
+      "description": "Learn how vectors represent physical quantities, how to decompose them into x and y components, and how to perform graphical addition.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Represent a 2D vector by its magnitude, direction, and components.",
+        "Decompose a vector into component axes using trigonometry.",
+        "Add vectors graphically using the tip-to-tail method to find the resultant vector."
+      ],
+      "instructions": [
+        "Observe the blue vector, A, appearing on the grid.",
+        "Observe how Vector A decomposes into orange horizontal and green vertical components.",
+        "Watch how Vector B is added to Vector A tip-to-tail to form the yellow resultant vector, R."
+      ],
+      "objects": [
+        {
+          "prefab": "gridPrefab",
+          "name": "grid_base",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.4,
+            0.8
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.5,
+            0.01,
+            0.5
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "y-axis\\n^\\n| \\n+---> x-axis",
+              "color": [
+                0.8,
+                0.8,
+                0.8,
+                0.5
+              ],
+              "fontSize": 24,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vector_A",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vector_Ax",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vector_Ay",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vector_B",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vector_R",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "math_text",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.2,
+            0.8
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vector Mechanics Lab",
+              "color": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "fontSize": 30,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "intro_vector",
+          "audioClip": "vector_introduction",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "math_text",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Vector A represents a quantity with magnitude (length) and direction.",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 32,
+                  "wrapText": true
+                }
+              ]
+            },
+            {
+              "target": "vector_A",
+              "position": [
+                0,
+                -0.3,
+                0.8
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                45
+              ],
+              "scale": [
+                0.05,
+                0.05,
+                0.25
+              ],
+              "enabled": true,
+              "color": [
+                0.1,
+                0.4,
+                0.9,
+                1
+              ]
+            }
+          ],
+          "changeMeaning": "Introduce a single vector represented as an arrow in 3D space, representing magnitude and direction.",
+          "narration": "Welcome to the laboratory on Vectors and Projectile Motion. Here, we see Vector A. In physics, vectors represent quantities like displacement, velocity, and force, which possess both a magnitude\u2014indicated by the length of the arrow\u2014and a specific direction in space."
+        },
+        {
+          "clipName": "decompose_vector",
+          "audioClip": "vector_decomposition",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "math_text",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Decomposition:\\nAx = A * cos(\u03b8)\\nAy = A * sin(\u03b8)",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 28,
+                  "wrapText": true
+                }
+              ]
+            },
+            {
+              "target": "vector_Ax",
+              "position": [
+                0,
+                -0.38,
+                0.8
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                0.04,
+                0.04,
+                0.18
+              ],
+              "enabled": true,
+              "color": [
+                0.9,
+                0.5,
+                0.1,
+                1
+              ]
+            },
+            {
+              "target": "vector_Ay",
+              "position": [
+                0,
+                -0.38,
+                0.8
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                90
+              ],
+              "scale": [
+                0.04,
+                0.04,
+                0.18
+              ],
+              "enabled": true,
+              "color": [
+                0.1,
+                0.8,
+                0.3,
+                1
+              ]
+            }
+          ],
+          "changeMeaning": "Decompose Vector A into its horizontal (Ax) and vertical (Ay) components.",
+          "narration": "Any two-dimensional vector can be decomposed into two perpendicular components. Using right-triangle trigonometry, we find the horizontal component, Ax, along the x-axis, and the vertical component, Ay, along the y-axis. These components completely describe the vector."
+        },
+        {
+          "clipName": "tiptotail_addition",
+          "audioClip": "tip_to_tail_addition",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "math_text",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Vector Addition (Tip-to-Tail):\\nA + B = R (Resultant)",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 28,
+                  "wrapText": true
+                }
+              ]
+            },
+            {
+              "target": "vector_B",
+              "position": [
+                0.18,
+                -0.12,
+                0.8
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                -15
+              ],
+              "scale": [
+                0.04,
+                0.04,
+                0.15
+              ],
+              "enabled": true,
+              "color": [
+                0.9,
+                0.1,
+                0.1,
+                1
+              ]
+            },
+            {
+              "target": "vector_R",
+              "position": [
+                0,
+                -0.38,
+                0.8
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                25
+              ],
+              "scale": [
+                0.05,
+                0.05,
+                0.38
+              ],
+              "enabled": true,
+              "color": [
+                0.8,
+                0.8,
+                0,
+                1
+              ]
+            },
+            {
+              "target": "vector_Ax",
+              "enabled": false
+            },
+            {
+              "target": "vector_Ay",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "Introduce Vector B and align it tip-to-tail with Vector A to demonstrate graphical vector addition. Reveal the resultant Vector R.",
+          "narration": "To add vectors graphically, we place them tip-to-tail. Here, we place the tail of Vector B at the tip of Vector A. The combined effect is represented by the resultant vector, R, which points directly from the start of Vector A to the tip of Vector B."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Projectile Motion & Independence of Motion",
+      "description": "Investigate how horizontal and vertical components govern the motion of a projectile, showing how independent axes produce a parabolic trajectory.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Explain why vertical and horizontal motions are independent.",
+        "Identify that horizontal velocity remains constant throughout flight.",
+        "State that vertical velocity is zero at the peak of trajectory.",
+        "Analyze how different launch angles affect range, flight duration, and peak height."
+      ],
+      "instructions": [
+        "Observe the cannon at the left of the table.",
+        "Watch the velocity vector split into horizontal (orange) and vertical (green) components.",
+        "Follow the projectile's trajectory and look at how the vertical component shrinks to zero at the peak.",
+        "Compare the parabolic arcs of different launch angles."
+      ],
+      "objects": [
+        {
+          "prefab": "gridPrefab",
+          "name": "projectile_ground",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.4,
+            0.9
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            0.01,
+            0.4
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Launch Zone ----------> Range Grid",
+              "color": [
+                0.5,
+                0.5,
+                0.5,
+                0.3
+              ],
+              "fontSize": 20,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "launcherPrefab",
+          "name": "cannon_launcher",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.45,
+            -0.38,
+            0.9
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            45
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.12
+          ]
+        },
+        {
+          "prefab": "moveableSphere",
+          "name": "projectile_ball",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.45,
+            -0.38,
+            0.9
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "arrow_v0",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "arrow_vx",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "arrow_vy",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "projectile_text",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.3,
+            0.9
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Projectile Dynamics",
+              "color": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "fontSize": 30,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "trajectoryLinePrefab",
+          "name": "trajectory_line_45",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.38,
+            0.9
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "color": [
+            0.1,
+            0.9,
+            0.9,
+            0.8
+          ]
+        },
+        {
+          "prefab": "trajectoryLinePrefab",
+          "name": "trajectory_line_30",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.38,
+            0.9
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "color": [
+            0.9,
+            0.1,
+            0.1,
+            0.4
+          ]
+        },
+        {
+          "prefab": "trajectoryLinePrefab",
+          "name": "trajectory_line_60",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.38,
+            0.9
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "color": [
+            0.1,
+            0.1,
+            0.9,
+            0.4
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "proj_launch_intro",
+          "audioClip": "projectile_launch_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile_text",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Projectile Launched at \u03b8 = 45\u00b0\\nInitial velocity vector V0 shown.",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 30,
+                  "wrapText": true
+                }
+              ]
+            },
+            {
+              "target": "arrow_v0",
+              "position": [
+                -0.38,
+                -0.28,
+                0.9
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                45
+              ],
+              "scale": [
+                0.04,
+                0.04,
+                0.2
+              ],
+              "enabled": true,
+              "color": [
+                0.2,
+                0.8,
+                0.8,
+                1
+              ]
+            }
+          ],
+          "changeMeaning": "Introduce a cannon and a projectile. Prepare to demonstrate 2D projectile motion.",
+          "narration": "Now let's apply these vector principles to projectile motion. When an object is launched, its initial velocity is a vector pointing at a specific angle. We can break this initial velocity vector down into horizontal and vertical velocity components."
+        },
+        {
+          "clipName": "proj_independence",
+          "audioClip": "independence_of_motion",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile_text",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Vx (Horizontal) remains CONSTANT.\\nVy (Vertical) changes due to GRAVITY.",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 26,
+                  "wrapText": true
+                }
+              ]
+            },
+            {
+              "target": "arrow_vx",
+              "position": [
+                -0.38,
+                -0.38,
+                0.9
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.14
+              ],
+              "enabled": true,
+              "color": [
+                0.9,
+                0.5,
+                0.1,
+                1
+              ]
+            },
+            {
+              "target": "arrow_vy",
+              "position": [
+                -0.38,
+                -0.38,
+                0.9
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                90
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.14
+              ],
+              "enabled": true,
+              "color": [
+                0.1,
+                0.8,
+                0.3,
+                1
+              ]
+            },
+            {
+              "target": "arrow_v0",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "Display Vx and Vy components, demonstrating that gravity only acts vertically, meaning Vx is constant and Vy changes.",
+          "narration": "Crucially, horizontal and vertical motions are independent. Because gravity only pulls straight down, there is no horizontal force. This means the horizontal velocity component remains completely constant, while the vertical velocity decreases on the way up and increases on the way down."
+        },
+        {
+          "clipName": "proj_peak_height",
+          "audioClip": "parabolic_flight_trajectory",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile_text",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "At Peak: Vy = 0\\nTrajectory is a Parabola.",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 26,
+                  "wrapText": true
+                }
+              ]
+            },
+            {
+              "target": "projectile_ball",
+              "components": [
+                {
+                  "componentType": "newscript",
+                  "scriptName": "projectileanimator",
+                  "scriptDescription": "Simulates a projectile moving along a 2D parabolic arc. Dynamically moves the projectile sphere and scales the attached Vy velocity vector to represent gravity's deceleration and acceleration, while leaving Vx constant."
+                }
+              ]
+            },
+            {
+              "target": "arrow_vy",
+              "position": [
+                0,
+                0.02,
+                0.9
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                -90
+              ],
+              "scale": [
+                0.03,
+                0.03,
+                0.14
+              ],
+              "enabled": true,
+              "color": [
+                0.1,
+                0.8,
+                0.3,
+                1
+              ]
+            },
+            {
+              "target": "projectile_ball",
+              "position": [
+                0,
+                0.02,
+                0.9
+              ]
+            },
+            {
+              "target": "trajectory_line_45",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Animate the ball along its trajectory, scaling the vertical velocity arrow to 0 at the peak, and reversing it downwards.",
+          "narration": "As the projectile rises, the vertical velocity vector shrinks, becoming exactly zero at the peak of flight. Gravity then pulls it downward, causing the vertical vector to grow in the negative direction. The combination of this constant horizontal motion and changing vertical motion traces out a beautiful, symmetric parabolic trajectory."
+        },
+        {
+          "clipName": "proj_angle_compare",
+          "audioClip": "angle_variation_effects",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile_text",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Max range occurs at \u03b8 = 45\u00b0.\\nHigher angles yield more altitude but less range.",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 24,
+                  "wrapText": true
+                }
+              ]
+            },
+            {
+              "target": "trajectory_line_30",
+              "enabled": true,
+              "color": [
+                0.6,
+                0.6,
+                0.6,
+                0.5
+              ]
+            },
+            {
+              "target": "trajectory_line_60",
+              "enabled": true,
+              "color": [
+                0.6,
+                0.6,
+                0.6,
+                0.5
+              ]
+            }
+          ],
+          "changeMeaning": "Compare 30, 45, and 60 degree launch angles to show how launch parameters alter range and peak height. Highlight 45 degrees for max range.",
+          "narration": "By changing the initial launch angle, we alter the initial components. A steeper angle increases the vertical component, resulting in a higher peak height but a shorter horizontal range. For flat ground, launching at forty-five degrees provides the optimal balance of components to achieve the maximum range."
+        }
+      ]
+    }
+  ]
+}

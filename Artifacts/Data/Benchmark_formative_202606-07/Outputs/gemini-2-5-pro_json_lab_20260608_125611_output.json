@@ -1,0 +1,860 @@
+{
+  "version": "2.0",
+  "labId": "chemistryVSEPR",
+  "author": "Dr. Evelyn Reed",
+  "courseName": "General Chemistry I",
+  "estimatedLength": "20 minutes",
+  "objectives": [
+    "Determine the steric number of a central atom from its Lewis structure.",
+    "Predict the electron-domain geometry of a molecule from its steric number.",
+    "Distinguish electron-domain geometry from molecular geometry.",
+    "Explain why lone pairs occupy more angular space than bonding pairs and predict bond-angle deviations.",
+    "Apply VSEPR predictions to specific molecules and compare predicted geometries to observed structures."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Introduction to VSEPR Theory",
+      "description": "Introduces the core concept of VSEPR theory and how to count electron domains from a 2D Lewis structure.",
+      "author": "Dr. Evelyn Reed",
+      "institution": "State University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Understand that VSEPR theory predicts 3D molecular geometry from 2D Lewis structures.",
+        "Define an electron domain and identify domains (bonding vs. lone pairs) on a Lewis structure."
+      ],
+      "instructions": [
+        "This module introduces the Valence Shell Electron Pair Repulsion (VSEPR) theory.",
+        "Follow the audio narration and observe the 3D models."
+      ],
+      "objects": [
+        {
+          "prefab": "atomPrefab",
+          "name": "CentralAtom",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            80.0,
+            80.0,
+            80.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "IntroText",
+          "parent": "CentralAtom",
+          "position": [
+            0.0,
+            0.2,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": true,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "VSEPR Theory: Predicting 3D Shapes",
+              "fontSize": 0.1,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "uiPanelPrefab",
+          "name": "LewisStructurePanel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.5,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.3,
+            0.01
+          ],
+          "enabled": false,
+          "texture": "waterLewisStructureTexture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "LewisStructureLabel",
+          "parent": "LewisStructurePanel",
+          "position": [
+            0.0,
+            -0.6,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Water (H\u2082O) Lewis Structure\n2 bonding domains, 2 lone pairs\nTotal Domains: 4",
+              "fontSize": 0.05,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_intro_1",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "IntroText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Electron pairs around a central atom repel each other, seeking the maximum possible separation in 3D space."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_intro_2",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "LewisStructurePanel",
+              "enabled": true
+            },
+            {
+              "target": "LewisStructureLabel",
+              "enabled": true
+            },
+            {
+              "target": "IntroText",
+              "enabled": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Electron Domain Geometries",
+      "description": "Demonstrates how two, three, and four electron domains arrange themselves to minimize repulsion, forming the fundamental VSEPR geometries.",
+      "author": "Dr. Evelyn Reed",
+      "institution": "State University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Visualize the process of electron domains minimizing repulsion.",
+        "Identify the linear, trigonal planar, and tetrahedral electron-domain geometries and their characteristic angles."
+      ],
+      "objects": [
+        {
+          "prefab": "atomPrefab",
+          "name": "CentralAtom",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            80.0,
+            80.0,
+            80.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "Domain1",
+          "parent": "CentralAtom",
+          "position": [
+            0.0,
+            0.2,
+            0.0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "Domain2",
+          "parent": "CentralAtom",
+          "position": [
+            0.0,
+            -0.2,
+            0.0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "Domain3",
+          "parent": "CentralAtom",
+          "position": [
+            0.173,
+            0.1,
+            0.0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "Domain4",
+          "parent": "CentralAtom",
+          "position": [
+            0.0,
+            0.0,
+            0.2
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "GeometryLabel",
+          "parent": "CentralAtom",
+          "position": [
+            0.0,
+            0.35,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 0.1
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_geo_1_linear",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Domain1",
+              "enabled": true,
+              "color": [
+                200.0,
+                200.0,
+                50.0,
+                255.0
+              ]
+            },
+            {
+              "target": "Domain2",
+              "enabled": true,
+              "color": [
+                200.0,
+                200.0,
+                50.0,
+                255.0
+              ]
+            },
+            {
+              "target": "GeometryLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Linear (180\u00b0)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_geo_2_trigonal",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Domain1",
+              "position": [
+                0.0,
+                0.2,
+                0.0
+              ]
+            },
+            {
+              "target": "Domain2",
+              "position": [
+                -0.173,
+                -0.1,
+                0.0
+              ]
+            },
+            {
+              "target": "Domain3",
+              "enabled": true,
+              "color": [
+                200.0,
+                200.0,
+                50.0,
+                255.0
+              ]
+            },
+            {
+              "target": "GeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Trigonal Planar (120\u00b0)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vsepr_geo_3_tetrahedral",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Domain1",
+              "position": [
+                0.0,
+                0.163,
+                0.115
+              ]
+            },
+            {
+              "target": "Domain2",
+              "position": [
+                -0.141,
+                -0.081,
+                0.115
+              ]
+            },
+            {
+              "target": "Domain3",
+              "position": [
+                0.141,
+                -0.081,
+                0.115
+              ]
+            },
+            {
+              "target": "Domain4",
+              "enabled": true,
+              "color": [
+                200.0,
+                200.0,
+                50.0,
+                255.0
+              ]
+            },
+            {
+              "target": "GeometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Tetrahedral (109.5\u00b0)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Molecular Geometry",
+      "description": "Illustrates the difference between electron-domain geometry and molecular geometry using methane, ammonia, and water.",
+      "author": "Dr. Evelyn Reed",
+      "institution": "State University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Distinguish between electron-domain geometry and molecular geometry.",
+        "Predict the molecular geometry (trigonal pyramidal, bent) that results from lone pairs in a tetrahedral electron arrangement."
+      ],
+      "objects": [
+        {
+          "prefab": "moleculePrefab",
+          "name": "TetrahedralMolecule",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "prefab": "atomPrefab",
+          "name": "CentralAtom",
+          "parent": "TetrahedralMolecule",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            80.0,
+            80.0,
+            80.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "atomPrefab",
+          "name": "Atom1",
+          "parent": "CentralAtom",
+          "position": [
+            0.0,
+            0.0,
+            0.2
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "atomPrefab",
+          "name": "Atom2",
+          "parent": "CentralAtom",
+          "position": [
+            0.188,
+            0.0,
+            -0.066
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "atomPrefab",
+          "name": "Atom3",
+          "parent": "CentralAtom",
+          "position": [
+            -0.188,
+            0.0,
+            -0.066
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "atomPrefab",
+          "name": "Atom4",
+          "parent": "CentralAtom",
+          "position": [
+            0.0,
+            0.2,
+            0.0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "lonePairPrefab",
+          "name": "LonePair1",
+          "parent": "CentralAtom",
+          "position": [
+            0.0,
+            0.2,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "GeometryLabels",
+          "parent": "TetrahedralMolecule",
+          "position": [
+            0.0,
+            0.3,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 0.08
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_molecular_1_methane",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "TetrahedralMolecule",
+              "eulerAngles": [
+                -20.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "GeometryLabels",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Methane (CH\u2084)\nElectron Geometry: Tetrahedral\nMolecular Geometry: Tetrahedral"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_molecular_2_ammonia",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Atom4",
+              "enabled": false
+            },
+            {
+              "target": "LonePair1",
+              "enabled": true
+            },
+            {
+              "target": "CentralAtom",
+              "color": [
+                0.0,
+                0.0,
+                200.0,
+                255.0
+              ]
+            },
+            {
+              "target": "GeometryLabels",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Ammonia (NH\u2083)\nElectron Geometry: Tetrahedral\nMolecular Geometry: Trigonal Pyramidal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vsepr_molecular_3_water",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Atom3",
+              "enabled": false
+            },
+            {
+              "target": "LonePair1",
+              "position": [
+                -0.094,
+                0.15,
+                -0.033
+              ]
+            },
+            {
+              "target": "TetrahedralMolecule",
+              "eulerAngles": [
+                -90.0,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            {
+              "target": "CentralAtom",
+              "color": [
+                200.0,
+                0.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "GeometryLabels",
+              "position": [
+                0.0,
+                0.4,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Water (H\u2082O)\nElectron Geometry: Tetrahedral\nMolecular Geometry: Bent"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Lone Pair Repulsion",
+      "description": "Explains why lone pairs cause bond angle compression by comparing the bond angles of methane, ammonia, and water.",
+      "author": "Dr. Evelyn Reed",
+      "institution": "State University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Explain why lone pairs exert greater repulsion than bonding pairs.",
+        "Predict the direction of bond-angle deviations from idealized values due to lone pairs."
+      ],
+      "objects": [
+        {
+          "prefab": "methanePrefab",
+          "name": "MethaneModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.5,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ]
+        },
+        {
+          "prefab": "ammoniaPrefab",
+          "name": "AmmoniaModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ]
+        },
+        {
+          "prefab": "waterPrefab",
+          "name": "WaterModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.5,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "MethaneAngleLabel",
+          "parent": "MethaneModel",
+          "position": [
+            0.0,
+            -0.3,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "109.5\u00b0",
+              "fontSize": 0.1,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "AmmoniaAngleLabel",
+          "parent": "AmmoniaModel",
+          "position": [
+            0.0,
+            -0.3,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "107\u00b0",
+              "fontSize": 0.1,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "WaterAngleLabel",
+          "parent": "WaterModel",
+          "position": [
+            0.0,
+            -0.3,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "104.5\u00b0",
+              "fontSize": 0.1,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_repulsion_1",
+          "autoAdvance": true
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_repulsion_2",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "AmmoniaAngleLabel",
+              "color": [
+                255.0,
+                255.0,
+                0.0,
+                255.0
+              ]
+            },
+            {
+              "target": "WaterAngleLabel",
+              "color": [
+                255.0,
+                255.0,
+                0.0,
+                255.0
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,275 @@
+{
+  "workplace": {
+    "id": "physics_lab_workplace",
+    "name": "Physics Laboratory",
+    "origin": "marker_origin",
+    "things": [
+      {
+        "id": "origin_point",
+        "name": "Origin Point",
+        "detectable": "marker_origin",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "vector_workbench",
+        "name": "Vector Workbench",
+        "detectable": "marker_workbench",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "physics_plane",
+        "name": "Physics Plane",
+        "detectable": "marker_plane",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "marker_origin",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_origin.bundle"
+      },
+      {
+        "id": "marker_workbench",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_bench.bundle"
+      },
+      {
+        "id": "marker_plane",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_plane.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "animation"
+      },
+      {
+        "id": "image"
+      },
+      {
+        "id": "label"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "vector_arrow",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/vector_arrow.glb"
+      },
+      {
+        "id": "vector_a",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/vector_blue.glb"
+      },
+      {
+        "id": "vector_b",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/vector_green.glb"
+      },
+      {
+        "id": "resultant_vector",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/vector_red.glb"
+      },
+      {
+        "id": "decomposition_viz",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/decomp.glb"
+      },
+      {
+        "id": "projectile_plane_viz",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/grid.png"
+      },
+      {
+        "id": "flight_path_viz",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/parabola.glb"
+      }
+    ]
+  },
+  "activity": {
+    "id": "physics_vectors_lab",
+    "name": "Vector Physics and Projectile Motion",
+    "description": "A lab exploring vectors, vector operations, and their application to 2D projectile motion.",
+    "workplace": "physics_lab_workplace",
+    "start": "intro_vectors",
+    "actions": [
+      {
+        "id": "intro_vectors",
+        "instruction": {
+          "title": "Introduction to Vectors",
+          "description": "Observe the floating vector. Grab the head to change magnitude and direction. Note how the components update."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "vector_workbench",
+              "type": "predicate",
+              "augmentation": "vector_arrow"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "vector_workbench"
+          }
+        ]
+      },
+      {
+        "id": "vector_addition",
+        "instruction": {
+          "title": "Vector Addition",
+          "description": "Observe the blue and green vectors added tip-to-tail. The red resultant vector shows the sum. Change the order to see the result remains constant."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "vector_workbench",
+              "type": "predicate",
+              "augmentation": "vector_a"
+            },
+            {
+              "target": "vector_workbench",
+              "type": "predicate",
+              "augmentation": "vector_b"
+            },
+            {
+              "target": "vector_workbench",
+              "type": "predicate",
+              "augmentation": "resultant_vector"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "vector_workbench"
+          }
+        ]
+      },
+      {
+        "id": "vector_decomposition",
+        "instruction": {
+          "title": "Vector Decomposition",
+          "description": "See the vector broken into x, y, and z components. Notice how they add tip-to-tail to equal the original vector."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "vector_workbench",
+              "type": "predicate",
+              "augmentation": "decomposition_viz"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "vector_workbench"
+          }
+        ]
+      },
+      {
+        "id": "projectile_intro",
+        "instruction": {
+          "title": "Projectile Motion Setup",
+          "description": "We move to a 2D plane to study projectile motion. Gravity acts vertically, affecting only the vertical component."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "physics_plane",
+              "type": "predicate",
+              "augmentation": "projectile_plane_viz"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "*",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "physics_plane"
+          }
+        ]
+      },
+      {
+        "id": "projectile_flight",
+        "instruction": {
+          "title": "Projectile Flight Demo",
+          "description": "Watch the ball flight. Note the independent horizontal (constant) and vertical (changing) velocity components."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "physics_plane",
+              "type": "predicate",
+              "augmentation": "flight_path_viz"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "physics_plane"
+          }
+        ]
+      }
+    ]
+  }
+}

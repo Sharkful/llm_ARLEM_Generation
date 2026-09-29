@@ -1,0 +1,319 @@
+{
+  "workplace": {
+    "id": "anatomy-lab-workplace",
+    "name": "Human Anatomy Lab",
+    "origin": "origin-marker",
+    "things": [
+      {
+        "id": "heart-model-01",
+        "name": "Anatomical Heart Model",
+        "detectable": "origin-marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "surgical-probe-01",
+        "name": "Anatomy Pointer",
+        "detectable": "desk-marker",
+        "pois": []
+      },
+      {
+        "id": "heart-diagram-01",
+        "name": "Circulation Diagram",
+        "detectable": "desk-marker",
+        "pois": []
+      }
+    ],
+    "places": [
+      {
+        "id": "anatomy-lab-desk",
+        "name": "Dissection Station 1",
+        "detectable": "desk-marker",
+        "pois": []
+      }
+    ],
+    "persons": [
+      {
+        "id": "student-01",
+        "name": "Anatomy Student",
+        "detectable": "learner-marker",
+        "pois": [],
+        "persona": "learner"
+      }
+    ],
+    "sensors": [],
+    "devices": [
+      {
+        "id": "ar-headset-01",
+        "type": "hololens",
+        "name": "Hololens 2",
+        "url": "ws://ar-headset-01.local"
+      }
+    ],
+    "apps": [],
+    "detectables": [
+      {
+        "id": "origin-marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/heart-marker.bundle"
+      },
+      {
+        "id": "desk-marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/desk-marker.bundle"
+      },
+      {
+        "id": "learner-marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/user-marker.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "image"
+      },
+      {
+        "id": "label"
+      },
+      {
+        "id": "animation"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "heart-model-view",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/heart_model.glb"
+      },
+      {
+        "id": "valve-callout",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "blood-flow-animation",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/pulmonary_flow.mp4"
+      },
+      {
+        "id": "systemic-flow-animation",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/systemic_flow.mp4"
+      },
+      {
+        "id": "myocardium-comparison-label",
+        "type": "label",
+        "scale": 1.0
+      }
+    ],
+    "warnings": []
+  },
+  "activity": {
+    "id": "heart-anatomy-lab-01",
+    "name": "Human Heart Anatomy and Physiology Lab",
+    "description": "A guided exploration of the human heart structure, valve function, and dual-loop blood circulation.",
+    "language": "en",
+    "workplace": "anatomy-lab-workplace",
+    "start": "step-1-anatomy-identification",
+    "actions": [
+      {
+        "id": "step-1-anatomy-identification",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar-headset-01",
+        "location": "anatomy-lab-desk",
+        "predicate": "heart-model-view",
+        "instruction": {
+          "title": "Anatomical Identification",
+          "description": "Identify the four chambers: Right Atrium, Right Ventricle, Left Atrium, and Left Ventricle on the 3D heart model. Tap each chamber to reveal its label."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart-model-01",
+              "type": "predicate",
+              "augmentation": "heart-model-view",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step-2-valve-function",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step-2-valve-function",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar-headset-01",
+        "location": "anatomy-lab-desk",
+        "predicate": "valve-callout",
+        "instruction": {
+          "title": "Valves and Backflow Prevention",
+          "description": "Locate the four valves: Tricuspid, Pulmonary, Mitral, and Aortic. Note how the AV valves (Tricuspid/Mitral) separate atria from ventricles."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart-model-01",
+              "type": "predicate",
+              "augmentation": "valve-callout",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart-model-01",
+              "type": "predicate",
+              "augmentation": "heart-model-view"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step-3-blood-flow-pathway",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step-3-blood-flow-pathway",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar-headset-01",
+        "location": "anatomy-lab-desk",
+        "predicate": "blood-flow-animation",
+        "instruction": {
+          "title": "Pulmonary Circulation Path",
+          "description": "Observe the animation tracing blood flow. Follow the path: Vena Cava -> Right Atrium -> Tricuspid Valve -> Right Ventricle -> Pulmonary Valve -> Pulmonary Arteries -> Lungs."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart-model-01",
+              "type": "predicate",
+              "augmentation": "blood-flow-animation",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step-4-systemic-circuit",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step-4-systemic-circuit",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar-headset-01",
+        "location": "anatomy-lab-desk",
+        "predicate": "systemic-flow-animation",
+        "instruction": {
+          "title": "Systemic Circulation Path",
+          "description": "Follow the oxygenated blood return: Pulmonary Veins -> Left Atrium -> Mitral Valve -> Left Ventricle -> Aortic Valve -> Aorta. Note the high-pressure route to the body."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart-model-01",
+              "type": "predicate",
+              "augmentation": "systemic-flow-animation",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step-5-myocardium-comparison",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step-5-myocardium-comparison",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar-headset-01",
+        "location": "anatomy-lab-desk",
+        "predicate": "myocardium-comparison-label",
+        "instruction": {
+          "title": "Myocardium Thickness and Pressure",
+          "description": "Compare the wall thickness of the right versus left ventricle. Observe how the thicker left myocardium supports systemic perfusion pressure."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart-model-01",
+              "type": "predicate",
+              "augmentation": "myocardium-comparison-label",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step-5-myocardium-comparison",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      }
+    ]
+  }
+}

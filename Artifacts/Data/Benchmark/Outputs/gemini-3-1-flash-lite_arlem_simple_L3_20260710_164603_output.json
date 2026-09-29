@@ -1,0 +1,318 @@
+{
+  "workplace": {
+    "id": "dna_lab_workplace",
+    "name": "Molecular Biology Lab Room",
+    "origin": "origin_marker",
+    "things": [
+      {
+        "id": "dna_helix_stand",
+        "name": "DNA Double Helix Model",
+        "detectable": "helix_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "base_pair_kit",
+        "name": "Base Pairing Demonstration Kit",
+        "detectable": "kit_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "ligase_tool",
+        "name": "Ligase Application Tool",
+        "detectable": "fork_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "replication_fork_place",
+        "name": "Replication Fork Area",
+        "detectable": "fork_marker",
+        "pois": []
+      },
+      {
+        "id": "lab_table_place",
+        "name": "Main Lab Table",
+        "detectable": "origin_marker",
+        "pois": []
+      }
+    ],
+    "detectables": [
+      {
+        "id": "origin_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/origin_marker.bundle"
+      },
+      {
+        "id": "helix_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/helix.bundle"
+      },
+      {
+        "id": "kit_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/kit.bundle"
+      },
+      {
+        "id": "fork_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/fork.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "label"
+      },
+      {
+        "id": "image",
+        "x_size": 30.0,
+        "y_size": 20.0
+      },
+      {
+        "id": "animation",
+        "x_size": 50.0,
+        "y_size": 50.0,
+        "z_size": 50.0
+      }
+    ],
+    "predicates": [
+      {
+        "id": "dna_model_label",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "base_pair_info",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/base_pairs.png"
+      },
+      {
+        "id": "antiparallel_diagram",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/antiparallel.png"
+      },
+      {
+        "id": "helicase_action",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/helicase.glb"
+      },
+      {
+        "id": "polymerase_process",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/polymerase.glb"
+      }
+    ]
+  },
+  "activity": {
+    "id": "dna_lab_activity",
+    "name": "Molecular Biology: DNA Structure and Replication",
+    "description": "A lab exploring the structure of DNA and the semiconservative replication process.",
+    "workplace": "dna_lab_workplace",
+    "start": "step_1_structure",
+    "actions": [
+      {
+        "id": "step_1_structure",
+        "instruction": {
+          "title": "DNA Structure Overview",
+          "description": "Observe the double helix. Identify the sugar-phosphate backbone and inward-facing nitrogenous bases. Click the stand to continue."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "dna_helix_stand",
+              "type": "predicate",
+              "augmentation": "dna_model_label",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "dna_helix_stand"
+          }
+        ]
+      },
+      {
+        "id": "step_2_base_pairing",
+        "instruction": {
+          "title": "Complementary Base Pairing",
+          "description": "Examine the complementary base pairing. Note that Adenine pairs with Thymine (2 H-bonds) and Guanine with Cytosine (3 H-bonds). Click the base kit to continue."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "base_pair_kit",
+              "type": "predicate",
+              "augmentation": "base_pair_info",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "dna_helix_stand",
+              "type": "predicate",
+              "augmentation": "dna_model_label"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "base_pair_kit"
+          }
+        ]
+      },
+      {
+        "id": "step_3_antiparallel",
+        "instruction": {
+          "title": "Antiparallel Orientation",
+          "description": "Notice the 5' to 3' orientation. The strands are antiparallel, running in opposite directions. Click the stand to proceed to replication."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "dna_helix_stand",
+              "type": "predicate",
+              "augmentation": "antiparallel_diagram",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "base_pair_kit",
+              "type": "predicate",
+              "augmentation": "base_pair_info"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "dna_helix_stand"
+          }
+        ]
+      },
+      {
+        "id": "step_4_replication_initiation",
+        "instruction": {
+          "title": "Initiating Replication",
+          "description": "Helicase unwinds the helix at the replication fork. Single-strand binding proteins stabilize the exposed strands. Observe the fork. Click it to continue."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "replication_fork_place",
+              "type": "predicate",
+              "augmentation": "helicase_action",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "dna_helix_stand",
+              "type": "predicate",
+              "augmentation": "antiparallel_diagram"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "replication_fork_place"
+          }
+        ]
+      },
+      {
+        "id": "step_5_synthesis",
+        "instruction": {
+          "title": "DNA Polymerase Synthesis",
+          "description": "DNA polymerase synthesizes the leading strand continuously and the lagging strand as Okazaki fragments. Identify the ligase joining these fragments. Replication is semiconservative."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "replication_fork_place",
+              "type": "predicate",
+              "augmentation": "polymerase_process",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "replication_fork_place",
+              "type": "predicate",
+              "augmentation": "helicase_action"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "replication_fork_place"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,280 @@
+{
+  "workplace": {
+    "id": "cardiology_lab_001",
+    "name": "University Anatomy Lab - Cardiology Station",
+    "origin": "origin_marker",
+    "things": [
+      {
+        "id": "heart_model_cutaway",
+        "name": "Heart Cutaway Model",
+        "detectable": "origin_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "heart_station",
+        "name": "Heart Display Bench",
+        "detectable": "bench_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "anatomy_bench",
+        "name": "Comparative Anatomy Workbench",
+        "detectable": "student_area_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "origin_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_origin.bundle"
+      },
+      {
+        "id": "bench_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_bench.bundle"
+      },
+      {
+        "id": "student_area_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_student.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "image"
+      },
+      {
+        "id": "label"
+      },
+      {
+        "id": "animation"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "heart_models_display",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/heart_models.png"
+      },
+      {
+        "id": "structural_labels",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "blood_stream_flow",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/blood_flow.glb"
+      },
+      {
+        "id": "cell_animation",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/rbc_trace.glb"
+      },
+      {
+        "id": "ventricle_comparison",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/ventricle_cross_sections.png"
+      }
+    ]
+  },
+  "activity": {
+    "id": "heart_anatomy_lab_001",
+    "name": "Human Heart Anatomy and Physiology Lab",
+    "description": "An exploration of the structural anatomy of the human heart and the path that blood takes through it.",
+    "workplace": "cardiology_lab_001",
+    "start": "scene_1_intro",
+    "actions": [
+      {
+        "id": "scene_1_intro",
+        "instruction": {
+          "title": "Introduction to Cardiac Anatomy",
+          "description": "Observe the intact heart and the cutaway view. Notice the anatomical orientation: the heart is described from the patient's perspective."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart_station",
+              "type": "predicate",
+              "augmentation": "heart_models_display"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "scene_1_intro"
+          }
+        ]
+      },
+      {
+        "id": "scene_2_tour",
+        "instruction": {
+          "title": "Structural Tour",
+          "description": "Follow the tour of the four chambers, four valves, and major vessels. Mapping the interior structures to the exterior landmarks."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart_station",
+              "type": "predicate",
+              "augmentation": "structural_labels"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart_station",
+              "type": "predicate",
+              "augmentation": "structural_labels"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "scene_2_tour"
+          }
+        ]
+      },
+      {
+        "id": "scene_3_circulation",
+        "instruction": {
+          "title": "Dual-Circuit Circulation",
+          "description": "Observe the dual-circuit blood flow. Blue represents deoxygenated blood in the pulmonary circuit, red represents oxygenated blood in the systemic circuit."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart_station",
+              "type": "predicate",
+              "augmentation": "blood_stream_flow"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart_station",
+              "type": "predicate",
+              "augmentation": "blood_stream_flow"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "scene_3_circulation"
+          }
+        ]
+      },
+      {
+        "id": "scene_4_trace",
+        "instruction": {
+          "title": "Blood Flow Trace",
+          "description": "Trace the path of a single red blood cell through the complete circulatory loop. Click to advance."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart_station",
+              "type": "predicate",
+              "augmentation": "cell_animation"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart_station",
+              "type": "predicate",
+              "augmentation": "cell_animation"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "scene_4_trace"
+          }
+        ]
+      },
+      {
+        "id": "scene_5_wall_thickness",
+        "instruction": {
+          "title": "Ventricle Wall Asymmetry",
+          "description": "Compare the wall thickness of the right versus left ventricle. Note the functional reason for the thicker myocardium on the left."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "anatomy_bench",
+              "type": "predicate",
+              "augmentation": "ventricle_comparison"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "scene_5_wall_thickness"
+          }
+        ]
+      }
+    ]
+  }
+}

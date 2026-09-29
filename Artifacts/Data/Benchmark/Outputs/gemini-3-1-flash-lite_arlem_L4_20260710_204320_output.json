@@ -1,0 +1,392 @@
+{
+  "workplace": {
+    "id": "molecular_biology_lab",
+    "name": "Molecular Biology Teaching Lab",
+    "origin": "marker_origin",
+    "things": [
+      {
+        "id": "dna_model_base",
+        "name": "Core DNA Model Asset",
+        "detectable": "marker_origin",
+        "pois": []
+      },
+      {
+        "id": "enzyme_kit",
+        "name": "Replication Enzyme Set",
+        "detectable": "marker_origin",
+        "pois": []
+      },
+      {
+        "id": "base_palette",
+        "name": "Base Nucleotide Palette",
+        "detectable": "marker_origin",
+        "pois": []
+      }
+    ],
+    "places": [
+      {
+        "id": "workbench_01",
+        "name": "Structure Workstation",
+        "detectable": "marker_workbench_01",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "workbench_02",
+        "name": "Replication Workstation",
+        "detectable": "marker_workbench_02",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "persons": [
+      {
+        "id": "student_01",
+        "name": "Biology Student",
+        "detectable": "marker_user",
+        "pois": [],
+        "persona": "learner"
+      }
+    ],
+    "sensors": [],
+    "devices": [
+      {
+        "id": "headset_01",
+        "type": "hololens",
+        "name": "AR Lab Headset 01",
+        "url": "mqtt://lab.local:1883"
+      }
+    ],
+    "apps": [],
+    "detectables": [
+      {
+        "id": "marker_origin",
+        "type": "anchor",
+        "sensor": "tracking",
+        "url": "https://assets.biology.edu/origin.bundle"
+      },
+      {
+        "id": "marker_workbench_01",
+        "type": "anchor",
+        "sensor": "tracking",
+        "url": "https://assets.biology.edu/w1.bundle"
+      },
+      {
+        "id": "marker_workbench_02",
+        "type": "anchor",
+        "sensor": "tracking",
+        "url": "https://assets.biology.edu/w2.bundle"
+      },
+      {
+        "id": "marker_user",
+        "type": "anchor",
+        "sensor": "tracking",
+        "url": "https://assets.biology.edu/user.bundle"
+      },
+      {
+        "id": "marker_headset",
+        "type": "anchor",
+        "sensor": "tracking",
+        "url": "https://assets.biology.edu/headset.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "image"
+      },
+      {
+        "id": "animation"
+      },
+      {
+        "id": "label"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "ladder_schematic",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.biology.edu/ladder.png"
+      },
+      {
+        "id": "double_helix_model",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.biology.edu/helix.glb"
+      },
+      {
+        "id": "antiparallel_model",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.biology.edu/antiparallel.glb"
+      },
+      {
+        "id": "replication_fork_complex",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.biology.edu/fork.glb"
+      },
+      {
+        "id": "semiconservative_model",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.biology.edu/semi.glb"
+      },
+      {
+        "id": "dna_exploration",
+        "type": "label",
+        "scale": 1.0,
+        "url": "https://assets.biology.edu/label.png"
+      }
+    ],
+    "warnings": []
+  },
+  "activity": {
+    "id": "dna_lab_001",
+    "name": "DNA Structure and Replication Lab",
+    "description": "Molecular Biology lab exploring DNA structure and replication mechanics.",
+    "language": "en",
+    "workplace": "molecular_biology_lab",
+    "start": "step_1_intro",
+    "actions": [
+      {
+        "id": "step_1_intro",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset_01",
+        "location": "workbench_01",
+        "predicate": "dna_exploration",
+        "instruction": {
+          "title": "DNA Schematic Representation",
+          "description": "Observe the ladder schematic of DNA. Notice the sugar-phosphate backbones on the sides and the nitrogenous base pairs forming the rungs. Bases: A (red), T (blue), G (yellow), C (green)."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "workbench_01",
+              "type": "predicate",
+              "augmentation": "ladder_schematic"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "workbench_01",
+              "augmentation": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step_1_intro",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_2_helix",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset_01",
+        "location": "workbench_01",
+        "predicate": "dna_exploration",
+        "instruction": {
+          "title": "Geometric DNA Structure",
+          "description": "The ladder twists into a double helix. Toggle between the schematic and the helix to see how they map to each other. Notice the turn every 10 base pairs."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "workbench_01",
+              "type": "predicate",
+              "augmentation": "double_helix_model"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "workbench_01",
+              "augmentation": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step_2_helix",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_3_antiparallel",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset_01",
+        "location": "workbench_01",
+        "predicate": "dna_exploration",
+        "instruction": {
+          "title": "Antiparallel Orientation",
+          "description": "Observe the directionality arrows. One strand runs 5' to 3', the other 3' to 5'. The backbone chemistry forces this antiparallel arrangement."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "workbench_01",
+              "type": "predicate",
+              "augmentation": "antiparallel_model"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "workbench_01",
+              "augmentation": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step_3_antiparallel",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_4_fork",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset_01",
+        "location": "workbench_02",
+        "predicate": "dna_exploration",
+        "instruction": {
+          "title": "DNA Replication Fork Dynamics",
+          "description": "Observe the replication fork. Helicase unwinds, SSBs stabilize, DNA polymerase synthesizes, and ligase seals Okazaki fragments."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "workbench_02",
+              "type": "predicate",
+              "augmentation": "replication_fork_complex"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "workbench_02",
+              "augmentation": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step_4_fork",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_5_semiconservative",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset_01",
+        "location": "workbench_02",
+        "predicate": "dna_exploration",
+        "instruction": {
+          "title": "Semiconservative Replication",
+          "description": "Watch the parental (gold) strands separate and template new (silver) strands. Each daughter molecule contains one parental strand, proving semiconservative replication."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "workbench_02",
+              "type": "predicate",
+              "augmentation": "semiconservative_model"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "workbench_02",
+              "augmentation": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step_5_semiconservative",
+            "operator": "equal"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,317 @@
+{
+  "workplace": {
+    "id": "vsepr_lab_workplace",
+    "name": "VSEPR Laboratory Workspace",
+    "origin": "marker_origin",
+    "things": [
+      {
+        "id": "workspace_origin",
+        "name": "Lab Origin Point",
+        "detectable": "marker_origin",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "central_atom_place",
+        "name": "Central Atom Display Area",
+        "detectable": "marker_central_atom",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "reference_panel_place",
+        "name": "Reference Info Panel",
+        "detectable": "marker_ref_panel",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "molecule_view_place",
+        "name": "Molecule Interaction Zone",
+        "detectable": "marker_molecule_view",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "marker_origin",
+        "type": "marker",
+        "url": "https://assets.chemistry.edu/origin.bundle"
+      },
+      {
+        "id": "marker_central_atom",
+        "type": "marker",
+        "url": "https://assets.chemistry.edu/atom.bundle"
+      },
+      {
+        "id": "marker_ref_panel",
+        "type": "marker",
+        "url": "https://assets.chemistry.edu/panel.bundle"
+      },
+      {
+        "id": "marker_molecule_view",
+        "type": "marker",
+        "url": "https://assets.chemistry.edu/view.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "label"
+      },
+      {
+        "id": "animation",
+        "x_size": 10.0,
+        "y_size": 10.0,
+        "z_size": 10.0
+      },
+      {
+        "id": "image",
+        "x_size": 20.0,
+        "y_size": 15.0
+      }
+    ],
+    "predicates": [
+      {
+        "id": "vsepr_intro_label",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "repulsion_animation",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.chemistry.edu/repulsion.glb"
+      },
+      {
+        "id": "geom_summary_image",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.chemistry.edu/geom_summary.png"
+      },
+      {
+        "id": "methane_model",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.chemistry.edu/methane.glb"
+      },
+      {
+        "id": "angles_comparison_image",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.chemistry.edu/angles.png"
+      }
+    ]
+  },
+  "activity": {
+    "id": "vsepr_lab_activity",
+    "name": "VSEPR Theory Exploration",
+    "description": "Exploring VSEPR theory, electron-domain geometries, and molecular shapes.",
+    "workplace": "vsepr_lab_workplace",
+    "start": "step_intro",
+    "actions": [
+      {
+        "id": "step_intro",
+        "instruction": {
+          "title": "Introduction to VSEPR Theory",
+          "description": "Electrons repel each other. Molecules adopt shapes that keep these electron domains as far apart as possible. Each bond or lone pair counts as one domain."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "workspace_origin",
+              "type": "predicate",
+              "augmentation": "vsepr_intro_label",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_intro"
+          }
+        ]
+      },
+      {
+        "id": "step_geometry_basics",
+        "instruction": {
+          "title": "Minimum Repulsion Principle",
+          "description": "Watch as electron domains rearrange to minimize repulsion. Observe how they settle into linear, trigonal planar, and tetrahedral arrangements."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "central_atom_place",
+              "type": "predicate",
+              "augmentation": "repulsion_animation",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "central_atom_place",
+              "type": "*",
+              "augmentation": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "step_geometry_basics"
+          }
+        ]
+      },
+      {
+        "id": "step_geometry_catalog",
+        "instruction": {
+          "title": "Geometry Catalog",
+          "description": "We add 5th and 6th domains to form trigonal bipyramidal and octahedral shapes. Observe the summary of all five fundamental geometries."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "reference_panel_place",
+              "type": "predicate",
+              "augmentation": "geom_summary_image",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "reference_panel_place",
+              "type": "*",
+              "augmentation": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_geometry_catalog"
+          }
+        ]
+      },
+      {
+        "id": "step_domain_vs_molecular",
+        "instruction": {
+          "title": "Domain vs. Molecular Geometry",
+          "description": "Compare methane (CH4) to ammonia (NH3) and water (H2O). Notice how replacing bonding domains with lone pairs changes molecular geometry while keeping the electron-domain geometry tetrahedral."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "molecule_view_place",
+              "type": "predicate",
+              "augmentation": "methane_model",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "workspace_origin",
+              "type": "*",
+              "augmentation": "*"
+            }
+          ]
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "molecule_view_place",
+              "type": "*",
+              "augmentation": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "step_domain_vs_molecular"
+          }
+        ]
+      },
+      {
+        "id": "step_lone_pair_asymmetry",
+        "instruction": {
+          "title": "Lone Pair Asymmetry",
+          "description": "Lone pairs occupy more angular space than bonding pairs. Observe the bond angles in CH4 (109.5\u00b0), NH3 (107\u00b0), and H2O (104.5\u00b0) decreasing as lone pairs increase."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "reference_panel_place",
+              "type": "predicate",
+              "augmentation": "angles_comparison_image",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_lone_pair_asymmetry"
+          }
+        ]
+      }
+    ]
+  }
+}

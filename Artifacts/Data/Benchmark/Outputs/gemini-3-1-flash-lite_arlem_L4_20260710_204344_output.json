@@ -1,0 +1,227 @@
+{
+  "workplace": {
+    "id": "physics-workplace-01",
+    "name": "Mechanics Lab 101",
+    "origin": "origin-marker-01",
+    "things": [
+      {
+        "id": "vector-arrow-main",
+        "name": "Main Vector Arrow",
+        "detectable": "vector-kit-marker",
+        "pois": []
+      },
+      {
+        "id": "component-vector-x",
+        "name": "X Component Arrow",
+        "detectable": "vector-kit-marker",
+        "pois": []
+      },
+      {
+        "id": "component-vector-y",
+        "name": "Y Component Arrow",
+        "detectable": "vector-kit-marker",
+        "pois": []
+      }
+    ],
+    "places": [
+      {
+        "id": "lab-work-surface",
+        "name": "Main Work Surface",
+        "detectable": "vector-kit-marker",
+        "pois": []
+      },
+      {
+        "id": "motion-test-zone",
+        "name": "Motion Testing Zone",
+        "detectable": "motion-plane-marker",
+        "pois": []
+      }
+    ],
+    "persons": [
+      {
+        "id": "learner-01",
+        "name": "Physics Student",
+        "detectable": "student-marker",
+        "pois": [],
+        "persona": "learner"
+      }
+    ],
+    "sensors": [],
+    "devices": [
+      {
+        "id": "headset-01",
+        "type": "hololens",
+        "name": "Physics Lab Headset",
+        "url": "ws://physics.lab.internal"
+      }
+    ],
+    "apps": [],
+    "detectables": [
+      {
+        "id": "origin-marker-01",
+        "type": "anchor",
+        "sensor": "mapping",
+        "url": "https://assets.example.com/origin.bundle"
+      },
+      {
+        "id": "vector-kit-marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/vector_kit.bundle"
+      },
+      {
+        "id": "motion-plane-marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/plane.bundle"
+      },
+      {
+        "id": "student-marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/student.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "label"
+      },
+      {
+        "id": "animation"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "explain-vectors",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "explain-addition",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "explain-decomposition",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "explain-projectile-plane",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "demonstrate-flight",
+        "type": "animation",
+        "scale": 1.0
+      }
+    ],
+    "warnings": []
+  },
+  "activity": {
+    "id": "physics-vectors-lab-101",
+    "name": "Vectors & Projectile Motion Lab",
+    "description": "An immersive physics lab exploring vectors and projectile motion.",
+    "language": "en",
+    "workplace": "physics-workplace-01",
+    "start": "step-1-vectors-intro",
+    "actions": [
+      {
+        "id": "step-1-vectors-intro",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset-01",
+        "location": "lab-work-surface",
+        "predicate": "explain-vectors",
+        "instruction": {
+          "title": "Vector Fundamentals",
+          "description": "Explore vectors as quantities with magnitude and direction. Grab the arrow head to modify the vector in real-time."
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step-2-vector-addition",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step-2-vector-addition",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset-01",
+        "location": "lab-work-surface",
+        "predicate": "explain-addition",
+        "instruction": {
+          "title": "Vector Addition",
+          "description": "Add the blue and green vectors tip-to-tail to observe the resulting red vector. Swap the order to see the commutative property."
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step-3-decomposition",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step-3-decomposition",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset-01",
+        "location": "lab-work-surface",
+        "predicate": "explain-decomposition",
+        "instruction": {
+          "title": "Vector Decomposition",
+          "description": "Observe how a single vector can be decomposed into x, y, and z components. Resize them to see the original vector update."
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step-4-projectile-plane",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step-4-projectile-plane",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset-01",
+        "location": "motion-test-zone",
+        "predicate": "explain-projectile-plane",
+        "instruction": {
+          "title": "Introduction to Projectile Motion",
+          "description": "The workspace now focuses on a 2D vertical plane, ideal for analyzing projectile trajectories under gravity."
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step-5-independence",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step-5-independence",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset-01",
+        "location": "motion-test-zone",
+        "predicate": "demonstrate-flight",
+        "instruction": {
+          "title": "Independence of Motions",
+          "description": "Launch the projectile. Watch the horizontal and vertical velocity components evolve independently over the flight."
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step-5-independence",
+            "operator": "equal"
+          }
+        ]
+      }
+    ]
+  }
+}

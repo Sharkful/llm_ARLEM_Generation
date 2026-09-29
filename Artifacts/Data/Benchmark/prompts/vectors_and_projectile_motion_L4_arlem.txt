@@ -1,0 +1,219 @@
+Create a complete ARLEM AR training scenario for the topic described below.
+
+Build an ARLEMScenario with two parts: a Workplace (the static environment) and an
+Activity (the step-by-step logic).
+
+Workplace requirements:
+- Define at least 3 things (tools, models, or materials the learner interacts with)
+  and at least 2 places (workstations, zones, or surfaces).
+- Include exactly 1 person (the learner) and at least 1 device (the AR headset).
+- Define detectables (markers or anchors) for spatial tracking. The workplace `origin` must
+  reference one detectable, and every thing/place/person must reference a distinct detectable.
+- List the primitives (supported media types: label, image, audio, video, animation) and create
+  predicates (reusable instructional augmentations) that the activity steps will display.
+- Any POI with id "default" must sit at the origin (zero offsets); rotation is allowed.
+
+Activity requirements:
+- Create at least 5 sequential action steps with a clear pedagogical progression.
+- Each action has an instruction (title + description) and enter/exit flows that activate and
+  deactivate augmentations on workplace targets.
+- Advance between steps with triggers (mode "click", "voice", or "detect").
+- Every reference (activate/deactivate targets, augmentations, action location/device/predicate,
+  POIs) must resolve to something defined in the Workplace. The `start` field and any
+  action-to-action links must reference valid action ids. Language is the 2-letter ISO 639-1
+  code (e.g. "en").
+
+The scenario should read like a realistic hands-on AR training session where augmentations
+guide the learner through the topic.
+
+## Field
+physics
+
+## Course context
+General Physics I (Mechanics), 100-level algebra-based undergraduate course
+
+## Topic description
+An exploration of vectors as the mathematical tool for representing
+quantities with both magnitude and direction, and the application of
+vector operations to two-dimensional projectile motion. Students work
+first with vectors as abstract objects: they see how two vectors add
+tip-to-tail to produce a resultant, how a single vector can be
+decomposed into components along chosen axes (typically the horizontal
+x-axis and vertical y-axis), and how the magnitude and direction of a
+vector relate to its components through right-triangle trigonometry.
+The lab then applies these operations to projectile motion. A
+projectile launched at an arbitrary angle has an initial velocity
+vector that can be decomposed into a horizontal component (which
+remains constant throughout the flight, since no horizontal force
+acts on the projectile) and a vertical component (which changes
+steadily under the influence of gravity, decreasing during ascent
+and increasing in the downward direction during descent). Students
+see that the horizontal and vertical motions are independent of one
+another — a counterintuitive but central insight of classical
+mechanics — and that the parabolic trajectory of the projectile
+emerges from the combination of constant horizontal velocity and
+uniformly accelerated vertical motion. Students manipulate the
+initial launch angle and speed and observe how these choices change
+the trajectory, range, and maximum height of the projectile.
+
+## Learning objectives
+- Students will represent a two-dimensional vector by its magnitude and direction, and equivalently by its horizontal and vertical components.
+- Students will add two or more vectors graphically using the tip-to-tail method and identify the resultant vector.
+- Students will decompose a vector into components along the x- and y-axes using right-triangle trigonometry, and reconstruct the original vector from its components.
+- Students will explain why the horizontal and vertical motions of a projectile are independent of one another, given that gravity acts only in the vertical direction.
+- Students will describe how the horizontal velocity, vertical velocity, and position of a projectile change over the course of its flight, and identify the moment of maximum height as the point where the vertical velocity is zero.
+- Students will predict how changes in initial launch angle and launch speed affect the trajectory, range, and maximum height of a projectile, and identify the launch angle that produces maximum range for a given speed.
+
+## Detailed script
+The lab opens with an introduction to vectors. A single arrow appears
+floating in the 3D workspace, with its tail at a fixed origin point and
+its head extending outward in some direction. The arrow is rendered with
+a clearly visible tail, shaft, and head. Two numerical labels float near
+the arrow: a magnitude value (the length of the arrow) and a direction
+indicator (a small set of angle measurements relative to the x, y, and
+z reference axes that are also visible in the workspace as colored
+ground lines). Students can grab the arrow's head and drag it around in
+3D space; as they do, the magnitude and direction values update in real
+time. Narration introduces vectors as quantities with both a size (the
+magnitude) and a direction in space, distinct from scalar quantities
+like temperature or mass that have only a size. Students rotate around
+the vector to view it from any angle and confirm that the underlying
+arrow does not change — only their viewpoint on it.
+
+The second scene introduces vector addition by the tip-to-tail method.
+Two vectors appear in the workspace, drawn in different colors (for
+example, blue for the first vector and green for the second). The
+first vector starts at the origin; the second vector starts at the
+head of the first, placed tip-to-tail. A third arrow, the resultant,
+is drawn from the tail of the first to the head of the second in a
+third color (for example, red). Students can grab and reorient either
+the blue or the green vector; the resultant updates continuously to
+remain anchored from the origin to the head of the second vector.
+Narration explains that vector addition is the operation that produces
+the resultant, and that the order in which the two vectors are added
+does not matter — the resultant is the same whether the green is laid
+on top of the blue or vice versa. Students confirm this by swapping
+the order of the two vectors and observing that the resultant points
+to the same place.
+
+The third scene introduces vector decomposition by treating it as
+reversed addition. A single vector appears in the workspace, drawn in
+a neutral color. Three smaller component arrows then emerge from the
+origin, one along each axis (x, y, z), color-coded to match the axes.
+The component arrows lie tip-to-tail in sequence: the x component
+starts at the origin, the y component starts at the tip of x, and the
+z component starts at the tip of y, terminating at the head of the
+original vector. Narration introduces this as decomposition — breaking
+the original vector down into pieces along the chosen axes — and
+emphasizes that the three components add up tip-to-tail to reproduce
+the original. Students can grab and resize each component arrow
+individually, lengthening or shortening it along its axis; as they do,
+the original vector updates to reflect the new sum. The narration ties
+this directly back to the previous scene: decomposition is just
+addition viewed in reverse — instead of adding two vectors to get a
+resultant, the resultant has been broken into three vectors that add
+back to it. A brief mention notes that the magnitudes of the
+components relate to the original vector's magnitude through the
+three-dimensional Pythagorean theorem, and in two dimensions the
+components and magnitude form a right triangle.
+
+The fourth scene transitions from abstract vectors to projectile
+motion. The 3D vector workspace gives way to a 2D vertical plane,
+rendered as a clearly visible surface in the AR environment with
+horizontal and vertical axes labeled. Narration explains that the
+vector tools just introduced will now be applied to a specific
+physical problem: the motion of a projectile launched into the air.
+Because the projectile experiences gravity (which acts only
+downward) and no horizontal force, the entire motion takes place in
+a vertical plane that contains the initial velocity vector — so
+although the world is three-dimensional, the projectile problem is
+genuinely two-dimensional. Students see a small projectile (a ball)
+resting on the ground line at the left side of the plane, with a
+velocity vector arrow drawn from the ball pointing up and to the
+right at some initial angle.
+
+The fifth scene is the projectile motion demonstration. The initial
+velocity vector is shown decomposed into two component arrows: a
+horizontal arrow (pointing right) and a vertical arrow (pointing
+up), color-coded to distinguish them from the original velocity.
+Narration explains that the horizontal component represents the
+ball's rightward velocity at launch, and the vertical component
+represents the ball's upward velocity at launch. The ball is
+launched. As it flies, both component arrows are drawn on the ball
+in real time and update continuously: the horizontal arrow stays the
+same length throughout the flight, while the vertical arrow shrinks
+during the ascent, becomes zero at the peak of the trajectory, then
+grows downward during the descent. The ball traces a parabolic path,
+which is drawn behind it as a faint trail. Students watch the full
+flight from a default side view; controls allow them to switch to an
+overhead view (looking straight down the y-axis, where the parabola
+disappears and the motion appears as a straight horizontal line) and
+to other angles in between. Narration emphasizes the central
+insight: the horizontal and vertical motions are independent. The
+horizontal motion is unaffected by gravity — the ball moves
+rightward at a constant velocity, exactly as it would if there were
+no gravity at all. The vertical motion is exactly what a ball
+thrown straight up would do — it slows, stops, and falls. The
+parabolic trajectory is just these two motions happening at the
+same time.
+
+The sixth scene is the discovery of the maximum-range result.
+Students are given controls to set the initial launch angle (from
+0 to 90 degrees above horizontal) and the launch speed. The
+projectile launches each time the student changes the parameters
+and presses launch; the trajectory is drawn and the range (the
+horizontal distance from launch to landing on the same elevation)
+is displayed. Students try various combinations and observe how
+range changes. A small history panel records the angle, speed, and
+range of each launch, so students can compare across attempts. As
+they explore, they discover that for any fixed launch speed, the
+range is maximized when the launch angle is 45 degrees, and that
+angles symmetric about 45 degrees (for example, 30 and 60, or 20
+and 70) produce the same range. Once students have made a few
+launches in the 35-55 degree range, narration confirms the result
+and explains it: the range is maximized when the horizontal and
+vertical components of the initial velocity are equal, which occurs
+at 45 degrees. If a student happens to launch at or very close to
+45 degrees on one of their first few attempts, narration confirms
+the result early rather than waiting — there is no need to keep
+the student exploring if they have already found the maximum.
+
+The seventh scene is a targeting challenge. A target appears at a
+fixed location on the ground plane, some distance away from the
+launch point and at the same elevation. Students must set the
+launch angle and speed to hit the target. The challenge repeats
+several times with the target placed at different distances; each
+successful hit advances to the next target. Narration notes that
+for any given target distance there are typically two angle
+solutions — a complementary pair such as 30 degrees and 60 degrees
+— and invites students to find both for at least one target if
+they want to, though only a single hit is required to advance.
+The targeting challenge ties the vector decomposition skills from
+the abstract half directly to the practical task of predicting
+projectile behavior.
+
+The eighth scene is a free-exploration sandbox. The constraints of
+the structured scenes are removed, and students gain control over
+every parameter of the projectile motion problem within reasonable
+bounds: initial launch angle, launch speed, initial height (the
+ball can now be launched from a platform at any height from ground
+level up to approximately 50 meters), and gravity strength (which
+can be scaled from zero up to five times Earth's gravity). The
+targeting elements are gone; students simply launch projectiles
+and watch the trajectories, with the live component arrows still
+drawn. Narration suggests a few exploratory questions for students
+to investigate: what happens to the range when gravity is halved?
+what does the trajectory look like under very strong gravity? what
+if the projectile is launched from a 50-meter platform — does 45
+degrees still maximize range, or does the optimal angle shift?
+This scene gives students a chance to consolidate intuition by
+playing with the system.
+
+The lab closes with a recap. A summary screen lists the six concept
+areas covered — vectors as quantities with magnitude and direction,
+vector addition by the tip-to-tail method, vector decomposition as
+reversed addition along chosen axes, the application of vector
+decomposition to projectile motion, the independence of horizontal
+and vertical motion under gravity, and the 45-degree maximum range
+result — with each area highlighted in turn as the narration
+reviews it.

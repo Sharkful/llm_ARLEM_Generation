@@ -1,0 +1,435 @@
+{
+  "version": "2.0",
+  "labId": "bio101-dna-3d-replication-AR001",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Introductory Molecular Biology (200-level)",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Identify the 3D structural components of DNA: two antiparallel sugar-phosphate backbones, four nitrogenous bases, and hydrogen bonds between complementary base pairs.",
+    "Apply complementary base-pairing rules (A\u2013T with 2 H-bonds; G\u2013C with 3 H-bonds) to determine sequence relationships across the helix.",
+    "Explain antiparallel orientation and how sugar-phosphate directionality enforces 5'\u21923' vs 3'\u21925' running.",
+    "Trace DNA replication at the replication fork by matching enzymes (helicase, SSBs, DNA polymerase, DNA ligase) to their roles.",
+    "Describe why leading synthesis is continuous and lagging synthesis is discontinuous into Okazaki fragments based on DNA polymerase\u2019s 5'\u21923' building rule on antiparallel templates.",
+    "Predict daughter-molecule composition after one and two rounds of semiconservative replication."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: Ladder Schematic & Base Identity",
+      "description": "Begin with a schematic ladder showing sugar-phosphate backbones, base-pair rungs, and base identity in a clear, non-geometric representation.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Distinguish backbone segments from base-pair rungs in a ladder schematic.",
+        "Recognize A, T, G, C base identity labeling and how pairing occurs across the ladder.",
+        "Interpret hydrogen-bond counts as a proxy for base-pair stability."
+      ],
+      "instructions": [
+        "Center the ladder in your workspace (~1 arm length from you).",
+        "Watch the rungs appear; focus on how each colored base segment meets in the middle."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaLadderPrefab",
+          "name": "dnaLadder",
+          "position": [
+            0,
+            0.25,
+            1.0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.35,
+            0.25,
+            0.02
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "ladderLegendText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.55,
+            1.0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.4,
+            0.12,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "DNA ladder: rails = sugar-phosphate backbones; rungs = base pairs (A\u2013T, G\u2013C)",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "s1_intro",
+          "audioClip": "dna_ladder_scene1_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "dnaLadder"
+            }
+          ],
+          "changeMeaning": "The schematic DNA ladder is instantiated and made visible as the starting representation, keeping the workspace uncluttered so students can first map backbone vs base-pair structure. The text legend anchors the learner\u2019s attention to the key parts (rails and rungs).",
+          "narration": "Welcome! This first scene uses a simple DNA ladder to reveal the repeating backbone and the base pairs that connect them."
+        },
+        {
+          "clipName": "s1_rungs_appear",
+          "audioClip": "dna_ladder_scene1_rungs",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "dnaLadder"
+            }
+          ],
+          "changeMeaning": "Colored rungs for adenine, thymine, guanine, and cytosine appear in the ladder\u2019s interior. This sets up complementary pairing identification before bond-count emphasis.",
+          "narration": "Each rung contains two bases\u2014color coding helps you see adenine paired with thymine, and guanine paired with cytosine."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: Double-Helix Twist (Schematic \u2194 Realistic)",
+      "description": "Transform the ladder into a realistic double helix and introduce a toggle to switch between schematic and helix representations during the same scene.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Connect ladder schematic features to the corresponding 3D double-helix geometry.",
+        "Describe the approximate helical periodicity (one full turn ~10 base pairs).",
+        "Observe groove-like surface features as emergent geometry."
+      ],
+      "instructions": [
+        "Use the toggle to switch between ladder and helix.",
+        "Rotate the model to see backbones spiraling around a shared axis."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaDoubleHelixPrefab",
+          "name": "dnaHelix",
+          "position": [
+            0,
+            0.25,
+            1.0
+          ],
+          "eulerAngles": [
+            0,
+            25,
+            0
+          ],
+          "scale": [
+            0.38,
+            0.38,
+            0.22
+          ],
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 6
+            }
+          ]
+        },
+        {
+          "prefab": "dnaLadderPrefab",
+          "name": "dnaLadderGhost",
+          "position": [
+            0,
+            0.25,
+            1.0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.35,
+            0.25,
+            0.02
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "togglePrefab",
+          "name": "helixSchematicToggle",
+          "position": [
+            0.65,
+            0.4,
+            0.85
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.08,
+            0.04,
+            0.02
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "helixPeriodText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.55,
+            0.95
+          ],
+          "scale": [
+            0.45,
+            0.12,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Full turn \u2248 every 10 base pairs",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "s2_transition",
+          "audioClip": "dna_helix_scene2_transition",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "dnaHelix"
+            },
+            {
+              "target": "dnaLadderGhost"
+            }
+          ],
+          "changeMeaning": "Helix and ladder are staged in the same location so learners can match the schematic rails/rungs to the 3D geometry before focusing on twisting behavior.",
+          "narration": "Now we move from a ladder representation to the actual double-helix geometry\u2014two intertwined backbones with base pairs stacked between them."
+        },
+        {
+          "clipName": "s2_twist_animation",
+          "audioClip": "dna_helix_scene2_twist_animation",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "dnaHelix"
+            }
+          ],
+          "changeMeaning": "The helix performs a one-turn twist animation to communicate helical periodicity. Base stacking remains visible so learners associate ladder rungs with interior stacking along the helix.",
+          "narration": "Watch how the structure spirals. A full turn is roughly every ten base pairs."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: Antiparallel Orientation & 5'/3' Directionality",
+      "description": "Show arrows on both sugar-phosphate backbones to establish antiparallel orientation and label each strand\u2019s 5' and 3' termini.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Identify antiparallel orientation: one strand runs 5'\u21923' while the other runs 3'\u21925'.",
+        "Interpret 5' and 3' labels as termini of the sugar-phosphate backbone directionality.",
+        "Use rotation to confirm arrow directions from different viewpoints."
+      ],
+      "instructions": [
+        "Rotate the helix to verify the arrows.",
+        "Read the 5' and 3' labels at both ends of the two strands."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaDoubleHelixPrefab",
+          "name": "dnaHelixAntiparallel",
+          "position": [
+            0,
+            0.25,
+            1.0
+          ],
+          "eulerAngles": [
+            0,
+            45,
+            0
+          ],
+          "scale": [
+            0.38,
+            0.38,
+            0.22
+          ],
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 7
+            }
+          ]
+        },
+        {
+          "prefab": "arrowBundlePrefab",
+          "name": "backboneDirectionArrows",
+          "position": [
+            0,
+            0.25,
+            1.0
+          ],
+          "eulerAngles": [
+            0,
+            45,
+            0
+          ],
+          "scale": [
+            0.38,
+            0.38,
+            0.22
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "fivePrimeLabelTop",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.08,
+            0.43,
+            1.12
+          ],
+          "scale": [
+            0.22,
+            0.08,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "5'",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "threePrimeLabelTop",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.08,
+            0.43,
+            1.12
+          ],
+          "scale": [
+            0.22,
+            0.08,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "3'",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "fivePrimeLabelBottom",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.08,
+            0.18,
+            0.88
+          ],
+          "scale": [
+            0.22,
+            0.08,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "5'",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "threePrimeLabelBottom",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.08,
+            0.18,
+            0.88
+          ],
+          "scale": [
+            0.22,
+            0.08,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "3'",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "s3_intro_arrows",
+          "audioClip": "dna_antiparallel_scene3_intro_arrows",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "backboneDirectionArrows"
+            }
+          ],
+          "changeMeaning": "The arrow bundle appears on top of the helix, explicitly showing that the two backbones run in opposite directions. This isolates the key conceptual variable: directionality.",
+          "narration": "Next, let\u2019s make antiparallel orientation explicit. One backbone runs 5' to 3', while the other runs 3' to 5'."
+        },
+        {
+          "clipName": "s3_label_focus",
+          "audioClip": "dna_antiparallel_scene3_terminal_labels",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "fivePrimeLabelTop"
+            },
+            {
+              "target": "threePrimeLabelTop"
+            },
+            {
+              "target": "fivePrimeLabelBottom"
+            },
+            {
+              "target": "threePrimeLabelBottom"
+            }
+          ],
+          "changeMeaning": "Terminal labels are emphasized so learners can connect each 5'/3' tag to the correct strand end. With rotation enabled on the helix, students can confirm the antiparallel relationship from any viewing angle.",
+          "narration": "These 5' and 3' labels mark the ends of each sugar-phosphate backbone."
+        }
+      ]
+    }
+  ]
+}

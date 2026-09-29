@@ -1,0 +1,419 @@
+{
+  "version": "2.0",
+  "labId": "apparent_retrograde_motion_astronomy",
+  "author": "Dr. Helena Vance, Dept. of Astronomy",
+  "courseName": "Introduction to Astronomy (AST-101)",
+  "estimatedLength": "20 minutes",
+  "objectives": [
+    "Describe the apparent path of Mars across the night sky during a retrograde episode, including direct and retrograde phases.",
+    "Explain apparent retrograde motion in the heliocentric model as a consequence of Earth overtaking a slower-moving outer planet.",
+    "Contrast geocentric and heliocentric explanations of retrograde motion, evaluating them on scientific parsimony.",
+    "Compare the retrograde loops of Mars, Jupiter, and Saturn, explaining how distance impacts loop size."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "The View from Earth",
+      "description": "Observe Mars tracing its classic retrograde loop against the background constellations of the zodiac.",
+      "author": "Dr. Helena Vance",
+      "institution": "University of Astronomical Sciences",
+      "dateCreated": "2023-10-24",
+      "educationalObjectives": [
+        "Track Mars's apparent path across the zodiacal constellations.",
+        "Identify the transitions between eastward direct motion and westward retrograde motion."
+      ],
+      "instructions": [
+        "Look at the celestial backdrop floating in your room.",
+        "Watch the red path trace out as Mars progresses through its loop.",
+        "Notice how the motion slows down before reversing direction."
+      ],
+      "objects": [
+        {
+          "prefab": "constellationBackdropPrefab",
+          "name": "constellationBg",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            -1.5
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.6,
+            0.9,
+            0.1
+          ],
+          "enabled": true,
+          "texture": "zodiac_constellations_map"
+        },
+        {
+          "prefab": "tinySphere",
+          "name": "marsSkyPoint",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.6,
+            -0.1,
+            -1.4
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "enabled": true,
+          "color": [
+            255.0,
+            69.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "skyLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.5,
+            -1.4
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": true,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Apparent Path of Mars (Sky View)",
+              "color": [
+                255.0,
+                255.0,
+                255.0,
+                255.0
+              ],
+              "fontSize": 0.18,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "normalDrift",
+          "audioClip": "retro_normal_drift_explanation",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "skyLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Phase 1: Direct Motion\nMars drifts slowly eastward (left-to-right) against background stars over several weeks."
+                }
+              ]
+            },
+            {
+              "target": "marsSkyPoint",
+              "position": [
+                -0.3,
+                -0.05,
+                -1.4
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "retrogradeLoop",
+          "audioClip": "retro_loop_explanation",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "skyLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Phase 2: Retrograde Reversal\nMars slows, halts, and loops westward (right-to-left) as Earth begins to overtake it."
+                }
+              ]
+            },
+            {
+              "target": "marsSkyPoint",
+              "position": [
+                0.0,
+                0.1,
+                -1.4
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "resumeDirect",
+          "audioClip": "retro_resume_explanation",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "skyLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Phase 3: Direct Motion Resumed\nHaving completed the loop, Mars resumes its normal eastward drift across the zodiac."
+                }
+              ]
+            },
+            {
+              "target": "marsSkyPoint",
+              "position": [
+                0.5,
+                -0.05,
+                -1.4
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "The Heliocentric View",
+      "description": "Step outside the solar system to watch Earth overtake Mars on their orbital tracks, explaining the retrograde illusion.",
+      "author": "Dr. Helena Vance",
+      "institution": "University of Astronomical Sciences",
+      "dateCreated": "2023-10-24",
+      "educationalObjectives": [
+        "Explain how the relative velocity difference between Earth and Mars yields apparent retrograde loops.",
+        "Assess why outer planets farther from Earth produce smaller apparent retrograde paths."
+      ],
+      "instructions": [
+        "Examine the inner solar system array on your tabletop.",
+        "Watch Earth (blue) in its rapid inner orbit and Mars (red) in its slower outer orbit.",
+        "Observe the sightline sweeping backwards during closest approach."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "sun",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            -0.2,
+            -1.2
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "enabled": true,
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "rotationTime": 25.0
+            }
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earthPlanet",
+          "parent": "sun",
+          "position": [
+            0.25,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.35,
+            0.35,
+            0.35
+          ],
+          "enabled": true,
+          "texture": "2k_earth_daymap",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 10.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": false
+            }
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "marsPlanet",
+          "parent": "sun",
+          "position": [
+            0.45,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ],
+          "enabled": true,
+          "texture": "2k_mars",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 18.8,
+              "orbitalScale": 1.0,
+              "synchronousRotation": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "heliocentricLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.4,
+            -1.2
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": true,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Heliocentric Mechanism: Earth & Mars",
+              "color": [
+                255.0,
+                255.0,
+                255.0,
+                255.0
+              ],
+              "fontSize": 0.18,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "jupiterPrefab",
+          "name": "jupiterPlanet",
+          "parent": "sun",
+          "position": [
+            0.7,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "enabled": false,
+          "texture": "2k_jupiter",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 118.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "raceTrack",
+          "audioClip": "helioc_orbital_speeds",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "heliocentricLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "The Heliocentric Model\nEarth travels faster on an inner orbit. Mars travels slower on an outer orbit. Observe their continuous, uniform motion forward."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "overtakingPoint",
+          "audioClip": "helioc_overtaking_explanation",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "heliocentricLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Overtaking at Opposition\nAs Earth passes Mars, the line-of-sight vector briefly pivots backwards. This causes Mars to appear to retrograde in the Earth sky."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "outerPlanetsCompare",
+          "audioClip": "helioc_outer_planets_comparison",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "jupiterPlanet",
+              "enabled": true
+            },
+            {
+              "target": "heliocentricLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Further Outer Planets\nJupiter (now visible further out) travels even slower. Because it is so distant, the angular sweep of our sightline is smaller, producing tighter sky loops."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

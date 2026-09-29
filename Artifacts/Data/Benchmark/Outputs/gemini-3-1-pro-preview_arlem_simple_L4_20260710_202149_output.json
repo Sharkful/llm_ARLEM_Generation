@@ -1,0 +1,437 @@
+{
+  "workplace": {
+    "id": "wp_astro_lab",
+    "name": "Astronomy 100 Lab Environment",
+    "origin": "det_origin",
+    "things": [
+      {
+        "id": "thing_mars",
+        "name": "Physical Mars Prop",
+        "detectable": "det_mars",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "thing_earth",
+        "name": "Physical Earth Prop",
+        "detectable": "det_earth",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "thing_sun",
+        "name": "Physical Sun Prop",
+        "detectable": "det_sun",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "place_night_sky",
+        "name": "Night Sky Dome View",
+        "detectable": "det_night_sky",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "place_solar_system",
+        "name": "Top-Down Solar System View",
+        "detectable": "det_solar_system",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "det_origin",
+        "type": "anchor",
+        "url": "https://assets.example.com/origin.bundle"
+      },
+      {
+        "id": "det_mars",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_mars.bundle"
+      },
+      {
+        "id": "det_earth",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_earth.bundle"
+      },
+      {
+        "id": "det_sun",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_sun.bundle"
+      },
+      {
+        "id": "det_night_sky",
+        "type": "anchor",
+        "url": "https://assets.example.com/anchor_night_sky.bundle"
+      },
+      {
+        "id": "det_solar_system",
+        "type": "anchor",
+        "url": "https://assets.example.com/anchor_solar_system.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "animation"
+      },
+      {
+        "id": "label"
+      },
+      {
+        "id": "audio"
+      },
+      {
+        "id": "image"
+      },
+      {
+        "id": "video"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "pred_night_sky_loop",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/anim_night_sky_mars_loop.glb"
+      },
+      {
+        "id": "pred_narrator_intro",
+        "type": "audio",
+        "scale": 1.0,
+        "url": "https://assets.example.com/audio_retrograde_intro.mp3"
+      },
+      {
+        "id": "pred_geocentric",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/anim_geocentric_epicycles.glb"
+      },
+      {
+        "id": "pred_heliocentric",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/anim_heliocentric_orbits.glb"
+      },
+      {
+        "id": "pred_line_of_sight",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/anim_line_of_sight.glb"
+      },
+      {
+        "id": "pred_planet_comparison",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/anim_planet_comparison.glb"
+      }
+    ]
+  },
+  "activity": {
+    "id": "act_retrograde_motion",
+    "name": "Apparent Retrograde Motion",
+    "description": "An interactive lab explaining apparent retrograde motion. Students observe Mars's backward loop in the night sky and compare geocentric epicycles with the simpler heliocentric model where Earth overtakes Mars.",
+    "workplace": "wp_astro_lab",
+    "start": "step_1_night_sky",
+    "actions": [
+      {
+        "id": "step_1_night_sky",
+        "instruction": {
+          "title": "1. The Night Sky Observation",
+          "description": "Look at the simulated night sky. Watch as Mars drifts slowly eastward over several months, then briefly reverses course into a westward loop before resuming its normal eastward path. This is apparent retrograde motion."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "place_night_sky",
+              "type": "predicate",
+              "augmentation": "pred_night_sky_loop",
+              "poi": "default"
+            },
+            {
+              "target": "place_night_sky",
+              "type": "predicate",
+              "augmentation": "pred_narrator_intro",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": true,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "place_night_sky",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_1_night_sky"
+          }
+        ]
+      },
+      {
+        "id": "step_2_geocentric",
+        "instruction": {
+          "title": "2. The Geocentric Explanation",
+          "description": "To explain the backward loop, the ancient geocentric model placed Mars on a small rotating circle (an epicycle) that moved along a larger circle (the deferent) around Earth. Watch the complex machinery required to reproduce the observation."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "place_solar_system",
+              "type": "predicate",
+              "augmentation": "pred_geocentric",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": true,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "place_solar_system",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_2_geocentric"
+          }
+        ]
+      },
+      {
+        "id": "step_3_heliocentric",
+        "instruction": {
+          "title": "3. The Heliocentric Resolution",
+          "description": "Now view the solar system from above. The heliocentric model removes the need for epicycles. Watch as Earth, moving faster on its inner orbit, overtakes the slower-moving Mars."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "place_solar_system",
+              "type": "predicate",
+              "augmentation": "pred_heliocentric",
+              "poi": "default"
+            },
+            {
+              "target": "thing_sun",
+              "type": "primitive",
+              "augmentation": "label",
+              "poi": "default",
+              "text": "Sun (Center)"
+            },
+            {
+              "target": "thing_earth",
+              "type": "primitive",
+              "augmentation": "label",
+              "poi": "default",
+              "text": "Earth (1.0 AU, Faster)"
+            },
+            {
+              "target": "thing_mars",
+              "type": "primitive",
+              "augmentation": "label",
+              "poi": "default",
+              "text": "Mars (1.52 AU, Slower)"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": true,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "place_solar_system",
+              "type": "*"
+            },
+            {
+              "target": "thing_sun",
+              "type": "*"
+            },
+            {
+              "target": "thing_earth",
+              "type": "*"
+            },
+            {
+              "target": "thing_mars",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_3_heliocentric"
+          }
+        ]
+      },
+      {
+        "id": "step_4_linking",
+        "instruction": {
+          "title": "4. Linking the Perspectives",
+          "description": "Notice the line of sight extending from Earth through Mars to the distant stars. As Earth overtakes Mars, this line temporarily sweeps backward (westward), creating the illusion of retrograde motion in Earth's sky."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "place_solar_system",
+              "type": "predicate",
+              "augmentation": "pred_line_of_sight",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": true,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "place_solar_system",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_4_linking"
+          }
+        ]
+      },
+      {
+        "id": "step_5_comparison",
+        "instruction": {
+          "title": "5. Outer Planet Comparison",
+          "description": "Compare the apparent loops of Mars, Jupiter, and Saturn. Because Jupiter and Saturn are much farther away, the parallax effect from Earth's motion is smaller, resulting in narrower retrograde loops."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "place_solar_system",
+              "type": "predicate",
+              "augmentation": "pred_planet_comparison",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": true,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "place_solar_system",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_5_comparison"
+          }
+        ]
+      },
+      {
+        "id": "step_6_recap",
+        "instruction": {
+          "title": "6. Lab Summary",
+          "description": "You have observed retrograde motion, contrasted the geocentric and heliocentric explanations, and seen how relative distance affects the magnitude of the illusion. Click to finish the lab."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "place_night_sky",
+              "type": "primitive",
+              "augmentation": "label",
+              "poi": "default",
+              "text": "Retrograde motion is elegantly explained by relative planetary speeds in a heliocentric model, championing the scientific principle of parsimony."
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": true,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "place_night_sky",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_6_recap"
+          }
+        ]
+      }
+    ]
+  }
+}

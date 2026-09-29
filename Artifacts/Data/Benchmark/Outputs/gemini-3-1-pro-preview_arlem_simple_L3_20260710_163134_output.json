@@ -1,0 +1,394 @@
+{
+  "workplace": {
+    "id": "wp_vectors_projectile",
+    "name": "Physics Mechanics Lab",
+    "origin": "det_origin",
+    "things": [
+      {
+        "id": "thing_vectorboard",
+        "name": "Interactive Vector Board",
+        "detectable": "det_vectorboard",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "thing_cannon",
+        "name": "Spring-Loaded Projectile Cannon",
+        "detectable": "det_cannon",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          },
+          {
+            "id": "muzzle",
+            "x_offset": 0.0,
+            "y_offset": 12.0,
+            "z_offset": 25.0,
+            "x_rotation": 45.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "thing_projectile",
+        "name": "Steel Projectile Sphere",
+        "detectable": "det_projectile",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "place_desk",
+        "name": "Lab Work Desk",
+        "detectable": "det_desk",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "place_launchpad",
+        "name": "Projectile Launch Pad",
+        "detectable": "det_launchpad",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "place_targetzone",
+        "name": "Target Impact Zone",
+        "detectable": "det_targetzone",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "det_origin",
+        "type": "anchor"
+      },
+      {
+        "id": "det_desk",
+        "type": "marker",
+        "url": "https://assets.example.com/markers/desk_qr.bundle"
+      },
+      {
+        "id": "det_launchpad",
+        "type": "marker",
+        "url": "https://assets.example.com/markers/launchpad_qr.bundle"
+      },
+      {
+        "id": "det_targetzone",
+        "type": "marker",
+        "url": "https://assets.example.com/markers/targetzone_qr.bundle"
+      },
+      {
+        "id": "det_vectorboard",
+        "type": "marker",
+        "url": "https://assets.example.com/markers/vectorboard_qr.bundle"
+      },
+      {
+        "id": "det_cannon",
+        "type": "marker",
+        "url": "https://assets.example.com/markers/cannon_qr.bundle"
+      },
+      {
+        "id": "det_projectile",
+        "type": "marker",
+        "url": "https://assets.example.com/markers/projectile_qr.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "animation"
+      },
+      {
+        "id": "label"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "pred_anim_vector_add",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/models/physics/vector_addition_tiptotail.glb"
+      },
+      {
+        "id": "pred_anim_components",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/models/physics/vector_xy_components.glb"
+      },
+      {
+        "id": "pred_anim_trajectory",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/models/physics/parabolic_trajectory_vectors.glb"
+      },
+      {
+        "id": "pred_label_generic",
+        "type": "label",
+        "scale": 1.0
+      }
+    ]
+  },
+  "activity": {
+    "id": "act_vectors_projectile",
+    "name": "Vectors and 2D Projectile Motion Lab",
+    "description": "An interactive physics lab exploring vector addition, right-triangle trigonometric decomposition, and their application to 2D projectile motion. Students observe how independent horizontal and vertical motions create a parabolic trajectory.",
+    "workplace": "wp_vectors_projectile",
+    "start": "step_1_vector_add",
+    "actions": [
+      {
+        "id": "step_1_vector_add",
+        "instruction": {
+          "title": "Tip-to-Tail Vector Addition",
+          "description": "Vectors represent quantities with both magnitude and direction. Look at the Vector Board to observe how two vectors are added graphically using the tip-to-tail method to produce a resultant vector."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "thing_vectorboard",
+              "type": "predicate",
+              "augmentation": "pred_anim_vector_add",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "thing_vectorboard",
+              "type": "predicate",
+              "augmentation": "pred_anim_vector_add",
+              "poi": "default"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_1_vector_add"
+          }
+        ]
+      },
+      {
+        "id": "step_2_components",
+        "instruction": {
+          "title": "Vector Decomposition",
+          "description": "Any two-dimensional vector can be decomposed into horizontal (x) and vertical (y) components using right-triangle trigonometry. Notice how the original vector forms the hypotenuse of the triangle."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "thing_vectorboard",
+              "type": "predicate",
+              "augmentation": "pred_anim_components",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "thing_vectorboard",
+              "type": "predicate",
+              "augmentation": "pred_anim_components",
+              "poi": "default"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_2_components"
+          }
+        ]
+      },
+      {
+        "id": "step_3_cannon_setup",
+        "instruction": {
+          "title": "Initial Velocity of a Projectile",
+          "description": "Let's apply vectors to projectile motion. Focus on the Cannon. The initial launch angle and speed determine the initial velocity vector, which is instantly decomposed into independent horizontal and vertical velocities."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "thing_cannon",
+              "type": "predicate",
+              "augmentation": "pred_label_generic",
+              "poi": "muzzle",
+              "text": "V0 = Vx + Vy"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "thing_cannon",
+              "type": "predicate",
+              "augmentation": "pred_label_generic",
+              "poi": "muzzle"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_3_cannon_setup"
+          }
+        ]
+      },
+      {
+        "id": "step_4_independent_motion",
+        "instruction": {
+          "title": "Independent x and y Motions",
+          "description": "Observe the simulated trajectory. Because gravity only acts downwards, the horizontal velocity (Vx) remains perfectly constant. The vertical velocity (Vy) decreases steadily on the way up, reaches zero at maximum height, and increases downwards."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "place_launchpad",
+              "type": "predicate",
+              "augmentation": "pred_anim_trajectory",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "place_launchpad",
+              "type": "predicate",
+              "augmentation": "pred_anim_trajectory",
+              "poi": "default"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_4_independent_motion"
+          }
+        ]
+      },
+      {
+        "id": "step_5_max_range",
+        "instruction": {
+          "title": "Maximizing the Projectile Range",
+          "description": "The combination of constant horizontal motion and accelerated vertical motion creates a parabolic path. Adjust the cannon to exactly 45 degrees to achieve the theoretical maximum range, and watch the projectile strike the Target Zone."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "thing_cannon",
+              "type": "predicate",
+              "augmentation": "pred_label_generic",
+              "poi": "default",
+              "text": "Adjust to 45\u00b0 Launch Angle"
+            },
+            {
+              "target": "place_targetzone",
+              "type": "predicate",
+              "augmentation": "pred_label_generic",
+              "poi": "default",
+              "text": "Expected Max Range Impact"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "thing_cannon",
+              "type": "predicate",
+              "augmentation": "pred_label_generic",
+              "poi": "default"
+            },
+            {
+              "target": "place_targetzone",
+              "type": "predicate",
+              "augmentation": "pred_label_generic",
+              "poi": "default"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "thing_cannon"
+          }
+        ]
+      }
+    ]
+  }
+}

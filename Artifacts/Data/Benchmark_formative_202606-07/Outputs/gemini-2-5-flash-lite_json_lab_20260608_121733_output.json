@@ -1,0 +1,2433 @@
+{
+  "version": "2.0",
+  "labId": "VSEPR_Geometry",
+  "author": "AI Assistant",
+  "courseName": "General Chemistry I",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Determine the steric number of a central atom from its Lewis structure by counting bonding pairs and lone pairs.",
+    "Predict the electron-domain geometry of a molecule from its steric number, identifying the linear, trigonal planar, tetrahedral, trigonal bipyramidal, or octahedral arrangement.",
+    "Distinguish electron-domain geometry from molecular geometry, and identify the molecular shape produced when one or more domains is a lone pair.",
+    "Explain why lone pairs occupy more angular space than bonding pairs, and predict the direction of bond-angle deviations from idealized values.",
+    "Apply VSEPR predictions to specific molecules and compare predicted geometries to experimentally observed structures."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Introduction to VSEPR",
+      "description": "Introduction to VSEPR theory and the concept of electron pair repulsion.",
+      "author": "AI Assistant",
+      "educationalObjectives": [
+        "Understand the fundamental principle of VSEPR theory: electron pairs minimize repulsion.",
+        "Identify electron domains (bonding pairs and lone pairs) around a central atom."
+      ],
+      "objects": [
+        {
+          "prefab": "textPrefab",
+          "name": "titleText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "VSEPR Theory: Electron Domain Geometry",
+              "fontSize": 0.1,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "introText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Electron pairs around a central atom repel each other and arrange themselves to be as far apart as possible.",
+              "fontSize": 0.05,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "atomPrefab",
+          "name": "centralAtom",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "2k_red_sphere",
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Central",
+              "fontSize": 0.1,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.3,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domain1",
+          "parent": "centralAtom",
+          "position": [
+            0.2,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            0.0,
+            0.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domain2",
+          "parent": "centralAtom",
+          "position": [
+            -0.2,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            0.0,
+            0.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_intro",
+          "audioClip": "vsepr_intro_audio",
+          "autoAdvance": true
+        },
+        {
+          "clipName": "clip2_domains",
+          "audioClip": "vsepr_domains_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "introText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "We count electron domains (bonding pairs and lone pairs) around the central atom. These domains push each other away."
+                }
+              ]
+            },
+            {
+              "target": "domain2",
+              "position": [
+                0.15,
+                0.15,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domain1",
+              "position": [
+                -0.15,
+                -0.15,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Linear Geometry (Steric Number 2)",
+      "description": "Explore linear electron-domain geometry.",
+      "author": "AI Assistant",
+      "educationalObjectives": [
+        "Predict the linear electron-domain geometry for a steric number of 2.",
+        "Identify molecular geometries derived from linear electron-domain geometry (e.g., linear)."
+      ],
+      "objects": [
+        {
+          "prefab": "textPrefab",
+          "name": "moduleTitle",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Steric Number 2: Linear Geometry",
+              "fontSize": 0.1,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "descriptionText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "With two electron domains, the geometry is linear, with bond angles of 180 degrees.",
+              "fontSize": 0.05,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "atomPrefab",
+          "name": "centralAtomSN2",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "2k_green_sphere",
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "C",
+              "fontSize": 0.1,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.3,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainA_SN2",
+          "parent": "centralAtomSN2",
+          "position": [
+            0.3,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainB_SN2",
+          "parent": "centralAtomSN2",
+          "position": [
+            -0.3,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "CO2_molecule",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "2k_co2_model",
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "CO2 (Linear)",
+              "fontSize": 0.08,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.5,
+                0.0
+              ]
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_setup_SN2",
+          "audioClip": "vsepr_sn2_setup_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "moduleTitle",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric Number 2: Linear Geometry"
+                }
+              ]
+            },
+            {
+              "target": "descriptionText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "For a steric number of 2, the two electron domains will arrange themselves at 180 degrees to minimize repulsion. This results in a linear electron-domain geometry."
+                }
+              ]
+            },
+            {
+              "target": "centralAtomSN2",
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "domainA_SN2",
+              "position": [
+                0.3,
+                0.0,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainB_SN2",
+              "position": [
+                -0.3,
+                0.0,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "CO2_molecule",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_example_SN2",
+          "audioClip": "vsepr_sn2_example_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "descriptionText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Carbon dioxide (CO2) is an example of a molecule with linear geometry. The double bonds count as single electron domains for VSEPR purposes."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Trigonal Planar Geometry (Steric Number 3)",
+      "description": "Explore trigonal planar electron-domain geometry.",
+      "author": "AI Assistant",
+      "educationalObjectives": [
+        "Predict the trigonal planar electron-domain geometry for a steric number of 3.",
+        "Identify molecular geometries derived from trigonal planar electron-domain geometry (e.g., trigonal planar, bent)."
+      ],
+      "objects": [
+        {
+          "prefab": "textPrefab",
+          "name": "moduleTitle",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Steric Number 3: Trigonal Planar Geometry",
+              "fontSize": 0.1,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "descriptionText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "With three electron domains, the geometry is trigonal planar, with bond angles of 120 degrees.",
+              "fontSize": 0.05,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "atomPrefab",
+          "name": "centralAtomSN3",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "2k_blue_sphere",
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "B",
+              "fontSize": 0.1,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.3,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainA_SN3",
+          "parent": "centralAtomSN3",
+          "position": [
+            0.3,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainB_SN3",
+          "parent": "centralAtomSN3",
+          "position": [
+            -0.15,
+            0.2598,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainC_SN3",
+          "parent": "centralAtomSN3",
+          "position": [
+            -0.15,
+            -0.2598,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "BF3_molecule",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "2k_bf3_model",
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "BF3 (Trigonal Planar)",
+              "fontSize": 0.08,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.5,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "prefab": "lonePairPrefab",
+          "name": "lonePair_SN3",
+          "parent": "centralAtomSN3",
+          "position": [
+            0.3,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            200.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_setup_SN3",
+          "audioClip": "vsepr_sn3_setup_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "moduleTitle",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric Number 3: Trigonal Planar Geometry"
+                }
+              ]
+            },
+            {
+              "target": "descriptionText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "With three electron domains, the most stable arrangement is trigonal planar, with all domains in the same plane and 120 degrees apart."
+                }
+              ]
+            },
+            {
+              "target": "centralAtomSN3",
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "domainA_SN3",
+              "position": [
+                0.3,
+                0.0,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainB_SN3",
+              "position": [
+                -0.15,
+                0.2598,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainC_SN3",
+              "position": [
+                -0.15,
+                -0.2598,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "BF3_molecule",
+              "enabled": true
+            },
+            {
+              "target": "lonePair_SN3",
+              "enabled": false
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_bent_shape",
+          "audioClip": "vsepr_sn3_bent_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "descriptionText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "If one domain is a lone pair (e.g., SO2), the electron-domain geometry is still trigonal planar, but the molecular geometry is bent. Lone pairs are slightly larger and push bonding pairs closer."
+                }
+              ]
+            },
+            {
+              "target": "domainA_SN3",
+              "enabled": false
+            },
+            {
+              "target": "domainB_SN3",
+              "enabled": false
+            },
+            {
+              "target": "domainC_SN3",
+              "enabled": false
+            },
+            {
+              "target": "lonePair_SN3",
+              "position": [
+                0.3,
+                0.0,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "BF3_molecule",
+              "enabled": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Tetrahedral Geometry (Steric Number 4)",
+      "description": "Explore tetrahedral electron-domain geometry.",
+      "author": "AI Assistant",
+      "educationalObjectives": [
+        "Predict the tetrahedral electron-domain geometry for a steric number of 4.",
+        "Identify molecular geometries derived from tetrahedral electron-domain geometry (e.g., tetrahedral, trigonal pyramidal, bent)."
+      ],
+      "objects": [
+        {
+          "prefab": "textPrefab",
+          "name": "moduleTitle",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Steric Number 4: Tetrahedral Geometry",
+              "fontSize": 0.1,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "descriptionText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "With four electron domains, the geometry is tetrahedral, with ideal bond angles of 109.5 degrees.",
+              "fontSize": 0.05,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "atomPrefab",
+          "name": "centralAtomSN4",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "2k_yellow_sphere",
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "C",
+              "fontSize": 0.1,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.3,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainA_SN4",
+          "parent": "centralAtomSN4",
+          "position": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainB_SN4",
+          "parent": "centralAtomSN4",
+          "position": [
+            -0.15,
+            0.15,
+            0.15
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainC_SN4",
+          "parent": "centralAtomSN4",
+          "position": [
+            0.15,
+            -0.15,
+            0.15
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainD_SN4",
+          "parent": "centralAtomSN4",
+          "position": [
+            0.15,
+            0.15,
+            -0.15
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "CH4_molecule",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "2k_ch4_model",
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "CH4 (Tetrahedral)",
+              "fontSize": 0.08,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.5,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "prefab": "lonePairPrefab",
+          "name": "lonePair_SN4",
+          "parent": "centralAtomSN4",
+          "position": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            200.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_setup_SN4",
+          "audioClip": "vsepr_sn4_setup_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "moduleTitle",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric Number 4: Tetrahedral Geometry"
+                }
+              ]
+            },
+            {
+              "target": "descriptionText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "For a steric number of 4, the electron domains arrange in a tetrahedral shape. The ideal angle is 109.5 degrees."
+                }
+              ]
+            },
+            {
+              "target": "centralAtomSN4",
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "domainA_SN4",
+              "position": [
+                0.15,
+                0.15,
+                0.15
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainB_SN4",
+              "position": [
+                -0.15,
+                0.15,
+                0.15
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainC_SN4",
+              "position": [
+                0.15,
+                -0.15,
+                0.15
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainD_SN4",
+              "position": [
+                0.15,
+                0.15,
+                -0.15
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "CH4_molecule",
+              "enabled": true
+            },
+            {
+              "target": "lonePair_SN4",
+              "enabled": false
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_pyramidal_shape",
+          "audioClip": "vsepr_sn4_pyramidal_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "descriptionText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "With one lone pair (e.g., NH3), the molecular geometry is trigonal pyramidal. Lone pairs repel more strongly, compressing bond angles slightly."
+                }
+              ]
+            },
+            {
+              "target": "domainA_SN4",
+              "enabled": false
+            },
+            {
+              "target": "domainB_SN4",
+              "enabled": false
+            },
+            {
+              "target": "domainC_SN4",
+              "enabled": false
+            },
+            {
+              "target": "domainD_SN4",
+              "position": [
+                0.0,
+                0.3,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "CH4_molecule",
+              "enabled": false
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_bent_shape_SN4",
+          "audioClip": "vsepr_sn4_bent_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "descriptionText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "With two lone pairs (e.g., H2O), the molecular geometry is bent. The bond angle is further reduced due to increased lone pair repulsion."
+                }
+              ]
+            },
+            {
+              "target": "domainD_SN4",
+              "enabled": false
+            },
+            {
+              "target": "lonePair_SN4",
+              "position": [
+                0.15,
+                0.15,
+                0.15
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Trigonal Bipyramidal Geometry (Steric Number 5)",
+      "description": "Explore trigonal bipyramidal electron-domain geometry.",
+      "author": "AI Assistant",
+      "educationalObjectives": [
+        "Predict the trigonal bipyramidal electron-domain geometry for a steric number of 5.",
+        "Identify molecular geometries derived from trigonal bipyramidal electron-domain geometry (e.g., trigonal bipyramidal, seesaw, T-shaped, linear)."
+      ],
+      "objects": [
+        {
+          "prefab": "textPrefab",
+          "name": "moduleTitle",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Steric Number 5: Trigonal Bipyramidal Geometry",
+              "fontSize": 0.1,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "descriptionText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "With five electron domains, the geometry is trigonal bipyramidal. It has axial and equatorial positions.",
+              "fontSize": 0.05,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "atomPrefab",
+          "name": "centralAtomSN5",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "2k_purple_sphere",
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "P",
+              "fontSize": 0.1,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.3,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainA_SN5",
+          "parent": "centralAtomSN5",
+          "position": [
+            0.0,
+            0.3,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainB_SN5",
+          "parent": "centralAtomSN5",
+          "position": [
+            0.0,
+            -0.3,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainC_SN5",
+          "parent": "centralAtomSN5",
+          "position": [
+            0.2598,
+            0.0,
+            0.15
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainD_SN5",
+          "parent": "centralAtomSN5",
+          "position": [
+            -0.2598,
+            0.0,
+            0.15
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainE_SN5",
+          "parent": "centralAtomSN5",
+          "position": [
+            0.0,
+            0.0,
+            -0.3
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "PF5_molecule",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "2k_pf5_model",
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "PF5 (Trigonal Bipyramidal)",
+              "fontSize": 0.08,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.5,
+                0.0
+              ]
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_setup_SN5",
+          "audioClip": "vsepr_sn5_setup_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "moduleTitle",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric Number 5: Trigonal Bipyramidal Geometry"
+                }
+              ]
+            },
+            {
+              "target": "descriptionText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "With five electron domains, the arrangement is trigonal bipyramidal. Three domains are in the equatorial plane (120 degrees apart), and two are in axial positions (180 degrees apart, 90 degrees to the plane)."
+                }
+              ]
+            },
+            {
+              "target": "centralAtomSN5",
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "domainA_SN5",
+              "position": [
+                0.0,
+                0.3,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainB_SN5",
+              "position": [
+                0.0,
+                -0.3,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainC_SN5",
+              "position": [
+                0.2598,
+                0.0,
+                0.15
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainD_SN5",
+              "position": [
+                -0.2598,
+                0.0,
+                0.15
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainE_SN5",
+              "position": [
+                0.0,
+                0.0,
+                -0.3
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "PF5_molecule",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_seesaw_shape",
+          "audioClip": "vsepr_sn5_seesaw_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "descriptionText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "With one lone pair (e.g., SF4), the molecular geometry is seesaw. Lone pairs prefer equatorial positions. Bond angles deviate from ideal."
+                }
+              ]
+            },
+            {
+              "target": "domainA_SN5",
+              "enabled": false
+            },
+            {
+              "target": "domainB_SN5",
+              "enabled": false
+            },
+            {
+              "target": "domainC_SN5",
+              "enabled": false
+            },
+            {
+              "target": "domainD_SN5",
+              "enabled": false
+            },
+            {
+              "target": "domainE_SN5",
+              "position": [
+                0.3,
+                0.0,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "PF5_molecule",
+              "enabled": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Octahedral Geometry (Steric Number 6)",
+      "description": "Explore octahedral electron-domain geometry.",
+      "author": "AI Assistant",
+      "educationalObjectives": [
+        "Predict the octahedral electron-domain geometry for a steric number of 6.",
+        "Identify molecular geometries derived from octahedral electron-domain geometry (e.g., octahedral, square pyramidal, square planar)."
+      ],
+      "objects": [
+        {
+          "prefab": "textPrefab",
+          "name": "moduleTitle",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Steric Number 6: Octahedral Geometry",
+              "fontSize": 0.1,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "descriptionText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "With six electron domains, the geometry is octahedral, with all positions equivalent and bond angles of 90 degrees.",
+              "fontSize": 0.05,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "atomPrefab",
+          "name": "centralAtomSN6",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "2k_orange_sphere",
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "S",
+              "fontSize": 0.1,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.3,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainA_SN6",
+          "parent": "centralAtomSN6",
+          "position": [
+            0.0,
+            0.25,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainB_SN6",
+          "parent": "centralAtomSN6",
+          "position": [
+            0.0,
+            -0.25,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainC_SN6",
+          "parent": "centralAtomSN6",
+          "position": [
+            0.25,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainD_SN6",
+          "parent": "centralAtomSN6",
+          "position": [
+            -0.25,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainE_SN6",
+          "parent": "centralAtomSN6",
+          "position": [
+            0.0,
+            0.0,
+            0.25
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "domainF_SN6",
+          "parent": "centralAtomSN6",
+          "position": [
+            0.0,
+            0.0,
+            -0.25
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "useGravity": false,
+              "xConstraint": true,
+              "yConstraint": true,
+              "zConstraint": true,
+              "xRotationConstraint": true,
+              "yRotationConstraint": true,
+              "zRotationConstraint": true
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "SF6_molecule",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "2k_sf6_model",
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "SF6 (Octahedral)",
+              "fontSize": 0.08,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.5,
+                0.0
+              ]
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_setup_SN6",
+          "audioClip": "vsepr_sn6_setup_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "moduleTitle",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric Number 6: Octahedral Geometry"
+                }
+              ]
+            },
+            {
+              "target": "descriptionText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "With six electron domains, the geometry is octahedral. All positions are equivalent, and the ideal bond angles are 90 degrees."
+                }
+              ]
+            },
+            {
+              "target": "centralAtomSN6",
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "domainA_SN6",
+              "position": [
+                0.0,
+                0.25,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainB_SN6",
+              "position": [
+                0.0,
+                -0.25,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainC_SN6",
+              "position": [
+                0.25,
+                0.0,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainD_SN6",
+              "position": [
+                -0.25,
+                0.0,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainE_SN6",
+              "position": [
+                0.0,
+                0.0,
+                0.25
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "domainF_SN6",
+              "position": [
+                0.0,
+                0.0,
+                -0.25
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "SF6_molecule",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_square_pyramidal",
+          "audioClip": "vsepr_sn6_square_pyramidal_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "descriptionText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "With one lone pair (e.g., BrF5), the molecular geometry is square pyramidal. The lone pair occupies one of the axial positions, compressing angles slightly."
+                }
+              ]
+            },
+            {
+              "target": "domainA_SN6",
+              "enabled": false
+            },
+            {
+              "target": "domainB_SN6",
+              "enabled": false
+            },
+            {
+              "target": "domainC_SN6",
+              "enabled": false
+            },
+            {
+              "target": "domainD_SN6",
+              "enabled": false
+            },
+            {
+              "target": "domainE_SN6",
+              "enabled": false
+            },
+            {
+              "target": "domainF_SN6",
+              "position": [
+                0.0,
+                0.25,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "SF6_molecule",
+              "enabled": false
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_square_planar",
+          "audioClip": "vsepr_sn6_square_planar_audio",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "descriptionText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "With two lone pairs (e.g., XeF4), the molecular geometry is square planar. The lone pairs occupy opposite axial positions."
+                }
+              ]
+            },
+            {
+              "target": "domainF_SN6",
+              "enabled": false
+            },
+            {
+              "target": "domainB_SN6",
+              "position": [
+                0.0,
+                0.25,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

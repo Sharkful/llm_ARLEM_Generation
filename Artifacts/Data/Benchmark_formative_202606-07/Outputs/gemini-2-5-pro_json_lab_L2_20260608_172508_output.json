@@ -1,0 +1,435 @@
+{
+  "version": "2.0",
+  "labId": "Anatomy-HeartBloodFlow",
+  "author": "AR-MedSim Inc.",
+  "courseName": "Human Anatomy and Physiology I",
+  "estimatedLength": "10 minutes",
+  "objectives": [
+    "Identify the four chambers, four valves, and major vessels of the human heart.",
+    "Trace the path of blood through the pulmonary and systemic circuits.",
+    "Explain the structural basis for the different functions of the right and left ventricles."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Gross Anatomy of the Heart",
+      "description": "An introduction to the four chambers, four valves, and major vessels of the human heart.",
+      "author": "Dr. A. Sharma",
+      "institution": "State University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Identify the four chambers of the heart.",
+        "Locate the major blood vessels connected to the heart.",
+        "Observe the difference in myocardial thickness between the ventricles."
+      ],
+      "instructions": [
+        "This module introduces the major structures of the human heart.",
+        "Follow the audio narration and watch as each part is highlighted."
+      ],
+      "objects": [
+        {
+          "prefab": "heartPrefab",
+          "name": "heartModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            -90.0,
+            0.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "enabled": false,
+          "texture": "heart_albedo_map"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "chamberLabel",
+          "parent": "heartModel",
+          "position": [
+            0.0,
+            0.6,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Right Atrium",
+              "color": [
+                255.0,
+                255.0,
+                255.0,
+                255.0
+              ],
+              "fontSize": 0.15
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "myocardiumLabel",
+          "parent": "heartModel",
+          "position": [
+            -0.3,
+            -0.4,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Thick Myocardium of Left Ventricle",
+              "color": [
+                255.0,
+                220.0,
+                0.0,
+                255.0
+              ],
+              "fontSize": 0.1
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_intro",
+          "audioClip": "Anatomy_01_Intro.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartModel",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_chambers",
+          "audioClip": "Anatomy_02_Chambers.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "chamberLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Right Atrium"
+                }
+              ]
+            },
+            {
+              "target": "chamberLabel",
+              "position": [
+                0.3,
+                0.4,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_ventricles",
+          "audioClip": "Anatomy_03_Ventricles.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "chamberLabel",
+              "position": [
+                0.3,
+                -0.3,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Right Ventricle"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_myocardium",
+          "audioClip": "Anatomy_04_Myocardium.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "chamberLabel",
+              "enabled": false
+            },
+            {
+              "target": "myocardiumLabel",
+              "enabled": true
+            },
+            {
+              "target": "heartModel",
+              "color": [
+                255.0,
+                255.0,
+                255.0,
+                150.0
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Path of Blood Flow",
+      "description": "Tracing the dual-loop circulation of blood through the pulmonary and systemic circuits.",
+      "author": "Dr. A. Sharma",
+      "institution": "State University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Trace the path of deoxygenated blood to the lungs.",
+        "Trace the path of oxygenated blood to the body.",
+        "Identify the function of the four heart valves in directing blood flow."
+      ],
+      "instructions": [
+        "This module traces the path of blood through the heart.",
+        "Blue indicates deoxygenated blood, and red indicates oxygenated blood."
+      ],
+      "objects": [
+        {
+          "prefab": "heartPrefab",
+          "name": "heartModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            -90.0,
+            0.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "texture": "heart_albedo_map"
+        },
+        {
+          "prefab": "flowArrowPrefab",
+          "name": "flowIndicator",
+          "parent": "heartModel",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "flowLabel",
+          "parent": "heartModel",
+          "position": [
+            0.5,
+            0.5,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vena Cava",
+              "fontSize": 0.1
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_pulmonary_intro",
+          "audioClip": "BloodFlow_01_RightSide.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "flowIndicator",
+              "enabled": true,
+              "color": [
+                0.0,
+                150.0,
+                255.0,
+                200.0
+              ]
+            },
+            {
+              "target": "flowIndicator",
+              "position": [
+                0.2,
+                0.6,
+                0.0
+              ],
+              "eulerAngles": [
+                0.0,
+                0.0,
+                -90.0
+              ]
+            },
+            {
+              "target": "flowLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Vena Cava -> Right Atrium"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_to_lungs",
+          "audioClip": "BloodFlow_02_ToLungs.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "flowIndicator",
+              "position": [
+                0.2,
+                0.1,
+                -0.3
+              ],
+              "eulerAngles": [
+                -45.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "flowLabel",
+              "position": [
+                0.3,
+                0.0,
+                -0.4
+              ],
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Right Ventricle -> Pulmonary Artery"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_systemic_intro",
+          "audioClip": "BloodFlow_03_LeftSide.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "flowIndicator",
+              "color": [
+                255.0,
+                40.0,
+                40.0,
+                200.0
+              ]
+            },
+            {
+              "target": "flowIndicator",
+              "position": [
+                -0.2,
+                0.5,
+                0.3
+              ],
+              "eulerAngles": [
+                0.0,
+                180.0,
+                -90.0
+              ]
+            },
+            {
+              "target": "flowLabel",
+              "position": [
+                -0.5,
+                0.5,
+                0.3
+              ],
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Pulmonary Veins -> Left Atrium"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_to_body",
+          "audioClip": "BloodFlow_04_ToBody.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "flowIndicator",
+              "position": [
+                -0.1,
+                0.2,
+                0.0
+              ],
+              "eulerAngles": [
+                90.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "flowLabel",
+              "position": [
+                -0.1,
+                0.8,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Left Ventricle -> Aorta"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

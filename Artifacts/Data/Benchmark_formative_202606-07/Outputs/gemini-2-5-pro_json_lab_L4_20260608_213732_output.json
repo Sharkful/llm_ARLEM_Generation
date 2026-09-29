@@ -1,0 +1,1034 @@
+{
+  "version": "2.0",
+  "labId": "Astro101_RetrogradeMotion",
+  "author": "Dr. Evelyn Reed",
+  "courseName": "Introduction to Astronomy",
+  "estimatedLength": "25 minutes",
+  "objectives": [
+    "Describe the apparent path of Mars across the night sky during a retrograde episode.",
+    "Explain why apparent retrograde motion occurs in the heliocentric model as a consequence of Earth overtaking a slower-moving outer planet.",
+    "Contrast the geocentric and heliocentric explanations of retrograde motion.",
+    "Predict when retrograde motion will occur for a given outer planet based on the relative orbital positions of Earth and that planet.",
+    "Compare the apparent retrograde loops of Mars, Jupiter, and Saturn."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Observing from Earth",
+      "description": "Witness the apparent retrograde motion of Mars from the perspective of an observer on Earth.",
+      "author": "Dr. Evelyn Reed",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Describe the apparent path of Mars against the background stars over several months.",
+        "Identify the prograde, retrograde, and stationary points in Mars's path."
+      ],
+      "instructions": [
+        "In this module, you will observe the motion of Mars in the night sky over a period of six months."
+      ],
+      "objects": [
+        {
+          "prefab": "invertedSpherePrefab",
+          "name": "starfield",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            10.0,
+            10.0,
+            10.0
+          ],
+          "texture": "starfield_ecliptic_map"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "titleLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.5,
+            1.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "The Path of Mars",
+              "fontSize": 0.1,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "tinySphere",
+          "name": "marsPoint",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.4,
+            0.1,
+            1.5
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "color": [
+            255.0,
+            80.0,
+            50.0,
+            255.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "isKinematic": true,
+              "useGravity": false
+            }
+          ]
+        },
+        {
+          "prefab": "trailRendererPrefab",
+          "name": "marsTrail",
+          "parent": "marsPoint",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_intro",
+          "audioClip": "retrograde_m1_c0.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "titleLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "You are observing the night sky from Earth. The red point is Mars."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_prograde",
+          "audioClip": "retrograde_m1_c1.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "titleLabel",
+              "enabled": false
+            },
+            {
+              "target": "marsTrail",
+              "enabled": true
+            },
+            {
+              "target": "marsPoint",
+              "position": [
+                -0.1,
+                0.15,
+                1.5
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_retrograde",
+          "audioClip": "retrograde_m1_c2.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "marsPoint",
+              "position": [
+                0.1,
+                0.12,
+                1.5
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_resume",
+          "audioClip": "retrograde_m1_c3.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "marsPoint",
+              "position": [
+                0.4,
+                0.0,
+                1.5
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip4_summary",
+          "audioClip": "retrograde_m1_c4.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "titleLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "This backward loop is 'apparent retrograde motion'."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Historical Explanations",
+      "description": "Compare the Ptolemaic (Earth-centered) and Copernican (Sun-centered) explanations for retrograde motion.",
+      "author": "Dr. Evelyn Reed",
+      "educationalObjectives": [
+        "Explain how the geocentric model used epicycles to produce retrograde motion.",
+        "Explain how the heliocentric model provides a simpler explanation."
+      ],
+      "objects": [
+        {
+          "prefab": "emptyObject",
+          "name": "geocentricSystem",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "geoEarth",
+          "parent": "geocentricSystem",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "texture": "2k_earth_daymap"
+        },
+        {
+          "prefab": "torusPrefab",
+          "name": "deferent",
+          "parent": "geocentricSystem",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            90.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.8,
+            0.8,
+            0.005
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            100.0
+          ]
+        },
+        {
+          "prefab": "emptyObject",
+          "name": "epicycleCenter",
+          "parent": "deferent",
+          "position": [
+            0.0,
+            0.4,
+            0.0
+          ],
+          "scale": [
+            1.25,
+            1.25,
+            1.25
+          ],
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "rotationTime": 20.0
+            }
+          ]
+        },
+        {
+          "prefab": "torusPrefab",
+          "name": "epicycle",
+          "parent": "epicycleCenter",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.005
+          ],
+          "color": [
+            255.0,
+            100.0,
+            100.0,
+            100.0
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "geoMars",
+          "parent": "epicycle",
+          "position": [
+            0.0,
+            0.075,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "2k_mars",
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "rotationTime": 8.0
+            }
+          ]
+        },
+        {
+          "prefab": "emptyObject",
+          "name": "heliocentricSystem",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "SunPrefab",
+          "name": "helioSun",
+          "parent": "heliocentricSystem",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "helioEarth",
+          "parent": "helioSun",
+          "position": [
+            0.4,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 10.0
+            }
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "helioMars",
+          "parent": "helioSun",
+          "position": [
+            0.6,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 18.8
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "modelTitle",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.5,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_geocentric",
+          "audioClip": "retrograde_m2_c0.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "modelTitle",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Geocentric Model (Ptolemy)",
+                  "fontSize": 0.08
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_geocentric_explain",
+          "audioClip": "retrograde_m2_c1.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "epicycleCenter",
+              "components": [
+                {
+                  "componentType": "simpleRotation",
+                  "timeRate": 1.0
+                }
+              ]
+            },
+            {
+              "target": "geoMars",
+              "components": [
+                {
+                  "componentType": "simpleRotation",
+                  "timeRate": 1.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_heliocentric",
+          "audioClip": "retrograde_m2_c2.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "geocentricSystem",
+              "enabled": false
+            },
+            {
+              "target": "heliocentricSystem",
+              "enabled": true
+            },
+            {
+              "target": "modelTitle",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Heliocentric Model (Copernicus)",
+                  "fontSize": 0.08
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_heliocentric_explain",
+          "audioClip": "retrograde_m2_c3.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "helioEarth",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "timeRate": 1.0
+                }
+              ]
+            },
+            {
+              "target": "helioMars",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "timeRate": 1.0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Linking Perspectives",
+      "description": "See how the heliocentric orbital configuration creates the apparent motion seen from Earth.",
+      "author": "Dr. Evelyn Reed",
+      "educationalObjectives": [
+        "Visually connect the orbital positions of Earth and Mars to the apparent position of Mars in the night sky."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "sun",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earth",
+          "parent": "sun",
+          "position": [
+            0.4,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 10.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": false,
+              "mass": 1.0,
+              "useGravity": false,
+              "draggable": false
+            }
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "mars",
+          "parent": "sun",
+          "position": [
+            0.6,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 18.8
+            }
+          ]
+        },
+        {
+          "prefab": "lineOfSightPrefab",
+          "name": "sightLine",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "explanationText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.5,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_intro",
+          "audioClip": "retrograde_m3_c0.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "explanationText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "The line of sight from Earth to Mars projects onto the distant stars.",
+                  "fontSize": 0.06
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_overtaking",
+          "audioClip": "retrograde_m3_c1.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "explanationText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "As Earth overtakes Mars, our line of sight sweeps backward temporarily."
+                }
+              ]
+            },
+            {
+              "target": "earth",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "timeRate": 1.0
+                }
+              ]
+            },
+            {
+              "target": "mars",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "timeRate": 1.0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Outer Planets and Prediction",
+      "description": "Compare retrograde loops and predict when they will occur.",
+      "author": "Dr. Evelyn Reed",
+      "educationalObjectives": [
+        "Compare the size of retrograde loops for different outer planets.",
+        "Predict the orbital configuration that leads to retrograde motion."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "sun",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            -0.2,
+            1.2
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earth",
+          "parent": "sun",
+          "position": [
+            0.4,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "mars",
+          "parent": "sun",
+          "position": [
+            0.6,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ]
+        },
+        {
+          "prefab": "jupiterPrefab",
+          "name": "jupiter",
+          "parent": "sun",
+          "position": [
+            0.9,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ]
+        },
+        {
+          "prefab": "saturnPrefab",
+          "name": "saturn",
+          "parent": "sun",
+          "position": [
+            1.2,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "infoText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.5,
+            1.2
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "prefab": "moveableSphere",
+          "name": "marsDraggable",
+          "parent": "sun",
+          "position": [
+            0.6,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "texture": "2k_mars",
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true
+            }
+          ]
+        },
+        {
+          "prefab": "emptyObject",
+          "name": "angleChecker",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_comparison",
+          "audioClip": "retrograde_m4_c0.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "infoText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "More distant planets have smaller retrograde loops.",
+                  "fontSize": 0.06
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_prediction_setup",
+          "audioClip": "retrograde_m4_c1.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "mars",
+              "enabled": false
+            },
+            {
+              "target": "jupiter",
+              "enabled": false
+            },
+            {
+              "target": "saturn",
+              "enabled": false
+            },
+            {
+              "target": "earth",
+              "position": [
+                0.4,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "marsDraggable",
+              "enabled": true
+            },
+            {
+              "target": "infoText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Drag Mars to the position where retrograde motion occurs."
+                }
+              ]
+            },
+            {
+              "target": "angleChecker",
+              "components": [
+                {
+                  "componentType": "checkAngle",
+                  "azmTarget": 180,
+                  "azmTolerance": 20,
+                  "audioClipSuccess": "success_chime.wav",
+                  "callBackObjects": [
+                    "infoText"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Conclusion",
+      "description": "A summary of the key concepts covered in the lab.",
+      "author": "Dr. Evelyn Reed",
+      "educationalObjectives": [
+        "Summarize the cause of apparent retrograde motion and contrast it with the geocentric explanation."
+      ],
+      "objects": [
+        {
+          "prefab": "textPrefab",
+          "name": "recapTitle",
+          "position": [
+            0.0,
+            0.4,
+            1.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Lab Summary",
+              "fontSize": 0.1
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "recapPoint1",
+          "position": [
+            -0.5,
+            0.2,
+            1.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "1. Observation: Outer planets appear to move backward in the sky periodically.",
+              "fontSize": 0.05,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "recapPoint2",
+          "position": [
+            -0.5,
+            0.0,
+            1.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "2. Geocentric Model: Used complex epicycles to explain this motion.",
+              "fontSize": 0.05,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "recapPoint3",
+          "position": [
+            -0.5,
+            -0.2,
+            1.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "3. Heliocentric Model: Explained as a natural result of Earth overtaking outer planets.",
+              "fontSize": 0.05,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "retrograde_m5_c0.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "recapPoint1",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "retrograde_m5_c1.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "recapPoint2",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "retrograde_m5_c2.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "recapPoint3",
+              "enabled": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

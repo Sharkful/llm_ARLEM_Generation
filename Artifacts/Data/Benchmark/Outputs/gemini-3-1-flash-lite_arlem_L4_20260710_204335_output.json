@@ -1,0 +1,283 @@
+{
+  "workplace": {
+    "id": "anatomy_lab_01",
+    "name": "University Anatomy Laboratory 2024",
+    "origin": "marker_learner_origin",
+    "things": [
+      {
+        "id": "heart_intact_thing",
+        "name": "Intact Heart Model",
+        "detectable": "marker_table_main",
+        "pois": []
+      },
+      {
+        "id": "heart_cutaway_thing",
+        "name": "Cutaway Heart Model",
+        "detectable": "marker_table_main",
+        "pois": []
+      },
+      {
+        "id": "ventricle_comp_thing",
+        "name": "Ventricular Cross Section Models",
+        "detectable": "marker_wall_comp",
+        "pois": []
+      }
+    ],
+    "places": [
+      {
+        "id": "main_lab_table",
+        "name": "Main Anatomy Demonstration Table",
+        "detectable": "marker_table_main",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "ventricle_comp_station",
+        "name": "Ventricular Comparison Station",
+        "detectable": "marker_wall_comp",
+        "pois": []
+      }
+    ],
+    "persons": [
+      {
+        "id": "student_01",
+        "name": "Undergraduate Student",
+        "detectable": "marker_learner_origin",
+        "pois": []
+      }
+    ],
+    "sensors": [],
+    "devices": [
+      {
+        "id": "AR_Headset_01",
+        "type": "hololens",
+        "name": "HoloLens 2 Learner Unit",
+        "url": "wss://ar-lab-server.example.com"
+      }
+    ],
+    "apps": [],
+    "detectables": [
+      {
+        "id": "marker_table_main",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/marker_table_main.bundle"
+      },
+      {
+        "id": "marker_wall_comp",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/marker_wall_comp.bundle"
+      },
+      {
+        "id": "marker_learner_origin",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/marker_learner_origin.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "label"
+      },
+      {
+        "id": "animation"
+      },
+      {
+        "id": "image"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "label_chambers",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "blood_flow_anim",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/heart_blood_flow.glb"
+      },
+      {
+        "id": "rbc_path_trace",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/rbc_path.glb"
+      },
+      {
+        "id": "ventricular_compare",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/ventricle_cross_section.png"
+      }
+    ],
+    "warnings": []
+  },
+  "activity": {
+    "id": "heart_anatomy_lab_001",
+    "name": "Human Heart Structure and Function",
+    "description": "Anatomy lab on human heart structure and circulatory pathways.",
+    "language": "en",
+    "workplace": "anatomy_lab_01",
+    "start": "scene_1_intro",
+    "actions": [
+      {
+        "id": "scene_1_intro",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "AR_Headset_01",
+        "location": "main_lab_table",
+        "predicate": "label_chambers",
+        "instruction": {
+          "title": "Introduction to Cardiac Anatomy",
+          "description": "Observe the two heart models. The left shows the exterior anatomy; the right is a cutaway revealing internal chambers. Note that the right/left sides are labeled from the patient's perspective. Rotate the models to explore."
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "scene_1_intro",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "scene_2_tour",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "AR_Headset_01",
+        "location": "main_lab_table",
+        "predicate": "label_chambers",
+        "instruction": {
+          "title": "Structural Anatomy Tour",
+          "description": "The tour identifies the four chambers, four valves, and major vessels. Observe how these structures map between the intact and cutaway models."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart_cutaway_thing",
+              "type": "predicate",
+              "augmentation": "label_chambers"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "scene_2_tour",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "scene_3_circuits",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "AR_Headset_01",
+        "location": "main_lab_table",
+        "predicate": "blood_flow_anim",
+        "instruction": {
+          "title": "Dual-Circuit Circulation",
+          "description": "Observe the dual-circuit blood flow. Blue indicates deoxygenated blood in the pulmonary circuit; red indicates oxygenated blood in the systemic circuit."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart_cutaway_thing",
+              "type": "predicate",
+              "augmentation": "blood_flow_anim"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "scene_3_circuits",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "scene_4_trace",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "AR_Headset_01",
+        "location": "main_lab_table",
+        "predicate": "rbc_path_trace",
+        "instruction": {
+          "title": "Tracing the Path of Blood",
+          "description": "Click 'Next' to trace a red blood cell's journey. Observe the transition from blue to red at the lungs."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart_cutaway_thing",
+              "type": "predicate",
+              "augmentation": "rbc_path_trace"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "scene_4_trace",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "scene_5_asymmetry",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "AR_Headset_01",
+        "location": "ventricle_comp_station",
+        "predicate": "ventricular_compare",
+        "instruction": {
+          "title": "Ventricular Wall Asymmetry",
+          "description": "Compare the myocardial thickness of the right and left ventricles. Note the 3:1 ratio. Why is the left side thicker?"
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "ventricle_comp_station",
+              "type": "predicate",
+              "augmentation": "ventricular_compare"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "scene_5_asymmetry",
+            "operator": "equal"
+          }
+        ]
+      }
+    ]
+  }
+}

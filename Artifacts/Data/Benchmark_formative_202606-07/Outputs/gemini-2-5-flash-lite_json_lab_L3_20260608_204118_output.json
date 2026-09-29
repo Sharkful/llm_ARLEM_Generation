@@ -1,0 +1,607 @@
+{
+  "version": "2.0",
+  "labId": "retrograde-motion-exploration",
+  "author": "AR Educational Content Team",
+  "courseName": "Introduction to Astronomy",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Describe the apparent path of Mars across the night sky during a retrograde episode.",
+    "Explain the heliocentric model's cause of apparent retrograde motion.",
+    "Contrast geocentric and heliocentric explanations for retrograde motion.",
+    "Predict retrograde motion based on relative orbital positions.",
+    "Compare retrograde loops of outer planets and explain differences."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Earth-Based Perspective: Mars's Retrograde Loop",
+      "description": "Observing Mars's apparent retrograde motion from Earth's surface.",
+      "author": "AR Educational Content Team",
+      "educationalObjectives": [
+        "Describe the apparent path of Mars across the night sky during a retrograde episode, including the eastward drift, westward loop, and return to eastward motion."
+      ],
+      "instructions": [
+        "Imagine you are observing Mars from Earth over several months.",
+        "Notice how Mars generally moves eastward against the background stars.",
+        "Pay close attention to the period where Mars appears to reverse its direction, forming a loop."
+      ],
+      "objects": [
+        {
+          "prefab": "sunPrefab",
+          "name": "sun",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earth",
+          "position": [
+            0.5,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "2k_earth_daymap"
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "mars",
+          "position": [
+            0.75,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "texture": "2k_mars"
+        },
+        {
+          "prefab": "starfieldPrefab",
+          "name": "starfield",
+          "position": [
+            0.0,
+            0.0,
+            5.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "marsPathLabel",
+          "parent": "mars",
+          "position": [
+            0.0,
+            0.1,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Apparent Path of Mars",
+              "fontSize": 10.0,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1",
+          "audioClip": "retrograde_intro_earth",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "marsPathLabel",
+              "enabled": false
+            }
+          ]
+        },
+        {
+          "clipName": "clip2",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "earth",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 30.0,
+                  "orbitalScale": 0.5,
+                  "synchronousRotation": true
+                }
+              ]
+            },
+            {
+              "target": "mars",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 55.0,
+                  "orbitalScale": 0.75,
+                  "synchronousRotation": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "retrograde_mars_eastward_drift",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "marsPathLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Eastward Drift"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip4",
+          "audioClip": "retrograde_mars_loop_start",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "marsPathLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Westward Loop Begins"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip5",
+          "audioClip": "retrograde_mars_loop_end",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "marsPathLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Return to Eastward Motion"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Heliocentric Perspective: Earth Overtakes Mars",
+      "description": "Viewing the solar system from outside to understand the cause of retrograde motion.",
+      "author": "AR Educational Content Team",
+      "educationalObjectives": [
+        "Explain why apparent retrograde motion occurs in the heliocentric model as a consequence of Earth overtaking a slower-moving outer planet.",
+        "Contrast geocentric and heliocentric explanations for retrograde motion and articulate why the heliocentric model is preferred on grounds of parsimony."
+      ],
+      "instructions": [
+        "Now, observe the solar system from a distant vantage point.",
+        "Watch Earth and Mars orbit the Sun.",
+        "Notice how Earth's faster orbit causes it to 'lap' Mars, creating the illusion of Mars moving backward."
+      ],
+      "objects": [
+        {
+          "prefab": "sunPrefab",
+          "name": "sun_heliocentric",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earth_heliocentric",
+          "position": [
+            0.6,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "texture": "2k_earth_daymap"
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "mars_heliocentric",
+          "position": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "texture": "2k_mars"
+        },
+        {
+          "prefab": "jupiterPrefab",
+          "name": "jupiter_heliocentric",
+          "position": [
+            1.5,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "texture": "2k_jupiter"
+        },
+        {
+          "prefab": "saturnPrefab",
+          "name": "saturn_heliocentric",
+          "position": [
+            2.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "texture": "2k_saturn_ringed"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "heliocentricLabel",
+          "position": [
+            0.0,
+            0.5,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Heliocentric View",
+              "fontSize": 10.0,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip6",
+          "audioClip": "heliocentric_intro",
+          "autoAdvance": true
+        },
+        {
+          "clipName": "clip7",
+          "audioClip": "heliocentric_earth_overtakes_mars",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "earth_heliocentric",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 30.0,
+                  "orbitalScale": 0.6,
+                  "synchronousRotation": true
+                }
+              ]
+            },
+            {
+              "target": "mars_heliocentric",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 55.0,
+                  "orbitalScale": 1.0,
+                  "synchronousRotation": true
+                }
+              ]
+            },
+            {
+              "target": "jupiter_heliocentric",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 90.0,
+                  "orbitalScale": 1.5,
+                  "synchronousRotation": true
+                }
+              ]
+            },
+            {
+              "target": "saturn_heliocentric",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 150.0,
+                  "orbitalScale": 2.0,
+                  "synchronousRotation": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip8",
+          "audioClip": "heliocentric_geocentric_contrast",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heliocentricLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Heliocentric Explanation"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Comparing Outer Planet Retrograde Loops",
+      "description": "Comparing the retrograde motion of Mars, Jupiter, and Saturn.",
+      "author": "AR Educational Content Team",
+      "educationalObjectives": [
+        "Compare the apparent retrograde loops of Mars, Jupiter, and Saturn, and explain why more distant planets produce smaller loops.",
+        "Predict when retrograde motion will occur for a given outer planet based on the relative orbital positions of Earth and that planet."
+      ],
+      "instructions": [
+        "Observe the orbits of Jupiter and Saturn compared to Mars.",
+        "Notice how their apparent retrograde loops are less pronounced.",
+        "Consider why this difference exists based on their distances from the Sun and Earth."
+      ],
+      "objects": [
+        {
+          "prefab": "sunPrefab",
+          "name": "sun_comparison",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earth_comparison",
+          "position": [
+            0.6,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "texture": "2k_earth_daymap"
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "mars_comparison",
+          "position": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "texture": "2k_mars"
+        },
+        {
+          "prefab": "jupiterPrefab",
+          "name": "jupiter_comparison",
+          "position": [
+            1.5,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "texture": "2k_jupiter"
+        },
+        {
+          "prefab": "saturnPrefab",
+          "name": "saturn_comparison",
+          "position": [
+            2.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "texture": "2k_saturn_ringed"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "comparisonLabel",
+          "position": [
+            0.0,
+            0.5,
+            0.0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Comparing Retrograde Loops",
+              "fontSize": 10.0,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip9",
+          "audioClip": "comparison_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "earth_comparison",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 30.0,
+                  "orbitalScale": 0.6,
+                  "synchronousRotation": true
+                }
+              ]
+            },
+            {
+              "target": "mars_comparison",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 55.0,
+                  "orbitalScale": 1.0,
+                  "synchronousRotation": true
+                }
+              ]
+            },
+            {
+              "target": "jupiter_comparison",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 90.0,
+                  "orbitalScale": 1.5,
+                  "synchronousRotation": true
+                }
+              ]
+            },
+            {
+              "target": "saturn_comparison",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 150.0,
+                  "orbitalScale": 2.0,
+                  "synchronousRotation": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip10",
+          "audioClip": "comparison_mars_jupiter",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "comparisonLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Mars vs. Jupiter"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip11",
+          "audioClip": "comparison_jupiter_saturn",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "comparisonLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Jupiter vs. Saturn"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip12",
+          "audioClip": "comparison_conclusion",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "comparisonLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Distant Planets, Smaller Loops"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

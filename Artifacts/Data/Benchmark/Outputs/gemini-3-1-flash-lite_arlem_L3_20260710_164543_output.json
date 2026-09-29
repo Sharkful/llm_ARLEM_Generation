@@ -1,0 +1,359 @@
+{
+  "workplace": {
+    "id": "chem-lab-room-01",
+    "name": "University Chemistry Lab 101",
+    "origin": "origin-marker",
+    "things": [
+      {
+        "id": "methane-model-id",
+        "name": "Methane Model CH4",
+        "detectable": "methane-marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "water-model-id",
+        "name": "Water Model H2O",
+        "detectable": "water-marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "sf6-model-id",
+        "name": "Sulfur Hexafluoride Model SF6",
+        "detectable": "sf6-marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "table-01",
+        "name": "Methane and Water Station",
+        "detectable": "table-marker-1",
+        "pois": []
+      },
+      {
+        "id": "table-02",
+        "name": "Expanded Octet Station",
+        "detectable": "table-marker-2",
+        "pois": []
+      }
+    ],
+    "persons": [
+      {
+        "id": "student-01",
+        "name": "Learner",
+        "detectable": "origin-marker",
+        "pois": [],
+        "persona": "learner"
+      }
+    ],
+    "sensors": [],
+    "devices": [
+      {
+        "id": "ar-headset-01",
+        "type": "hololens",
+        "name": "Hololens 2 Student Unit",
+        "url": "https://ar-device.local:8080"
+      }
+    ],
+    "apps": [],
+    "detectables": [
+      {
+        "id": "origin-marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.chemistry.edu/markers/origin.bundle"
+      },
+      {
+        "id": "methane-marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.chemistry.edu/markers/methane.bundle"
+      },
+      {
+        "id": "water-marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.chemistry.edu/markers/water.bundle"
+      },
+      {
+        "id": "sf6-marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.chemistry.edu/markers/sf6.bundle"
+      },
+      {
+        "id": "table-marker-1",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.chemistry.edu/markers/table1.bundle"
+      },
+      {
+        "id": "table-marker-2",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.chemistry.edu/markers/table2.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "label"
+      },
+      {
+        "id": "animation",
+        "x_size": 10.0,
+        "y_size": 10.0,
+        "z_size": 10.0
+      }
+    ],
+    "predicates": [
+      {
+        "id": "intro-label",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "tetra-geometry-overlay",
+        "type": "animation",
+        "scale": 1.5,
+        "url": "https://assets.chemistry.edu/models/tetrahedron_overlay.glb"
+      },
+      {
+        "id": "water-molecule-label",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "trig-bipyramidal-label",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "final-summary-label",
+        "type": "label",
+        "scale": 1.0
+      }
+    ],
+    "warnings": []
+  },
+  "activity": {
+    "id": "vsepr-lab-001",
+    "name": "VSEPR Molecular Geometry Lab",
+    "description": "An interactive lab session teaching VSEPR theory via 3D molecule manipulation and geometric overlays.",
+    "language": "en",
+    "workplace": "chem-lab-room-01",
+    "start": "step-1-intro",
+    "actions": [
+      {
+        "id": "step-1-intro",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar-headset-01",
+        "location": "table-01",
+        "predicate": "intro-label",
+        "instruction": {
+          "title": "Analyze Methane Structure",
+          "description": "Identify the central Carbon atom in the Methane model. Count the bonding pairs to determine the steric number."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "table-01",
+              "type": "predicate",
+              "augmentation": "intro-label",
+              "text": "Welcome to VSEPR Lab. Locate the Methane model."
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "methane-model-id",
+            "type": "tangible",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step-2-geometry",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar-headset-01",
+        "location": "table-01",
+        "predicate": "tetra-geometry-overlay",
+        "instruction": {
+          "title": "Electron Domain Geometry",
+          "description": "Observe the tetrahedral electron-domain geometry. Note the 109.5 degree bond angles."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "methane-model-id",
+              "type": "predicate",
+              "augmentation": "tetra-geometry-overlay"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "methane-model-id",
+              "augmentation": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step-3-lonepairs",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step-3-lonepairs",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar-headset-01",
+        "location": "table-01",
+        "predicate": "water-molecule-label",
+        "instruction": {
+          "title": "Lone Pair Repulsion",
+          "description": "Examine the water molecule. Notice how the two lone pairs compress the H-O-H bond angle to 104.5 degrees."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "water-model-id",
+              "type": "predicate",
+              "augmentation": "water-molecule-label",
+              "text": "Compare Methane (0 lone pairs) to Water (2 lone pairs)."
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "water-model-id",
+            "type": "tangible",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step-4-expanded",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar-headset-01",
+        "location": "table-02",
+        "predicate": "trig-bipyramidal-label",
+        "instruction": {
+          "title": "Expanded Octet Geometries",
+          "description": "Explore the trigonal bipyramidal and octahedral geometries using the PF5 and SF6 models."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "sf6-model-id",
+              "type": "predicate",
+              "augmentation": "trig-bipyramidal-label",
+              "text": "Examine the Octahedral geometry of SF6."
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step-5-summary",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step-5-summary",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar-headset-01",
+        "location": "table-02",
+        "predicate": "final-summary-label",
+        "instruction": {
+          "title": "Final Review",
+          "description": "Review the relationship between steric numbers, lone pairs, and molecular shapes."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "table-02",
+              "type": "predicate",
+              "augmentation": "final-summary-label",
+              "text": "Lab Complete: You have mastered VSEPR predictions."
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step-5-summary",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      }
+    ]
+  }
+}

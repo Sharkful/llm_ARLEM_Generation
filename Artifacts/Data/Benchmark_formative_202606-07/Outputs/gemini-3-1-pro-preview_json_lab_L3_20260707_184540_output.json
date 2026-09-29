@@ -1,0 +1,517 @@
+{
+  "version": "2.0",
+  "labId": "phys101_vectors_projectile_motion",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Physics I (Mechanics)",
+  "objectives": [
+    "Represent a two-dimensional vector by its magnitude and direction, and equivalently by its horizontal and vertical components.",
+    "Add two or more vectors graphically using the tip-to-tail method and identify the resultant vector.",
+    "Decompose a vector into components along the x- and y-axes using right-triangle trigonometry.",
+    "Explain why the horizontal and vertical motions of a projectile are independent of one another.",
+    "Describe how the horizontal velocity, vertical velocity, and position of a projectile change over the course of its flight.",
+    "Predict how changes in initial launch angle and launch speed affect the trajectory, range, and maximum height of a projectile."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Abstract Vectors and Components",
+      "description": "An introduction to 2D vectors, magnitude, direction, and vector decomposition using right-triangle trigonometry.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Represent a two-dimensional vector by its magnitude and direction.",
+        "Decompose a vector into components along the x- and y-axes."
+      ],
+      "objects": [
+        {
+          "prefab": "arrowPrefab",
+          "name": "main_vector",
+          "position": [
+            -0.5,
+            1,
+            2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            -45
+          ],
+          "scale": [
+            0.05,
+            1.414,
+            0.05
+          ],
+          "color": [
+            0.2,
+            0.6,
+            1,
+            1
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "x_component",
+          "position": [
+            -0.5,
+            1,
+            2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            -90
+          ],
+          "scale": [
+            0.05,
+            1,
+            0.05
+          ],
+          "enabled": false,
+          "color": [
+            1,
+            0.2,
+            0.2,
+            1
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "y_component",
+          "position": [
+            0.5,
+            1,
+            2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.05,
+            1,
+            0.05
+          ],
+          "enabled": false,
+          "color": [
+            0.2,
+            1,
+            0.2,
+            1
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "vector_label",
+          "position": [
+            0,
+            1.8,
+            2
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vector V",
+              "color": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "intro_vector",
+          "autoAdvance": false,
+          "changeMeaning": "Introduction to a 2D vector as a single entity with magnitude and direction",
+          "narration": "Welcome to the vectors and projectile motion lab. Here we see a single 2D vector. A vector is a mathematical object that has both a magnitude, represented by its length, and a direction, represented by where the arrow points."
+        },
+        {
+          "clipName": "decompose_vector",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "x_component",
+              "enabled": true
+            },
+            {
+              "target": "y_component",
+              "enabled": true
+            },
+            {
+              "target": "vector_label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "V = Vx + Vy",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Decompose the main vector into its horizontal and vertical components",
+          "narration": "Any 2D vector can be decomposed into two perpendicular components. Using right-triangle trigonometry, we can project the vector onto the x-axis to find the horizontal component, and the y-axis to find the vertical component. Notice how adding the horizontal and vertical vectors tip-to-tail reconstructs our original vector."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Projectile Motion Independence",
+      "description": "Observe the independent horizontal and vertical motions of a projectile in flight.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Explain why horizontal and vertical motions are independent.",
+        "Describe how velocity components change over the course of the flight.",
+        "Identify the moment of maximum height as the point where vertical velocity is zero."
+      ],
+      "objects": [
+        {
+          "prefab": "moveableSphere",
+          "name": "projectile",
+          "position": [
+            -0.8,
+            1,
+            2
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "texture": "balldimpled"
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "v_x",
+          "position": [
+            -0.8,
+            1,
+            2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            -90
+          ],
+          "scale": [
+            0.03,
+            0.8,
+            0.03
+          ],
+          "color": [
+            1,
+            0.2,
+            0.2,
+            1
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "v_y",
+          "position": [
+            -0.8,
+            1,
+            2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.03,
+            0.8,
+            0.03
+          ],
+          "color": [
+            0.2,
+            1,
+            0.2,
+            1
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "projectile_start",
+          "autoAdvance": false,
+          "changeMeaning": "Initialize projectile at the start of its flight path",
+          "narration": "Now let's apply vectors to projectile motion. When an object is launched into the air, its initial velocity vector can be broken into horizontal and vertical components. Let's observe a projectile in slow motion."
+        },
+        {
+          "clipName": "mid_ascent",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile",
+              "position": [
+                -0.4,
+                1.45,
+                2
+              ]
+            },
+            {
+              "target": "v_x",
+              "position": [
+                -0.4,
+                1.45,
+                2
+              ]
+            },
+            {
+              "target": "v_y",
+              "position": [
+                -0.4,
+                1.45,
+                2
+              ],
+              "scale": [
+                0.03,
+                0.5,
+                0.03
+              ]
+            }
+          ],
+          "changeMeaning": "Move projectile to mid-ascent, showing decreasing vertical velocity and constant horizontal velocity",
+          "narration": "As the projectile rises, gravity pulls downward, causing the vertical velocity to decrease. However, because there are no horizontal forces acting on the projectile, the horizontal velocity remains perfectly constant. The two motions are completely independent."
+        },
+        {
+          "clipName": "peak_height",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile",
+              "position": [
+                0,
+                1.6,
+                2
+              ]
+            },
+            {
+              "target": "v_x",
+              "position": [
+                0,
+                1.6,
+                2
+              ]
+            },
+            {
+              "target": "v_y",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "Move projectile to peak height, showing vertical velocity reaches zero",
+          "narration": "At the exact peak of the trajectory, the vertical velocity becomes zero for an instant. The projectile stops rising and is about to begin its descent. Note that the horizontal velocity is still unchanged! The total velocity here is purely horizontal."
+        },
+        {
+          "clipName": "mid_descent",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile",
+              "position": [
+                0.4,
+                1.45,
+                2
+              ]
+            },
+            {
+              "target": "v_x",
+              "position": [
+                0.4,
+                1.45,
+                2
+              ]
+            },
+            {
+              "target": "v_y",
+              "position": [
+                0.4,
+                1.45,
+                2
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                180
+              ],
+              "scale": [
+                0.03,
+                0.5,
+                0.03
+              ],
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Move projectile to mid-descent, showing vertical velocity increasing in the downward direction",
+          "narration": "As the projectile falls, gravity accelerates it downward. The vertical velocity vector now points down and increases in magnitude. Through the entire parabolic flight, the horizontal motion and vertical motion operate independently of one another."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Launch Angles and Trajectories",
+      "description": "Explore how altering launch angles affects a projectile's maximum height, trajectory, and range.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Predict how changes in launch angle affect trajectory, range, and maximum height.",
+        "Identify that a 45-degree angle produces maximum range (ignoring air resistance)."
+      ],
+      "objects": [
+        {
+          "prefab": "parabolaPathPrefab",
+          "name": "trajectory_45",
+          "position": [
+            0,
+            1,
+            2
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "color": [
+            1,
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "prefab": "parabolaPathPrefab",
+          "name": "trajectory_30",
+          "position": [
+            0,
+            1,
+            2
+          ],
+          "scale": [
+            1,
+            0.58,
+            0.86
+          ],
+          "enabled": false,
+          "color": [
+            0,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "prefab": "parabolaPathPrefab",
+          "name": "trajectory_60",
+          "position": [
+            0,
+            1,
+            2
+          ],
+          "scale": [
+            1,
+            1.73,
+            0.86
+          ],
+          "enabled": false,
+          "color": [
+            1,
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "angle_label",
+          "position": [
+            0,
+            2,
+            2
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Launch Angle: 45 degrees (Maximum Range)",
+              "color": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "launch_45",
+          "autoAdvance": false,
+          "changeMeaning": "Show the optimal 45-degree trajectory for maximum range",
+          "narration": "The launch angle determines the shape of the parabolic trajectory. A 45-degree angle perfectly balances vertical hang-time with horizontal speed, yielding the maximum possible range for a given launch speed."
+        },
+        {
+          "clipName": "launch_30_60",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "trajectory_30",
+              "enabled": true
+            },
+            {
+              "target": "trajectory_60",
+              "enabled": true
+            },
+            {
+              "target": "angle_label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Complementary angles (30 and 60) yield the same range!",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Show 30 and 60 degree trajectories to demonstrate complementary angles landing at the same spot",
+          "narration": "If we change the angle to 60 degrees, the projectile goes higher and stays in the air longer, but has less horizontal speed, landing shorter. If we use 30 degrees, it has great horizontal speed but hits the ground too soon. Interestingly, these complementary angles result in the exact same range!"
+        }
+      ]
+    }
+  ]
+}

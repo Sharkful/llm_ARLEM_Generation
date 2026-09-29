@@ -1,0 +1,256 @@
+{
+  "workplace": {
+    "id": "physics_lab_workplace",
+    "name": "General Physics I Lab Space",
+    "origin": "origin_marker",
+    "things": [
+      {
+        "id": "thing_vector_kit",
+        "name": "Physics Vector Kit",
+        "detectable": "ws_alpha_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "thing_launcher",
+        "name": "Ballistic Launcher",
+        "detectable": "zone_launch_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "thing_tablet",
+        "name": "Lab Data Tablet",
+        "detectable": "origin_marker",
+        "pois": []
+      }
+    ],
+    "places": [
+      {
+        "id": "workstation_alpha",
+        "name": "Vector Workbench",
+        "detectable": "ws_alpha_marker",
+        "pois": []
+      },
+      {
+        "id": "zone_launch_pad",
+        "name": "Projectile Launch Zone",
+        "detectable": "zone_launch_marker",
+        "pois": []
+      }
+    ],
+    "persons": [
+      {
+        "id": "learner_01",
+        "name": "Physics Student",
+        "detectable": "origin_marker",
+        "pois": [],
+        "persona": "learner"
+      }
+    ],
+    "sensors": [],
+    "devices": [
+      {
+        "id": "ar_headset_01",
+        "type": "hololens",
+        "name": "HoloLens 2 Physics Lab Unit",
+        "url": "https://device.local"
+      }
+    ],
+    "apps": [],
+    "detectables": [
+      {
+        "id": "origin_marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.physics.edu/origin.bundle"
+      },
+      {
+        "id": "ws_alpha_marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.physics.edu/alpha.bundle"
+      },
+      {
+        "id": "zone_launch_marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.physics.edu/launch.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "animation"
+      },
+      {
+        "id": "label"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "launched",
+        "type": "label",
+        "scale": 1.0,
+        "url": "https://assets.physics.edu/label.glb"
+      },
+      {
+        "id": "vector_resultant_model",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.physics.edu/vector_add.glb"
+      },
+      {
+        "id": "decomposition_label",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "projectile_launcher_model",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.physics.edu/launcher.glb"
+      },
+      {
+        "id": "trajectory_path_anim",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.physics.edu/path.glb"
+      }
+    ],
+    "warnings": []
+  },
+  "activity": {
+    "id": "physics_lab_001",
+    "name": "Vector and Projectile Mechanics Lab",
+    "description": "An interactive lab to visualize vectors and projectile motion.",
+    "language": "en",
+    "workplace": "physics_lab_workplace",
+    "start": "step_1_vector_intro",
+    "actions": [
+      {
+        "id": "step_1_vector_intro",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar_headset_01",
+        "location": "workstation_alpha",
+        "predicate": "launched",
+        "instruction": {
+          "title": "Introduction to Vectors",
+          "description": "Observe the 3D vector model. Note how magnitude (length) and direction (angle) define the vector. Use your hand to rotate the vector to see its components."
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_2_addition",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_2_addition",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar_headset_01",
+        "location": "workstation_alpha",
+        "predicate": "launched",
+        "instruction": {
+          "title": "Vector Addition (Tip-to-Tail)",
+          "description": "Drag the second vector to the tip of the first. The resultant vector connects the start of the first to the end of the second."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "thing_vector_kit",
+              "type": "predicate",
+              "augmentation": "vector_resultant_model"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_3_decomposition",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_3_decomposition",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar_headset_01",
+        "location": "workstation_alpha",
+        "predicate": "launched",
+        "instruction": {
+          "title": "Vector Decomposition",
+          "description": "Project the vector onto the x and y axes. Observe how the hypotenuse relates to the legs of the right triangle."
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_4_projectile_setup",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_4_projectile_setup",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar_headset_01",
+        "location": "zone_launch_pad",
+        "predicate": "launched",
+        "instruction": {
+          "title": "Projectile Launch Setup",
+          "description": "Adjust the launcher angle and speed. Notice the initial velocity vector decomposes into blue (Vx) and red (Vy) arrows."
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_5_analyze_motion",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_5_analyze_motion",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar_headset_01",
+        "location": "zone_launch_pad",
+        "predicate": "launched",
+        "instruction": {
+          "title": "Analyzing Projectile Motion",
+          "description": "Launch the projectile. Watch how Vx stays constant while Vy changes. Observe max height when Vy becomes zero."
+        },
+        "triggers": []
+      }
+    ]
+  }
+}

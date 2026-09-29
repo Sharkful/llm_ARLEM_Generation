@@ -1,0 +1,1539 @@
+{
+  "version": "2.0",
+  "labId": "chem_vsepr_001",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Chemistry I",
+  "estimatedLength": "30 minutes",
+  "objectives": [
+    "Determine steric number from a Lewis structure by counting bonding and lone-pair electron domains around a central atom.",
+    "Predict electron-domain geometry from steric number using the five fundamental VSEPR arrangements.",
+    "Distinguish electron-domain geometry from molecular geometry when lone pairs are present.",
+    "Explain why lone pairs occupy more angular space than bonding pairs and how this changes bond angles from ideal values.",
+    "Apply VSEPR theory to real molecules including H2O, NH3, CH4, PF5, SF6, and XeF4."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: From Lewis Structure to Electron Domains",
+      "description": "Introduces the central VSEPR idea that electron domains repel and arrange to minimize repulsion, starting from counting domains in a Lewis structure.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Count bonding pairs and lone pairs around a central atom to determine steric number.",
+        "Describe VSEPR as a model of minimizing electron-pair repulsion in three dimensions.",
+        "Relate a 2D Lewis structure to a 3D arrangement problem."
+      ],
+      "instructions": [
+        "Look at the central atom and count each bonding region and lone pair as one electron domain.",
+        "Use the Next and Previous buttons to compare the flat Lewis picture with the 3D VSEPR model.",
+        "Notice that molecular shape depends on where bonded atoms are, while electron-domain geometry includes lone pairs too."
+      ],
+      "objects": [
+        {
+          "prefab": "chemWorkbenchPrefab",
+          "name": "workbench",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.35,
+            0.7
+          ],
+          "scale": [
+            1.2,
+            0.1,
+            0.8
+          ],
+          "texture": "lab_bench_gray_texture"
+        },
+        {
+          "prefab": "atomCorePrefab",
+          "name": "centralAtom",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.02,
+            0.45
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.09
+          ],
+          "texture": "nitrogen_atom_blue_texture"
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "bondDomain1",
+          "parent": "centralAtom",
+          "position": [
+            0.22,
+            0,
+            0
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.12
+          ],
+          "color": [
+            120,
+            200,
+            255,
+            180
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "bondDomain2",
+          "parent": "centralAtom",
+          "position": [
+            -0.11,
+            0.19,
+            0
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.12
+          ],
+          "color": [
+            120,
+            200,
+            255,
+            180
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "bondDomain3",
+          "parent": "centralAtom",
+          "position": [
+            -0.11,
+            -0.19,
+            0
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.12
+          ],
+          "color": [
+            120,
+            200,
+            255,
+            180
+          ]
+        },
+        {
+          "prefab": "lonePairCloudPrefab",
+          "name": "lonePair1",
+          "parent": "centralAtom",
+          "position": [
+            0,
+            0,
+            0.24
+          ],
+          "scale": [
+            0.09,
+            0.05,
+            0.12
+          ],
+          "color": [
+            255,
+            180,
+            80,
+            190
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "scene1Label",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.28,
+            0.45
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Lewis Structure to Steric Number",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "scene1Caption",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.22,
+            0.45
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.09
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Each bond or lone pair counts as one domain.",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_intro_electron_domains",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "scene1Label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Count electron domains around the central atom",
+                  "fontSize": 30
+                }
+              ]
+            },
+            {
+              "target": "scene1Caption",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Electron domains repel and spread out in 3D.",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The main label and caption are updated to direct attention to domain counting and the core VSEPR idea that electron domains minimize repulsion in three dimensions.",
+          "narration": "VSEPR theory begins with a simple idea: electron domains around a central atom repel one another and arrange themselves in space to minimize that repulsion. Starting from a Lewis structure, we count each bond and each lone pair around the central atom as one domain."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "steric_number_count_example",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "bondDomain1",
+              "scale": [
+                0.08,
+                0.08,
+                0.14
+              ]
+            },
+            {
+              "target": "bondDomain2",
+              "scale": [
+                0.08,
+                0.08,
+                0.14
+              ]
+            },
+            {
+              "target": "bondDomain3",
+              "scale": [
+                0.08,
+                0.08,
+                0.14
+              ]
+            },
+            {
+              "target": "lonePair1",
+              "scale": [
+                0.11,
+                0.06,
+                0.15
+              ]
+            },
+            {
+              "target": "scene1Label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "3 bonding domains + 1 lone pair = steric number 4",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The four electron domains are emphasized by enlarging them, and the label now states the steric-number calculation explicitly to connect the visual model to Lewis structure counting.",
+          "narration": "In this example, the central atom has three bonding domains and one lone pair. That gives a steric number of four. Steric number tells us which ideal electron-domain arrangement to consider first."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "electron_geometry_vs_molecular_geometry_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "lonePair1",
+              "position": [
+                0,
+                0.12,
+                0.2
+              ]
+            },
+            {
+              "target": "bondDomain2",
+              "position": [
+                -0.16,
+                -0.16,
+                0.1
+              ]
+            },
+            {
+              "target": "bondDomain3",
+              "position": [
+                -0.16,
+                0.16,
+                -0.1
+              ]
+            },
+            {
+              "target": "scene1Caption",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Electron geometry counts lone pairs; molecular geometry names bonded atoms.",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "One domain is clearly distinguished as a lone pair and the other domains shift into a tetrahedral-like spacing, preparing students to separate electron-domain geometry from the visible molecular shape.",
+          "narration": "Even when lone pairs are not atoms, they still count in the electron-domain geometry because they occupy space and repel. Molecular geometry, by contrast, is named from the positions of the bonded atoms only."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: The Five Fundamental Electron-Domain Geometries",
+      "description": "Shows how steric numbers 2 through 6 map to the five ideal electron-domain geometries in VSEPR.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Match steric numbers 2, 3, 4, 5, and 6 to linear, trigonal planar, tetrahedral, trigonal bipyramidal, and octahedral electron-domain geometries.",
+        "Recognize idealized three-dimensional arrangements and approximate bond angles.",
+        "Describe these geometries as minimum-repulsion patterns for electron domains."
+      ],
+      "instructions": [
+        "Watch the same central atom gain more electron domains as steric number increases.",
+        "Compare the spacing of the domains and notice how symmetry helps reduce repulsion.",
+        "Use the labels to connect each arrangement to its ideal bond angles."
+      ],
+      "objects": [
+        {
+          "prefab": "atomCorePrefab",
+          "name": "geomCenter",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.03,
+            0.55
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "texture": "generic_central_atom_texture"
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "d1",
+          "parent": "geomCenter",
+          "position": [
+            0.24,
+            0,
+            0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.12
+          ],
+          "color": [
+            110,
+            210,
+            255,
+            190
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "d2",
+          "parent": "geomCenter",
+          "position": [
+            -0.24,
+            0,
+            0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.12
+          ],
+          "color": [
+            110,
+            210,
+            255,
+            190
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "d3",
+          "parent": "geomCenter",
+          "position": [
+            0,
+            0.24,
+            0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.12
+          ],
+          "enabled": false,
+          "color": [
+            110,
+            210,
+            255,
+            190
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "d4",
+          "parent": "geomCenter",
+          "position": [
+            0,
+            -0.24,
+            0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.12
+          ],
+          "enabled": false,
+          "color": [
+            110,
+            210,
+            255,
+            190
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "d5",
+          "parent": "geomCenter",
+          "position": [
+            0,
+            0,
+            0.24
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.12
+          ],
+          "enabled": false,
+          "color": [
+            110,
+            210,
+            255,
+            190
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "d6",
+          "parent": "geomCenter",
+          "position": [
+            0,
+            0,
+            -0.24
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.12
+          ],
+          "enabled": false,
+          "color": [
+            110,
+            210,
+            255,
+            190
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "geomLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.3,
+            0.55
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Steric Number 2: Linear, 180\u00b0",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "linear_geometry_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "geomLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric Number 2: Linear, 180\u00b0",
+                  "fontSize": 30
+                }
+              ]
+            },
+            {
+              "target": "d1",
+              "scale": [
+                0.07,
+                0.07,
+                0.13
+              ]
+            },
+            {
+              "target": "d2",
+              "scale": [
+                0.07,
+                0.07,
+                0.13
+              ]
+            }
+          ],
+          "changeMeaning": "The simplest arrangement is highlighted by enlarging the two opposite domains and labeling the linear geometry with its ideal bond angle.",
+          "narration": "A steric number of two gives a linear electron-domain geometry. Two domains are farthest apart when they point in opposite directions, making an ideal angle of one hundred eighty degrees."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "trigonal_planar_geometry_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "d3",
+              "position": [
+                0,
+                0.28,
+                0
+              ],
+              "enabled": true
+            },
+            {
+              "target": "d1",
+              "position": [
+                0.24,
+                -0.14,
+                0
+              ]
+            },
+            {
+              "target": "d2",
+              "position": [
+                -0.24,
+                -0.14,
+                0
+              ]
+            },
+            {
+              "target": "geomLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric Number 3: Trigonal Planar, 120\u00b0",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "A third domain is added and the three domains reposition into a flat trigonal planar arrangement, demonstrating how the minimum-repulsion pattern changes with steric number three.",
+          "narration": "With three electron domains, the lowest-repulsion arrangement is trigonal planar. The domains spread evenly in a plane, producing ideal angles of one hundred twenty degrees."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "tetrahedral_geometry_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "d4",
+              "position": [
+                0,
+                -0.18,
+                -0.16
+              ],
+              "enabled": true
+            },
+            {
+              "target": "d1",
+              "position": [
+                0.2,
+                0.12,
+                0.12
+              ]
+            },
+            {
+              "target": "d2",
+              "position": [
+                -0.2,
+                0.12,
+                -0.12
+              ]
+            },
+            {
+              "target": "d3",
+              "position": [
+                0,
+                -0.18,
+                0.16
+              ]
+            },
+            {
+              "target": "geomLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric Number 4: Tetrahedral, 109.5\u00b0",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "A fourth domain appears and all four rearrange into tetrahedral positions, showing that four domains maximize separation in three dimensions rather than in one plane.",
+          "narration": "Four electron domains adopt a tetrahedral arrangement. This is the familiar steric number four pattern, with ideal bond angles of about one hundred nine point five degrees."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "trigonal_bipyramidal_geometry_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "d5",
+              "position": [
+                0,
+                0.26,
+                0
+              ],
+              "enabled": true
+            },
+            {
+              "target": "d1",
+              "position": [
+                0.24,
+                0,
+                0
+              ]
+            },
+            {
+              "target": "d2",
+              "position": [
+                -0.24,
+                0,
+                0
+              ]
+            },
+            {
+              "target": "d3",
+              "position": [
+                0.12,
+                -0.2,
+                0
+              ]
+            },
+            {
+              "target": "d4",
+              "position": [
+                -0.12,
+                -0.2,
+                0
+              ]
+            },
+            {
+              "target": "geomLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric Number 5: Trigonal Bipyramidal, 90\u00b0 and 120\u00b0",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "A fifth domain is introduced and the arrangement separates into axial and equatorial positions, highlighting the mixed ninety- and one-hundred-twenty-degree relationships of trigonal bipyramidal geometry.",
+          "narration": "Five domains form a trigonal bipyramidal arrangement. Three equatorial positions lie in a plane one hundred twenty degrees apart, while two axial positions sit above and below that plane at ninety degrees to the equatorial domains."
+        },
+        {
+          "clipName": "clip4",
+          "audioClip": "octahedral_geometry_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "d6",
+              "position": [
+                0,
+                -0.26,
+                0
+              ],
+              "enabled": true
+            },
+            {
+              "target": "d5",
+              "position": [
+                0,
+                0.26,
+                0
+              ]
+            },
+            {
+              "target": "d1",
+              "position": [
+                0.24,
+                0,
+                0
+              ]
+            },
+            {
+              "target": "d2",
+              "position": [
+                -0.24,
+                0,
+                0
+              ]
+            },
+            {
+              "target": "d3",
+              "position": [
+                0,
+                0,
+                0.24
+              ]
+            },
+            {
+              "target": "d4",
+              "position": [
+                0,
+                0,
+                -0.24
+              ]
+            },
+            {
+              "target": "geomLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric Number 6: Octahedral, 90\u00b0",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The sixth domain completes an octahedral arrangement with six equivalent directions, concluding the progression from steric number two to six.",
+          "narration": "Six electron domains produce an octahedral geometry. Here, all adjacent domain angles are ninety degrees, and the arrangement is highly symmetrical."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: How Lone Pairs Change Molecular Shape",
+      "description": "Demonstrates how lone pairs modify molecular geometry within tetrahedral, trigonal bipyramidal, and octahedral electron-domain frameworks.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Differentiate electron-domain geometry from molecular geometry using the same electron-domain arrangement.",
+        "Identify common VSEPR molecular shapes including bent, trigonal pyramidal, seesaw, T-shaped, square planar, and square pyramidal.",
+        "Explain why lone pairs occupy more space than bonding pairs and compress bond angles."
+      ],
+      "instructions": [
+        "Watch electron domains stay in the same overall framework while some domains are reclassified as lone pairs.",
+        "Focus on the bonded atoms only when naming molecular geometry.",
+        "Notice that lone pairs are shown larger to represent their stronger repulsive effect."
+      ],
+      "objects": [
+        {
+          "prefab": "atomCorePrefab",
+          "name": "shapeCenter",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.02,
+            0.5
+          ],
+          "scale": [
+            0.085,
+            0.085,
+            0.085
+          ],
+          "texture": "central_atom_gray_texture"
+        },
+        {
+          "prefab": "bondedAtomPrefab",
+          "name": "lig1",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.2,
+            0.14,
+            0.62
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "fluorine_green_texture"
+        },
+        {
+          "prefab": "bondedAtomPrefab",
+          "name": "lig2",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.2,
+            0.14,
+            0.38
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "fluorine_green_texture"
+        },
+        {
+          "prefab": "bondedAtomPrefab",
+          "name": "lig3",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.18,
+            0.66
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "fluorine_green_texture"
+        },
+        {
+          "prefab": "bondedAtomPrefab",
+          "name": "lig4",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.18,
+            0.34
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "texture": "fluorine_green_texture"
+        },
+        {
+          "prefab": "bondedAtomPrefab",
+          "name": "lig5",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.28,
+            0.5
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "texture": "fluorine_green_texture"
+        },
+        {
+          "prefab": "lonePairCloudPrefab",
+          "name": "lpA",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.28,
+            0.5
+          ],
+          "scale": [
+            0.1,
+            0.06,
+            0.14
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            180,
+            80,
+            190
+          ]
+        },
+        {
+          "prefab": "lonePairCloudPrefab",
+          "name": "lpB",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.28,
+            0.5
+          ],
+          "scale": [
+            0.1,
+            0.06,
+            0.14
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            180,
+            80,
+            190
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "shapeLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.31,
+            0.5
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Tetrahedral electron geometry to molecular shape",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "trigonal_pyramidal_from_tetrahedral",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "lpA",
+              "enabled": true
+            },
+            {
+              "target": "shapeLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "SN 4: 3 bonds + 1 lone pair \u2192 trigonal pyramidal",
+                  "fontSize": 30
+                }
+              ]
+            },
+            {
+              "target": "lpA",
+              "scale": [
+                0.11,
+                0.07,
+                0.15
+              ]
+            }
+          ],
+          "changeMeaning": "A tetrahedral electron-domain set is reinterpreted with one position occupied by a lone pair, changing the visible molecular geometry to trigonal pyramidal while preserving the underlying electron arrangement.",
+          "narration": "For steric number four, replacing one tetrahedral position with a lone pair gives a trigonal pyramidal molecular shape. The electron-domain geometry remains tetrahedral, but the molecular geometry changes because only bonded atoms are counted in the shape name."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "bent_shape_from_tetrahedral_water",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "lig3",
+              "enabled": false
+            },
+            {
+              "target": "lpB",
+              "enabled": true
+            },
+            {
+              "target": "lig1",
+              "position": [
+                0.16,
+                0.02,
+                0.62
+              ]
+            },
+            {
+              "target": "lig2",
+              "position": [
+                -0.16,
+                0.02,
+                0.38
+              ]
+            },
+            {
+              "target": "shapeLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "SN 4: 2 bonds + 2 lone pairs \u2192 bent, like H2O",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "A second lone pair is added and one bonded atom is removed, leaving a bent molecular shape that models water and sets up discussion of angle compression by lone pairs.",
+          "narration": "With two bonds and two lone pairs, the same steric number four framework gives a bent shape, as in water. The lone pairs repel more strongly than bonding pairs, so the H\u2013O\u2013H angle is compressed below the ideal tetrahedral angle."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "seesaw_from_trigonal_bipyramidal",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "lig3",
+              "position": [
+                0.18,
+                -0.18,
+                0.5
+              ],
+              "enabled": true
+            },
+            {
+              "target": "lig4",
+              "position": [
+                -0.18,
+                -0.18,
+                0.5
+              ],
+              "enabled": true
+            },
+            {
+              "target": "lig5",
+              "position": [
+                0,
+                0.28,
+                0.5
+              ],
+              "enabled": true
+            },
+            {
+              "target": "lpA",
+              "position": [
+                0.22,
+                0,
+                0.5
+              ],
+              "scale": [
+                0.12,
+                0.07,
+                0.16
+              ]
+            },
+            {
+              "target": "lpB",
+              "enabled": false
+            },
+            {
+              "target": "shapeLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "SN 5: 4 bonds + 1 lone pair \u2192 seesaw",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The arrangement is reconfigured to a trigonal bipyramidal framework with one larger equatorial lone pair, illustrating the seesaw shape and the preference of lone pairs for equatorial positions.",
+          "narration": "For steric number five, lone pairs prefer equatorial positions because that choice minimizes ninety-degree interactions. With four bonds and one lone pair in a trigonal bipyramidal arrangement, the molecular geometry is seesaw."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "t_shaped_example",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "lig4",
+              "enabled": false
+            },
+            {
+              "target": "lpB",
+              "position": [
+                -0.22,
+                0,
+                0.5
+              ],
+              "scale": [
+                0.12,
+                0.07,
+                0.16
+              ],
+              "enabled": true
+            },
+            {
+              "target": "lig1",
+              "position": [
+                0,
+                0.28,
+                0.5
+              ]
+            },
+            {
+              "target": "lig2",
+              "position": [
+                0,
+                -0.28,
+                0.5
+              ]
+            },
+            {
+              "target": "lig3",
+              "position": [
+                0.24,
+                0,
+                0.5
+              ]
+            },
+            {
+              "target": "shapeLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "SN 5: 3 bonds + 2 lone pairs \u2192 T-shaped",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "A second lone pair replaces one bonded position in the trigonal bipyramidal framework, leaving three bonded atoms arranged in a T shape.",
+          "narration": "If a steric number five system has two lone pairs, the remaining bonded atoms can form a T-shaped molecular geometry. Again, the electron-domain geometry is still based on five total domains."
+        },
+        {
+          "clipName": "clip4",
+          "audioClip": "square_pyramidal_and_square_planar",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "lig4",
+              "position": [
+                -0.24,
+                0,
+                0.5
+              ],
+              "enabled": true
+            },
+            {
+              "target": "lig5",
+              "position": [
+                0,
+                0,
+                0.74
+              ]
+            },
+            {
+              "target": "lig1",
+              "position": [
+                0,
+                0.24,
+                0.5
+              ]
+            },
+            {
+              "target": "lig2",
+              "position": [
+                0,
+                -0.24,
+                0.5
+              ]
+            },
+            {
+              "target": "lig3",
+              "position": [
+                0.24,
+                0,
+                0.5
+              ]
+            },
+            {
+              "target": "lpA",
+              "position": [
+                0,
+                0,
+                0.26
+              ]
+            },
+            {
+              "target": "shapeLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "SN 6: square pyramidal with 1 lone pair; square planar with 2 lone pairs",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The model shifts to an octahedral-derived arrangement to summarize two important lone-pair outcomes: square pyramidal with one lone pair and square planar with two opposite lone pairs.",
+          "narration": "In steric number six systems, one lone pair gives square pyramidal geometry, and two opposite lone pairs give square planar geometry. Xenon tetrafluoride is a classic square planar example."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 4: Real Molecules and Bond-Angle Deviations",
+      "description": "Applies VSEPR predictions to common molecules and compares idealized and observed geometries, emphasizing the larger repulsion from lone pairs.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Use VSEPR to predict the shapes of methane, ammonia, water, PF5, SF6, and XeF4.",
+        "Compare ideal bond angles to observed values and explain deviations qualitatively.",
+        "Connect abstract domain counting to familiar molecular examples."
+      ],
+      "instructions": [
+        "Compare each molecule's electron-domain count, molecular shape, and approximate bond angles.",
+        "Pay special attention to methane, ammonia, and water to see how lone pairs reduce angles.",
+        "Use the label changes to connect each 3D model to its VSEPR prediction."
+      ],
+      "objects": [
+        {
+          "prefab": "moleculeModelPrefab",
+          "name": "methaneModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.42,
+            0.02,
+            0.58
+          ],
+          "scale": [
+            0.22,
+            0.22,
+            0.22
+          ],
+          "enabled": true,
+          "texture": "methane_ball_stick_texture"
+        },
+        {
+          "prefab": "moleculeModelPrefab",
+          "name": "ammoniaModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.02,
+            0.58
+          ],
+          "scale": [
+            0.22,
+            0.22,
+            0.22
+          ],
+          "enabled": false,
+          "texture": "ammonia_ball_stick_texture"
+        },
+        {
+          "prefab": "moleculeModelPrefab",
+          "name": "waterModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.42,
+            0.02,
+            0.58
+          ],
+          "scale": [
+            0.22,
+            0.22,
+            0.22
+          ],
+          "enabled": false,
+          "texture": "water_ball_stick_texture"
+        },
+        {
+          "prefab": "moleculeModelPrefab",
+          "name": "pf5Model",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.3,
+            -0.02,
+            0.88
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "enabled": false,
+          "texture": "pf5_ball_stick_texture"
+        },
+        {
+          "prefab": "moleculeModelPrefab",
+          "name": "sf6Model",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.02,
+            0.88
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "enabled": false,
+          "texture": "sf6_ball_stick_texture"
+        },
+        {
+          "prefab": "moleculeModelPrefab",
+          "name": "xef4Model",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.3,
+            -0.02,
+            0.88
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "enabled": false,
+          "texture": "xef4_ball_stick_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "moleculeLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.31,
+            0.62
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "CH4: tetrahedral, 109.5\u00b0",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "moleculeCaption",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.22,
+            0.62
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.09
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Ideal tetrahedral geometry as reference.",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "methane_reference_ideal_tetrahedral",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "moleculeLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "CH4: tetrahedral, ideal 109.5\u00b0",
+                  "fontSize": 30
+                }
+              ]
+            },
+            {
+              "target": "moleculeCaption",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Four bonding domains, no lone pairs.",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Methane is introduced as the ideal tetrahedral reference structure, giving students a baseline before lone-pair-containing molecules are compared.",
+          "narration": "Methane has four bonding domains and no lone pairs on carbon. VSEPR predicts a tetrahedral geometry with an ideal bond angle of one hundred nine point five degrees."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "ammonia_angle_compression",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "methaneModel",
+              "enabled": false
+            },
+            {
+              "target": "ammoniaModel",
+              "enabled": true
+            },
+            {
+              "target": "moleculeLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "NH3: trigonal pyramidal, about 107\u00b0",
+                  "fontSize": 30
+                }
+              ]
+            },
+            {
+              "target": "moleculeCaption",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "One lone pair compresses the bond angle.",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The ideal tetrahedral reference is replaced by ammonia, letting students compare a one-lone-pair system to methane and observe the expected decrease in bond angle.",
+          "narration": "Ammonia also has steric number four, but one domain is a lone pair. The electron-domain geometry is tetrahedral, while the molecular geometry is trigonal pyramidal, and the H\u2013N\u2013H angle is compressed to about one hundred seven degrees."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "water_stronger_lone_pair_effect",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "ammoniaModel",
+              "enabled": false
+            },
+            {
+              "target": "waterModel",
+              "enabled": true
+            },
+            {
+              "target": "moleculeLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "H2O: bent, 104.5\u00b0",
+                  "fontSize": 30
+                }
+              ]
+            },
+            {
+              "target": "moleculeCaption",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Two lone pairs compress the angle even more.",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Water replaces ammonia to show a two-lone-pair case, reinforcing that increasing lone-pair repulsion causes still greater bond-angle compression.",
+          "narration": "Water has two bonding pairs and two lone pairs around oxygen. VSEPR predicts a bent molecular geometry, and the bond angle decreases further to about one hundred four point five degrees because lone pairs occupy more angular space than bonding pairs."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "pf5_sf6_xef4_comparison",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "pf5Model",
+              "enabled": true
+            },
+            {
+              "target": "sf6Model",
+              "enabled": true
+            },
+            {
+              "target": "xef4Model",
+              "enabled": true
+            },
+            {
+              "target": "moleculeLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "PF5: trigonal bipyramidal; SF6: octahedral; XeF4: square planar",
+                  "fontSize": 30
+                }
+              ]
+            },
+            {
+              "target": "moleculeCaption",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric numbers 5 and 6 extend VSEPR to larger molecules.",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Three larger examples appear together so students can compare steric numbers five and six, including how octahedral electron geometry with two lone pairs leads to square planar XeF4.",
+          "narration": "VSEPR also predicts the shapes of larger molecules. Phosphorus pentafluoride is trigonal bipyramidal, sulfur hexafluoride is octahedral, and xenon tetrafluoride is square planar because it has an octahedral electron-domain geometry with two opposite lone pairs."
+        }
+      ]
+    }
+  ]
+}

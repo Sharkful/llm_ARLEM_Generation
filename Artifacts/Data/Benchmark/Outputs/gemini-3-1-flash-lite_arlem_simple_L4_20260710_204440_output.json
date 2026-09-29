@@ -1,0 +1,272 @@
+{
+  "workplace": {
+    "id": "physics_lab_wp",
+    "name": "General Physics Lab",
+    "origin": "table_marker",
+    "things": [
+      {
+        "id": "vector_worktable",
+        "name": "Vector Analysis Table",
+        "detectable": "table_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "projectile_ball",
+        "name": "Test Projectile Ball",
+        "detectable": "floor_anchor",
+        "pois": []
+      },
+      {
+        "id": "graph_board",
+        "name": "Trajectory Graphing Board",
+        "detectable": "wall_anchor",
+        "pois": []
+      }
+    ],
+    "places": [
+      {
+        "id": "lab_floor",
+        "name": "Lab Floor Space",
+        "detectable": "floor_anchor",
+        "pois": []
+      },
+      {
+        "id": "physics_lab_area",
+        "name": "Projectile Motion Plane",
+        "detectable": "wall_anchor",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "table_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/marker1.bundle"
+      },
+      {
+        "id": "floor_anchor",
+        "type": "anchor",
+        "url": "https://assets.example.com/anchor1.bundle"
+      },
+      {
+        "id": "wall_anchor",
+        "type": "anchor",
+        "url": "https://assets.example.com/anchor2.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "animation"
+      },
+      {
+        "id": "image"
+      },
+      {
+        "id": "label"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "vector_arrow",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/vector_arrow.glb"
+      },
+      {
+        "id": "mag_label",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "resultant_sum",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/resultant.glb"
+      },
+      {
+        "id": "component_decomp",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/components.glb"
+      },
+      {
+        "id": "projectile_plane",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/grid_plane.png"
+      },
+      {
+        "id": "initial_velocity",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/vel_vec.glb"
+      },
+      {
+        "id": "flight_animation",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/projectile_arc.glb"
+      }
+    ]
+  },
+  "activity": {
+    "id": "physics_lab_activity",
+    "name": "Vector Mechanics and Projectile Motion",
+    "description": "An exploration of vectors and their application to 2D projectile motion.",
+    "workplace": "physics_lab_wp",
+    "start": "intro_vectors",
+    "actions": [
+      {
+        "id": "intro_vectors",
+        "instruction": {
+          "title": "Introduction to Vectors",
+          "description": "Explore vectors by dragging the arrow head. Observe how magnitude and angle change."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "vector_worktable",
+              "type": "predicate",
+              "augmentation": "vector_arrow"
+            },
+            {
+              "target": "vector_worktable",
+              "type": "predicate",
+              "augmentation": "mag_label",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "vector_worktable"
+          }
+        ]
+      },
+      {
+        "id": "vector_addition",
+        "instruction": {
+          "title": "Vector Addition",
+          "description": "Observe the tip-to-tail addition of two vectors to form a resultant."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "vector_worktable",
+              "type": "predicate",
+              "augmentation": "resultant_sum"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "vector_worktable"
+          }
+        ]
+      },
+      {
+        "id": "vector_decomposition",
+        "instruction": {
+          "title": "Vector Decomposition",
+          "description": "Decompose the vector into x, y, and z components. Notice how they sum back to the original."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "vector_worktable",
+              "type": "predicate",
+              "augmentation": "component_decomp"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "vector_worktable"
+          }
+        ]
+      },
+      {
+        "id": "projectile_intro",
+        "instruction": {
+          "title": "Projectile Motion Setup",
+          "description": "Visualize projectile motion in 2D space. The velocity vector is decomposed into horizontal and vertical components."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "physics_lab_area",
+              "type": "predicate",
+              "augmentation": "projectile_plane"
+            },
+            {
+              "target": "physics_lab_area",
+              "type": "predicate",
+              "augmentation": "initial_velocity"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "physics_lab_area"
+          }
+        ]
+      },
+      {
+        "id": "projectile_flight",
+        "instruction": {
+          "title": "Analyzing Projectile Motion",
+          "description": "Watch the ball's flight. Observe how the vertical component changes while the horizontal remains constant."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "physics_lab_area",
+              "type": "predicate",
+              "augmentation": "flight_animation"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "physics_lab_area"
+          }
+        ]
+      }
+    ]
+  }
+}

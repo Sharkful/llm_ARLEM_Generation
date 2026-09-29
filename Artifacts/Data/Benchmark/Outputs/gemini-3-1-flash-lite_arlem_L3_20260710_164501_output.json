@@ -1,0 +1,393 @@
+{
+  "workplace": {
+    "id": "mol_bio_lab_01",
+    "name": "Molecular Biology Lab Room 202",
+    "origin": "lab_room_anchor",
+    "things": [
+      {
+        "id": "dna_model_thing",
+        "name": "Interactive DNA Helix Model",
+        "detectable": "dna_anchor",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "lab_table_place",
+        "name": "Biology Workbench",
+        "detectable": "table_marker",
+        "pois": []
+      },
+      {
+        "id": "dna_zone_place",
+        "name": "DNA Visualization Zone",
+        "detectable": "dna_anchor",
+        "pois": []
+      }
+    ],
+    "persons": [
+      {
+        "id": "learner_01",
+        "name": "Molecular Biology Student",
+        "detectable": "student_anchor",
+        "pois": [],
+        "persona": "learner"
+      }
+    ],
+    "sensors": [],
+    "devices": [
+      {
+        "id": "hololens_01",
+        "type": "hololens",
+        "name": "Student HoloLens Headset",
+        "url": "https://ar-device.local:8080"
+      }
+    ],
+    "apps": [
+      {
+        "id": "biochem_viewer_app",
+        "type": "widget",
+        "name": "Molecular Structure Viewer",
+        "url": "https://example.com/mol-viewer.html"
+      }
+    ],
+    "detectables": [
+      {
+        "id": "table_marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/table_marker.bundle"
+      },
+      {
+        "id": "lab_room_anchor",
+        "type": "anchor",
+        "sensor": "mapping",
+        "url": "https://assets.example.com/lab_anchor.bundle"
+      },
+      {
+        "id": "student_anchor",
+        "type": "anchor",
+        "sensor": "mapping",
+        "url": "https://assets.example.com/student_anchor.bundle"
+      },
+      {
+        "id": "dna_anchor",
+        "type": "anchor",
+        "sensor": "mapping",
+        "url": "https://assets.example.com/dna_anchor.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "animation"
+      },
+      {
+        "id": "label"
+      },
+      {
+        "id": "image"
+      },
+      {
+        "id": "audio"
+      },
+      {
+        "id": "video"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "view_structure_predicate",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "examine_pairing_predicate",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "observe_helicase_predicate",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "observe_polymerase_predicate",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "final_summary_predicate",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "dna_helix_model_pred",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/dna_helix.glb"
+      },
+      {
+        "id": "base_pair_label_pred",
+        "type": "label",
+        "scale": 1.0,
+        "url": "https://assets.example.com/base_pairs.png"
+      },
+      {
+        "id": "helicase_animation_pred",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/helicase_action.glb"
+      },
+      {
+        "id": "polymerase_label_pred",
+        "type": "label",
+        "scale": 1.0,
+        "url": "https://assets.example.com/pol_activity.png"
+      },
+      {
+        "id": "ligase_summary_pred",
+        "type": "label",
+        "scale": 1.0,
+        "url": "https://assets.example.com/ligase_result.png"
+      }
+    ],
+    "warnings": []
+  },
+  "activity": {
+    "id": "dna_replication_lab",
+    "name": "DNA Replication and Structure Analysis",
+    "description": "A guided molecular biology tour of DNA structure and the mechanism of semiconservative replication.",
+    "language": "en",
+    "workplace": "mol_bio_lab_01",
+    "start": "step1_structure",
+    "actions": [
+      {
+        "id": "step1_structure",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "hololens_01",
+        "location": "lab_table_place",
+        "predicate": "view_structure_predicate",
+        "instruction": {
+          "title": "DNA Structure Exploration",
+          "description": "Observe the DNA double helix. Notice the antiparallel sugar-phosphate backbones and the nitrogenous bases pairing inside."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "dna_model_thing",
+              "type": "predicate",
+              "augmentation": "dna_helix_model_pred"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step2_base_pairing",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step2_base_pairing",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "hololens_01",
+        "location": "lab_table_place",
+        "predicate": "examine_pairing_predicate",
+        "instruction": {
+          "title": "Complementary Base Pairing",
+          "description": "Examine the A-T and G-C pairings. A-T forms two hydrogen bonds, while G-C forms three. Understanding this specificity is key to replication."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "dna_model_thing",
+              "type": "predicate",
+              "augmentation": "base_pair_label_pred"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "dna_model_thing",
+              "type": "predicate",
+              "augmentation": "dna_helix_model_pred"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step3_unwinding",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step3_unwinding",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "hololens_01",
+        "location": "lab_table_place",
+        "predicate": "observe_helicase_predicate",
+        "instruction": {
+          "title": "Initiating Replication: Unwinding",
+          "description": "Watch as Helicase unwinds the double helix at the replication fork, creating single-stranded templates stabilized by proteins."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "dna_model_thing",
+              "type": "predicate",
+              "augmentation": "helicase_animation_pred"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "dna_model_thing",
+              "type": "predicate",
+              "augmentation": "base_pair_label_pred"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step4_polymerase",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step4_polymerase",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "hololens_01",
+        "location": "lab_table_place",
+        "predicate": "observe_polymerase_predicate",
+        "instruction": {
+          "title": "DNA Polymerase Activity",
+          "description": "Observe DNA Polymerase synthesizing the leading strand continuously 5' to 3'. Note how the lagging strand must be synthesized in segments."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "dna_model_thing",
+              "type": "predicate",
+              "augmentation": "polymerase_label_pred"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "dna_model_thing",
+              "type": "predicate",
+              "augmentation": "helicase_animation_pred"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step5_ligase",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step5_ligase",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "hololens_01",
+        "location": "lab_table_place",
+        "predicate": "final_summary_predicate",
+        "instruction": {
+          "title": "Completing Replication: Ligase and Summary",
+          "description": "DNA Ligase joins the Okazaki fragments on the lagging strand. The result: two molecules, each with one parent strand and one new strand. (Semiconservative)."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "lab_table_place",
+              "type": "predicate",
+              "augmentation": "ligase_summary_pred"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "dna_model_thing",
+              "type": "predicate",
+              "augmentation": "polymerase_label_pred"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step1_structure",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      }
+    ]
+  }
+}

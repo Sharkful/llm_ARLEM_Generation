@@ -1,0 +1,990 @@
+{
+  "version": "2.0",
+  "labId": "heart_anatomy_circulation_lab",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Human Anatomy and Physiology I",
+  "estimatedLength": "40 minutes",
+  "objectives": [
+    "Identify and name the four chambers of the heart, the four heart valves, and the major vessels entering and leaving the heart.",
+    "Trace the path of blood through the heart's dual circulation, naming each chamber, valve, and vessel in order.",
+    "Distinguish the pulmonary circuit from the systemic circuit and explain why the right and left sides of the heart serve different circulatory functions.",
+    "Explain why the left ventricle has a substantially thicker myocardium than the right ventricle, relating wall thickness to systemic versus pulmonary pressure demands.",
+    "Describe how atrioventricular and semilunar valves prevent backflow during the cardiac cycle."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: The Four Chambers and Great Vessels",
+      "description": "Introduces the gross structure of the heart, identifying the four chambers and the major vessels that enter and leave the heart.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Identify the right atrium, right ventricle, left atrium, and left ventricle.",
+        "Name the superior and inferior vena cava, pulmonary arteries, pulmonary veins, and aorta and where each connects to the heart.",
+        "Recognize the anatomical orientation of the heart within the thorax."
+      ],
+      "instructions": [
+        "Face the anatomical model floating in front of you.",
+        "Use Next and Previous to move through the guided tour.",
+        "Observe each labeled structure as the narrator describes it."
+      ],
+      "objects": [
+        {
+          "prefab": "heartPrefab",
+          "name": "heartModel",
+          "position": [
+            0,
+            1.4,
+            0.8
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "texture": "heart_muscle_texture",
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 24
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "sceneTitle",
+          "position": [
+            0,
+            1.85,
+            0.85
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "The Human Heart",
+              "color": [
+                220,
+                40,
+                40,
+                255
+              ],
+              "fontSize": 48
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "chamberLabel",
+          "position": [
+            0.45,
+            1.4,
+            0.8
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 28,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "vesselMarkerPrefab",
+          "name": "vesselMarker",
+          "position": [
+            0,
+            1.55,
+            0.75
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": false,
+          "color": [
+            80,
+            120,
+            255,
+            255
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "scene1_heart_introduction",
+          "autoAdvance": false,
+          "changeMeaning": "Opening the scene with the rotating heart model and title so students can orient to the whole organ.",
+          "narration": "Welcome. Floating before you is a model of the human heart, roughly the size of your own fist. It is slowly rotating so you can see it from all sides. The heart is a muscular pump divided into four chambers, and today we will explore each of them and the great vessels that connect the heart to the rest of the body."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "scene1_atria",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "chamberLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Upper chambers:\nRight Atrium\nLeft Atrium",
+                  "color": [
+                    120,
+                    180,
+                    255,
+                    255
+                  ],
+                  "fontSize": 28,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Enabling the chamber label and showing the two upper receiving chambers, the atria.",
+          "narration": "The two upper chambers are the atria. The right atrium receives deoxygenated blood returning from the body, while the left atrium receives oxygen-rich blood returning from the lungs. Atria are thin-walled because they only push blood a short distance into the ventricles below."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "scene1_ventricles",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "chamberLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Lower chambers:\nRight Ventricle\nLeft Ventricle",
+                  "color": [
+                    255,
+                    160,
+                    120,
+                    255
+                  ],
+                  "fontSize": 28,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Updating the label to the lower pumping chambers, the ventricles, shifting focus downward on the model.",
+          "narration": "Below the atria are the two ventricles, the powerful pumping chambers. The right ventricle pumps blood to the lungs, and the left ventricle pumps blood to the entire body. Their thicker walls reflect the force required to eject blood out of the heart."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "scene1_great_vessels",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vesselMarker",
+              "enabled": true
+            },
+            {
+              "target": "chamberLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Great vessels:\nVena Cava (in)\nPulmonary Arteries (out)\nPulmonary Veins (in)\nAorta (out)",
+                  "color": [
+                    255,
+                    255,
+                    255,
+                    255
+                  ],
+                  "fontSize": 26,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Revealing the vessel marker and updating the label to highlight the great vessels entering and leaving the heart.",
+          "narration": "Now notice the great vessels. The superior and inferior vena cava return deoxygenated blood to the right atrium. The pulmonary arteries carry blood from the right ventricle to the lungs, and the pulmonary veins return oxygenated blood to the left atrium. Finally, the aorta arches away from the left ventricle to supply the whole body."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: The Four Valves",
+      "description": "Focuses on the four heart valves, showing where each sits and how they open and close to prevent backflow.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Locate the tricuspid, pulmonary, mitral (bicuspid), and aortic valves.",
+        "Distinguish atrioventricular valves from semilunar valves.",
+        "Explain how valves prevent backflow during the cardiac cycle."
+      ],
+      "instructions": [
+        "Observe the cross-sectioned heart with valves highlighted.",
+        "Watch each valve highlight as it is described.",
+        "Advance through the clips to compare AV and semilunar valves."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCrossSectionPrefab",
+          "name": "heartCrossSection",
+          "position": [
+            0,
+            1.4,
+            0.8
+          ],
+          "scale": [
+            0.32,
+            0.32,
+            0.32
+          ],
+          "texture": "heart_muscle_texture"
+        },
+        {
+          "prefab": "valvePrefab",
+          "name": "tricuspidValve",
+          "position": [
+            -0.08,
+            1.36,
+            0.78
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            200,
+            60,
+            255
+          ]
+        },
+        {
+          "prefab": "valvePrefab",
+          "name": "mitralValve",
+          "position": [
+            0.08,
+            1.36,
+            0.78
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "color": [
+            60,
+            200,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "valvePrefab",
+          "name": "pulmonaryValve",
+          "position": [
+            -0.05,
+            1.5,
+            0.78
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "enabled": false,
+          "color": [
+            120,
+            255,
+            120,
+            255
+          ]
+        },
+        {
+          "prefab": "valvePrefab",
+          "name": "aorticValve",
+          "position": [
+            0.05,
+            1.5,
+            0.78
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            120,
+            120,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "valveLabel",
+          "position": [
+            0.5,
+            1.5,
+            0.8
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "The Heart Valves",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 32,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "scene2_valve_intro",
+          "autoAdvance": false,
+          "changeMeaning": "Introducing the cross-section view of the heart before revealing individual valves.",
+          "narration": "Here is the heart shown in cross-section so we can look inside. Four valves ensure that blood flows in only one direction as the heart beats. Two are atrioventricular valves, between the atria and ventricles, and two are semilunar valves, guarding the exits into the great arteries."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "scene2_av_valves",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "tricuspidValve",
+              "enabled": true
+            },
+            {
+              "target": "mitralValve",
+              "enabled": true
+            },
+            {
+              "target": "valveLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "AV Valves:\nTricuspid (right)\nMitral/Bicuspid (left)",
+                  "color": [
+                    200,
+                    220,
+                    255,
+                    255
+                  ],
+                  "fontSize": 28,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Revealing the two atrioventricular valves, the tricuspid and mitral, and updating the label.",
+          "narration": "The atrioventricular valves sit between each atrium and ventricle. On the right side is the tricuspid valve, with three cusps, highlighted in gold. On the left side is the mitral, or bicuspid, valve, with two cusps, highlighted in blue. When the ventricles contract, these valves snap shut to stop blood from flowing backward into the atria."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "scene2_semilunar_valves",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "pulmonaryValve",
+              "enabled": true
+            },
+            {
+              "target": "aorticValve",
+              "enabled": true
+            },
+            {
+              "target": "valveLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Semilunar Valves:\nPulmonary (right out)\nAortic (left out)",
+                  "color": [
+                    200,
+                    255,
+                    200,
+                    255
+                  ],
+                  "fontSize": 28,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Revealing the two semilunar valves, pulmonary and aortic, at the ventricular outflow tracts.",
+          "narration": "Guarding the exits are the semilunar valves. The pulmonary valve, in green, opens from the right ventricle into the pulmonary artery. The aortic valve, in red, opens from the left ventricle into the aorta. As the ventricles relax, these valves close to prevent blood from falling back into the heart."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "scene2_valve_summary",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "valveLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Four Valves:\nTricuspid | Mitral\nPulmonary | Aortic",
+                  "color": [
+                    255,
+                    255,
+                    255,
+                    255
+                  ],
+                  "fontSize": 28,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Summarizing all four valves together with a full label to reinforce their arrangement.",
+          "narration": "Together, these four valves keep blood moving forward through the cardiac cycle. Remember: the tricuspid and mitral valves separate atria from ventricles, while the pulmonary and aortic valves separate ventricles from the great arteries. The familiar lub-dub of the heartbeat is the sound of these valves closing."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: Tracing Blood Through Dual Circulation",
+      "description": "Animates the path of blood through the heart, following deoxygenated blood into the right side, through the pulmonary circuit, and oxygenated blood through the left side into the systemic circuit.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Trace blood in order through each chamber, valve, and vessel.",
+        "Distinguish the pulmonary circuit from the systemic circuit.",
+        "Connect valve function to the direction of blood flow."
+      ],
+      "instructions": [
+        "Follow the colored blood marker as it travels through the heart.",
+        "Blue represents deoxygenated blood; red represents oxygenated blood.",
+        "Advance through each clip to complete the full circulatory loop."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCrossSectionPrefab",
+          "name": "heartFlowModel",
+          "position": [
+            0,
+            1.4,
+            0.8
+          ],
+          "scale": [
+            0.32,
+            0.32,
+            0.32
+          ],
+          "texture": "heart_muscle_texture"
+        },
+        {
+          "prefab": "lungsPrefab",
+          "name": "lungsModel",
+          "position": [
+            0,
+            1.78,
+            0.8
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "color": [
+            255,
+            180,
+            200,
+            255
+          ]
+        },
+        {
+          "prefab": "bloodMarkerPrefab",
+          "name": "bloodDrop",
+          "position": [
+            -0.14,
+            1.44,
+            0.78
+          ],
+          "scale": [
+            0.035,
+            0.035,
+            0.035
+          ],
+          "color": [
+            40,
+            90,
+            220,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "flowLabel",
+          "position": [
+            0.5,
+            1.5,
+            0.8
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Blood Flow",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 30,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "scene3_right_atrium",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "bloodDrop",
+              "position": [
+                -0.14,
+                1.44,
+                0.78
+              ],
+              "color": [
+                40,
+                90,
+                220,
+                255
+              ]
+            },
+            {
+              "target": "flowLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "1. Right Atrium\n(deoxygenated in)",
+                  "color": [
+                    120,
+                    160,
+                    255,
+                    255
+                  ],
+                  "fontSize": 28,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Positioning the blood drop entering the right atrium to begin tracing the pulmonary circuit.",
+          "narration": "Let us follow a single drop of blood. Our blue drop is deoxygenated, returning from the body through the vena cava and entering the right atrium, the first stop on its journey."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "scene3_right_ventricle",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "bloodDrop",
+              "position": [
+                -0.14,
+                1.34,
+                0.78
+              ]
+            },
+            {
+              "target": "flowLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "2. Tricuspid Valve\n\u2192 Right Ventricle",
+                  "color": [
+                    120,
+                    160,
+                    255,
+                    255
+                  ],
+                  "fontSize": 28,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Moving the blood drop through the tricuspid valve into the right ventricle.",
+          "narration": "The drop passes down through the tricuspid valve into the right ventricle. When the ventricle contracts, this valve closes behind it, preventing any backflow into the atrium."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "scene3_lungs",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "bloodDrop",
+              "position": [
+                0,
+                1.72,
+                0.79
+              ]
+            },
+            {
+              "target": "flowLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "3. Pulmonary Valve\n\u2192 Lungs (pulmonary circuit)",
+                  "color": [
+                    120,
+                    160,
+                    255,
+                    255
+                  ],
+                  "fontSize": 26,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Sending the still-blue drop up through the pulmonary valve to the lungs to be oxygenated.",
+          "narration": "The right ventricle pumps the drop through the pulmonary valve and pulmonary arteries up to the lungs. This is the pulmonary circuit. In the lungs the blood releases carbon dioxide and picks up oxygen."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "scene3_left_atrium",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "bloodDrop",
+              "position": [
+                0.14,
+                1.44,
+                0.78
+              ],
+              "color": [
+                220,
+                40,
+                40,
+                255
+              ]
+            },
+            {
+              "target": "flowLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "4. Pulmonary Veins\n\u2192 Left Atrium (oxygenated)",
+                  "color": [
+                    255,
+                    120,
+                    120,
+                    255
+                  ],
+                  "fontSize": 26,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The drop turns red after oxygenation and returns via the pulmonary veins to the left atrium.",
+          "narration": "Now oxygen-rich, our drop turns red. It travels back through the pulmonary veins into the left atrium, completing the pulmonary loop and beginning the systemic one."
+        },
+        {
+          "clipName": "clip4",
+          "audioClip": "scene3_left_ventricle_aorta",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "bloodDrop",
+              "position": [
+                0.14,
+                1.34,
+                0.78
+              ]
+            },
+            {
+              "target": "flowLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "5. Mitral Valve \u2192 Left Ventricle\n6. Aortic Valve \u2192 Aorta (systemic)",
+                  "color": [
+                    255,
+                    120,
+                    120,
+                    255
+                  ],
+                  "fontSize": 24,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Moving the red drop through the mitral valve into the left ventricle, then out the aorta to the body.",
+          "narration": "The drop descends through the mitral valve into the powerful left ventricle. From here it is pumped through the aortic valve into the aorta and out to the entire body, the systemic circuit. Eventually it will give up its oxygen, return through the vena cava, and the journey begins again."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 4: Why the Left Ventricle Is Thicker",
+      "description": "Compares the myocardial wall thickness of the right and left ventricles, relating the difference to the pressure required to perfuse the systemic versus pulmonary circuits.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Compare right and left ventricular wall thickness.",
+        "Relate wall thickness to the pressure needed for systemic versus pulmonary circulation.",
+        "Explain the functional consequence of the two circuits' differing resistances."
+      ],
+      "instructions": [
+        "Examine the side-by-side ventricle cross-sections.",
+        "Observe the thickness difference between the two ventricle walls.",
+        "Advance through the clips to understand the pressure relationship."
+      ],
+      "objects": [
+        {
+          "prefab": "ventricleCrossSectionPrefab",
+          "name": "rightVentricleSection",
+          "position": [
+            -0.35,
+            1.4,
+            0.8
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "texture": "heart_muscle_texture",
+          "color": [
+            120,
+            150,
+            220,
+            255
+          ]
+        },
+        {
+          "prefab": "ventricleCrossSectionPrefab",
+          "name": "leftVentricleSection",
+          "position": [
+            0.35,
+            1.4,
+            0.8
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "texture": "heart_muscle_texture",
+          "color": [
+            220,
+            120,
+            120,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "rightLabel",
+          "position": [
+            -0.35,
+            1.62,
+            0.8
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Right Ventricle",
+              "color": [
+                120,
+                150,
+                255,
+                255
+              ],
+              "fontSize": 26,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "leftLabel",
+          "position": [
+            0.35,
+            1.62,
+            0.8
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Left Ventricle",
+              "color": [
+                255,
+                120,
+                120,
+                255
+              ],
+              "fontSize": 26,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "scene4_comparison_intro",
+          "autoAdvance": false,
+          "changeMeaning": "Presenting both ventricle cross-sections side by side to set up the comparison.",
+          "narration": "Here are the two ventricles shown in cross-section, side by side. At first glance they may look similar, but watch what happens as we compare their walls, the myocardium, more closely."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "scene4_right_thin",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rightVentricleSection",
+              "scale": [
+                0.18,
+                0.18,
+                0.16
+              ]
+            },
+            {
+              "target": "rightLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Right Ventricle\nThin wall\nLow pressure \u2192 lungs",
+                  "color": [
+                    120,
+                    150,
+                    255,
+                    255
+                  ],
+                  "fontSize": 24,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Emphasizing the thin right ventricle wall by keeping it slim and updating its label.",
+          "narration": "The right ventricle has a relatively thin wall. It only needs to pump blood a short distance to the nearby lungs, against low resistance and low pressure. Its job is gentle by comparison."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "scene4_left_thick",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "leftVentricleSection",
+              "scale": [
+                0.22,
+                0.22,
+                0.22
+              ]
+            },
+            {
+              "target": "leftLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Left Ventricle\nThick wall\nHigh pressure \u2192 whole body",
+                  "color": [
+                    255,
+                    120,
+                    120,
+                    255
+                  ],
+                  "fontSize": 24,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Thickening the left ventricle section visually to dramatize its heavier myocardium.",
+          "narration": "Now look at the left ventricle. Its wall is substantially thicker, often two to three times thicker than the right. It must generate enough pressure to push blood through the entire body, against high systemic resistance."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "scene4_summary",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "leftLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Structure follows function:\nMore pressure \u2192 thicker muscle",
+                  "color": [
+                    255,
+                    220,
+                    220,
+                    255
+                  ],
+                  "fontSize": 24,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Concluding with a summary label connecting wall thickness to the two circulatory circuits.",
+          "narration": "So the difference in wall thickness is not arbitrary. It directly reflects workload: the right ventricle serves the low-pressure pulmonary circuit, while the muscular left ventricle drives the high-pressure systemic circuit. Structure follows function, a theme you will see throughout anatomy."
+        }
+      ]
+    }
+  ]
+}

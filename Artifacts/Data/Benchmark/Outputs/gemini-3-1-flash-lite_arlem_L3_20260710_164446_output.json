@@ -1,0 +1,418 @@
+{
+  "workplace": {
+    "id": "astronomy_lab_01",
+    "name": "Astronomy Simulation Lab",
+    "origin": "marker_origin",
+    "things": [
+      {
+        "id": "sun_model",
+        "name": "Sun Model",
+        "detectable": "marker_origin",
+        "pois": []
+      },
+      {
+        "id": "mars_model",
+        "name": "Mars Model",
+        "detectable": "marker_origin",
+        "pois": []
+      },
+      {
+        "id": "earth_model",
+        "name": "Earth Model",
+        "detectable": "marker_origin",
+        "pois": []
+      }
+    ],
+    "places": [
+      {
+        "id": "desk_station",
+        "name": "Observation Desk",
+        "detectable": "marker_desk",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "lab_floor_area",
+        "name": "Simulation Floor Space",
+        "detectable": "marker_floor",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "persons": [
+      {
+        "id": "learner_01",
+        "name": "Undergraduate Student",
+        "detectable": "marker_student",
+        "pois": [],
+        "persona": "learner"
+      }
+    ],
+    "sensors": [],
+    "devices": [
+      {
+        "id": "ar_headset_01",
+        "type": "hololens",
+        "name": "HoloLens 2 Astronomy Unit",
+        "url": "wifi://astronomy-lab-local"
+      }
+    ],
+    "apps": [],
+    "detectables": [
+      {
+        "id": "marker_origin",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.astronomy-lab.com/marker_origin.bundle"
+      },
+      {
+        "id": "marker_desk",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.astronomy-lab.com/marker_desk.bundle"
+      },
+      {
+        "id": "marker_floor",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.astronomy-lab.com/marker_floor.bundle"
+      },
+      {
+        "id": "marker_student",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.astronomy-lab.com/marker_student.bundle"
+      },
+      {
+        "id": "marker_headset",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.astronomy-lab.com/marker_headset.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "animation"
+      },
+      {
+        "id": "label"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "label_intro",
+        "type": "label",
+        "scale": 1.0,
+        "url": "https://assets.astronomy-lab.com/text_intro.png"
+      },
+      {
+        "id": "anim_retrograde_loop",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.astronomy-lab.com/mars_retrograde.glb"
+      },
+      {
+        "id": "model_solar_system",
+        "type": "animation",
+        "scale": 0.5,
+        "url": "https://assets.astronomy-lab.com/solar_system.glb"
+      },
+      {
+        "id": "anim_overtaking_effect",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.astronomy-lab.com/overtake_physics.glb"
+      },
+      {
+        "id": "model_planet_comparison",
+        "type": "animation",
+        "scale": 0.8,
+        "url": "https://assets.astronomy-lab.com/planets_comparison.glb"
+      },
+      {
+        "id": "view_prograde",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "view_retrograde",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "view_heliocentric",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "view_overtaking",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "view_comparison",
+        "type": "label",
+        "scale": 1.0
+      }
+    ],
+    "warnings": []
+  },
+  "activity": {
+    "id": "retrograde_motion_lab_01",
+    "name": "Understanding Retrograde Motion",
+    "description": "An exploration of apparent retrograde motion in the solar system.",
+    "language": "en",
+    "workplace": "astronomy_lab_01",
+    "start": "step_1_intro",
+    "actions": [
+      {
+        "id": "step_1_intro",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar_headset_01",
+        "location": "desk_station",
+        "predicate": "view_prograde",
+        "instruction": {
+          "title": "Normal Prograde Motion",
+          "description": "Observe the celestial sphere. Mars appears to drift eastward nightly against the constellations."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "desk_station",
+              "type": "predicate",
+              "augmentation": "label_intro",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "desk_station",
+              "augmentation": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_1_intro",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_2_loop",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar_headset_01",
+        "location": "desk_station",
+        "predicate": "view_retrograde",
+        "instruction": {
+          "title": "Observing the Retrograde Loop",
+          "description": "Watch as Mars slows down, reverses direction (westward), and then resumes its eastward path."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "desk_station",
+              "type": "predicate",
+              "augmentation": "anim_retrograde_loop",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "desk_station",
+              "augmentation": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_2_loop",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_3_heliocentric_view",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar_headset_01",
+        "location": "lab_floor_area",
+        "predicate": "view_heliocentric",
+        "instruction": {
+          "title": "The Heliocentric Explanation",
+          "description": "Switch to the Solar System view. Notice how Earth orbits faster than Mars."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "lab_floor_area",
+              "type": "predicate",
+              "augmentation": "model_solar_system",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "lab_floor_area",
+              "augmentation": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_3_heliocentric_view",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_4_overtake_dynamics",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar_headset_01",
+        "location": "lab_floor_area",
+        "predicate": "view_overtaking",
+        "instruction": {
+          "title": "The Overtaking Effect",
+          "description": "As Earth passes Mars, the relative perspective creates the appearance of backward motion."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "lab_floor_area",
+              "type": "predicate",
+              "augmentation": "anim_overtaking_effect",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "lab_floor_area",
+              "augmentation": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_4_overtake_dynamics",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_5_comparison",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "ar_headset_01",
+        "location": "desk_station",
+        "predicate": "view_comparison",
+        "instruction": {
+          "title": "Comparing Planetary Loops",
+          "description": "Observe Jupiter and Saturn. Notice their loops are smaller because they are further from the Sun."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "desk_station",
+              "type": "predicate",
+              "augmentation": "model_planet_comparison",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "desk_station",
+              "augmentation": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_5_comparison",
+            "type": "action",
+            "operator": "equal"
+          }
+        ]
+      }
+    ]
+  }
+}

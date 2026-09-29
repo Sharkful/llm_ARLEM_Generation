@@ -1,0 +1,251 @@
+{
+  "workplace": {
+    "id": "physics_lab_workspace",
+    "name": "General Physics Lab Room 101",
+    "origin": "marker_board",
+    "things": [
+      {
+        "id": "projectile_launcher",
+        "name": "Projectile Launcher Device",
+        "detectable": "marker_launcher",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "tabletop",
+        "name": "Main Workbench",
+        "detectable": "marker_table",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "vector_board",
+        "name": "Instructional Whiteboard",
+        "detectable": "marker_board",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "marker_board",
+        "type": "marker",
+        "url": "https://assets.physics.edu/markers/board.bundle"
+      },
+      {
+        "id": "marker_table",
+        "type": "marker",
+        "url": "https://assets.physics.edu/markers/table.bundle"
+      },
+      {
+        "id": "marker_launcher",
+        "type": "marker",
+        "url": "https://assets.physics.edu/markers/launcher.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "animation"
+      },
+      {
+        "id": "image"
+      },
+      {
+        "id": "label"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "vector_def_label",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "tip_to_tail_anim",
+        "type": "animation",
+        "scale": 1.5,
+        "url": "https://assets.physics.edu/animations/tip_to_tail.glb"
+      },
+      {
+        "id": "component_diagram",
+        "type": "image",
+        "scale": 1.2,
+        "url": "https://assets.physics.edu/images/components.png"
+      },
+      {
+        "id": "projectile_path_anim",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.physics.edu/animations/projectile_arc.glb"
+      },
+      {
+        "id": "max_height_label",
+        "type": "label",
+        "scale": 1.0
+      }
+    ]
+  },
+  "activity": {
+    "id": "physics_vector_lab_001",
+    "name": "Vector Mechanics Lab",
+    "description": "An exploration of vectors and projectile motion.",
+    "workplace": "physics_lab_workspace",
+    "start": "intro_vectors",
+    "actions": [
+      {
+        "id": "intro_vectors",
+        "instruction": {
+          "title": "Introduction to Vectors",
+          "description": "A vector has both magnitude and direction. Look at the board to see the representation. Click to proceed."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "vector_board",
+              "type": "predicate",
+              "augmentation": "vector_def_label",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "vector_board"
+          }
+        ]
+      },
+      {
+        "id": "vector_addition",
+        "instruction": {
+          "title": "Vector Addition",
+          "description": "Observe the tip-to-tail method for adding vectors to find the resultant. Click to proceed."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "vector_board",
+              "type": "predicate",
+              "augmentation": "tip_to_tail_anim",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "vector_board"
+          }
+        ]
+      },
+      {
+        "id": "decomposition",
+        "instruction": {
+          "title": "Vector Decomposition",
+          "description": "Place your marker on the table to see how a vector is decomposed into x and y components."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "tabletop",
+              "type": "predicate",
+              "augmentation": "component_diagram",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "tabletop"
+          }
+        ]
+      },
+      {
+        "id": "projectile_motion",
+        "instruction": {
+          "title": "Projectile Motion Exploration",
+          "description": "Observe the parabolic path. Note how horizontal and vertical motions are independent. Click to proceed."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "projectile_launcher",
+              "type": "predicate",
+              "augmentation": "projectile_path_anim",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "projectile_launcher"
+          }
+        ]
+      },
+      {
+        "id": "conclusion",
+        "instruction": {
+          "title": "Conclusion",
+          "description": "At maximum height, the vertical velocity is zero. Congratulations on completing the lab!"
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "projectile_launcher",
+              "type": "predicate",
+              "augmentation": "max_height_label",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "projectile_launcher"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,625 @@
+{
+  "version": "2.0",
+  "labId": "genchem1-vsepr-ar-001",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Chemistry I (100-level)",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Determine steric number from a Lewis structure by counting electron domains (bonding + lone pairs).",
+    "Predict electron-domain geometry (linear, trigonal planar, tetrahedral, trigonal bipyramidal, octahedral) and corresponding ideal bond angles.",
+    "Distinguish electron-domain geometry from molecular geometry when lone pairs are present.",
+    "Explain why lone pairs occupy more angular space than bonding pairs and predict bond-angle deviations from idealized values.",
+    "Apply VSEPR predictions to specific molecules and compare predicted geometries to experimentally observed structures."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: VSEPR Setup & Lewis-to-3D Counting",
+      "description": "Introduce VSEPR theory with a central labeled atom and a side panel showing a Lewis structure and electron-domain counting rules.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Explain the minimum-repulsion principle as the core idea of VSEPR.",
+        "Practice counting electron domains from a Lewis structure (each bond and lone pair counts as one domain).",
+        "Link the 2D Lewis representation to the 3D electron arrangement around a central atom."
+      ],
+      "instructions": [
+        "Scan your workspace to begin.",
+        "Look at the central atom label and the Lewis panel off to the side.",
+        "When you\u2019re ready, press Next to see domains move to minimize repulsion."
+      ],
+      "objects": [
+        {
+          "prefab": "vseprCentralAtomPrefab",
+          "name": "centralAtom",
+          "position": [
+            0,
+            0.25,
+            0.6
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "texture": "balldimpled"
+        },
+        {
+          "prefab": "clickableSphere",
+          "name": "bondDomainPlaceholder",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.35,
+            0.15,
+            0.9
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "color": [
+            80,
+            200,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "centralLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.55,
+            0.6
+          ],
+          "scale": [
+            0.5,
+            0.25,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Central Atom",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "vseprLewisPanelPrefab",
+          "name": "lewisPanel",
+          "position": [
+            0.45,
+            0.25,
+            0.35
+          ],
+          "eulerAngles": [
+            0,
+            180,
+            0
+          ],
+          "scale": [
+            0.35,
+            0.25,
+            0.02
+          ],
+          "texture": "2k_moon"
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "s1_clip0",
+          "audioClip": "vsepr_scene1_introduction",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "centralAtom"
+            },
+            {
+              "target": "centralLabel"
+            },
+            {
+              "target": "lewisPanel"
+            },
+            {
+              "target": "bondDomainPlaceholder"
+            }
+          ],
+          "changeMeaning": "Initial staging: a labeled central atom appears in the center while a Lewis-structure reference panel is placed to the side with a small domain placeholder to cue counting.",
+          "narration": "VSEPR theory turns a flat Lewis structure into a real three-dimensional shape. The key idea is simple: electron pairs around a central atom repel one another, so they arrange to minimize mutual repulsion."
+        },
+        {
+          "clipName": "s1_clip1",
+          "audioClip": "vsepr_scene1_counting_domains",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "lewisPanel"
+            },
+            {
+              "target": "bondDomainPlaceholder"
+            },
+            {
+              "target": "bondDomainPlaceholder"
+            },
+            {
+              "target": "centralLabel"
+            }
+          ],
+          "changeMeaning": "The side panel visually emphasizes the Lewis structure and students are guided to focus on domain counting with color/position cues; the central label updates to remind the counting task.",
+          "narration": "For counting, each single bond, double bond, triple bond, and each lone pair counts as one electron domain. Let\u2019s use the example shown on the panel\u2014water drawn flat\u2014and count domains around the oxygen."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: Minimum-Repulsion to Build Electron-Domain Geometries",
+      "description": "Demonstrate how two to four electron domains settle into linear, trigonal planar, and tetrahedral arrangements with repulsion vectors fading after stabilization.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Model the minimum-repulsion principle by observing domains separate to maximize spacing.",
+        "Identify ideal angles for linear (180\u00b0), trigonal planar (120\u00b0), and tetrahedral (109.5\u00b0).",
+        "Correlate the number of electron domains with electron-domain geometry."
+      ],
+      "instructions": [
+        "Watch the electron domains drift apart as they repel each other.",
+        "After each configuration settles, note the named geometry and ideal angle.",
+        "Press Next to move to the next sequence."
+      ],
+      "objects": [
+        {
+          "prefab": "vseprCentralAtomPrefab",
+          "name": "centralAtom2",
+          "position": [
+            0,
+            0.25,
+            0.6
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "texture": "balldimpled"
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "domainA",
+          "position": [
+            -0.12,
+            0.25,
+            0.72
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            120,
+            255,
+            200,
+            200
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "domainB",
+          "position": [
+            0.16,
+            0.25,
+            0.78
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            120,
+            255,
+            200,
+            200
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "domainC",
+          "position": [
+            0.0,
+            0.25,
+            0.78
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "domainD",
+          "position": [
+            0.0,
+            0.25,
+            0.78
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "repulsionHint",
+          "position": [
+            0,
+            0.62,
+            0.6
+          ],
+          "scale": [
+            0.55,
+            0.25,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Domains settle to maximize spacing",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "repulsionVectorPrefab",
+          "name": "repulsionVectors",
+          "position": [
+            0,
+            0.25,
+            0.6
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "s2_clip0",
+          "audioClip": "vsepr_scene2_linear_settle",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "domainA"
+            },
+            {
+              "target": "domainB"
+            },
+            {
+              "target": "domainC"
+            },
+            {
+              "target": "domainD"
+            },
+            {
+              "target": "domainA"
+            },
+            {
+              "target": "domainB"
+            },
+            {
+              "target": "repulsionVectors"
+            },
+            {
+              "target": "repulsionVectors"
+            },
+            {
+              "target": "repulsionHint"
+            }
+          ],
+          "changeMeaning": "The first configuration uses two domains placed roughly opposite the central atom; repulsion vectors appear during the 'settling' phase and are then faded to indicate stabilization.",
+          "narration": "First, imagine two electron domains. They move directly opposite each other to maximize separation. That\u2019s the linear electron-domain geometry\u2014180 degrees."
+        },
+        {
+          "clipName": "s2_clip1",
+          "audioClip": "vsepr_scene2_trigonal_planar_settle",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "domainC"
+            },
+            {
+              "target": "domainC"
+            },
+            {
+              "target": "domainA"
+            },
+            {
+              "target": "domainB"
+            },
+            {
+              "target": "domainC"
+            },
+            {
+              "target": "repulsionVectors"
+            },
+            {
+              "target": "repulsionVectors"
+            },
+            {
+              "target": "repulsionHint"
+            }
+          ],
+          "changeMeaning": "A third domain is enabled and the system transitions to the ideal 120\u00b0 trigonal-planar set; repulsion vectors fade once stabilized.",
+          "narration": "Add a third domain. The minimum-repulsion arrangement becomes trigonal planar: three domains separated by 120 degrees in one plane."
+        },
+        {
+          "clipName": "s2_clip2",
+          "audioClip": "vsepr_scene2_tetrahedral_settle",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "domainD"
+            },
+            {
+              "target": "domainD"
+            },
+            {
+              "target": "domainA"
+            },
+            {
+              "target": "domainB"
+            },
+            {
+              "target": "domainC"
+            },
+            {
+              "target": "domainD"
+            },
+            {
+              "target": "repulsionVectors"
+            },
+            {
+              "target": "repulsionVectors"
+            },
+            {
+              "target": "repulsionHint"
+            }
+          ],
+          "changeMeaning": "A fourth lobe appears and the configuration updates to an ideal tetrahedral spacing; repulsion vectors indicate transient rearrangement before fading.",
+          "narration": "Now add a fourth domain. The domains spread into a tetrahedral arrangement with bond angles of about 109.5 degrees."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: Complete Geometry Catalog (5 & 6 Domains)",
+      "description": "Extend from tetrahedral to trigonal bipyramidal and octahedral electron-domain geometries, including labeled angles and a rotatable view.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Identify electron-domain geometry for steric numbers 5 and 6.",
+        "Recognize axial vs equatorial positions in trigonal bipyramidal (90\u00b0 and 120\u00b0 relationships).",
+        "Recognize octahedral arrangement (90\u00b0) and understand that students can view it from any angle."
+      ],
+      "instructions": [
+        "Rotate your viewpoint to see axial and equatorial domains.",
+        "Use the angle labels to confirm relationships.",
+        "Press Next to learn how lone pairs alter molecular geometry."
+      ],
+      "objects": [
+        {
+          "prefab": "vseprCentralAtomPrefab",
+          "name": "centralAtom3",
+          "position": [
+            0,
+            0.25,
+            0.6
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "texture": "balldimpled"
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "d1",
+          "position": [
+            0.0,
+            0.25,
+            0.78
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "d2",
+          "position": [
+            0.16,
+            0.25,
+            0.64
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "d3",
+          "position": [
+            -0.16,
+            0.25,
+            0.64
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "d4",
+          "position": [
+            0.0,
+            0.42,
+            0.6
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "d5",
+          "position": [
+            0.0,
+            0.08,
+            0.6
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ]
+        },
+        {
+          "prefab": "electronDomainLobePrefab",
+          "name": "d6",
+          "position": [
+            0.16,
+            0.08,
+            0.6
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "catalogAngles",
+          "position": [
+            0,
+            0.65,
+            0.6
+          ],
+          "scale": [
+            0.7,
+            0.28,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "5 domains: trigonal bipyramidal (90\u00b0/120\u00b0) | 6 domains: octahedral (90\u00b0)",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "s3_clip0",
+          "audioClip": "vsepr_scene3_trigonal_bipyramidal",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "d6"
+            },
+            {
+              "target": "d1"
+            },
+            {
+              "target": "d2"
+            },
+            {
+              "target": "d3"
+            },
+            {
+              "target": "d4"
+            },
+            {
+              "target": "d5"
+            },
+            {
+              "target": "catalogAngles"
+            }
+          ],
+          "changeMeaning": "The scene arranges five domains into axial (top/bottom) and equatorial (spaced 120\u00b0) positions, with on-screen text updated to the two characteristic angle types.",
+          "narration": "With five electron domains, the electron-domain geometry becomes trigonal bipyramidal. Three equatorial domains sit 120 degrees apart, and two axial domains sit 90 degrees relative to the equatorial plane."
+        },
+        {
+          "clipName": "s3_clip1",
+          "audioClip": "vsepr_scene3_octahedral",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "d6"
+            },
+            {
+              "target": "d6"
+            },
+            {
+              "target": "d1"
+            },
+            {
+              "target": "d5"
+            },
+            {
+              "target": "d2"
+            },
+            {
+              "target": "d3"
+            },
+            {
+              "target": "catalogAngles"
+            }
+          ],
+          "changeMeaning": "A sixth lobe is enabled and placed to complete the octahedral electron-domain set; the angle panel updates to reflect the 90\u00b0 relationships.",
+          "narration": "Add the sixth domain and you reach octahedral geometry. All neighboring electron domains are arranged at 90 degrees."
+        },
+        {
+          "clipName": "s3_clip2",
+          "audioClip": "vsepr_scene3_summary_angles",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "catalogAngles"
+            }
+          ],
+          "changeMeaning": "A recap text consolidates the characteristic ideal angles to help students remember the geometry catalog before lone pairs are introduced.",
+          "narration": "Here\u2019s the full catalog of five electron-domain geometries: 2 gives linear at 180\u00b0, 3 gives trigonal planar at 120\u00b0, 4 gives tetrahedral at 109.5\u00b0, 5 gives trigonal bipyramidal with 90\u00b0 and 120\u00b0 relationships, and 6 gives octahedral at 90\u00b0."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,477 @@
+{
+  "version": "2.0",
+  "labId": "Astro101_RetrogradeMotion",
+  "author": "AR Educational Content Team",
+  "courseName": "Introduction to Astronomy",
+  "estimatedLength": "15 minutes",
+  "objectives": [
+    "Describe the apparent path of Mars across the night sky during a retrograde episode.",
+    "Explain why apparent retrograde motion occurs in the heliocentric model as a consequence of Earth overtaking a slower-moving outer planet.",
+    "Contrast the geocentric and heliocentric explanations of retrograde motion.",
+    "Predict when retrograde motion will occur for an outer planet based on the relative orbital positions of Earth and that planet."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "A Puzzle in the Night Sky",
+      "description": "Observe the apparent motion of Mars against the background stars as seen from Earth, including its mysterious retrograde loop.",
+      "author": "Dr. Evelyn Hayes",
+      "institution": "Galileo University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Describe the apparent path of Mars during a retrograde episode, including prograde and retrograde phases.",
+        "Recognize the challenge this observation posed for geocentric models of the solar system."
+      ],
+      "instructions": [
+        "This module shows the path of Mars in the night sky over several months.",
+        "Use the 'Next' button to step through the animation."
+      ],
+      "objects": [
+        {
+          "prefab": "constellationSpherePrefab",
+          "name": "Starfield",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            10.0,
+            10.0,
+            10.0
+          ],
+          "texture": "8k_stars_milky_way"
+        },
+        {
+          "prefab": "planetPrefab",
+          "name": "Mars_Apparent",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.8,
+            0.2,
+            2.0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "texture": "2k_mars"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "Mars_Label",
+          "parent": "Mars_Apparent",
+          "position": [
+            0.0,
+            0.04,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Mars",
+              "fontSize": 0.05,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "tinySphere",
+          "name": "Path_Tracer",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.8,
+            0.2,
+            2.0
+          ],
+          "scale": [
+            0.008,
+            0.008,
+            0.008
+          ],
+          "enabled": false,
+          "color": [
+            255.0,
+            229.0,
+            124.0,
+            255.0
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_intro",
+          "audioClip": "retro_intro.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Mars_Label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Mars appears to wander against the fixed stars."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_prograde",
+          "audioClip": "retro_prograde.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Mars_Apparent",
+              "position": [
+                -0.4,
+                0.25,
+                2.0
+              ]
+            },
+            {
+              "target": "Path_Tracer",
+              "enabled": true
+            },
+            {
+              "target": "Mars_Label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Normally, it drifts eastward (prograde motion)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_retrograde_start",
+          "audioClip": "retro_loop_start.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Mars_Apparent",
+              "position": [
+                0.1,
+                0.28,
+                2.0
+              ]
+            },
+            {
+              "target": "Path_Tracer",
+              "scale": [
+                0.008,
+                0.008,
+                1.1
+              ],
+              "color": [
+                255.0,
+                100.0,
+                100.0,
+                255.0
+              ]
+            },
+            {
+              "target": "Mars_Label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "But then, it appears to slow down and reverse direction..."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_retrograde_end",
+          "audioClip": "retro_loop_end.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Mars_Apparent",
+              "position": [
+                0.4,
+                0.22,
+                2.0
+              ]
+            },
+            {
+              "target": "Path_Tracer",
+              "position": [
+                -0.35,
+                0.24,
+                2.0
+              ],
+              "scale": [
+                0.008,
+                0.008,
+                1.5
+              ],
+              "color": [
+                255.0,
+                229.0,
+                124.0,
+                255.0
+              ]
+            },
+            {
+              "target": "Mars_Label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "...tracing a loop before resuming its eastward path. This puzzled ancient astronomers."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "The Heliocentric Solution",
+      "description": "View the orbits of Earth and Mars from above the solar system to understand how relative motion creates the illusion of retrograde motion.",
+      "author": "Dr. Evelyn Hayes",
+      "institution": "Galileo University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Model the orbits of Earth and Mars around the Sun.",
+        "Explain apparent retrograde motion as a result of Earth's faster orbit overtaking Mars's slower orbit."
+      ],
+      "instructions": [
+        "This module shows a top-down view of the solar system.",
+        "Observe how the relative positions of Earth and Mars change over time."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "Sun",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ]
+        },
+        {
+          "prefab": "orbitLinePrefab",
+          "name": "Earth_Orbit",
+          "parent": "Sun",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.6,
+            0.01,
+            0.6
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            50.0
+          ]
+        },
+        {
+          "prefab": "orbitLinePrefab",
+          "name": "Mars_Orbit",
+          "parent": "Sun",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.9,
+            0.01,
+            0.9
+          ],
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            50.0
+          ]
+        },
+        {
+          "prefab": "planetPrefab",
+          "name": "Earth",
+          "parent": "Sun",
+          "position": [
+            0.6,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "texture": "2k_earth_daymap",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 20.0,
+              "orbitalScale": 0.6,
+              "synchronousRotation": false
+            }
+          ]
+        },
+        {
+          "prefab": "planetPrefab",
+          "name": "Mars_Heliocentric",
+          "parent": "Sun",
+          "position": [
+            0.9,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "texture": "2k_mars",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 37.6,
+              "orbitalScale": 0.9,
+              "synchronousRotation": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "Explanation_Text",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.4,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 0.06
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_helio_intro",
+          "audioClip": "helio_intro.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Explanation_Text",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "In the Sun-centered model, both Earth and Mars have simple, circular orbits."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_overtake",
+          "audioClip": "helio_overtake.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Earth",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "timeRate": 1.0
+                }
+              ]
+            },
+            {
+              "target": "Mars_Heliocentric",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "timeRate": 1.0
+                }
+              ]
+            },
+            {
+              "target": "Explanation_Text",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Because Earth is on an inner track, it moves faster and periodically overtakes Mars."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_illusion",
+          "audioClip": "helio_illusion.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "Earth",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "timeRate": 0.0
+                }
+              ]
+            },
+            {
+              "target": "Mars_Heliocentric",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "timeRate": 0.0
+                }
+              ]
+            },
+            {
+              "target": "Explanation_Text",
+              "position": [
+                0.0,
+                -0.3,
+                1.0
+              ],
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "As Earth passes Mars, our line of sight causes Mars to appear to move backward against distant stars. This is the cause of retrograde motion."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

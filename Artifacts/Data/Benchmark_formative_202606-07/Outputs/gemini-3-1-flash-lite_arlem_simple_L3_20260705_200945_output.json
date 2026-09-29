@@ -1,0 +1,256 @@
+{
+  "workplace": {
+    "id": "astronomy_lab_workplace",
+    "name": "Astronomy Lab Workbench",
+    "origin": "marker_table",
+    "things": [
+      {
+        "id": "orrery_model",
+        "name": "Heliocentric Orrery Model",
+        "detectable": "marker_orrery",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "table_lab_bench",
+        "name": "Lab Bench",
+        "detectable": "marker_table",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "sky_chart_display",
+        "name": "Sky Chart Display",
+        "detectable": "marker_sky_chart",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "marker_sky_chart",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_sky_chart.bundle"
+      },
+      {
+        "id": "marker_orrery",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_orrery.bundle"
+      },
+      {
+        "id": "marker_table",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_table.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "animation"
+      },
+      {
+        "id": "label"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "label_intro",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "label_retrograde",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "model_solar_system",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/orrery_animation.glb"
+      },
+      {
+        "id": "label_comparison",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "label_conclusion",
+        "type": "label",
+        "scale": 1.0
+      }
+    ]
+  },
+  "activity": {
+    "id": "retrograde_motion_lab",
+    "name": "Understanding Apparent Retrograde Motion",
+    "description": "A lab exploring why planets appear to loop in the night sky.",
+    "workplace": "astronomy_lab_workplace",
+    "start": "step_1_intro",
+    "actions": [
+      {
+        "id": "step_1_intro",
+        "instruction": {
+          "title": "Mars's Normal Path",
+          "description": "Observing the night sky, Mars normally moves eastward against the background stars. Click to observe its path."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "sky_chart_display",
+              "type": "predicate",
+              "augmentation": "label_intro",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_2_retrograde"
+          }
+        ]
+      },
+      {
+        "id": "step_2_retrograde",
+        "instruction": {
+          "title": "The Retrograde Loop",
+          "description": "Every 26 months, Mars slows down and traces a westward loop before continuing eastward. This is 'apparent retrograde motion'. Click to see the physical model."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "sky_chart_display",
+              "type": "predicate",
+              "augmentation": "label_retrograde",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "sky_chart_display",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_3_heliocentric_view"
+          }
+        ]
+      },
+      {
+        "id": "step_3_heliocentric_view",
+        "instruction": {
+          "title": "Heliocentric Perspective",
+          "description": "This is the heliocentric model. Earth moves faster than Mars. As we pass Mars, it appears to drift backward from our perspective. Observe the overtaking maneuver. Click to continue."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "orrery_model",
+              "type": "predicate",
+              "augmentation": "model_solar_system",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "sky_chart_display",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_4_compare_planets"
+          }
+        ]
+      },
+      {
+        "id": "step_4_compare_planets",
+        "instruction": {
+          "title": "Comparing Planets",
+          "description": "Jupiter and Saturn are farther from the Sun. Notice how their retrograde loops are smaller than Mars's because the relative velocity difference is lower. Click to finish."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "orrery_model",
+              "type": "predicate",
+              "augmentation": "label_comparison",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_5_conclusion"
+          }
+        ]
+      },
+      {
+        "id": "step_5_conclusion",
+        "instruction": {
+          "title": "Conclusion",
+          "description": "The heliocentric model explains retrograde motion naturally, unlike the complex epicycles of the geocentric model. Understanding this shift is key to modern astronomy. Activity complete."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "table_lab_bench",
+              "type": "predicate",
+              "augmentation": "label_conclusion",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_5_conclusion"
+          }
+        ]
+      }
+    ]
+  }
+}

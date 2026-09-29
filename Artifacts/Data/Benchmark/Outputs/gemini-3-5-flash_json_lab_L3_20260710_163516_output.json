@@ -1,0 +1,546 @@
+{
+  "version": "2.0",
+  "labId": "anatomy_heart_structure_and_circulation",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Human Anatomy and Physiology I",
+  "estimatedLength": "20 minutes",
+  "objectives": [
+    "Identify and name the four chambers of the heart, the four valves, and the major entering and exiting vessels.",
+    "Trace the pathway of blood through the dual-loop (pulmonary and systemic) circulatory systems.",
+    "Explain why the left ventricle wall is thicker than the right ventricle wall, relating anatomy to pressure demands.",
+    "Analyze how the atrioventricular and semilunar valves open and close in response to pressure changes to prevent backflow."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Heart Chambers and Wall Anatomy",
+      "description": "Explore the anatomical chambers, major blood vessels, and the structural differences in myocardium wall thickness.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Identify and locate the four chambers of the heart.",
+        "Distinguish the major blood vessels entering and leaving the heart.",
+        "Explain the physiological reason behind the difference in myocardium thickness between the left and right ventricles."
+      ],
+      "instructions": [
+        "Look at the cross-sectioned heart model in front of you.",
+        "Observe the positions of the four internal chambers as highlighted by the pointer.",
+        "Examine the thick muscular wall of the left ventricle compared to the right ventricle."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCrossSectionPrefab",
+          "name": "heartModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.1,
+            -0.6
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "texture": "heart_muscle_texture",
+          "components": [
+            {
+              "componentType": "newscript",
+              "scriptName": "heartsectioncontroller",
+              "scriptDescription": "Manages the cross-sectional rendering states, color tint highlights of chambers, and enables visualization lines."
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "structuralLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.45,
+            -0.6
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Anatomy of the Heart",
+              "color": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "fontSize": 32
+            }
+          ]
+        },
+        {
+          "prefab": "muscleHighlightPrefab",
+          "name": "myocardiumHighlight",
+          "parent": "heartModel",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.01,
+            1.01,
+            1.01
+          ],
+          "enabled": false,
+          "texture": "heart_muscle_texture",
+          "color": [
+            1,
+            1,
+            1,
+            0.5
+          ]
+        },
+        {
+          "prefab": "anatomicalPointerPrefab",
+          "name": "chamberPointer",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.1,
+            -0.6
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_intro_chambers",
+          "audioClip": "heart_intro_chambers",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "structuralLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "The Four Chambers",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 32
+                }
+              ]
+            },
+            {
+              "target": "heartModel",
+              "components": [
+                {
+                  "componentType": "pointerReceiver",
+                  "draggable": false,
+                  "kinematicWhileIdle": true,
+                  "faceWhileDragging": false,
+                  "matchWallWhileDragging": false,
+                  "invertForward": false
+                }
+              ]
+            },
+            {
+              "target": "chamberPointer",
+              "position": [
+                -0.05,
+                1.12,
+                -0.55
+              ],
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "pointerReceiver",
+                  "draggable": false,
+                  "kinematicWhileIdle": true,
+                  "faceWhileDragging": false,
+                  "matchWallWhileDragging": false,
+                  "invertForward": false
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Introduction of the four heart chambers. The main heart model is displayed and a text label appears.",
+          "narration": "Welcome to the virtual anatomy lab. Today, we will explore the internal structures of the human heart. The heart is a muscular dual-pump divided into four chambers. Let's start with the receiving chambers: the right atrium and the left atrium, situated at the top. Below them are the pumping chambers: the right ventricle and the left ventricle. Notice how the chambers are separated by muscular walls to prevent mixing of blood."
+        },
+        {
+          "clipName": "clip1_great_vessels",
+          "audioClip": "heart_great_vessels",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "structuralLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Great Vessels of the Heart",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 32
+                }
+              ]
+            },
+            {
+              "target": "heartModel",
+              "eulerAngles": [
+                0,
+                45,
+                0
+              ]
+            },
+            {
+              "target": "chamberPointer",
+              "position": [
+                0.03,
+                1.25,
+                -0.57
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                45
+              ],
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Introduce the major blood vessels entering and exiting the heart. Move the pointer to show the aorta and upper vena cava.",
+          "narration": "Connected to these chambers are the major blood vessels. Deoxygenated blood returns from the body via the Superior and Inferior Vena Cava into the right atrium. Once oxygenated by the lungs, blood enters the left atrium via the Pulmonary Veins. To pump blood out, the right ventricle ejects blood into the Pulmonary Trunk, while the massive Left Ventricle pumps blood into the Aorta to supply the entire systemic circulation."
+        },
+        {
+          "clipName": "clip2_myocardium_thickness",
+          "audioClip": "heart_myocardium_thickness",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "structuralLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Myocardium: Left vs. Right Ventricle",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 32
+                }
+              ]
+            },
+            {
+              "target": "chamberPointer",
+              "enabled": false
+            },
+            {
+              "target": "myocardiumHighlight",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Highlight the muscular ventricular walls to compare myocardium thickness between the left and right ventricles.",
+          "narration": "Take a close look at the muscular walls of both ventricles, known as the myocardium. Notice how the myocardium of the Left Ventricle is significantly thicker than that of the Right Ventricle. Why is this? The right ventricle only needs to generate enough pressure to pump blood to the nearby lungs in the low-resistance pulmonary circuit. In contrast, the left ventricle must generate tremendous pressure to force blood through the vast systemic circuit of the entire body."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Blood Circulation and Valve Mechanics",
+      "description": "Trace the pathway of blood through the pulmonary and systemic circuits while observing valve mechanics.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Trace the sequential path of blood through both loops of the cardiovascular system.",
+        "Identify the names, types, and locations of the four heart valves.",
+        "Describe how pressure gradients cause the valves to open and close to maintain one-way circulation."
+      ],
+      "instructions": [
+        "Watch the blue flow lines to trace deoxygenated blood to the lungs.",
+        "Watch the red flow lines to trace oxygenated blood through the systemic vessels.",
+        "Observe the closing mechanics of the AV and semilunar valves during contraction."
+      ],
+      "objects": [
+        {
+          "prefab": "heartValvesModelPrefab",
+          "name": "heartValvesModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.1,
+            -0.6
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "texture": "heart_muscle_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "valveLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.45,
+            -0.6
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Blood Flow and Valves",
+              "color": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "fontSize": 32
+            }
+          ]
+        },
+        {
+          "prefab": "blueFlowParticlesPrefab",
+          "name": "deoxygenatedFlow",
+          "parent": "heartValvesModel",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "newscript",
+              "scriptName": "blueflowparticlescontroller",
+              "scriptDescription": "Manages blue particle flow velocities and emission rates to simulate blood movement through the right side of the heart."
+            }
+          ]
+        },
+        {
+          "prefab": "redFlowParticlesPrefab",
+          "name": "oxygenatedFlow",
+          "parent": "heartValvesModel",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "newscript",
+              "scriptName": "redflowparticlescontroller",
+              "scriptDescription": "Manages red particle flow velocities and emission rates to simulate blood movement through the left side of the heart."
+            }
+          ]
+        },
+        {
+          "prefab": "valveRingHighlightPrefab",
+          "name": "valveIndicatorRing",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.1,
+            -0.6
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_valves_intro",
+          "audioClip": "valves_intro_backflow",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "valveLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "The Cardiac Valves",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 32
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Introduction to the four heart valves. Display the valve model and general label.",
+          "narration": "Now let's examine the four heart valves. Valves are critical structures that act as one-way doors, ensuring blood flows in only one direction and preventing backward flow, or regurgitation. There are two types: atrioventricular valves between the chambers, and semilunar valves between the ventricles and great vessels."
+        },
+        {
+          "clipName": "clip1_pulmonary_loop",
+          "audioClip": "pulmonary_circuit_path",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "valveLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Pulmonary Circuit (Deoxygenated)",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 32
+                }
+              ]
+            },
+            {
+              "target": "deoxygenatedFlow",
+              "enabled": true
+            },
+            {
+              "target": "valveIndicatorRing",
+              "position": [
+                -0.03,
+                1.12,
+                -0.58
+              ],
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Trace the path of deoxygenated blood through the pulmonary circuit. Enable blue flow particles and highlight the right-side valves.",
+          "narration": "Let's trace the path of deoxygenated blood returning from the body. It enters the Right Atrium, then passes through the Tricuspid Valve\u2014the right-side atrioventricular valve\u2014into the Right Ventricle. During contraction, the ventricle pumps this blood through the Pulmonary Semilunar Valve into the Pulmonary Arteries, carrying it to the lungs to receive oxygen. This loop is known as the Pulmonary Circuit."
+        },
+        {
+          "clipName": "clip2_systemic_loop",
+          "audioClip": "systemic_circuit_path",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "valveLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Systemic Circuit (Oxygenated)",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 32
+                }
+              ]
+            },
+            {
+              "target": "deoxygenatedFlow",
+              "enabled": false
+            },
+            {
+              "target": "oxygenatedFlow",
+              "enabled": true
+            },
+            {
+              "target": "valveIndicatorRing",
+              "position": [
+                0.03,
+                1.12,
+                -0.56
+              ]
+            }
+          ],
+          "changeMeaning": "Trace the path of oxygenated blood through the systemic circuit. Disable blue flow, enable red flow, and highlight left-side valves.",
+          "narration": "Once oxygenated by the lungs, blood returns via Pulmonary Veins to the Left Atrium. It then passes through the Mitral, or Bicuspid Valve, into the Left Ventricle. The highly muscular left ventricle then powerfully ejects this blood through the Aortic Semilunar Valve into the Aorta, which distributes oxygenated blood throughout the tissues of the body. This is the Systemic Circuit."
+        },
+        {
+          "clipName": "clip3_preventing_backflow",
+          "audioClip": "valve_dynamics_closing",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "valveLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Preventing Backflow",
+                  "color": [
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "fontSize": 32
+                }
+              ]
+            },
+            {
+              "target": "deoxygenatedFlow",
+              "enabled": true
+            },
+            {
+              "target": "oxygenatedFlow",
+              "enabled": true
+            },
+            {
+              "target": "valveIndicatorRing",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "Demonstrate both pathways and explain valve dynamics during ventricular contraction. Turn on both flows and pulse the scale of the valves.",
+          "narration": "How do these valves prevent backflow? When the ventricles contract during ventricular systole, the high pressure forces the Tricuspid and Mitral valves to snap shut, preventing blood from going back into the atria. At the same time, the Semilunar valves are pushed open. When the ventricles relax, backpressure in the Aorta and Pulmonary trunk snaps the Semilunar valves shut, preventing blood from draining back into the ventricles. This exquisite mechanical synchronization maintains continuous, forward blood flow."
+        }
+      ]
+    }
+  ]
+}
