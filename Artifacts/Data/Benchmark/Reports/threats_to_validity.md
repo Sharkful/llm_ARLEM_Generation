@@ -22,7 +22,7 @@ descriptive of limitations, not a results doc.
 ## 1. Structured-output enforcement is not uniform across providers
 
 Each provider reaches a valid `Lab` by a different mechanism. See
-`create_instructor_client` in `Code/Testing/benchmark.py`:
+`create_instructor_client` in `Code/Benchmark/benchmark.py`:
 
 | Provider | Instructor mode | How the schema is enforced |
 |---|---|---|

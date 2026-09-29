@@ -35,7 +35,13 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
 
     # ── Anthropic ─────────────────────────────────────────────────────────
     "claude-opus-4-8":          {"input":  5.00, "output": 25.00},   # verified 2026-07 (current flagship Opus)
-    "claude-sonnet-5":          {"input":  3.00, "output": 15.00},   # verified 2026-07 (current mid; intro $2/$10 thru 2026-08-31 — standard rate stored)
+    # 2026-08-14: Anthropic made the $2/$10 introductory rate permanent, so it is
+    # now the standard rate — not a discount with an expiry. Was stored at the
+    # $3/$15 standard rate on the assumption the intro would lapse 2026-08-31.
+    # Note this is *also* the as-billed rate for every run in the repo: the
+    # wave-2 sweep (2026-07-10) ran inside the old intro window, so $2/$10 is
+    # correct both as "what it cost" and "what it costs now".
+    "claude-sonnet-5":          {"input":  2.00, "output": 10.00},   # current mid
     "claude-sonnet-4-6":        {"input":  3.00, "output": 15.00},   # verified 2026-07: now legacy (superseded by Sonnet 5); dropped from roster
     # Haiku 4.5 — keyed by its full versioned model ID used in API calls
     "claude-haiku-4-5-20251001": {"input":  1.00, "output":  5.00},   # verified 2026-07 (current small)

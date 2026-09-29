@@ -39,13 +39,19 @@ YAML lab desc ──► prompt_builder ──► (prompt, response_model)
 | Path | Role |
 | --- | --- |
 | `Code/Schemas/` | **Pydantic schemas only** — the response models. No I/O, no LLM calls. |
-| `Code/Testing/` | The benchmark runner, prompt builder, metrics, report builders. |
+| `Code/Benchmark/` | **Generation only** — the runner, prompt builder, model registry, structural metrics. The only layer that calls an LLM. |
+| `Code/Benchmark/probes/` | One-shot provider/schema diagnostics. Not part of the pipeline; kept for re-testing a provider quirk. |
+| `Code/Analysis/` | **Everything downstream of a run.** `benchmark_dataframe.py` (the loader), plus curation utilities (`reprice_runs.py`, `quarantine_infra_failures.py`). |
+| `Code/Analysis/reports/` | Notebook/HTML/CSV report builders + their docs. |
+| `Code/Analysis/figures/` | Publication figures and the LaTeX tables they emit. `figure_style.py` holds the shared palette, rcParams, and custom marks. |
 | `Code/Data Processing/` | Legacy Unity-JSON → v2.0 converters (`convert_lab_json.py`, `prototype_json_patcher.py`). Separate concern from benchmarking. |
 | `tracking/` | **At repo root, not under Code/.** Token/retry/cost tracking, copied from a feature branch. |
 | `Artifacts/Lab Descriptions/` | `*_lab.yaml` topic source-of-truth (six fields). `Example/` subfolder is excluded by `--all-labs`. |
 | `Artifacts/Data/Benchmark/` | Run artifacts: `Outputs/` (generated JSON), `Metrics/` (`*_metrics.json`), `prompts/`, `suite_results_*.json`, and `Reports/`. |
 | `Artifacts/Data/Errors/` | Per-run `_errors.txt` (per-attempt validation/API errors). |
-| `Artifacts/Data/Benchmark/Reports/` | Generated notebooks/HTML/CSV from the report builders. |
+| `Artifacts/Data/Benchmark/Reports/` | **Exploration layer** — generated notebooks/HTML/CSV from the report builders. No `.tex`. |
+| `Artifacts/Paper/figures/` | **Publication layer** — `.pdf`/`.png` written by `Code/Analysis/figures/`. |
+| `Artifacts/Paper/tables/` | **Publication layer** — every `.tex` table, hand-authored and generated alike. |
 
 ---
 
@@ -69,7 +75,7 @@ Consequences:
   `prompt_builder.build_prompt`) so a schema module loads only when used. There are
   no longer per-provider variants — one schema serves every provider.
 
-**Module dependency arrows (within `Code/Testing/`):**
+**Module dependency arrows (within `Code/Benchmark/`):**
 
 ```
 prompt_builder.py   ← pure, imports nothing project-local (avoids a cycle)
@@ -78,6 +84,28 @@ benchmark_config.py ── imports Level/Structure from prompt_builder
         ▲
 benchmark.py ── imports both, plus lab_metrics, plus tracking
 ```
+
+**Across the two packages.** The dependency runs one way only — `Code/Benchmark/`
+never imports `Code/Analysis/`:
+
+```
+Code/Benchmark/  (generation)
+        │  writes Metrics/*.json + Outputs/*.json
+        ▼
+Code/Analysis/benchmark_dataframe.py  ── load_runs()
+        │        └─ reaches back into Code/Benchmark for
+        │           benchmark_config.MODELS + lab_metrics.analyze_assets
+        ├──────────────► reports/build_*_report.py   → Reports/*.{ipynb,html,csv}
+        └──────────────► figures/*.py                → Paper/{figures,tables}/
+                              └─ figure_style.py (shared tokens + marks)
+```
+
+Two `sys.path` inserts keep the flat-import house style working across the split:
+`benchmark_dataframe.py` adds `Code/Benchmark/`, and the report builders add
+`Code/Analysis/`. Files nested one level deeper (`reports/`, `figures/`, `probes/`)
+compute the repo root as `Path(__file__).resolve().parents[3]`, not
+`.parent.parent.parent` — check this first if a moved script writes to the wrong
+place.
 
 `prompt_builder` is deliberately **dependency-free of `benchmark_config`** to
 break the circular import — it takes `spec_type` as a plain `str`, which works

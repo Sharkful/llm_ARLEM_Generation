@@ -40,35 +40,55 @@ python "Code/Data Processing/convert_lab_json.py"
 jupyter notebook "Code/Examples/ARLEM_Test.ipynb"
 
 # Benchmark with a free-form topic (legacy path, single prompt template)
-python "Code/Testing/benchmark.py" --model gpt-4o-mini
-python "Code/Testing/benchmark.py" --model gpt-4o-mini claude-haiku-4.5 gemini-2.5-flash \
+python "Code/Benchmark/benchmark.py" --model gpt-4o-mini
+python "Code/Benchmark/benchmark.py" --model gpt-4o-mini claude-haiku-4.5 gemini-2.5-flash \
     --topic "Human Heart Anatomy"
 
 # Benchmark with a YAML lab description at a specificity level (L1, L3, L4; L2 retired)
-python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L3
-python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab vsepr_molecular_geometry --level L4
+python "Code/Benchmark/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L3
+python "Code/Benchmark/benchmark.py" --model gpt-4o-mini --lab vsepr_molecular_geometry --level L4
 
 # Switch output structure for L3-L4 (L1 ignores this)
 #   single-module           - one DemoModule, many clips
 #   multi-module (default)  - Lab with one DemoModule per scene
 #   module-only             - bare DemoModule, no Lab wrapper
-python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon \
+python "Code/Benchmark/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon \
     --level L3 --structure multi-module
 
 # Benchmark ARLEM specs via the YAML path (L1, L3, L4)
-python "Code/Testing/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L3 --spec arlem
+python "Code/Benchmark/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L3 --spec arlem
 
 # Sweep multiple output formats together (--spec takes 1, 2, or all 3 formats)
-python "Code/Testing/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon --level L3 \
+python "Code/Benchmark/benchmark.py" --model gpt-4o-mini --lab phases_of_the_moon --level L3 \
     --spec json_lab arlem arlem_simple
 
 # Run a pre-defined suite (quick = cheap models, full = all models)
-python "Code/Testing/benchmark.py" --suite quick
-python "Code/Testing/benchmark.py" --suite full
+python "Code/Benchmark/benchmark.py" --suite quick
+python "Code/Benchmark/benchmark.py" --suite full
 
 # List registered models / available lab YAMLs
-python "Code/Testing/benchmark.py" --list-models
-python "Code/Testing/benchmark.py" --list-labs
+python "Code/Benchmark/benchmark.py" --list-models
+python "Code/Benchmark/benchmark.py" --list-labs
+```
+
+Analysis and reporting (reads saved run artifacts, no LLM calls):
+
+```bash
+# Notebook/HTML reports -> Artifacts/Data/Benchmark/Reports/
+python "Code/Analysis/reports/build_statistics_report.py" --since 00000000 --label all
+python "Code/Analysis/reports/build_summary_report.py"    --since 00000000 --label all
+
+# Publication figures -> Artifacts/Paper/figures/ (+ tables/)
+python "Code/Analysis/figures/cost_figures.py"
+python "Code/Analysis/figures/timing_figures.py"
+python "Code/Analysis/figures/cost_by_model_figures.py"
+
+# Re-cost a run table against current tracking/pricing.py rates
+python "Code/Analysis/reprice_runs.py"     "Artifacts/Data/Benchmark/Reports/benchmark_runs_wave2.csv" --dry-run
+
+# Render any figure script against a repriced table, as _repriced siblings
+CSV="Artifacts/Data/Benchmark/Reports/benchmark_runs_wave2_repriced.csv"
+python "Code/Analysis/figures/cost_figures.py" --runs-csv "$CSV" --suffix _repriced
 ```
 
 There is no test runner or linter configured. Validation is done via Pydantic model instantiation and Jupyter notebooks.
@@ -94,7 +114,19 @@ Benchmark runs:
   → Artifacts/Data/Benchmark/prompts/ (deduped prompt artifacts, one per
                                        lab × level × spec × structure tuple)
   → Artifacts/Data/Errors/   ← instructor error logs
+
+Analysis (everything below reads run artifacts; nothing here calls an LLM):
+  Artifacts/Data/Benchmark/Metrics/ + Outputs/
+  → Code/Analysis/benchmark_dataframe.py  (load_runs → one tidy row per run)
+  → Code/Analysis/reports/   → Artifacts/Data/Benchmark/Reports/ (ipynb, html, csv)
+  → Code/Analysis/figures/   → Artifacts/Paper/figures/ (pdf, png)
+                             → Artifacts/Paper/tables/  (tex)
 ```
+
+**Reports/ vs Paper/**: `Artifacts/Data/Benchmark/Reports/` is the exploration
+layer (notebooks, HTML, CSV). `Artifacts/Paper/` is the publication layer —
+everything the LaTeX document `\includegraphics`es or `\input`s, figures and
+tables alike, hand-authored and generated together.
 
 ### Key Models
 
@@ -115,7 +147,10 @@ Benchmark runs:
 - Cross-validation: `ARLEMScenario.validate_activity_flows()` checks activity actions against workplace resources
 - `Tangible` subtypes (Thing/Place/Person) use discriminated unions on `type` field
 
-### Benchmark System (`Code/Testing/`)
+### Benchmark System (`Code/Benchmark/`)
+
+Generation only — this is the one layer that calls an LLM. Post-run analysis
+lives in `Code/Analysis/` (below) and never imports the other way around.
 
 **`benchmark.py`** — CLI runner. Creates instructor clients per provider, wraps them with `InstructorTracker`, generates a lab, analyzes output, saves results. Supports two prompt-construction paths:
 - Legacy: `--topic "..."` uses the templates in `benchmark_config.py`
@@ -136,7 +171,7 @@ Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `A
 
 **`lab_metrics.py`** — Post-generation structural analysis:
 - `analyze_json_lab()` — counts objects, clips, components, text labels, object changes, prefab diversity. Shaped for the full `Lab` schema; reports zeros for `LabOutline` outputs (L1 runs)
-- `analyze_assets()` — counts **novel assets** the model invented (prefabs/textures not in the moon-lab library, deduped per lab — what we'd have to author) plus audio volume. Holds the known-asset lists (`KNOWN_TEXTURES`/`KNOWN_PREFABS`), kept in sync with the `SceneObject.prefab`/`.texture` descriptions in `json_lab.py`; returns `novel_prefab_names`/`novel_texture_names` for qualitative review. Not stored in metrics files — computed at dataframe-load time from saved outputs. See `Code/Testing/STATISTICS_REPORT.md`
+- `analyze_assets()` — counts **novel assets** the model invented (prefabs/textures not in the moon-lab library, deduped per lab — what we'd have to author) plus audio volume. Holds the known-asset lists (`KNOWN_TEXTURES`/`KNOWN_PREFABS`), kept in sync with the `SceneObject.prefab`/`.texture` descriptions in `json_lab.py`; returns `novel_prefab_names`/`novel_texture_names` for qualitative review. Not stored in metrics files — computed at dataframe-load time from saved outputs. See `Code/Analysis/reports/STATISTICS_REPORT.md`
 - `analyze_arlem()` — counts things, places, actions, activates/deactivates, triggers, POIs
 
 **`tracking/`** — Token/retry tracking module (copied from `feature/instructor-tracking`):
@@ -149,6 +184,43 @@ Benchmark outputs go to `Artifacts/Data/Benchmark/`:
 - `{model}_{spec}[_{level}]_{timestamp}_metrics.json` — full tracking record (includes `prompt_file` reference for YAML-driven runs)
 - `suite_results_{timestamp}.json` — combined results across all suite runs
 - `prompts/{lab}_{level}_{spec}[_{structure}].txt` — assembled user prompt, written once per unique tuple
+
+`probes/` holds one-shot provider/schema diagnostics (`probe_gemini_unions.py`,
+`probe_unified_schema.py`, `probe_arlem_unified.py`). They are not part of the
+pipeline — they exist to re-test a provider quirk on demand.
+
+### Analysis System (`Code/Analysis/`)
+
+Everything downstream of a run. Reads `Metrics/` + `Outputs/`; never calls an LLM.
+
+**`benchmark_dataframe.py`** — the shared loader. `load_runs()` flattens every
+`*_metrics.json` into one tidy DataFrame (one row per run) and re-reads each paired
+`Outputs/*_output.json` for novel-asset counts. It reaches back into
+`Code/Benchmark/` for `benchmark_config.MODELS` and `lab_metrics.analyze_assets`
+via a `sys.path` insert — the only cross-package import in the codebase.
+
+**`reprice_runs.py`** — re-costs a run CSV against current `tracking/pricing.py`
+rates, written as a `_repriced` sibling so originals stay put.
+**`quarantine_infra_failures.py`** — moves infra-caused failures out of the
+live run set.
+
+**`reports/`** — `build_statistics_report.py` (structural + cost/token/time
+aggregates) and `build_summary_report.py` (which models/levels generated at all).
+Both emit `.ipynb` + `.html` (+ `.csv`) into `Artifacts/Data/Benchmark/Reports/`.
+See `STATISTICS_REPORT.md` / `SUMMARY_REPORT.md` alongside them.
+
+**`figures/`** — publication assets, written to `Artifacts/Paper/`:
+- `figure_style.py` — shared design tokens, `set_style()` rcParams, and the two
+  custom marks (`rounded_bar`, `draw_provider_brackets`). Change the palette or
+  `MODEL_ORDER` here and every figure moves together
+- `cost_figures.py` — `wave2_tokens_cost_{mean,total}`: stacked tokens-over-cost panels
+- `timing_figures.py` — the four `wave2_time_*` / `wave2_latency_*` figures, plus
+  `generation_time_tables.tex`
+- `cost_by_model_figures.py` — `cost_tokens_by_model{,_L1}`: per-model means over
+  the L3/L4 base slice and the L1 slice
+
+All three figure scripts take `--runs-csv` / `--suffix` so a repriced table can be
+rendered as `_repriced` siblings without disturbing the originals.
 
 ### Data Processing Transformations (`Code/Data Processing/`)
 

@@ -1,0 +1,39 @@
+% Comparison of Code/Schemas/arlem_full.py vs. Code/Schemas/arlem_simplified.py
+% Requires: \usepackage{booktabs} \usepackage{tabularx} \usepackage{url}
+% (\path{} breaks long dotted/slashed field names at punctuation instead of
+%  overflowing the narrow first column; plain identifiers stay \texttt{}.)
+\begin{table}[htbp]
+    \centering
+    \small
+    \caption{Elements removed from the full ARLEM schema (\texttt{arlem\_full.py}) to produce the simplified schema (\texttt{arlem\_simplified.py}).}
+    \label{tab:arlem-simplified-diff}
+    \begin{tabularx}{\linewidth}{@{} p{0.27\linewidth} X @{}}
+        \toprule
+        \textbf{Removed element} & \textbf{Note} \\
+        \midrule
+        \multicolumn{2}{@{}l}{\textit{Workplace}} \\
+        \texttt{Person}              & Drops the user/instructor tangible subtype (\texttt{twitter}, \texttt{mbox}, \texttt{persona}); only \texttt{Thing}/\texttt{Place} tangibles remain. \\
+        \texttt{Sensor}, \texttt{SensorData} & Removes IoT sensor connectivity (URL, auth, data-stream variables). \\
+        \texttt{Device}              & Removes hardware/device modeling (HoloLens, tablet, MQTT topic, auth). \\
+        \texttt{App}                 & Removes external widget/app launch integration. \\
+        \texttt{Warning}             & Removes ISO 7010 hazard-sign augmentations. \\
+        \path{Detectable.sensor}     & Drops the tracking-vs-mapping sensor subsystem choice; \texttt{type} alone selects marker/anchor. \\
+        \path{persons/sensors/devices/apps/warnings} & Environment is limited to things, places, detectables, primitives, and predicates. \\
+        \addlinespace
+        \multicolumn{2}{@{}l}{\textit{Activity}} \\
+        \texttt{Message}             & Removes device/person/sensor messaging commands from action flows. \\
+        \texttt{IfLogic}             & Removes xAPI-conditional branching logic from action flows. \\
+        \path{Activate.viewport/option} & Drops HUD-attachment and configuration-option (e.g.\ pointer direction) controls. \\
+        \path{Deactivate.viewport}   & Same HUD-viewport removal as \texttt{Activate}. \\
+        \texttt{Trigger.mode} (narrowed) & \{click, voice, detect, sensor\} narrowed to \{click, detect\}. \\
+        \path{Trigger.type/viewport/key/value/operator} & Drops IoT sensor-threshold triggering entirely. \\
+        \path{ActionFlow.messages/if_logic} & Action flows can only activate/deactivate augmentations, not send messages or branch conditionally. \\
+        \path{Action.viewport/type/device/location/predicate} & Steps lose visual-area/styling, device targeting, place binding, and xAPI verb override. \\
+        \texttt{Activity.language}   & Drops the ISO~639-1 language code and its validator; single implicit language. \\
+        \addlinespace
+        \multicolumn{2}{@{}l}{\textit{Cross-validation (\texttt{ARLEMScenario})}} \\
+        \texttt{validate\_scenario} checks & No longer checks \texttt{Action.location}/\texttt{device}/\texttt{predicate} against workplace places, devices, and predicates (fields removed). \\
+        \texttt{validate\_activity\_flows} checks & Drops the \texttt{Message} target/launch validation helper entirely; \texttt{Person} removed from the tangible lookup map; augmentation checks no longer consider a \texttt{warning} type. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
