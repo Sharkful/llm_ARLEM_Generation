@@ -11,7 +11,7 @@ Five figures, two LaTeX tables, written to Artifacts/Paper/.
     wave2_json_lab_size          size against the human-authored moon lab
     wave2_authoring_burden       novel assets + prefab reuse collapse
     wave2_arlem_validity         the OpenAI zero-activate defect
-    wave2_specificity_elasticity how much the Script level buys, per spec family
+    wave2_specificity_elasticity what the Script level adds, format against format
     wave2_arlem_floor            how often models stop at the stated minimum
 
 Regenerate:
@@ -36,7 +36,7 @@ or voice/sensor triggers, so a zero in those columns is a schema fact, not a
 model behaviour. Figures 3 and 5 pool the two specs because the fields they
 read (``activates``, things/places/actions) exist identically in both, and the
 two prompts carry identical minimum-count wording. Figure 4 uses full ARLEM
-alone, since it walks fields the simplified schema drops.
+alone, to keep one schema per panel.
 
 **Gemini 2.5 Flash-Lite is kept, with an explicit n.** It has 0 successful full-
 ARLEM runs, 3 arlem_simple and 4 json_lab Objectives/Script. Dropping it would hide the
@@ -558,72 +558,141 @@ def fig_arlem_validity(df: pd.DataFrame) -> plt.Figure:
 
 # ---- Figure 4: specificity elasticity -------------------------------
 
-D_JSON = [("num_modules", "modules"), ("num_clips", "clips"),
-          ("num_objects", "objects"), ("num_components", "components"),
-          ("num_object_changes", "object changes"),
-          ("num_text_labels", "text labels"), ("novel_prefabs", "novel prefabs")]
-D_ARLEM = [("num_predicates", "predicates"), ("num_actions", "actions"),
-           ("total_triggers", "triggers"), ("total_pois", "POIs"),
-           ("num_things", "things"), ("num_places", "places"),
-           ("num_detectables", "detectables")]
+# The two formats name their parts differently, so the figure compares only
+# the parts that correspond, row-aligned across the panels. ``None`` holds a
+# slot with no counterpart.
+#
+# ARLEM rows count what the actions *show*, not what the workplace declares.
+# The workplace ``primitives`` list is a menu of five media types that every
+# run fills near-completely, so it cannot register growth; an augmentation
+# reaches the learner only when an action's enter/exit flow activates it, as
+# either a predicate (a wrapped, reusable asset) or a primitive used directly.
+# Both routes are counted, by the media type they resolve to. These counts are
+# not in the run CSV -- see ``add_activation_counts``.
+D_ROWS = [
+    # (json_lab column, label)            (arlem column, label)
+    (("num_objects", "objects"),         ("shown_all", "augmentations shown")),
+    (None,                               ("shown_animation", "  animations")),
+    (("num_clips", "clips"),             ("num_actions", "action steps")),
+]
+
+# Every text size in the figure, in one place for tuning legibility.
+D_FONT = {"suptitle": 16, "legend": 12, "panel": 13, "rows": 12,
+          "ratio": 12, "ratio_header": 9.5, "xticks": 10.5, "xlabel": 11}
+
+METRICS_DIR = ROOT / "Artifacts" / "Data" / "Benchmark" / "Metrics"
+OUTPUTS_DIR = ROOT / "Artifacts" / "Data" / "Benchmark" / "Outputs"
 
 
-def _elasticity_panel(ax, data, metrics, title):
-    """Slope chart on a log x-axis, so equal slopes are equal growth ratios."""
-    rows = []
-    for col, label in metrics:
-        lo = data[data["ok"] & (data["level"] == "L3")][col].mean()
-        hi = data[data["ok"] & (data["level"] == "L4")][col].mean()
-        rows.append((label, lo, hi, hi / lo if lo else np.nan))
-    rows.sort(key=lambda r: r[3])
+def add_activation_counts(ar: pd.DataFrame) -> pd.DataFrame:
+    """Per-run counts of what ARLEM actions activate, read from saved outputs.
 
-    for y, (label, lo, hi, ratio) in enumerate(rows):
-        ax.plot([lo, hi], [y, y], color=INK_MUTED, linewidth=1.4, zorder=2,
+    ``shown_all`` counts every activation of a predicate, primitive or warning
+    (activations of type ``action`` launch another step and show nothing).
+    ``shown_animation`` splits out those whose media type is animation (how 3D
+    models are displayed): a predicate resolves through its workplace ``type``,
+    a direct primitive activation is its own type. Runs are matched to their
+    output file through the metrics record, on (model, timestamp).
+    """
+    counts = {}
+    for m in METRICS_DIR.glob("*_arlem*_metrics.json"):
+        rec = json.loads(m.read_text(encoding="utf-8"))
+        out = OUTPUTS_DIR / (m.name[: -len("_metrics.json")] + "_output.json")
+        if not rec.get("success") or not out.exists():
+            continue
+        spec = json.loads(out.read_text(encoding="utf-8"))
+        pred_type = {p.get("id"): p.get("type") for p in
+                     (spec.get("workplace") or {}).get("predicates") or []}
+        n = {"shown_all": 0, "shown_animation": 0}
+        for action in (spec.get("activity") or {}).get("actions") or []:
+            for flow in ("enter", "exit"):
+                for a in (action.get(flow) or {}).get("activates") or []:
+                    kind = a.get("type")
+                    if kind == "action":
+                        continue
+                    n["shown_all"] += 1
+                    media = (pred_type.get(a.get("augmentation"))
+                             if kind == "predicate" else a.get("augmentation"))
+                    if media == "animation":
+                        n["shown_animation"] += 1
+        counts[(rec["model"], rec["timestamp"])] = n
+    keys = list(zip(ar["model"], ar["timestamp"]))
+    for col in ("shown_all", "shown_animation"):
+        ar[col] = [counts.get(k, {}).get(col, np.nan) for k in keys]
+    return ar
+
+
+def _level_mean(data, level, col):
+    return data[data["ok"] & (data["level"] == level)][col].mean()
+
+
+def _elasticity_panel(ax, data, rows, title):
+    """Objectives-to-Script dumbbells on a linear axis, one per row slot."""
+    for y, row in enumerate(rows):
+        if row is None:
+            continue
+        col, _ = row
+        lo, hi = _level_mean(data, "L3", col), _level_mean(data, "L4", col)
+        ax.plot([lo, hi], [y, y], color=INK_MUTED, linewidth=1.6, zorder=2,
                 solid_capstyle="round")
         for val, lv in ((lo, "L3"), (hi, "L4")):
-            ax.plot(val, y, marker="o", markersize=8, zorder=3,
+            ax.plot(val, y, marker="o", markersize=10, zorder=3,
                     markerfacecolor=LEVEL_COLOR[lv], markeredgecolor=SURFACE,
                     markeredgewidth=1.5, linestyle="none")
-        ax.text(1.02, y, f"{ratio:.2f}\u00d7", transform=ax.get_yaxis_transform(),
-                ha="left", va="center", fontsize=8.5, color=INK,
-                fontweight="bold" if ratio >= 2 else "normal", clip_on=False)
+        ratio = hi / lo if lo else np.nan
+        ax.text(1.03, y, f"{ratio:.2f}×", transform=ax.get_yaxis_transform(),
+                ha="left", va="center", fontsize=D_FONT["ratio"], color=INK,
+                clip_on=False)
+    ax.text(1.03, -0.55, "change\nObjectives\n→ Script",
+            transform=ax.get_yaxis_transform(), ha="left", va="bottom",
+            fontsize=D_FONT["ratio_header"], color=INK_MUTED, style="italic",
+            clip_on=False)
 
-    ax.set_yticks(range(len(rows)))
-    ax.set_yticklabels([r[0] for r in rows], fontsize=8.5)
-    ax.set_ylim(-0.7, len(rows) - 0.3)
-    ax.set_xscale("log")
-    ax.set_xlim(1.6, 72)
-    ax.set_xticks([2, 5, 10, 20, 50])
-    ax.set_xticklabels(["2", "5", "10", "20", "50"], fontsize=8.5)
-    ax.set_xlabel("mean count per generated specification (log scale)", fontsize=8.5)
+    ax.set_yticks([y for y, r in enumerate(rows) if r is not None])
+    ax.set_yticklabels([r[1] for r in rows if r is not None],
+                       fontsize=D_FONT["rows"])
+    ax.tick_params(axis="y", length=0, labelleft=True)
+    ax.tick_params(axis="x", labelsize=D_FONT["xticks"])
+    ax.set_xlabel("mean count across generations", fontsize=D_FONT["xlabel"])
     ax.set_axisbelow(True)
     ax.xaxis.grid(True, color=GRID, linewidth=0.6, zorder=0)
     ax.yaxis.grid(False)
     for side in ("top", "right", "left"):
         ax.spines[side].set_visible(False)
     ax.spines["bottom"].set_color(GRID)
-    ax.tick_params(axis="y", length=0)
-    ax.set_title(title, fontsize=9.5, color=INK, loc="left", pad=8)
+    ax.set_title(title, fontsize=D_FONT["panel"], fontweight="bold", color=INK, loc="left",
+                 pad=10)
 
 
 def fig_specificity_elasticity(df: pd.DataFrame) -> plt.Figure:
-    fig, (ax_j, ax_a) = plt.subplots(1, 2, figsize=(11.0, 5.6))
-    _elasticity_panel(ax_j, json_lab_slice(df), D_JSON,
-                      "json_lab  \u2014  Lab JSON")
-    _elasticity_panel(ax_a, arlem_slice(df, full_only=True), D_ARLEM,
-                      "arlem  \u2014  full ARLEM scenario")
+    # Not sharey: a shared y axis shares tick labels too, and each panel names
+    # its rows in its own format's terms. The limits are set on both instead.
+    fig, (ax_j, ax_a) = plt.subplots(1, 2, figsize=(11.0, 4.2), sharex=True)
+    _elasticity_panel(ax_j, json_lab_slice(df), [r[0] for r in D_ROWS],
+                      "Lab JSON")
+    ar = add_activation_counts(arlem_slice(df, full_only=True))
+    ok = ar[ar["ok"] & ar["level"].isin(["L3", "L4"])]
+    assert ok["shown_all"].notna().all(), "ARLEM run without a matching output"
+    _elasticity_panel(ax_a, ar,
+                      [r[1] for r in D_ROWS], "ARLEM")
+    # Shared linear axis, so a bar's length compares across the two formats.
+    ax_j.set_xlim(0, 45)
+    for ax in (ax_j, ax_a):
+        ax.set_ylim(len(D_ROWS) - 0.4, -0.6)
+        # Rule off the sequence row from the scene-content rows above it.
+        ax.axhline(len(D_ROWS) - 1.5, color=GRID, linewidth=0.8, zorder=1)
 
-    titles(fig, "What the detailed script buys, by target specification",
-           "Mean count per specification at the Objectives level (no script) and "
-           "the Script level (plus the full lesson script), pooled over all "
-           "models. On a log axis the slope "
-           "is the growth ratio, printed at the right.\nThe script roughly "
-           "doubles a Lab JSON but barely moves an ARLEM workplace: it lands "
-           "almost entirely in predicates and actions, leaving the environment "
-           "untouched.",
-           y=0.99, ysub=0.95)
-    level_legend(fig, y=0.998)
-    fig.tight_layout(rect=(0.02, 0.02, 0.955, 0.87), w_pad=6.0)
+    fig.suptitle("Changes in Output Caused by Increased Detail",
+                 fontsize=D_FONT["suptitle"], fontweight="bold", color=INK,
+                 x=0.5, ha="center", y=0.99)
+    handles = [plt.Line2D([], [], marker="o", linestyle="none", markersize=12,
+                          markerfacecolor=LEVEL_COLOR[lv],
+                          markeredgecolor=SURFACE, label=LEVEL_LABEL[lv])
+               for lv in ("L3", "L4")]
+    fig.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 0.925),
+               ncols=2, frameon=False, fontsize=D_FONT["legend"],
+               handletextpad=0.4, columnspacing=2.4)
+    fig.tight_layout(rect=(0.0, 0.0, 0.95, 0.86), w_pad=1.0)
     return fig
 
 
@@ -721,14 +790,17 @@ FIGURE_BLOCKS = [
     ("wave2_specificity_elasticity", "fig:specificity-elasticity",
      "Growth from the Objectives level (learning objectives, no script) to the "
      "Script level (plus the full lesson "
-     "script), pooled over all models. Counts are means; the axis is "
-     "logarithmic, so an equal slope is an equal growth ratio and the printed "
-     "multiplier reads directly off the line. The Lab JSON is elastic to "
-     "specificity \\textemdash{} modules $2.4\\times$, components $2.3\\times$, "
-     "objects $2.1\\times$, clips $2.0\\times$ \\textemdash{} while ARLEM is "
-     "nearly inelastic. The script's detail lands in ARLEM's predicates "
-     "($1.6\\times$) and actions ($1.3\\times$) and leaves the workplace "
-     "environment essentially unchanged (detectables $1.04\\times$)."),
+     "script), pooled over all models, for the parts of each format that "
+     "correspond. ARLEM rows count what the action flows activate \\textemdash{} "
+     "predicates and directly used primitives alike, split by media type "
+     "\\textemdash{} rather than what the workplace declares. Counts are means "
+     "on a shared linear axis. The script roughly doubles every Lab JSON count "
+     "(objects $2.05\\times$, clips $1.98\\times$). In ARLEM it grows the "
+     "augmentations shown by $1.67\\times$, driven by animations, the route "
+     "for 3D models ($1.86\\times$), while action steps grow only "
+     "$1.33\\times$. ARLEM means include the OpenAI runs, "
+     "which activate nothing (34 of 90), so they understate what the other "
+     "models show but not how it grows."),
     ("wave2_arlem_floor", "fig:arlem-floor",
      "How often a generated ARLEM scenario contains exactly the minimum the "
      "prompt asked for. Both ARLEM specifications carry identical wording "
