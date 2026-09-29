@@ -46,6 +46,9 @@ from benchmark_dataframe import load_runs
 df = load_runs(benchmark_dir=Path("Artifacts/Data/Benchmark_formative_202606-07"))
 ```
 
-Only `logs/`, `sweep_progress.log`, and this README are git-tracked (same
-policy as the live dir); the data directories exist on the machine that ran
-the sweeps.
+Git-tracked (same policy as the live dir): `Metrics/`, `Outputs/`, `prompts/`,
+`logs/`, `sweep_progress.log`, and this README. Not tracked: `suite_results_*.json`,
+`quarantine/`, and `Errors/`, which exist only on the machine that ran the
+sweeps. Failed formative runs are therefore not in the repository, except as
+rows in the formative-era CSVs under `Benchmark/Reports/`
+(`benchmark_runs.csv` for June, `benchmark_runs_final.csv` for the July sweep).

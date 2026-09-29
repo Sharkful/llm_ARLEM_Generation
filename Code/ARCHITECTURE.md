@@ -1,7 +1,7 @@
 # Code Map / Architecture Notes
 
 Orientation doc for working in this repo. CLAUDE.md has the project overview and
-run commands; [Testing/BENCHMARK.md](Testing/BENCHMARK.md) is the exhaustive
+run commands; [Benchmark/BENCHMARK.md](Benchmark/BENCHMARK.md) is the exhaustive
 `benchmark.py` CLI reference. **This file is the code map** — module
 relationships, the Pydantic patterns, the benchmark/tracking/report pipeline, and
 the cross-cutting gotchas that aren't obvious from any single file.
@@ -15,10 +15,12 @@ Read this first when picking up benchmark/model work.
 The project asks LLMs to emit a **structured AR lab spec** (JSON validated by
 Pydantic v2 via the `instructor` library), then measures how well each
 model/prompt does it. A *lab description* (YAML, six fields) is expanded into a
-*prompt* at one of four specificity *levels* (L1–L4), sent to a model wrapped in
-a *tracker* (tokens/cost/retries), and the returned object is *analyzed*
-(structural metrics). Everything is written to `Artifacts/Data/Benchmark/`, then
-two *report builders* roll the runs up into notebooks/HTML/CSV.
+*prompt* at one of three specificity *levels* (L1, L3, L4; L2 is retired) in
+one of three output formats (`json_lab`, `arlem`, `arlem_simple`). The prompt is
+sent to a model wrapped in a *tracker* (tokens/cost/retries), and the returned
+object is *analyzed* (structural metrics). Everything is written to
+`Artifacts/Data/Benchmark/`. Two *report builders* then roll the runs up into
+notebooks/HTML/CSV, and the figure scripts render the paper's figures and tables.
 
 ```
 YAML lab desc ──► prompt_builder ──► (prompt, response_model)
@@ -47,8 +49,9 @@ YAML lab desc ──► prompt_builder ──► (prompt, response_model)
 | `Code/Data Processing/` | Legacy Unity-JSON → v2.0 converters (`convert_lab_json.py`, `prototype_json_patcher.py`). Separate concern from benchmarking. |
 | `tracking/` | **At repo root, not under Code/.** Token/retry/cost tracking, copied from a feature branch. |
 | `Artifacts/Lab Descriptions/` | `*_lab.yaml` topic source-of-truth (six fields). `Example/` subfolder is excluded by `--all-labs`. |
-| `Artifacts/Data/Benchmark/` | Run artifacts: `Outputs/` (generated JSON), `Metrics/` (`*_metrics.json`), `prompts/`, `suite_results_*.json`, and `Reports/`. |
-| `Artifacts/Data/Errors/` | Per-run `_errors.txt` (per-attempt validation/API errors). |
+| `Artifacts/Data/Benchmark/` | Wave 2 run artifacts: `Outputs/` (generated JSON), `Metrics/` (`*_metrics.json`), `prompts/`, `logs/`, and `Reports/` are committed; `suite_results_*.json` and `quarantine/` are gitignored. |
+| `Artifacts/Data/Benchmark_formative_202606-07/` | Frozen pre-wave-2 archive, same layout. Do not mix with wave 2 (see its README). |
+| `Artifacts/Data/Errors/` | Per-run `_errors.txt` (per-attempt validation/API errors). Gitignored. |
 | `Artifacts/Data/Benchmark/Reports/` | **Exploration layer** — generated notebooks/HTML/CSV from the report builders. No `.tex`. |
 | `Artifacts/Paper/figures/` | **Publication layer** — `.pdf`/`.png` written by `Code/Analysis/figures/`. |
 | `Artifacts/Paper/tables/` | **Publication layer** — every `.tex` table, hand-authored and generated alike. |
@@ -160,8 +163,10 @@ volume; it's the source of truth for the known-asset lists.
 **Dual discriminator on components** (`json_lab.py`). Each component carries two
 literal fields kept in lockstep:
 - `type` — **LLM-facing**, value = the Python class name (e.g.
-  `"TextMeshProComponent"`). The discriminated union resolves on this. Marked
-  `exclude=True`, so it never reaches serialized output.
+  `"TextMeshProComponent"`). `Component` is a *plain* (smart) `Union` with no
+  `discriminator=`, because Gemini rejects `oneOf` + `discriminator`. Pydantic
+  still picks the right member because only the one whose `type` Literal matches
+  validates. Marked `exclude=True`, so it never reaches serialized output.
 - `componentType` — **headset-facing**, value = the Unity identifier (e.g.
   `"textMeshPro"`). `SkipJsonSchema` + a default, so the LLM never sees or sets
   it; it's auto-filled and is the only one that survives serialization.
@@ -183,9 +188,12 @@ failure surfaces here as a validation error (→ instructor retry).
 `ARLEMScenario` = `Workplace` (static environment: things/places/persons,
 detectables, primitives, predicates) + `Activity` (ordered `Action` steps with
 enter/exit `ActionFlow`s and `Trigger`s). `validate_activity_flows()`
-cross-checks activity actions against workplace resources. `Tangible` subtypes
-use a `type` discriminator. ARLEM is only reachable on the **legacy `--topic`
-path** today; the YAML path raises `NotImplementedError` for it.
+cross-checks activity actions against workplace resources. `things` and
+`places` are plain `List[Tangible]` (`Person` subclasses `Tangible`), with no
+discriminated unions. `arlem_simplified.py` is a reduced subset of
+the same `ARLEMScenario` shape. Both ARLEM specs run on the YAML path at L3–L4
+(`build_prompt` has an ARLEM branch with its own `min_things` / `min_places` /
+`min_actions` minima) and on the legacy `--topic` path.
 
 ---
 
@@ -199,7 +207,7 @@ This is the single most important branch in `benchmark.py` (`run_single_benchmar
 | Prompt from | `prompt_builder.build_prompt()` | templates in `benchmark_config.py` |
 | Response model | picked by `build_prompt` per level/structure | `get_response_model(spec_type)` |
 | Levels | L1, L3, L4 (L2 retired) | n/a (single template) |
-| ARLEM | not wired (`NotImplementedError`) | supported |
+| ARLEM | supported at L3–L4 (L1 → `LabOutline` for every spec) | supported |
 
 **Levels** (how much of the YAML is fed in):
 - **L1** field/course/description → `LabOutline` (rough outline, *not* a full
@@ -213,12 +221,9 @@ gap is intentional — levels encode input specificity, not a contiguous ordinal
 (L4 = has the script); renumbering is deferred to keep formative-run artifacts
 comparable.
 
-**Structure** (L3–L4 only; L1 ignores it): `multi-module` (default, one
-`DemoModule` per scene) / `single-module` (one module, many clips) /
+**Structure** (json_lab L3–L4 only; L1 and ARLEM ignore it): `multi-module`
+(default, one `DemoModule` per scene) / `single-module` (one module, many clips) /
 `module-only` (bare `DemoModule`).
-
-Adding ARLEM to the YAML path is "one row in the dispatch table" in
-`build_prompt` — the function is already parameterized on `spec_type`.
 
 ---
 
@@ -276,9 +281,10 @@ a model** or cost columns read zero.
 
 Per successful run, base name `{model}_{spec}[_{level}]_{timestamp}` (dots → dashes):
 - `Outputs/{base}_output.json` — the generated `Lab`/`DemoModule`/`LabOutline`/ARLEM JSON.
-- `Metrics/{base}_metrics.json` — the full record: identity, `tracking` block (§7),
-  `lab_metrics` block (`lab_metrics.analyze_*`), Gemini adjustment fields,
-  `prompt_file`/`errors_file` references.
+- `Metrics/{base}_metrics.json` — the full record: identity, `decode_mode`,
+  `tracking` block (§7), `lab_metrics` block (`lab_metrics.analyze_*`),
+  `transient_retries`, a `provenance` block (git SHA + dirty flag, Python and
+  key package versions), and `prompt_file`/`errors_file` references.
 - `prompts/{lab}_{level}_{spec}[_{structure}].txt` — deduped; one file per
   `(lab, level, spec, structure)` tuple, shared across models.
 - `../Errors/{base}_errors.txt` — per-attempt error log.
@@ -306,17 +312,25 @@ pandas row (nested `tracking`/`lab_metrics` → flat scalars + derived ratios li
 `Outputs/_output.json` through `lab_metrics.analyze_assets` to add **novel-asset**
 columns (`novel_prefabs`/`novel_textures` + `*_refs` + `audio_per_clip`; the
 metrics files don't store these), and joins the model's `size` tier from the
-`MODELS` registry. It prefers the Gemini-adjusted token/cost figures via the
-`effective_*` columns. `fail_mode()` classifies terminal errors
-(truncation / schema-validation / 404 / other) — kept byte-identical to the copy
-in `build_summary_report` so both reports agree.
+`MODELS` registry. Token/cost figures are the raw provider-reported ones (every
+spec is free-decode, so there is no Gemini adjustment). `fail_mode()` classifies
+terminal errors (truncation / schema-validation / 404 / Gemini parallel-call
+reask 400 / other); `build_summary_report` imports the same data through
+`load_runs`, so both reports agree.
 
-Two report builders (both emit executed notebook + HTML into `Artifacts/Data/Benchmark/Reports/`):
-- `build_summary_report.py` — *which* providers/levels generated at all;
-  per-lab-topic sections; Run 1 vs Run 2 fix comparison.
+Two report builders (both emit executed notebook + HTML into
+`Artifacts/Data/Benchmark/Reports/`, suffixed `_<label>`, and take
+`--since`/`--until`/`--label`/`--runs-csv`):
+- `build_summary_report.py` — *which* model × level × spec × lab cells generated
+  at all; overall + per-lab-topic sections; failure modes.
 - `build_statistics_report.py` — *what* they produced quantitatively
-  (tokens/cost/time/structure), sliced by model/provider/level; also writes
-  `benchmark_runs.csv`.
+  (tokens/cost/time/structure/novel assets), sliced by model/provider/level/spec;
+  also writes `benchmark_runs_<label>.csv`.
+
+`reprice_runs.py` re-costs a run CSV against current `tracking/pricing.py` rates
+into a `_repriced` sibling. The figure scripts in `figures/` read a run CSV
+(default: the wave 2 table) and take `--runs-csv`/`--suffix` to render repriced
+siblings.
 
 ---
 
@@ -325,12 +339,14 @@ Two report builders (both emit executed notebook + HTML into `Artifacts/Data/Ben
 See also memory notes (`project_benchmark_known_issues`,
 `project_gemini_schema_token_billing`).
 
-- Gemini reported tokens are understated by the schema tokens (handled via
-  estimation, but it's an *estimate*).
 - L1 runs report zero structural metrics by design (outline, not full spec) —
   not a failure.
-- OpenAI models occasionally fail discriminated-union resolution
-  (`union_tag_not_found`) → surfaces as schema-validation retries.
-- ARLEM is not yet wired on the YAML/L1–L4 path.
+- Standalone metrics files exist only for successes; in a fresh clone (no
+  `suite_results_*.json`) the run CSVs in `Reports/` are the only record of
+  failed runs.
+- Gemini ≥2-functionCall responses still hard-fail on reask (upstream instructor
+  bug, issue #53); surfaced as `fail_mode = "gemini parallel-call reask 400"`.
+- `cost_usd` is baked in at run time; after a rate change use `reprice_runs.py`
+  (wave 2's Claude Sonnet 5 cost is corrected in the `_repriced` files).
 - There is no test runner or linter. "Validation" = Pydantic instantiation +
   the notebooks.

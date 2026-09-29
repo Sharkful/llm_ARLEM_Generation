@@ -78,12 +78,17 @@ Coherence rules enforced at startup (non-suite path):
 > `topic_name`. To sweep a chosen subset of labs (but not all of them), run one
 > command per lab — see [Sweeping a subset of labs](#sweeping-a-subset-of-labs).
 
+### Output format (both paths)
+
+| Flag | Behavior |
+| --- | --- |
+| `--spec`, `-s {json_lab,arlem,arlem_simple} [...]` | One or more output formats to generate. Default `json_lab`. Passing several sweeps them, multiplying the run count. See [Spec types](#spec-types---spec). |
+
 ### Legacy free-form path
 
 | Flag | Behavior |
 | --- | --- |
 | `--topic`, `-t "<string>"` | Free-form topic string. Defaults to the Solar System topic when omitted. |
-| `--spec`, `-s {json_lab,arlem,arlem_simple}` | Which specification to generate. Default `json_lab`. ARLEM is only wired on the legacy path. |
 
 ### Suites
 
@@ -91,7 +96,7 @@ Coherence rules enforced at startup (non-suite path):
 | --- | --- |
 | `--suite {quick,full}` | Run a predefined model set across `DEFAULT_TOPICS` (legacy path). |
 
-- `quick` → `gpt-4o-mini`, `claude-haiku-4.5`, `gemini-2.5-flash-lite`
+- `quick` → `gpt-5.4-nano`, `claude-haiku-4.5`, `gemini-2.5-flash-lite`
 - `full` → every registered model
 
 `--suite` **cannot** be combined with `--model`, the tier flags, `--all-labs`,
@@ -118,17 +123,24 @@ needed.)
 
 ## How a run expands
 
-A "work item" is one `(lab, level)` pair (YAML path) or one `topic` (legacy
-path). The suite runs **every selected model × every work item**:
+A "work item" is one `(spec, lab, level)` tuple (YAML path) or one
+`(spec, topic)` pair (legacy path). The suite runs **every selected model ×
+every work item**:
 
 ```
-total runs = (models) × (labs × levels)        # YAML path
-total runs = (models) × (topics)               # legacy path
+total runs = (models) × (specs × labs × levels)   # YAML path
+total runs = (models) × (specs × topics)          # legacy path
 ```
 
 So `--all-models --all-levels --lab heart_anatomy_and_blood_flow` is
-`(all models) × 1 lab × 4 levels`. Confirm your model count with
+`11 models × 1 spec × 1 lab × 3 levels = 33 runs`. Confirm your model count with
 `--list-models` before launching a large paid sweep.
+
+L1 returns the same spec-agnostic `LabOutline` whatever `--spec` says, so
+sweeping several specs at L1 just repeats the outline. The wave 2 matrix avoided
+this by running L1 with `--spec json_lab` only and L3/L4 with all three specs:
+11 models × 5 labs × (1 + 2 × 3) = 385 runs.
+[`run_sweep.ps1`](run_sweep.ps1) drives that matrix as 33 resumable chunks.
 
 ---
 
@@ -140,7 +152,7 @@ therefore which response model is used. Higher levels add more authored detail.
 | Level | Input fields used | Response model |
 | --- | --- | --- |
 | **L1** | field / course / description | `LabOutline` — a rough scene-by-scene outline, **not** a full spec |
-| **L3** | L1 input + `learning_objectives` | full spec (`Lab` / `DemoModule`) |
+| **L3** | L1 input + `learning_objectives` | full spec (`Lab` / `DemoModule` / `ARLEMScenario`, per `--spec`) |
 | **L4** | L3 + `detailed_script` | full spec |
 
 L1 outputs `LabOutline`, so its structural metrics (object/clip counts) report
@@ -153,7 +165,7 @@ intentional — level numbers encode input specificity, not a contiguous ordinal
 (L4 = has the detailed script). Renumbering to contiguous L1/L2/L3 is deferred to
 a possible later migration to keep the formative-run artifacts comparable.
 
-## Structure modes (L3–L4 only)
+## Structure modes (json_lab, L3–L4 only)
 
 | Value | Output shape |
 | --- | --- |
@@ -161,41 +173,41 @@ a possible later migration to keep the formative-run artifacts comparable.
 | `single-module` | One `DemoModule` holding many clips. |
 | `module-only` | A bare `DemoModule`, no `Lab` wrapper. |
 
-L1 ignores `--structure` entirely.
+L1 ignores `--structure` entirely, and so does ARLEM (it has a single
+`ARLEMScenario` shape).
 
-## Spec types (legacy `--topic` path)
+## Spec types (`--spec`)
 
-| Value | Model |
+| Value | Model (L3–L4, or legacy `--topic`) |
 | --- | --- |
-| `json_lab` *(default)* | `Lab` (`json_lab.py`) |
+| `json_lab` *(default)* | `Lab` (`json_lab.py`), or `DemoModule` under `--structure module-only` |
 | `arlem` | `ARLEMScenario` (`arlem_full.py`) |
 | `arlem_simple` | `ARLEMScenario` (`arlem_simplified.py`) |
 
-ARLEM is currently only reachable on the legacy `--topic` path; the YAML path
-raises `NotImplementedError` for ARLEM.
+All three run on both prompt paths. At L1 every spec returns `LabOutline`.
+ARLEM prompts take their own structural minima (`min_things`, `min_places`,
+`min_actions` in `prompt_builder.build_prompt`).
 
 ## Registered models
 
-Snapshot of the registry (`MODELS` in `benchmark_config.py`). Run
-`--list-models` for the live list — this can drift.
+Snapshot of the registry (`MODELS` in `benchmark_config.py`), the 11-model
+roster locked in issue #32 and used for wave 2. Run `--list-models` for the live
+list. The CLI id is the registry key; file names use the provider model id with
+dots turned into dashes.
 
-| Model ID | Tier | Provider |
-| --- | --- | --- |
-| `gpt-5.5` | large | OpenAI |
-| `gpt-5.4-mini` | small | OpenAI |
-| `gpt-5.4-nano` | small | OpenAI |
-| `gpt-5-mini` | small | OpenAI |
-| `gpt-5-nano` | small | OpenAI |
-| `gpt-4o-mini` | small | OpenAI |
-| `claude-opus-4.8` | large | Anthropic |
-| `claude-sonnet-4.6` | medium | Anthropic |
-| `claude-haiku-4.5` | small | Anthropic |
-| `gemini-3.1-pro` | large | Google |
-| `gemini-3.1-flash-lite` | small | Google |
-| `gemini-3.5-flash` | medium | Google |
-| `gemini-2.5-pro` | large | Google |
-| `gemini-2.5-flash` | medium | Google |
-| `gemini-2.5-flash-lite` | small | Google |
+| CLI id | Provider model id | Tier | Provider |
+| --- | --- | --- | --- |
+| `gpt-5.5` | `gpt-5.5` | large | OpenAI |
+| `gpt-5.4` | `gpt-5.4` | medium | OpenAI |
+| `gpt-5.4-mini` | `gpt-5.4-mini` | small | OpenAI |
+| `gpt-5.4-nano` | `gpt-5.4-nano` | small | OpenAI |
+| `claude-opus-4.8` | `claude-opus-4-8` | large | Anthropic |
+| `claude-sonnet-5` | `claude-sonnet-5` | medium | Anthropic |
+| `claude-haiku-4.5` | `claude-haiku-4-5-20251001` | small | Anthropic |
+| `gemini-3.1-pro` | `gemini-3.1-pro-preview` | large | Google |
+| `gemini-3.5-flash` | `gemini-3.5-flash` | medium | Google |
+| `gemini-3.1-flash-lite` | `gemini-3.1-flash-lite` | small | Google |
+| `gemini-2.5-flash-lite` | `gemini-2.5-flash-lite` | small | Google |
 
 **Gemini handling**: Every spec — **JSON Lab**, **ARLEM full**, and **ARLEM
 simplified** — runs the *same* provider-agnostic schema on Gemini as on
@@ -260,22 +272,28 @@ python "Code/Benchmark/benchmark.py" --list-models
 python "Code/Benchmark/benchmark.py" --list-labs
 
 # Single model, one lab, one level
-python "Code/Benchmark/benchmark.py" --model claude-haiku-4.5 --lab phases_of_the_moon --level L3
+python "Code/Benchmark/benchmark.py" --model claude-haiku-4.5 --lab apparent_retrograde_motion --level L3
 
 # One lab, every level, with a chosen structure
-python "Code/Benchmark/benchmark.py" --model gpt-4o-mini --lab vsepr_molecular_geometry --all-levels --structure single-module
+python "Code/Benchmark/benchmark.py" --model gpt-5.4-mini --lab vsepr_molecular_geometry --all-levels --structure single-module
 
-# Every model × every lab × every level (the full matrix)
+# All three output formats for one cell
+python "Code/Benchmark/benchmark.py" --model gemini-3.5-flash --lab vsepr_molecular_geometry --level L4 --spec json_lab arlem arlem_simple
+
+# Every model × every lab × every level, json_lab only
 python "Code/Benchmark/benchmark.py" --all-models --all-labs --all-levels
+
+# The full wave 2 matrix (resumable, chunked; -DryRun prints the plan)
+.\Code\Benchmark\run_sweep.ps1 -DryRun
 
 # Tier subset: all small models on one lab at L3
 python "Code/Benchmark/benchmark.py" --small-models --lab heart_anatomy_and_blood_flow --level L3
 
 # Legacy free-form topic
-python "Code/Benchmark/benchmark.py" --model gpt-4o-mini --topic "Volcanic Eruption Mechanics"
+python "Code/Benchmark/benchmark.py" --model gpt-5.4-mini --topic "Volcanic Eruption Mechanics"
 
 # Legacy ARLEM spec
-python "Code/Benchmark/benchmark.py" --model claude-sonnet-4.6 --spec arlem --topic "Engine Maintenance"
+python "Code/Benchmark/benchmark.py" --model claude-sonnet-5 --spec arlem --topic "Engine Maintenance"
 
 # Predefined suites
 python "Code/Benchmark/benchmark.py" --suite quick

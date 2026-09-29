@@ -1,66 +1,78 @@
-# `build_summary_report.py` — Shareable Benchmark Summary
+# `build_summary_report.py` — Benchmark Success/Failure Summary
 
-`Code/Analysis/reports/build_summary_report.py` collates one or more benchmark sweeps
-(`suite_results_*.json`) into a single, shareable report — one section per lab
-topic, plus a before/after comparison of the fixes applied between runs.
+`Code/Analysis/reports/build_summary_report.py` answers *which* model × level ×
+spec × lab cells generated at all, and classifies the failures. It is the
+companion to [`build_statistics_report.py`](STATISTICS_REPORT.md), which covers
+*what* the successful runs produced. Both read the same deduplicated DataFrame
+from `benchmark_dataframe.load_runs(include_failures=True)`.
 
-It produces, under `Artifacts/Data/Benchmark/Reports/`:
+For each run window it produces, under `Artifacts/Data/Benchmark/Reports/`:
 
-- **`benchmark_summary.ipynb`** — a fully *executed*, self-contained notebook. The
-  per-run data is embedded inline, so it opens and re-runs without the source
-  JSON files.
-- **`benchmark_summary.html`** — a standalone HTML export that opens in any
-  browser. For a PDF, open it and **Print → Save as PDF** (direct PDF export needs
-  LaTeX/pandoc, which is not assumed to be installed).
+- **`benchmark_summary_<label>.ipynb`** is a fully *executed*, self-contained
+  notebook. The per-run data is embedded inline, so it opens and re-runs without
+  the source JSON files.
+- **`benchmark_summary_<label>.html`** is a standalone HTML export that opens in
+  any browser. For a PDF, open it and choose **Print → Save as PDF** (direct PDF
+  export needs LaTeX/pandoc, which the project does not assume).
+
+The committed wave 2 reports are `benchmark_summary_wave2.*` and
+`benchmark_summary_wave2_repriced.*`. They are identical except for Claude
+Sonnet 5's cost; see
+[STATISTICS_REPORT.md § Repricing](STATISTICS_REPORT.md#repricing-after-a-provider-rate-change).
 
 ## Usage
 
 Run from the project root with the virtual environment active:
 
 ```bash
+# Default: today's runs only, labelled with today's date
 python "Code/Analysis/reports/build_summary_report.py"
+
+# A specific sweep window (e.g. the wave 2 matrix)
+python "Code/Analysis/reports/build_summary_report.py" --since 20260710 --until 20260710 --label wave2
+
+# From a run CSV instead of Metrics/ (e.g. the repriced wave 2 table)
+python "Code/Analysis/reports/build_summary_report.py" \
+    --runs-csv "Artifacts/Data/Benchmark/Reports/benchmark_runs_wave2_repriced.csv" --label wave2_repriced
 ```
 
-No arguments — the sweeps to include are declared in the `SWEEPS` list at the top
-of the script.
+| Flag | Behavior |
+| --- | --- |
+| `--since YYYYMMDD[_HHMMSS]` | Inclusive lower bound. Default is today at 00:00; `00000000` includes all history. |
+| `--until YYYYMMDD[_HHMMSS]` | Optional inclusive upper bound. |
+| `--label <str>` | Suffix for output filenames (default: today's date), so successive reports never overwrite each other. |
+| `--runs-csv PATH` | Build from an existing run CSV rather than re-reading `*_metrics.json`. `--since`/`--until` are ignored because the CSV defines the window. |
 
-## What it reads
-
-Each entry in `SWEEPS` is a tuple:
-
-```python
-(topic_key, "Pretty Title", "Run N — phase label", "suite_results_<timestamp>.json")
-```
-
-The filename is resolved under `Artifacts/Data/Benchmark/`. To add a topic or a new
-run, append a row — nothing else needs to change. Ordering in the list is the
-ordering in the report.
+**Failures need the suite files or a CSV.** Failed runs write no standalone
+metrics file. They survive only in the gitignored `suite_results_*.json` files
+and in the exported run CSVs. In a fresh clone, therefore, build the wave 2
+summary with `--runs-csv`. Reading `Metrics/` alone would report 100% success.
 
 ## What's in the report
 
-- **Fixes between Run 1 and Run 2** — a narrative section plus a bar chart of
-  success rate by provider, pre-fix vs post-fix.
-- **One section per topic**, each with:
-  - topic stats (success rate, wall time, cost, avg objects/clips at L3–L4),
-  - success by provider × level,
-  - a per-model OK/✗ grid with the dominant failure mode,
-  - a failure-mode breakdown.
-- **Takeaways**.
+- **Overall:** headline stats for the window, success by provider × level and
+  by spec × level, the failure-mode table, and a success-rate-by-provider chart.
+- **Per-lab breakdown:** one section per lab topic present in the window, with
+  topic stats, success by provider × level, a per-model grid of
+  successes/attempts at each level (L3/L4 fan out to three specs, so `2/3` means
+  one spec failed), and that topic's failure modes.
+- **Takeaways:** computed from the data rather than written by hand, so they
+  stay true when the report is re-run.
 
-Failure modes are classified from each run's error string into
-`truncation (max_tokens)`, `404 model-not-found`, `schema validation`, or `other`
-(see `fail_mode()`).
+Failure modes come from `benchmark_dataframe.fail_mode()`, which classifies
+each run's terminal error as `schema validation`, `truncation (max_tokens)`,
+`404 model-not-found`, `gemini parallel-call reask 400`, or `other`.
 
 ## Dependencies
 
 `nbformat`, `nbconvert`, `matplotlib`, `pandas`, and a `python3` Jupyter kernel
-(`ipykernel`) — all already in `requirements.txt` / the project venv. The script
-executes the notebook via `nbconvert`'s `ExecutePreprocessor`, so generation will
-fail loudly if a cell errors rather than shipping a broken report.
+(`ipykernel`) are all in `requirements.txt` and the project venv. The script
+executes the notebook with `nbconvert`'s `ExecutePreprocessor`, so generation
+fails loudly if a cell errors rather than shipping a broken report.
 
-## Regenerating after a new sweep
+## History
 
-1. Run the new sweep (see [BENCHMARK.md](BENCHMARK.md)).
-2. Add its `suite_results_*.json` as a row in `SWEEPS`.
-3. Re-run `build_summary_report.py`. The `.ipynb` and `.html` are overwritten in
-   place.
+Before issue #61, this script hard-coded the three June 2026 formative sweeps
+in a `SWEEPS` list and wrote a VSEPR pre-fix/post-fix narrative. It was
+generalized to take any run window so that it could describe the wave 2
+matrix.
