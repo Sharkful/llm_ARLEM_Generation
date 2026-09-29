@@ -1,0 +1,2362 @@
+{
+  "version": "2.0",
+  "labId": "molbio_dna_structure_replication_200",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Introductory Molecular Biology (200-level)",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Identify the structural components of DNA \u2014 the sugar-phosphate backbone, the four nitrogenous bases, and the hydrogen bonds between base pairs \u2014 and describe how they assemble into the double helix.",
+    "Apply the complementary base-pairing rules (A with T, G with C) to determine the sequence of one strand given the other, and explain why these pairings occur (two hydrogen bonds for A-T, three for G-C).",
+    "Describe the antiparallel orientation of DNA's two strands and explain how the 5'-to-3' directionality of each backbone determines this arrangement.",
+    "Trace the action of helicase, single-strand binding proteins, DNA polymerase, and DNA ligase at the replication fork, identifying each enzyme's function.",
+    "Explain why replication produces a continuously synthesized leading strand and a discontinuous lagging strand of Okazaki fragments, relating this to the unidirectional 5'-to-3' activity of DNA polymerase on antiparallel templates.",
+    "Articulate why DNA replication is semiconservative and predict the composition of daughter molecules after one and two rounds of replication."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: The DNA Ladder",
+      "description": "A flat, schematic ladder representation of DNA introduces the sugar-phosphate backbones and color-coded, labeled base pairs before any geometric complexity.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Recognize DNA as a polymer with a repeating sugar-phosphate backbone.",
+        "Identify the four nitrogenous bases and their color coding.",
+        "Observe the base-pairing pattern in a simplified schematic."
+      ],
+      "instructions": [
+        "Use Next and Previous to move through the scene.",
+        "Observe how each rung is composed of two base segments meeting in the middle."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaLadderPrefab",
+          "name": "dnaLadder",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.3,
+            0.4,
+            0.05
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "ladderTitle",
+          "position": [
+            0,
+            1.6,
+            0.8
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "DNA: A Ladder of Base Pairs",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 40
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "backboneLabelLeft",
+          "position": [
+            -0.28,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "sugar-phosphate backbone",
+              "color": [
+                200,
+                200,
+                255,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "backboneLabelRight",
+          "position": [
+            0.28,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "sugar-phosphate backbone",
+              "color": [
+                200,
+                200,
+                255,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "baseKey",
+          "position": [
+            0,
+            0.85,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "A = red   T = blue   G = yellow   C = green",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "dna_ladder_introduction",
+          "autoAdvance": false,
+          "changeMeaning": "Introduce the schematic ladder and title so students see the overall repeating structure before details are added.",
+          "narration": "Welcome. DNA is a polymer with a beautifully regular structure. Here it is drawn as a ladder: the two side rails are the sugar-phosphate backbones, and each rung is a pair of nitrogenous bases reaching across from one backbone to the other."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "backbone_repeating_polymer",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "backboneLabelLeft",
+              "enabled": true
+            },
+            {
+              "target": "backboneLabelRight",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Reveal backbone labels to draw attention to the repeating sugar-phosphate side rails.",
+          "narration": "Notice that each side rail repeats the same unit over and over \u2014 a sugar joined to a phosphate, again and again. This repeating backbone gives DNA its structural consistency along its entire length."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "bases_project_inward",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "baseKey",
+              "enabled": true
+            },
+            {
+              "target": "dnaLadder",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Reveal the base color key and emphasize inward-projecting, complementary base pairs.",
+          "narration": "The four bases \u2014 adenine, thymine, guanine, and cytosine \u2014 project inward from each backbone and pair with a partner across the ladder. Each rung is two colored segments meeting in the middle: adenine red, thymine blue, guanine yellow, cytosine green."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: From Ladder to Double Helix",
+      "description": "The flat ladder twists into a realistic double helix. Students can toggle between the schematic ladder and the realistic helix to build a mental mapping between the two representations.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Map the schematic ladder onto the realistic double-helix geometry.",
+        "Recognize that the helix completes one full turn roughly every ten base pairs.",
+        "Observe the helical grooves as features of real DNA geometry."
+      ],
+      "instructions": [
+        "Use Next and Previous to progress.",
+        "Use the toggle to switch between the schematic ladder and the realistic helix at any time."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaLadderPrefab",
+          "name": "schematicLadder",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.5,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.25,
+            0.4,
+            0.05
+          ]
+        },
+        {
+          "prefab": "dnaHelixPrefab",
+          "name": "doubleHelix",
+          "position": [
+            0.5,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.15,
+            0.4,
+            0.15
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 16
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "helixNote",
+          "position": [
+            0.5,
+            0.8,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "~10 base pairs per full turn",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        },
+        {
+          "prefab": "representationTogglePrefab",
+          "name": "reprToggle",
+          "position": [
+            0,
+            0.65,
+            0.8
+          ],
+          "scale": [
+            0.1,
+            0.05,
+            0.02
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "newscript",
+              "scriptName": "representationToggle",
+              "scriptDescription": "A toggle control that switches which of two referenced GameObjects is visible. Requires two object references: 'schematicObject' and 'helixObject' set in the inspector. When the user clicks/selects the toggle, it enables one referenced object and disables the other, alternating with each activation. Outputs: sets the active state of the two referenced objects. Also exposes a boolean 'showHelix' state readable by other scripts."
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "ladder_to_helix_intro",
+          "autoAdvance": false,
+          "changeMeaning": "Show the schematic ladder alongside where the helix will appear so students anchor on the familiar representation first.",
+          "narration": "We just met DNA as a flat ladder. But in a real cell, that ladder is twisted. Let's watch the same structure coil into its true three-dimensional shape."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "double_helix_geometry",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "doubleHelix",
+              "enabled": true
+            },
+            {
+              "target": "helixNote",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Reveal and spin the realistic double helix beside the ladder to demonstrate the twist and grooves.",
+          "narration": "As the backbones spiral around a common axis, the base pairs stack along the interior. The helix completes about one full turn every ten base pairs. The winding of the two backbones creates the grooves you can see along its surface."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "toggle_representations",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "reprToggle",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Enable the toggle control so students can freely switch representations and reinforce the ladder-helix mapping.",
+          "narration": "Use this toggle any time to switch between the schematic ladder and the realistic helix. Every rung on the ladder is a stacked base pair inside the helix \u2014 same molecule, two ways of seeing it."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: Antiparallel Strands and 5'-to-3' Direction",
+      "description": "Directional arrows and 5'/3' end labels appear on the rotating helix to show the antiparallel arrangement and its origin in backbone chemistry.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Describe the antiparallel orientation of the two DNA strands.",
+        "Locate the 5' and 3' termini of each backbone.",
+        "Explain that antiparallel arrangement is forced by the directional chemistry of the sugar-phosphate backbone."
+      ],
+      "instructions": [
+        "Use Next and Previous to progress.",
+        "Rotate the helix to confirm the arrow directions from any angle."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaHelixPrefab",
+          "name": "directionHelix",
+          "position": [
+            0,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.15,
+            0.45,
+            0.15
+          ],
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 20
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "directionArrowPrefab",
+          "name": "arrowUp",
+          "position": [
+            -0.12,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.4,
+            0.03
+          ],
+          "enabled": false,
+          "color": [
+            80,
+            200,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "directionArrowPrefab",
+          "name": "arrowDown",
+          "position": [
+            0.12,
+            1.2,
+            0.8
+          ],
+          "eulerAngles": [
+            180,
+            0,
+            0
+          ],
+          "scale": [
+            0.03,
+            0.4,
+            0.03
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            160,
+            80,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelLeft5",
+          "position": [
+            -0.12,
+            0.9,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "5'",
+              "color": [
+                80,
+                200,
+                255,
+                255
+              ],
+              "fontSize": 40
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelLeft3",
+          "position": [
+            -0.12,
+            1.55,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "3'",
+              "color": [
+                80,
+                200,
+                255,
+                255
+              ],
+              "fontSize": 40
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelRight3",
+          "position": [
+            0.12,
+            0.9,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "3'",
+              "color": [
+                255,
+                160,
+                80,
+                255
+              ],
+              "fontSize": 40
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelRight5",
+          "position": [
+            0.12,
+            1.55,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "5'",
+              "color": [
+                255,
+                160,
+                80,
+                255
+              ],
+              "fontSize": 40
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "antiparallel_arrows",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "arrowUp",
+              "enabled": true
+            },
+            {
+              "target": "arrowDown",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Add directional arrows to each backbone to visualize that the two strands run in opposite directions.",
+          "narration": "Each backbone has a direction. Watch these arrows: the left strand points up, the right strand points down. The two strands always run in opposite directions \u2014 we call this antiparallel."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "five_prime_three_prime_ends",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "labelLeft5",
+              "enabled": true
+            },
+            {
+              "target": "labelLeft3",
+              "enabled": true
+            },
+            {
+              "target": "labelRight3",
+              "enabled": true
+            },
+            {
+              "target": "labelRight5",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Reveal 5' and 3' end labels tied to the carbon atoms of the sugar ring at each backbone terminus.",
+          "narration": "These labels, five-prime and three-prime, refer to specific carbon atoms of the sugar at each end of a backbone. Notice how one strand's five-prime end sits opposite the other strand's three-prime end."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "antiparallel_is_forced",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "directionHelix",
+              "components": [
+                {
+                  "componentType": "simpleRotation",
+                  "timeRate": 1.0,
+                  "rotationTime": 40
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Slow the rotation so students can confirm the antiparallel arrangement from any angle.",
+          "narration": "This arrangement is not optional. The directional chemistry of the sugar-phosphate backbone forces the two strands to be antiparallel. Rotate the helix and confirm the arrows for yourself \u2014 this fact will matter greatly during replication."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 4: Complementary Base-Pairing Activity",
+      "description": "An interactive activity where students drag loose bases onto an empty strand to complete the complement of a template, forming hydrogen bonds visualized as dashed lines.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Apply the complementary base-pairing rules (A-T, G-C).",
+        "Relate hydrogen-bond count to base-pair identity (two for A-T, three for G-C).",
+        "Recognize that the new strand runs antiparallel (3'-to-5') to the template."
+      ],
+      "instructions": [
+        "Drag bases from the palette onto the empty strand.",
+        "Correct pairings snap into place and form hydrogen bonds; incorrect ones are rejected with an explanation."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaLadderHalfPrefab",
+          "name": "templateStrand",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.2,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.12,
+            0.45,
+            0.05
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "5'-ATGCCAGT-3'",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "dnaBackboneEmptyPrefab",
+          "name": "emptyStrand",
+          "position": [
+            0.2,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.45,
+            0.05
+          ],
+          "components": [
+            {
+              "componentType": "newscript",
+              "scriptName": "basePairingSocket",
+              "scriptDescription": "Manages an empty DNA strand with a set of ordered pairing slots. Requires an inspector-set string 'templateSequence' (e.g. 'ATGCCAGT') and a reference to the template strand object. Each slot accepts a dragged base object and checks it against the complementary rule for the corresponding template base (A-T, G-C). Inputs: dragged base objects tagged with a base letter. Outputs: on a correct drop it snaps the base into the slot, spawns a hydrogen-bond visual (2 dashed lines for A-T, 3 for G-C) and plays a success sound; on an incorrect drop it rejects the base, returns it to the palette, and displays a short explanation string. Exposes a boolean 'strandComplete' that becomes true when all slots are correctly filled."
+            }
+          ]
+        },
+        {
+          "prefab": "baseTokenPrefab",
+          "name": "baseA",
+          "position": [
+            -0.15,
+            0.75,
+            0.8
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "color": [
+            220,
+            60,
+            60,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            },
+            {
+              "componentType": "textMeshPro",
+              "text": "A",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "baseTokenPrefab",
+          "name": "baseT",
+          "position": [
+            -0.05,
+            0.75,
+            0.8
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "color": [
+            60,
+            100,
+            220,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            },
+            {
+              "componentType": "textMeshPro",
+              "text": "T",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "baseTokenPrefab",
+          "name": "baseG",
+          "position": [
+            0.05,
+            0.75,
+            0.8
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "color": [
+            220,
+            200,
+            50,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            },
+            {
+              "componentType": "textMeshPro",
+              "text": "G",
+              "color": [
+                40,
+                40,
+                40,
+                255
+              ],
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "baseTokenPrefab",
+          "name": "baseC",
+          "position": [
+            0.15,
+            0.75,
+            0.8
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "color": [
+            60,
+            190,
+            90,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            },
+            {
+              "componentType": "textMeshPro",
+              "text": "C",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "pairResultLabel",
+          "position": [
+            0,
+            1.6,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "New strand: 3'-TACGGTCA-5'",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 28
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "base_pairing_setup",
+          "autoAdvance": false,
+          "changeMeaning": "Present the template strand, empty strand, and base palette to set up the drag-and-drop pairing task.",
+          "narration": "Here is a single template strand reading five-prime A-T-G-C-C-A-G-T-three-prime, and an empty backbone beside it. Drag bases from the palette to build the complementary strand. Remember: A pairs with T, and G pairs with C."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "base_pairing_confirm",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "pairResultLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Reveal the completed complementary sequence label after students finish, confirming the correct pairing and direction.",
+          "narration": "Well done. The complementary strand reads three-prime T-A-C-G-G-T-C-A-five-prime \u2014 running in the opposite direction to the template, just as antiparallel structure demands. Notice the G-C pairs formed three hydrogen bonds while the A-T pairs formed only two, which is why G-C rich DNA is a little harder to pull apart."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 5: Helicase Opens the Helix",
+      "description": "A section of realistic double helix is unwound by helicase, which moves along the DNA breaking hydrogen bonds and exposing the strands at the replication fork.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Identify helicase as the enzyme that unwinds the double helix.",
+        "Explain that helicase breaks the hydrogen bonds between paired bases.",
+        "Recognize the replication fork as the point of strand separation."
+      ],
+      "instructions": [
+        "Use Next and Previous to progress.",
+        "Watch helicase travel along the helix and open the strands behind it."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaHelixPrefab",
+          "name": "forkHelix",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.5,
+            0.12,
+            0.12
+          ]
+        },
+        {
+          "prefab": "helicasePrefab",
+          "name": "helicase",
+          "position": [
+            -0.4,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "color": [
+            180,
+            90,
+            200,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "helicase",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "helicase_intro",
+          "autoAdvance": false,
+          "changeMeaning": "Introduce a horizontal stretch of helix with helicase parked at one end, ready to begin unwinding.",
+          "narration": "Now that we understand DNA's structure, let's replicate it. The first enzyme is helicase. It docks at one end of the helix and prepares to open it up."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "helicase_unwinds",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "helicase",
+              "position": [
+                0.1,
+                1.2,
+                0.8
+              ]
+            }
+          ],
+          "changeMeaning": "Move helicase along the helix to show it breaking hydrogen bonds and creating the replication fork.",
+          "narration": "As helicase travels along the DNA, it breaks the hydrogen bonds holding the base pairs together, unzipping the two strands. This opening point is called the replication fork."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 6: Single-Strand Binding Proteins",
+      "description": "Single-strand binding proteins attach to the separated strands behind helicase, holding them open and preventing them from re-pairing.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Identify single-strand binding proteins (SSBs) and their location on exposed strands.",
+        "Explain that SSBs stabilize single-stranded DNA and prevent re-pairing.",
+        "Recognize why open, accessible strands are necessary for replication."
+      ],
+      "instructions": [
+        "Use Next and Previous to progress.",
+        "Watch SSBs attach to each exposed strand behind the fork."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaHelixPrefab",
+          "name": "forkHelix2",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.5,
+            0.12,
+            0.12
+          ]
+        },
+        {
+          "prefab": "helicasePrefab",
+          "name": "helicase2",
+          "position": [
+            0.1,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "color": [
+            180,
+            90,
+            200,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "helicase",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "ssbProteinPrefab",
+          "name": "ssbTop1",
+          "position": [
+            -0.2,
+            1.28,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": false,
+          "color": [
+            90,
+            200,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "ssbProteinPrefab",
+          "name": "ssbTop2",
+          "position": [
+            -0.05,
+            1.29,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": false,
+          "color": [
+            90,
+            200,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "ssbProteinPrefab",
+          "name": "ssbBottom1",
+          "position": [
+            -0.2,
+            1.12,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": false,
+          "color": [
+            90,
+            200,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "ssbProteinPrefab",
+          "name": "ssbBottom2",
+          "position": [
+            -0.05,
+            1.11,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": false,
+          "color": [
+            90,
+            200,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "ssbLabel",
+          "position": [
+            -0.12,
+            1.5,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "single-strand binding proteins",
+              "color": [
+                90,
+                220,
+                200,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "ssb_intro",
+          "autoAdvance": false,
+          "changeMeaning": "Show the fork already partly opened by helicase, with strands exposed but unprotected.",
+          "narration": "Behind helicase, the two strands are now separated and exposed. But single-stranded DNA is unstable \u2014 left alone, the strands would re-pair or fold on themselves."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "ssb_stabilize",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "ssbTop1",
+              "enabled": true
+            },
+            {
+              "target": "ssbTop2",
+              "enabled": true
+            },
+            {
+              "target": "ssbBottom1",
+              "enabled": true
+            },
+            {
+              "target": "ssbBottom2",
+              "enabled": true
+            },
+            {
+              "target": "ssbLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Enable the SSB proteins and their label to show them coating and stabilizing the exposed strands.",
+          "narration": "Single-strand binding proteins solve this. They coat the exposed strands, holding them open and accessible. Now the strands can serve as clean templates for the enzymes that follow."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 7: DNA Polymerase and the Leading Strand",
+      "description": "DNA polymerase synthesizes the leading strand continuously along the template oriented so synthesis follows the moving fork.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Identify DNA polymerase and its 5'-to-3' synthesis direction.",
+        "Explain why the leading strand is synthesized continuously.",
+        "Recognize that polymerase requires a primer to begin extension."
+      ],
+      "instructions": [
+        "Use Next and Previous to progress.",
+        "Watch the leading-strand polymerase move continuously with the fork."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaForkPrefab",
+          "name": "openFork",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.5,
+            0.25,
+            0.12
+          ]
+        },
+        {
+          "prefab": "polymerasePrefab",
+          "name": "leadingPol",
+          "position": [
+            -0.1,
+            1.28,
+            0.8
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "enabled": false,
+          "color": [
+            230,
+            120,
+            60,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "DNA polymerase",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "newStrandPrefab",
+          "name": "leadingNewStrand",
+          "position": [
+            -0.25,
+            1.28,
+            0.8
+          ],
+          "scale": [
+            0.15,
+            0.02,
+            0.02
+          ],
+          "enabled": false,
+          "color": [
+            180,
+            180,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "leadingLabel",
+          "position": [
+            -0.1,
+            1.55,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "leading strand: continuous 5' to 3'",
+              "color": [
+                230,
+                160,
+                100,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "polymerase_intro",
+          "autoAdvance": false,
+          "changeMeaning": "Show the opened fork as the stage on which polymerase will begin synthesizing the leading strand.",
+          "narration": "With the strands open and stabilized, DNA polymerase arrives. It builds a new strand by adding nucleotides only to a three-prime end \u2014 so it reads a template three-prime to five-prime while synthesizing five-prime to three-prime. It also needs a primer, a short starting point, to begin."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "leading_strand_continuous",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "leadingPol",
+              "enabled": true
+            },
+            {
+              "target": "leadingNewStrand",
+              "enabled": true
+            },
+            {
+              "target": "leadingLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Enable polymerase and the growing leading strand to show continuous synthesis following the fork.",
+          "narration": "On this template, the fork opens in the same direction polymerase naturally travels. So it moves continuously, following right behind the fork and building one long, unbroken new strand. This is the leading strand."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "leading_strand_grows",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "leadingPol",
+              "position": [
+                0.15,
+                1.28,
+                0.8
+              ]
+            },
+            {
+              "target": "leadingNewStrand",
+              "position": [
+                -0.15,
+                1.28,
+                0.8
+              ],
+              "scale": [
+                0.35,
+                0.02,
+                0.02
+              ]
+            }
+          ],
+          "changeMeaning": "Advance the polymerase and lengthen the new strand to visualize continuous growth alongside the moving fork.",
+          "narration": "As free nucleotides pair with the template and are stitched on, watch the leading strand grow smoothly and continuously, keeping pace with the advancing replication fork."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 8: The Lagging Strand and Okazaki Fragments",
+      "description": "On the opposite template, synthesis proceeds discontinuously as short Okazaki fragments that DNA ligase later joins into a continuous strand.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Explain why the lagging strand is synthesized discontinuously.",
+        "Identify Okazaki fragments and the direction of their synthesis.",
+        "Identify DNA ligase as the enzyme that joins the fragments."
+      ],
+      "instructions": [
+        "Use Next and Previous to progress.",
+        "Watch fragments form away from the fork, then ligase seal them together."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaForkPrefab",
+          "name": "openFork2",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.5,
+            0.25,
+            0.12
+          ]
+        },
+        {
+          "prefab": "polymerasePrefab",
+          "name": "laggingPol",
+          "position": [
+            0.1,
+            1.12,
+            0.8
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            230,
+            120,
+            60,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "DNA polymerase",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "okazakiFragmentPrefab",
+          "name": "fragment1",
+          "position": [
+            0.2,
+            1.12,
+            0.8
+          ],
+          "scale": [
+            0.08,
+            0.02,
+            0.02
+          ],
+          "enabled": false,
+          "color": [
+            180,
+            180,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "okazakiFragmentPrefab",
+          "name": "fragment2",
+          "position": [
+            0.05,
+            1.12,
+            0.8
+          ],
+          "scale": [
+            0.08,
+            0.02,
+            0.02
+          ],
+          "enabled": false,
+          "color": [
+            180,
+            180,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "okazakiFragmentPrefab",
+          "name": "fragment3",
+          "position": [
+            -0.1,
+            1.12,
+            0.8
+          ],
+          "scale": [
+            0.08,
+            0.02,
+            0.02
+          ],
+          "enabled": false,
+          "color": [
+            180,
+            180,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "ligasePrefab",
+          "name": "ligase",
+          "position": [
+            -0.25,
+            1.12,
+            0.8
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "enabled": false,
+          "color": [
+            120,
+            100,
+            220,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "DNA ligase",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "laggingLabel",
+          "position": [
+            0,
+            0.9,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "lagging strand: discontinuous Okazaki fragments",
+              "color": [
+                200,
+                200,
+                255,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "lagging_strand_problem",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "laggingLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Set up the second template strand where polymerase is forced to work away from the fork.",
+          "narration": "The other template runs the opposite way. Here polymerase can't simply follow the fork \u2014 to synthesize five-prime to three-prime, it must work backward, away from the fork. This creates a real problem."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "okazaki_fragments",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "fragment1",
+              "enabled": true
+            },
+            {
+              "target": "fragment2",
+              "enabled": true
+            },
+            {
+              "target": "fragment3",
+              "enabled": true
+            },
+            {
+              "target": "laggingPol",
+              "position": [
+                -0.15,
+                1.12,
+                0.8
+              ]
+            }
+          ],
+          "changeMeaning": "Reveal successive Okazaki fragments to show discontinuous synthesis in short pieces.",
+          "narration": "So polymerase makes a short fragment away from the fork, then jumps back toward the fork to start another. Again and again, it lays down short pieces called Okazaki fragments, growing in the opposite direction from the leading strand."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "ligase_seals",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "ligase",
+              "enabled": true
+            },
+            {
+              "target": "ligase",
+              "position": [
+                0.15,
+                1.12,
+                0.8
+              ]
+            },
+            {
+              "target": "fragment1",
+              "color": [
+                210,
+                210,
+                210,
+                255
+              ]
+            },
+            {
+              "target": "fragment2",
+              "color": [
+                210,
+                210,
+                210,
+                255
+              ]
+            },
+            {
+              "target": "fragment3",
+              "color": [
+                210,
+                210,
+                210,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Bring in DNA ligase to seal the fragments into one continuous lagging strand.",
+          "narration": "Finally, DNA ligase moves along the fragments and seals the gaps between them, joining the short pieces into one continuous strand. The lagging strand is complete."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 9: The Complete Replication Fork",
+      "description": "All five components operate together at the fork, and a summary panel links the leading/lagging asymmetry back to the antiparallel structure.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Identify all five replication components and their functions at the fork.",
+        "Relate leading/lagging asymmetry to the antiparallel arrangement of templates.",
+        "Synthesize the full replication process into a single coherent picture."
+      ],
+      "instructions": [
+        "Use Next and Previous to progress.",
+        "Rotate the full fork and identify each component by name."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaForkPrefab",
+          "name": "fullFork",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.5,
+            0.25,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "helicasePrefab",
+          "name": "fullHelicase",
+          "position": [
+            0.2,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            180,
+            90,
+            200,
+            255
+          ]
+        },
+        {
+          "prefab": "ssbProteinPrefab",
+          "name": "fullSSB1",
+          "position": [
+            0.0,
+            1.3,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "color": [
+            90,
+            200,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "ssbProteinPrefab",
+          "name": "fullSSB2",
+          "position": [
+            0.0,
+            1.1,
+            0.8
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "color": [
+            90,
+            200,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "polymerasePrefab",
+          "name": "fullLeadingPol",
+          "position": [
+            -0.05,
+            1.3,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "color": [
+            230,
+            120,
+            60,
+            255
+          ]
+        },
+        {
+          "prefab": "polymerasePrefab",
+          "name": "fullLaggingPol",
+          "position": [
+            -0.05,
+            1.1,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "color": [
+            230,
+            120,
+            60,
+            255
+          ]
+        },
+        {
+          "prefab": "ligasePrefab",
+          "name": "fullLigase",
+          "position": [
+            -0.2,
+            1.1,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "color": [
+            120,
+            100,
+            220,
+            255
+          ]
+        },
+        {
+          "prefab": "summaryPanelPrefab",
+          "name": "enzymePanel",
+          "position": [
+            0,
+            0.85,
+            0.8
+          ],
+          "scale": [
+            0.4,
+            0.2,
+            0.02
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "helicase: unwinds helix | SSB: stabilizes strands | DNA polymerase: builds 5' to 3' | DNA ligase: seals fragments",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 24,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "full_fork_overview",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "fullFork",
+              "components": [
+                {
+                  "componentType": "simpleRotation",
+                  "timeRate": 1.0,
+                  "rotationTime": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Assemble all five components at the fork and slowly rotate so students can survey the whole machine.",
+          "narration": "Here is the entire replication fork working together: helicase unwinding at the front, single-strand binding proteins holding the strands open, one polymerase building the leading strand continuously, another building the lagging strand in fragments, and ligase sealing behind it."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "asymmetry_from_antiparallel",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "enzymePanel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Show the summary panel and connect the leading/lagging asymmetry to the antiparallel structure.",
+          "narration": "Here is the key idea the whole lab has built toward: because the two template strands run in opposite directions \u2014 antiparallel \u2014 and polymerase can only work five-prime to three-prime, the two new strands must be made differently. One is continuous, the other in fragments. The structure dictates the mechanism."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 10: Semiconservative Replication",
+      "description": "A gold parental molecule replicates into two hybrid daughters; students then predict the composition of four molecules after a second round.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Articulate why replication is semiconservative.",
+        "Predict daughter-molecule composition after one and two rounds of replication.",
+        "Connect the observed pattern to classic experimental reasoning."
+      ],
+      "instructions": [
+        "Use Next and Previous to progress.",
+        "Predict the second-round outcome before it plays out."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaHelixPrefab",
+          "name": "parentMolecule",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.3,
+            0.8
+          ],
+          "scale": [
+            0.12,
+            0.35,
+            0.12
+          ],
+          "color": [
+            230,
+            200,
+            60,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 20
+            }
+          ]
+        },
+        {
+          "prefab": "dnaHelixPrefab",
+          "name": "daughter1",
+          "position": [
+            -0.3,
+            1.3,
+            0.8
+          ],
+          "scale": [
+            0.1,
+            0.32,
+            0.1
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 20
+            }
+          ]
+        },
+        {
+          "prefab": "dnaHelixPrefab",
+          "name": "daughter2",
+          "position": [
+            0.3,
+            1.3,
+            0.8
+          ],
+          "scale": [
+            0.1,
+            0.32,
+            0.1
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 20
+            }
+          ]
+        },
+        {
+          "prefab": "predictionPanelPrefab",
+          "name": "predictionPanel",
+          "position": [
+            0,
+            0.85,
+            0.8
+          ],
+          "scale": [
+            0.45,
+            0.25,
+            0.02
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "After round 2, the four molecules are: A) all half gold half silver  B) two hybrid two fully silver  C) all fully silver",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 24,
+              "wrapText": true
+            },
+            {
+              "componentType": "newscript",
+              "scriptName": "predictionChoicePanel",
+              "scriptDescription": "A multiple-choice prediction panel with three selectable options (A, B, C) and a designated correct answer set in the inspector (correctIndex). Inputs: user selection via pointer on each option region. Outputs: highlights the chosen option, then reveals whether it was correct by coloring the correct option green and incorrect selections red, and fires a callback to reveal the round-two result objects. Exposes a boolean 'answered' and an int 'selectedIndex'."
+            }
+          ]
+        },
+        {
+          "prefab": "dnaHelixPrefab",
+          "name": "round2mol1",
+          "position": [
+            -0.45,
+            1.35,
+            0.8
+          ],
+          "scale": [
+            0.07,
+            0.24,
+            0.07
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "dnaHelixPrefab",
+          "name": "round2mol2",
+          "position": [
+            -0.15,
+            1.35,
+            0.8
+          ],
+          "scale": [
+            0.07,
+            0.24,
+            0.07
+          ],
+          "enabled": false,
+          "color": [
+            200,
+            200,
+            210,
+            255
+          ]
+        },
+        {
+          "prefab": "dnaHelixPrefab",
+          "name": "round2mol3",
+          "position": [
+            0.15,
+            1.35,
+            0.8
+          ],
+          "scale": [
+            0.07,
+            0.24,
+            0.07
+          ],
+          "enabled": false,
+          "color": [
+            200,
+            200,
+            210,
+            255
+          ]
+        },
+        {
+          "prefab": "dnaHelixPrefab",
+          "name": "round2mol4",
+          "position": [
+            0.45,
+            1.35,
+            0.8
+          ],
+          "scale": [
+            0.07,
+            0.24,
+            0.07
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "semiconLabel",
+          "position": [
+            0,
+            1.65,
+            0.8
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "gold = parental   silver = new",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "semiconservative_parent",
+          "autoAdvance": false,
+          "changeMeaning": "Show the gold parental molecule so students register the original strands as the tracked material.",
+          "narration": "This parental DNA molecule is rendered in gold \u2014 both of its strands are the original material. Let's watch what happens when it replicates just once."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "semiconservative_round1",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "parentMolecule",
+              "enabled": false
+            },
+            {
+              "target": "daughter1",
+              "enabled": true,
+              "color": [
+                215,
+                200,
+                130,
+                255
+              ]
+            },
+            {
+              "target": "daughter2",
+              "enabled": true,
+              "color": [
+                215,
+                200,
+                130,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Split the parent into two hybrid daughters, each one gold strand and one silver strand, illustrating semiconservation.",
+          "narration": "The strands separate, and each is used as a template for a new silver strand. The result: two daughter molecules, each with one gold parental strand and one new silver strand. Each daughter conserves half of the original \u2014 that is why we call replication semiconservative."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "semiconservative_predict",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "predictionPanel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Present the prediction panel asking students to forecast the round-two composition before it plays.",
+          "narration": "Now these two daughters become the starting material for a second round. Before we play it out, predict: after round two, what will the four molecules look like? Make your choice."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "semiconservative_round2_result",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "daughter1",
+              "enabled": false
+            },
+            {
+              "target": "daughter2",
+              "enabled": false
+            },
+            {
+              "target": "round2mol1",
+              "enabled": true,
+              "color": [
+                215,
+                200,
+                130,
+                255
+              ]
+            },
+            {
+              "target": "round2mol2",
+              "enabled": true
+            },
+            {
+              "target": "round2mol3",
+              "enabled": true
+            },
+            {
+              "target": "round2mol4",
+              "enabled": true,
+              "color": [
+                215,
+                200,
+                130,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Reveal the four round-two molecules \u2014 two hybrids and two fully silver \u2014 confirming the correct answer.",
+          "narration": "The answer is B. Each gold strand ends up in one hybrid molecule, giving two molecules that are half gold and half silver. The two silver strands from round one template new silver strands, giving two molecules that are fully silver. Two hybrids, two fully silver \u2014 exactly the pattern a classic density experiment revealed."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 11: Recap",
+      "description": "A closing summary highlights each of the six concept areas in turn as the narration reviews them.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Consolidate the six core concepts of the lab.",
+        "Reconnect structure and mechanism into a unified understanding."
+      ],
+      "instructions": [
+        "Use Next and Previous to review each concept area."
+      ],
+      "objects": [
+        {
+          "prefab": "summaryPanelPrefab",
+          "name": "recapPanel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.5,
+            0.45,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "1. Double helix: backbones + bases | 2. Base pairing: A-T (2 H-bonds), G-C (3) | 3. Antiparallel 5' to 3' strands | 4. Replication enzymes at the fork | 5. Leading vs lagging (Okazaki) | 6. Semiconservative replication",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 26,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "highlightBarPrefab",
+          "name": "highlightBar",
+          "position": [
+            -0.22,
+            1.38,
+            0.79
+          ],
+          "scale": [
+            0.42,
+            0.05,
+            0.01
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            230,
+            90,
+            120
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "recap_structure",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "highlightBar",
+              "position": [
+                -0.22,
+                1.38,
+                0.79
+              ],
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Show the full recap list and highlight the double-helix structure concept first.",
+          "narration": "Let's review. First: DNA is a double helix of two sugar-phosphate backbones with nitrogenous bases projecting inward."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "recap_base_pairing",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "highlightBar",
+              "position": [
+                -0.22,
+                1.3,
+                0.79
+              ]
+            }
+          ],
+          "changeMeaning": "Move the highlight to the base-pairing rule concept to review complementary pairing and hydrogen-bond counts.",
+          "narration": "Second: bases pair complementarily \u2014 A with T through two hydrogen bonds, G with C through three."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "recap_replication_and_semiconservative",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "highlightBar",
+              "position": [
+                -0.22,
+                1.22,
+                0.79
+              ]
+            }
+          ],
+          "changeMeaning": "Move the highlight to the antiparallel concept, then briefly review the enzymes, asymmetry, and semiconservation.",
+          "narration": "Third: the two strands are antiparallel, running five-to-three in opposite directions. That structure drives replication: helicase, binding proteins, polymerase, and ligase build a continuous leading strand and a fragmented lagging strand \u2014 and because each daughter keeps one parental strand, replication is semiconservative. Nicely done."
+        }
+      ]
+    }
+  ]
+}

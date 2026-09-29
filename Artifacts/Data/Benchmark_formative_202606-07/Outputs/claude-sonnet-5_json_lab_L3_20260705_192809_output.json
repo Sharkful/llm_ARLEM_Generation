@@ -1,0 +1,770 @@
+{
+  "version": "2.0",
+  "labId": "heart_anatomy_circulation_101",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Human Anatomy and Physiology I",
+  "estimatedLength": "30 minutes",
+  "objectives": [
+    "Identify and name the four chambers of the heart, the four heart valves, and the major vessels entering and leaving the heart.",
+    "Trace the path of blood through the heart's dual circulation, naming each chamber, valve, and vessel in order.",
+    "Distinguish the pulmonary circuit from the systemic circuit and explain why the right and left sides of the heart serve different circulatory functions.",
+    "Explain why the left ventricle has a substantially thicker myocardium than the right ventricle, relating wall thickness to the pressure required to perfuse the systemic versus pulmonary circuits.",
+    "Describe the function of the atrioventricular and semilunar valves in preventing backflow, and identify which valves separate which chambers or chamber-vessel pairs."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: Heart Structure Overview",
+      "description": "Introduces the external and internal structure of the heart, labeling the four chambers, four valves, and major vessels.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Identify and name the four chambers of the heart.",
+        "Identify and name the four heart valves and their locations.",
+        "Identify the major vessels entering and leaving the heart."
+      ],
+      "instructions": [
+        "Observe the heart model as it rotates.",
+        "Listen for the name of each structure as it is highlighted.",
+        "Use the Next button to advance through each labeled structure."
+      ],
+      "objects": [
+        {
+          "prefab": "heartPrefab",
+          "name": "heartModel",
+          "position": [
+            0,
+            1.2,
+            0.6
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ],
+          "texture": "heart_muscle_texture",
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 12
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelText",
+          "position": [
+            0,
+            1.65,
+            0.6
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "The Human Heart",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 40
+            }
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "pointerArrow",
+          "position": [
+            0.15,
+            1.3,
+            0.6
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "vesselPrefab",
+          "name": "venaCavaModel",
+          "position": [
+            0.1,
+            1.5,
+            0.55
+          ],
+          "scale": [
+            0.05,
+            0.15,
+            0.05
+          ],
+          "enabled": false,
+          "texture": "vessel_texture"
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "heart_intro",
+          "autoAdvance": false,
+          "changeMeaning": "Initial spawn of the rotating heart model and title label to orient the student at the start of the module.",
+          "narration": "Welcome to the heart lab. Before us is a full model of the human heart, about the size of a fist. It sits in the chest between the lungs, protected by the rib cage. Let's begin by looking at its overall shape and rotating it to see all sides."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "four_chambers_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "heartModel",
+              "eulerAngles": [
+                0,
+                90,
+                0
+              ]
+            },
+            {
+              "target": "labelText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Right Atrium & Right Ventricle",
+                  "color": [
+                    255,
+                    210,
+                    210,
+                    255
+                  ],
+                  "fontSize": 34
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Update label text to introduce the chambers concept and stop heart rotation so the right side faces the student for labeling.",
+          "narration": "The heart has four chambers: two atria on top that receive blood, and two ventricles below that pump blood out. Let's label the right atrium and right ventricle first."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "left_chambers_label",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "heartModel",
+              "eulerAngles": [
+                0,
+                270,
+                0
+              ]
+            },
+            {
+              "target": "labelText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Left Atrium & Left Ventricle",
+                  "color": [
+                    210,
+                    210,
+                    255,
+                    255
+                  ],
+                  "fontSize": 34
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Rotate heart to show left side chambers and update label, foreshadowing the wall-thickness comparison covered later.",
+          "narration": "Now rotating to the left side: here is the left atrium and the left ventricle. Notice as we cut away the surface, the left ventricle wall is noticeably thicker than the right."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "four_valves_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "pointerArrow",
+              "enabled": true
+            },
+            {
+              "target": "labelText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Four Valves: Tricuspid, Pulmonary, Mitral, Aortic",
+                  "color": [
+                    255,
+                    255,
+                    200,
+                    255
+                  ],
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Bring in the pointer arrow to indicate valve locations on the model and update the label to introduce valve terminology.",
+          "narration": "Between chambers and vessels are four one-way valves: the tricuspid, pulmonary, mitral, and aortic valves. Each prevents blood from flowing backward as the heart beats."
+        },
+        {
+          "clipName": "clip4",
+          "audioClip": "major_vessels_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "pointerArrow",
+              "enabled": false
+            },
+            {
+              "target": "venaCavaModel",
+              "enabled": true
+            },
+            {
+              "target": "labelText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Major Vessels: Venae Cavae, Pulmonary Arteries/Veins, Aorta",
+                  "color": [
+                    200,
+                    255,
+                    220,
+                    255
+                  ],
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Reveal the vena cava vessel model attached to the heart and hide the pointer arrow, shifting focus to vascular connections before the circulation module begins.",
+          "narration": "Finally, several major vessels connect to the heart: the superior and inferior vena cava bring blood in, the pulmonary arteries and veins connect to the lungs, and the aorta carries blood out to the body."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: Tracing the Path of Blood",
+      "description": "Animates the dual-loop circulation of blood through the heart, from systemic return through the pulmonary circuit and back out through the systemic circuit.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Trace the path of blood through the heart's dual circulation, naming each chamber, valve, and vessel in order.",
+        "Distinguish the pulmonary circuit from the systemic circuit and explain why the right and left sides of the heart serve different circulatory functions.",
+        "Describe the function of the atrioventricular and semilunar valves in preventing backflow."
+      ],
+      "instructions": [
+        "Watch the blood flow animation move through the heart in sequence.",
+        "Note the color change between deoxygenated (blue) and oxygenated (red) blood.",
+        "Advance through each clip to follow the full circulatory loop."
+      ],
+      "objects": [
+        {
+          "prefab": "heartPrefab",
+          "name": "heartModelCutaway",
+          "position": [
+            0,
+            1.2,
+            0.6
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "texture": "heart_muscle_texture_cutaway"
+        },
+        {
+          "prefab": "bloodParticlePrefab",
+          "name": "bloodFlowDeoxygenated",
+          "position": [
+            0.12,
+            1.55,
+            0.55
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": false,
+          "color": [
+            40,
+            70,
+            220,
+            255
+          ]
+        },
+        {
+          "prefab": "bloodParticlePrefab",
+          "name": "bloodFlowOxygenated",
+          "position": [
+            -0.12,
+            1.55,
+            0.55
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": false,
+          "color": [
+            220,
+            30,
+            40,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "circulationLabel",
+          "position": [
+            0,
+            1.7,
+            0.6
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Tracing Blood Flow",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 36
+            }
+          ]
+        },
+        {
+          "prefab": "lungPrefab",
+          "name": "lungModel",
+          "position": [
+            0.6,
+            1.5,
+            0.4
+          ],
+          "scale": [
+            0.2,
+            0.25,
+            0.15
+          ],
+          "texture": "lung_texture",
+          "color": [
+            230,
+            190,
+            200,
+            255
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "circulation_overview",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "bloodFlowDeoxygenated",
+              "position": [
+                0.12,
+                1.6,
+                0.55
+              ],
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Introduce the cutaway heart model and start the deoxygenated blood particle at the vena cava entrance to begin the circulation trace.",
+          "narration": "Now let's trace an actual drop of blood through the heart. We'll start with deoxygenated blood returning from the body through the superior and inferior vena cava into the right atrium."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "right_atrium_to_ventricle",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "bloodFlowDeoxygenated",
+              "position": [
+                0.12,
+                1.3,
+                0.55
+              ]
+            }
+          ],
+          "changeMeaning": "Move the deoxygenated blood particle down through the tricuspid valve into the right ventricle to visualize the first stage of the pulmonary circuit.",
+          "narration": "From the right atrium, blood passes through the tricuspid valve into the right ventricle. This valve prevents blood from flowing back into the atrium when the ventricle contracts."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "pulmonary_circuit",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "bloodFlowDeoxygenated",
+              "position": [
+                0.4,
+                1.5,
+                0.45
+              ]
+            },
+            {
+              "target": "lungModel",
+              "color": [
+                200,
+                160,
+                180,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Animate the deoxygenated blood particle moving out toward the lung model via the pulmonary valve and artery, representing the pulmonary circuit.",
+          "narration": "The right ventricle contracts, pushing blood through the pulmonary valve and into the pulmonary arteries, which carry it to the lungs to pick up oxygen and release carbon dioxide."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "oxygenation_at_lungs",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "bloodFlowDeoxygenated",
+              "enabled": false
+            },
+            {
+              "target": "bloodFlowOxygenated",
+              "position": [
+                0.3,
+                1.5,
+                0.45
+              ],
+              "enabled": true
+            },
+            {
+              "target": "lungModel",
+              "color": [
+                255,
+                210,
+                215,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Swap the deoxygenated particle for the oxygenated particle near the lungs and route it toward the left atrium, showing gas exchange has occurred.",
+          "narration": "At the lungs, blood releases carbon dioxide and picks up oxygen, turning it bright red. It now returns to the heart via the pulmonary veins, entering the left atrium."
+        },
+        {
+          "clipName": "clip4",
+          "audioClip": "left_atrium_to_ventricle",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "bloodFlowOxygenated",
+              "position": [
+                -0.12,
+                1.6,
+                0.55
+              ]
+            },
+            {
+              "target": "circulationLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Left Atrium to Left Ventricle via Mitral Valve",
+                  "color": [
+                    255,
+                    220,
+                    220,
+                    255
+                  ],
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Move the oxygenated blood particle from the left atrium through the mitral valve into the left ventricle, continuing the systemic circuit trace.",
+          "narration": "Oxygenated blood in the left atrium passes through the mitral, or bicuspid, valve into the left ventricle, the heart's strongest pumping chamber."
+        },
+        {
+          "clipName": "clip5",
+          "audioClip": "systemic_ejection",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "bloodFlowOxygenated",
+              "position": [
+                -0.05,
+                1.85,
+                0.6
+              ]
+            },
+            {
+              "target": "circulationLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Left Ventricle to Aorta: Systemic Circulation",
+                  "color": [
+                    220,
+                    255,
+                    220,
+                    255
+                  ],
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Move the oxygenated blood particle out through the aortic valve and upward representing ejection into the aorta and systemic circulation, completing the trace.",
+          "narration": "Finally, the left ventricle contracts forcefully, pushing blood through the aortic valve into the aorta, and out to the entire body. This is the systemic circuit."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: Why the Left Ventricle Is Thicker",
+      "description": "Compares the myocardial wall thickness of the right and left ventricles and explains the pressure differences driving pulmonary versus systemic circulation.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Explain why the left ventricle has a substantially thicker myocardium than the right ventricle.",
+        "Relate wall thickness to the pressure required to perfuse the systemic versus pulmonary circuits.",
+        "Summarize the full dual-loop circulation and valve locations learned in the lab."
+      ],
+      "instructions": [
+        "Compare the cross-section views of the right and left ventricle walls.",
+        "Observe the pressure gauge animation as each ventricle contracts.",
+        "Review the final summary diagram of the complete circulatory loop."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCrossSectionPrefab",
+          "name": "crossSectionModel",
+          "position": [
+            0,
+            1.2,
+            0.6
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "texture": "heart_muscle_cross_section_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "thicknessLabel",
+          "position": [
+            0,
+            1.7,
+            0.6
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Comparing Ventricle Wall Thickness",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 34
+            }
+          ]
+        },
+        {
+          "prefab": "gaugePrefab",
+          "name": "pressureGaugeRight",
+          "position": [
+            0.35,
+            1.4,
+            0.6
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "enabled": false,
+          "color": [
+            150,
+            180,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "gaugePrefab",
+          "name": "pressureGaugeLeft",
+          "position": [
+            -0.35,
+            1.4,
+            0.6
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            150,
+            150,
+            255
+          ]
+        },
+        {
+          "prefab": "diagramPrefab",
+          "name": "summaryDiagram",
+          "position": [
+            0,
+            1.2,
+            0.6
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "enabled": false,
+          "texture": "dual_loop_circulation_diagram"
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "wall_thickness_intro",
+          "autoAdvance": false,
+          "changeMeaning": "Spawn the cross-section heart model, allowing direct visual comparison of the two ventricle wall thicknesses to open the module.",
+          "narration": "Let's take a closer look at a cross-section of the heart. Notice how the wall of the left ventricle, on this side, is nearly three times thicker than the wall of the right ventricle."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "pressure_explanation",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "pressureGaugeRight",
+              "enabled": true
+            },
+            {
+              "target": "thicknessLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Right Ventricle: Low-Pressure Pulmonary Circuit",
+                  "color": [
+                    180,
+                    210,
+                    255,
+                    255
+                  ],
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Activate the right-side pressure gauge to visually represent the relatively low pressure generated by the thinner right ventricle wall.",
+          "narration": "The right ventricle only needs to pump blood a short distance to the nearby lungs, a low-pressure circuit. Watch the pressure gauge as it contracts."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "left_ventricle_pressure",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "pressureGaugeLeft",
+              "enabled": true
+            },
+            {
+              "target": "thicknessLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Left Ventricle: High-Pressure Systemic Circuit",
+                  "color": [
+                    255,
+                    190,
+                    190,
+                    255
+                  ],
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Activate the left-side pressure gauge at a higher reading to contrast with the right ventricle and reinforce the structure-function relationship of myocardial thickness.",
+          "narration": "The left ventricle, however, must generate much higher pressure to push blood through the entire systemic circulation, all the way to your fingers and toes. That demand requires thicker, more powerful muscle."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "full_summary",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "crossSectionModel",
+              "enabled": false
+            },
+            {
+              "target": "pressureGaugeRight",
+              "enabled": false
+            },
+            {
+              "target": "pressureGaugeLeft",
+              "enabled": false
+            },
+            {
+              "target": "summaryDiagram",
+              "enabled": true
+            },
+            {
+              "target": "thicknessLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Full Dual-Loop Circulation Summary",
+                  "color": [
+                    255,
+                    255,
+                    255,
+                    255
+                  ],
+                  "fontSize": 32
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Replace the cross-section and gauges with a full summary diagram of the dual-loop circulation to consolidate all concepts covered in the lab.",
+          "narration": "Let's review the full path: deoxygenated blood enters the right atrium, crosses the tricuspid valve to the right ventricle, exits via the pulmonary valve to the lungs, returns oxygenated to the left atrium, crosses the mitral valve to the left ventricle, and exits through the aortic valve into the aorta. The thicker left ventricle wall reflects the greater pressure needed for systemic circulation."
+        }
+      ]
+    }
+  ]
+}

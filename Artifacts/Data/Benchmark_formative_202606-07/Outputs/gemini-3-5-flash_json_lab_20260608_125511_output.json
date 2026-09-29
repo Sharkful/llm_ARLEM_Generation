@@ -1,0 +1,1324 @@
+{
+  "version": "2.0",
+  "labId": "vsepr_theory_and_shapes",
+  "author": "Dr. Angela Martinez",
+  "courseName": "General Chemistry I",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Determine the steric number of a central atom from its Lewis structure by counting bonding pairs and lone pairs",
+    "Predict electron-domain geometries from steric numbers (linear, trigonal planar, tetrahedral, trigonal bipyramidal, octahedral)",
+    "Distinguish electron-domain geometry from molecular geometry when lone pairs are present",
+    "Explain lone pair angular asymmetry and its effect on bond-angle deviations",
+    "Apply VSEPR predictions to specific molecules and compare with experimentally observed structures"
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "VSEPR Setup and Introduction",
+      "description": "Introduction to the core VSEPR concept: minimizing mutual repulsion of electron domains around a central atom.",
+      "author": "Dr. Angela Martinez",
+      "institution": "University of Chemical Sciences",
+      "dateCreated": "2023-10-15",
+      "educationalObjectives": [
+        "Explain the core principle of Valence Shell Electron Pair Repulsion",
+        "Identify and count electron domains from a Lewis structure"
+      ],
+      "instructions": [
+        "Observe the central atom and the Lewis structure panel on the left.",
+        "Learn how a flat representation translates to a three-dimensional arrangement."
+      ],
+      "objects": [
+        {
+          "prefab": "atomPrefab",
+          "name": "centralAtomM1",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            -0.4
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "color": [
+            90.0,
+            90.0,
+            95.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "lewisStructurePanelPrefab",
+          "name": "lewisWaterPanel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.5,
+            1.1,
+            -0.4
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.02
+          ],
+          "enabled": false,
+          "texture": "water_lewis_flat"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "vseprLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.3,
+            -0.4
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "VSEPR Core Theory",
+              "fontSize": 0.18,
+              "wrapText": true,
+              "initialPosition": [
+                0.0,
+                1.3,
+                -0.4
+              ],
+              "orbitalPeriod": 0.0,
+              "orbitalScale": 0.0,
+              "synchronousRotation": false,
+              "azmTarget": 0,
+              "azmTolerance": 0,
+              "altTarget": 0,
+              "altTolerance": 0,
+              "mass": 0.0,
+              "drag": 0.0,
+              "angularDrag": 0.0,
+              "isKinematic": false,
+              "useGravity": false,
+              "xConstraint": false,
+              "yConstraint": false,
+              "zConstraint": false,
+              "xRotationConstraint": false,
+              "yRotationConstraint": false,
+              "zRotationConstraint": false,
+              "draggable": false,
+              "kinematicWhileIdle": false,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "intro_vsepr_concept",
+          "audioClip": "audio_vsepr_intro_repulsion",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "centralAtomM1",
+              "scale": [
+                0.18,
+                0.18,
+                0.18
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "show_lewis_structure",
+          "audioClip": "audio_counting_domains",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "lewisWaterPanel",
+              "enabled": true
+            },
+            {
+              "target": "vseprLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "1. Single, double, triple bonds, and lone pairs all count as single domains.",
+                  "fontSize": 0.12,
+                  "wrapText": true,
+                  "initialPosition": [
+                    0.0,
+                    1.3,
+                    -0.4
+                  ],
+                  "orbitalPeriod": 0.0,
+                  "orbitalScale": 0.0,
+                  "synchronousRotation": false,
+                  "azmTarget": 0,
+                  "azmTolerance": 0,
+                  "altTarget": 0,
+                  "altTolerance": 0,
+                  "mass": 0.0,
+                  "drag": 0.0,
+                  "angularDrag": 0.0,
+                  "isKinematic": false,
+                  "useGravity": false,
+                  "xConstraint": false,
+                  "yConstraint": false,
+                  "zConstraint": false,
+                  "xRotationConstraint": false,
+                  "yRotationConstraint": false,
+                  "zRotationConstraint": false,
+                  "draggable": false,
+                  "kinematicWhileIdle": false,
+                  "faceWhileDragging": false,
+                  "matchWallWhileDragging": false,
+                  "invertForward": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "The Repulsion Principle (2 to 4 Domains)",
+      "description": "Watch electron domains drift apart to minimize electrostatic repulsion, forming linear, trigonal planar, and tetrahedral arrangements.",
+      "author": "Dr. Angela Martinez",
+      "institution": "University of Chemical Sciences",
+      "dateCreated": "2023-10-15",
+      "educationalObjectives": [
+        "Visualize the electrostatic origin of electron-domain arrangements",
+        "Explain the geometric structures formed by 2, 3, and 4 electron domains"
+      ],
+      "instructions": [
+        "Watch the electron clouds rearrange as new domains are introduced.",
+        "Observe the final stable angles that minimize repulsion."
+      ],
+      "objects": [
+        {
+          "prefab": "atomPrefab",
+          "name": "centralAtomM2",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            -0.4
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "color": [
+            90.0,
+            90.0,
+            95.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "cloudPrefab",
+          "name": "cloud1",
+          "parent": "centralAtomM2",
+          "position": [
+            0.0,
+            0.2,
+            0.0
+          ],
+          "scale": [
+            0.12,
+            0.25,
+            0.12
+          ],
+          "color": [
+            0.0,
+            191.0,
+            255.0,
+            180.0
+          ]
+        },
+        {
+          "prefab": "cloudPrefab",
+          "name": "cloud2",
+          "parent": "centralAtomM2",
+          "position": [
+            0.05,
+            -0.18,
+            0.05
+          ],
+          "scale": [
+            0.12,
+            0.25,
+            0.12
+          ],
+          "color": [
+            0.0,
+            191.0,
+            255.0,
+            180.0
+          ]
+        },
+        {
+          "prefab": "cloudPrefab",
+          "name": "cloud3",
+          "parent": "centralAtomM2",
+          "position": [
+            0.15,
+            0.05,
+            0.0
+          ],
+          "scale": [
+            0.12,
+            0.25,
+            0.12
+          ],
+          "enabled": false,
+          "color": [
+            0.0,
+            191.0,
+            255.0,
+            180.0
+          ]
+        },
+        {
+          "prefab": "cloudPrefab",
+          "name": "cloud4",
+          "parent": "centralAtomM2",
+          "position": [
+            -0.1,
+            -0.1,
+            0.15
+          ],
+          "scale": [
+            0.12,
+            0.25,
+            0.12
+          ],
+          "enabled": false,
+          "color": [
+            0.0,
+            191.0,
+            255.0,
+            180.0
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "angleLabelM2",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.4,
+            -0.4
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Steric Number 2: Linear Geometry (180\u00b0)",
+              "fontSize": 0.14,
+              "wrapText": true,
+              "initialPosition": [
+                0.0,
+                1.4,
+                -0.4
+              ],
+              "orbitalPeriod": 0.0,
+              "orbitalScale": 0.0,
+              "synchronousRotation": false,
+              "azmTarget": 0,
+              "azmTolerance": 0,
+              "altTarget": 0,
+              "altTolerance": 0,
+              "mass": 0.0,
+              "drag": 0.0,
+              "angularDrag": 0.0,
+              "isKinematic": false,
+              "useGravity": false,
+              "xConstraint": false,
+              "yConstraint": false,
+              "zConstraint": false,
+              "xRotationConstraint": false,
+              "yRotationConstraint": false,
+              "zRotationConstraint": false,
+              "draggable": false,
+              "kinematicWhileIdle": false,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "linear_drift",
+          "audioClip": "audio_linear_arrangement",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "cloud1",
+              "position": [
+                0.0,
+                0.25,
+                0.0
+              ],
+              "eulerAngles": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "cloud2",
+              "position": [
+                0.0,
+                -0.25,
+                0.0
+              ],
+              "eulerAngles": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "trigonal_planar_drift",
+          "audioClip": "audio_trig_planar_arrangement",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "cloud3",
+              "enabled": true
+            },
+            {
+              "target": "cloud1",
+              "position": [
+                0.0,
+                0.25,
+                0.0
+              ],
+              "eulerAngles": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "cloud2",
+              "position": [
+                0.217,
+                -0.125,
+                0.0
+              ],
+              "eulerAngles": [
+                0.0,
+                0.0,
+                -120.0
+              ]
+            },
+            {
+              "target": "cloud3",
+              "position": [
+                -0.217,
+                -0.125,
+                0.0
+              ],
+              "eulerAngles": [
+                0.0,
+                0.0,
+                120.0
+              ]
+            },
+            {
+              "target": "angleLabelM2",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric Number 3: Trigonal Planar (120\u00b0)",
+                  "fontSize": 0.14,
+                  "wrapText": true,
+                  "initialPosition": [
+                    0.0,
+                    1.4,
+                    -0.4
+                  ],
+                  "orbitalPeriod": 0.0,
+                  "orbitalScale": 0.0,
+                  "synchronousRotation": false,
+                  "azmTarget": 0,
+                  "azmTolerance": 0,
+                  "altTarget": 0,
+                  "altTolerance": 0,
+                  "mass": 0.0,
+                  "drag": 0.0,
+                  "angularDrag": 0.0,
+                  "isKinematic": false,
+                  "useGravity": false,
+                  "xConstraint": false,
+                  "yConstraint": false,
+                  "zConstraint": false,
+                  "xRotationConstraint": false,
+                  "yRotationConstraint": false,
+                  "zRotationConstraint": false,
+                  "draggable": false,
+                  "kinematicWhileIdle": false,
+                  "faceWhileDragging": false,
+                  "matchWallWhileDragging": false,
+                  "invertForward": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "tetrahedral_drift",
+          "audioClip": "audio_tetrahedral_arrangement",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "cloud4",
+              "enabled": true
+            },
+            {
+              "target": "cloud1",
+              "position": [
+                0.0,
+                0.25,
+                0.0
+              ],
+              "eulerAngles": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "target": "cloud2",
+              "position": [
+                0.236,
+                -0.083,
+                0.0
+              ],
+              "eulerAngles": [
+                0.0,
+                0.0,
+                -109.5
+              ]
+            },
+            {
+              "target": "cloud3",
+              "position": [
+                -0.118,
+                -0.083,
+                0.204
+              ],
+              "eulerAngles": [
+                120.0,
+                30.0,
+                0.0
+              ]
+            },
+            {
+              "target": "cloud4",
+              "position": [
+                -0.118,
+                -0.083,
+                -0.204
+              ],
+              "eulerAngles": [
+                -120.0,
+                -30.0,
+                0.0
+              ]
+            },
+            {
+              "target": "angleLabelM2",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Steric Number 4: Tetrahedral (109.5\u00b0)",
+                  "fontSize": 0.14,
+                  "wrapText": true,
+                  "initialPosition": [
+                    0.0,
+                    1.4,
+                    -0.4
+                  ],
+                  "orbitalPeriod": 0.0,
+                  "orbitalScale": 0.0,
+                  "synchronousRotation": false,
+                  "azmTarget": 0,
+                  "azmTolerance": 0,
+                  "altTarget": 0,
+                  "altTolerance": 0,
+                  "mass": 0.0,
+                  "drag": 0.0,
+                  "angularDrag": 0.0,
+                  "isKinematic": false,
+                  "useGravity": false,
+                  "xConstraint": false,
+                  "yConstraint": false,
+                  "zConstraint": false,
+                  "xRotationConstraint": false,
+                  "yRotationConstraint": false,
+                  "zRotationConstraint": false,
+                  "draggable": false,
+                  "kinematicWhileIdle": false,
+                  "faceWhileDragging": false,
+                  "matchWallWhileDragging": false,
+                  "invertForward": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Expanding Geometries (5 & 6 Domains)",
+      "description": "Examine hypervalent coordination states: trigonal bipyramidal and octahedral arrangements.",
+      "author": "Dr. Angela Martinez",
+      "institution": "University of Chemical Sciences",
+      "dateCreated": "2023-10-15",
+      "educationalObjectives": [
+        "Contrast axial and equatorial positions in trigonal bipyramidal geometries",
+        "Explain the uniform 90-degree angles of octahedral arrangements"
+      ],
+      "instructions": [
+        "Rotate the models to inspect axial and equatorial planes.",
+        "Compare bond angles in hypervalent structures."
+      ],
+      "objects": [
+        {
+          "prefab": "moleculePF5Prefab",
+          "name": "tbpAssembly",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.3,
+            1.0,
+            -0.4
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "rotationTime": 15.0
+            }
+          ]
+        },
+        {
+          "prefab": "moleculeSF6Prefab",
+          "name": "octahedralAssembly",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.3,
+            1.0,
+            -0.4
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "rotationTime": 15.0
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelsM3",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.4,
+            -0.4
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Trigonal Bipyramidal (left) and Octahedral (right)",
+              "fontSize": 0.14,
+              "wrapText": true,
+              "initialPosition": [
+                0.0,
+                1.4,
+                -0.4
+              ],
+              "orbitalPeriod": 0.0,
+              "orbitalScale": 0.0,
+              "synchronousRotation": false,
+              "azmTarget": 0,
+              "azmTolerance": 0,
+              "altTarget": 0,
+              "altTolerance": 0,
+              "mass": 0.0,
+              "drag": 0.0,
+              "angularDrag": 0.0,
+              "isKinematic": false,
+              "useGravity": false,
+              "xConstraint": false,
+              "yConstraint": false,
+              "zConstraint": false,
+              "xRotationConstraint": false,
+              "yRotationConstraint": false,
+              "zRotationConstraint": false,
+              "draggable": false,
+              "kinematicWhileIdle": false,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "explain_tbp",
+          "audioClip": "audio_tbp_axial_equatorial",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "tbpAssembly",
+              "scale": [
+                0.35,
+                0.35,
+                0.35
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "explain_octahedral",
+          "audioClip": "audio_octahedral_90_degrees",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "tbpAssembly",
+              "scale": [
+                0.3,
+                0.3,
+                0.3
+              ]
+            },
+            {
+              "target": "octahedralAssembly",
+              "scale": [
+                0.35,
+                0.35,
+                0.35
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Electron-Domain vs Molecular Geometry",
+      "description": "Understand how lone pairs alter visible molecular structures while keeping the same overall electron-domain geometries.",
+      "author": "Dr. Angela Martinez",
+      "institution": "University of Chemical Sciences",
+      "dateCreated": "2023-10-15",
+      "educationalObjectives": [
+        "Distinguish between electron-domain geometry and molecular geometry",
+        "Deduce molecular shape variations (bent, trigonal pyramidal) from tetrahedral frameworks"
+      ],
+      "instructions": [
+        "Watch as terminal atoms (bonds) are replaced by translucent lone pair clouds.",
+        "Observe the shift in the resulting molecular shape classification."
+      ],
+      "objects": [
+        {
+          "prefab": "moleculeCH4Prefab",
+          "name": "methaneStructure",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            -0.4
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ]
+        },
+        {
+          "prefab": "moleculeNH3Prefab",
+          "name": "ammoniaStructure",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            -0.4
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "moleculeH2OPrefab",
+          "name": "waterStructure",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            -0.4
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "geometryLegend",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.4,
+            -0.4
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Methane (CH4): Tetrahedral EDG, Tetrahedral Molecular Geometry",
+              "fontSize": 0.13,
+              "wrapText": true,
+              "initialPosition": [
+                0.0,
+                1.4,
+                -0.4
+              ],
+              "orbitalPeriod": 0.0,
+              "orbitalScale": 0.0,
+              "synchronousRotation": false,
+              "azmTarget": 0,
+              "azmTolerance": 0,
+              "altTarget": 0,
+              "altTolerance": 0,
+              "mass": 0.0,
+              "drag": 0.0,
+              "angularDrag": 0.0,
+              "isKinematic": false,
+              "useGravity": false,
+              "xConstraint": false,
+              "yConstraint": false,
+              "zConstraint": false,
+              "xRotationConstraint": false,
+              "yRotationConstraint": false,
+              "zRotationConstraint": false,
+              "draggable": false,
+              "kinematicWhileIdle": false,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "tetrahedral_all_bonding",
+          "audioClip": "audio_methane_all_bonding",
+          "autoAdvance": true,
+          "changes": []
+        },
+        {
+          "clipName": "one_lone_pair_pyramidal",
+          "audioClip": "audio_ammonia_lone_pair",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "methaneStructure",
+              "enabled": false
+            },
+            {
+              "target": "ammoniaStructure",
+              "enabled": true
+            },
+            {
+              "target": "geometryLegend",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Ammonia (NH3): Tetrahedral EDG, Trigonal Pyramidal Molecular Geometry",
+                  "fontSize": 0.13,
+                  "wrapText": true,
+                  "initialPosition": [
+                    0.0,
+                    1.4,
+                    -0.4
+                  ],
+                  "orbitalPeriod": 0.0,
+                  "orbitalScale": 0.0,
+                  "synchronousRotation": false,
+                  "azmTarget": 0,
+                  "azmTolerance": 0,
+                  "altTarget": 0,
+                  "altTolerance": 0,
+                  "mass": 0.0,
+                  "drag": 0.0,
+                  "angularDrag": 0.0,
+                  "isKinematic": false,
+                  "useGravity": false,
+                  "xConstraint": false,
+                  "yConstraint": false,
+                  "zConstraint": false,
+                  "xRotationConstraint": false,
+                  "yRotationConstraint": false,
+                  "zRotationConstraint": false,
+                  "draggable": false,
+                  "kinematicWhileIdle": false,
+                  "faceWhileDragging": false,
+                  "matchWallWhileDragging": false,
+                  "invertForward": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "two_lone_pairs_bent",
+          "audioClip": "audio_water_two_lone_pairs",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "ammoniaStructure",
+              "enabled": false
+            },
+            {
+              "target": "waterStructure",
+              "enabled": true
+            },
+            {
+              "target": "geometryLegend",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Water (H2O): Tetrahedral EDG, Bent Molecular Geometry",
+                  "fontSize": 0.13,
+                  "wrapText": true,
+                  "initialPosition": [
+                    0.0,
+                    1.4,
+                    -0.4
+                  ],
+                  "orbitalPeriod": 0.0,
+                  "orbitalScale": 0.0,
+                  "synchronousRotation": false,
+                  "azmTarget": 0,
+                  "azmTolerance": 0,
+                  "altTarget": 0,
+                  "altTolerance": 0,
+                  "mass": 0.0,
+                  "drag": 0.0,
+                  "angularDrag": 0.0,
+                  "isKinematic": false,
+                  "useGravity": false,
+                  "xConstraint": false,
+                  "yConstraint": false,
+                  "zConstraint": false,
+                  "xRotationConstraint": false,
+                  "yRotationConstraint": false,
+                  "zRotationConstraint": false,
+                  "draggable": false,
+                  "kinematicWhileIdle": false,
+                  "faceWhileDragging": false,
+                  "matchWallWhileDragging": false,
+                  "invertForward": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Lone Pair Asymmetry and Bond Angles",
+      "description": "Learn why lone pairs exert more repulsion than bonding pairs, leading to reduced bond angles.",
+      "author": "Dr. Angela Martinez",
+      "institution": "University of Chemical Sciences",
+      "dateCreated": "2023-10-15",
+      "educationalObjectives": [
+        "Explain the physical reason why lone pairs occupy more space than bonding pairs",
+        "Correlate the number of central atom lone pairs with decreasing bond angles"
+      ],
+      "instructions": [
+        "Examine the size difference between the lone pairs and the bonding orbitals.",
+        "Compare the bond angles of methane (109.5\u00b0), ammonia (107\u00b0), and water (104.5\u00b0)."
+      ],
+      "objects": [
+        {
+          "prefab": "moleculeCH4Prefab",
+          "name": "methaneAsym",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.4,
+            1.0,
+            -0.4
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ]
+        },
+        {
+          "prefab": "moleculeNH3Prefab",
+          "name": "ammoniaAsym",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            -0.4
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ]
+        },
+        {
+          "prefab": "moleculeH2OPrefab",
+          "name": "waterAsym",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.4,
+            1.0,
+            -0.4
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "asymmetryLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.4,
+            -0.4
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Comparing Tetrahedral Angles: Methane (109.5\u00b0), Ammonia (107\u00b0), Water (104.5\u00b0)",
+              "fontSize": 0.12,
+              "wrapText": true,
+              "initialPosition": [
+                0.0,
+                1.4,
+                -0.4
+              ],
+              "orbitalPeriod": 0.0,
+              "orbitalScale": 0.0,
+              "synchronousRotation": false,
+              "azmTarget": 0,
+              "azmTolerance": 0,
+              "altTarget": 0,
+              "altTolerance": 0,
+              "mass": 0.0,
+              "drag": 0.0,
+              "angularDrag": 0.0,
+              "isKinematic": false,
+              "useGravity": false,
+              "xConstraint": false,
+              "yConstraint": false,
+              "zConstraint": false,
+              "xRotationConstraint": false,
+              "yRotationConstraint": false,
+              "zRotationConstraint": false,
+              "draggable": false,
+              "kinematicWhileIdle": false,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "explain_asymmetry_size",
+          "audioClip": "audio_asymmetry_orbital_size",
+          "autoAdvance": true,
+          "changes": []
+        },
+        {
+          "clipName": "compare_angles_trend",
+          "audioClip": "audio_bond_compression_trend",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "methaneAsym",
+              "scale": [
+                0.22,
+                0.22,
+                0.22
+              ]
+            },
+            {
+              "target": "ammoniaAsym",
+              "scale": [
+                0.22,
+                0.22,
+                0.22
+              ]
+            },
+            {
+              "target": "waterAsym",
+              "scale": [
+                0.22,
+                0.22,
+                0.22
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Interactive Shape Matcher",
+      "description": "Challenge your understanding: align and position the orbital domains into minimum repulsion locations.",
+      "author": "Dr. Angela Martinez",
+      "institution": "University of Chemical Sciences",
+      "dateCreated": "2023-10-15",
+      "educationalObjectives": [
+        "Position molecular domains according to predicted VSEPR angular limits",
+        "Demonstrate spatial awareness of high-symmetry point groups"
+      ],
+      "instructions": [
+        "Grab the floating orbital domains and drag them into correct spatial positions.",
+        "They will snap in when you approach the correct angular geometries."
+      ],
+      "objects": [
+        {
+          "prefab": "atomPrefab",
+          "name": "interactiveCore",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.0,
+            -0.4
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "color": [
+            100.0,
+            100.0,
+            100.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "moveableSphere",
+          "name": "domainA",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.3,
+            1.2,
+            -0.3
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            100.0,
+            100.0,
+            200.0
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "moveableSphere",
+          "name": "domainB",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.3,
+            0.8,
+            -0.3
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255.0,
+            100.0,
+            100.0,
+            200.0
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "interactivePrompt",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            1.4,
+            -0.4
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Drag domains to opposite sides (180\u00b0) of the central atom.",
+              "fontSize": 0.13,
+              "wrapText": true,
+              "initialPosition": [
+                0.0,
+                1.4,
+                -0.4
+              ],
+              "orbitalPeriod": 0.0,
+              "orbitalScale": 0.0,
+              "synchronousRotation": false,
+              "azmTarget": 0,
+              "azmTolerance": 0,
+              "altTarget": 0,
+              "altTolerance": 0,
+              "mass": 0.0,
+              "drag": 0.0,
+              "angularDrag": 0.0,
+              "isKinematic": false,
+              "useGravity": false,
+              "xConstraint": false,
+              "yConstraint": false,
+              "zConstraint": false,
+              "xRotationConstraint": false,
+              "yRotationConstraint": false,
+              "zRotationConstraint": false,
+              "draggable": false,
+              "kinematicWhileIdle": false,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "interactive_challenge_start",
+          "audioClip": "audio_interactive_instructions",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "domainA",
+              "components": [
+                {
+                  "componentType": "checkAngle",
+                  "azmTarget": 180,
+                  "azmTolerance": 15,
+                  "altTarget": 0,
+                  "altTolerance": 15,
+                  "audioClipSuccess": "audio_success_snap",
+                  "callBackObjects": [
+                    "interactivePrompt"
+                  ],
+                  "isKinematic": false,
+                  "useGravity": false,
+                  "xConstraint": false,
+                  "yConstraint": false,
+                  "zConstraint": false,
+                  "xRotationConstraint": false,
+                  "yRotationConstraint": false,
+                  "zRotationConstraint": false,
+                  "draggable": false,
+                  "kinematicWhileIdle": false,
+                  "faceWhileDragging": false,
+                  "matchWallWhileDragging": false,
+                  "invertForward": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,437 @@
+{
+  "version": "2.0",
+  "labId": "AnatomyHeartCirculation",
+  "author": "AR Educational Content Team",
+  "courseName": "Human Anatomy and Physiology I",
+  "estimatedLength": "20 minutes",
+  "objectives": [
+    "Students will identify and name the four chambers of the heart, the four heart valves, and the major vessels entering and leaving the heart.",
+    "Students will trace the path of blood through the heart's dual circulation, naming each chamber, valve, and vessel in order.",
+    "Students will distinguish the pulmonary circuit from the systemic circuit and explain why the right and left sides of the heart serve different circulatory functions.",
+    "Students will explain why the left ventricle has a substantially thicker myocardium than the right ventricle, relating wall thickness to the pressure required to perfuse the systemic versus pulmonary circuits.",
+    "Students will describe the function of the atrioventricular and semilunar valves in preventing backflow, and identify which valves separate which chambers or chamber-vessel pairs."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Structural Anatomy of the Heart",
+      "description": "An introduction to the major chambers, valves, and vessels of the human heart.",
+      "author": "Dr. Anya Sharma",
+      "institution": "University of Biology",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Identify the four chambers of the heart: right atrium, left atrium, right ventricle, and left ventricle.",
+        "Identify the four primary valves: tricuspid, pulmonary, mitral, and aortic.",
+        "Identify the major vessels connected to the heart: vena cavae, pulmonary artery, pulmonary veins, and aorta."
+      ],
+      "instructions": [
+        "This module will introduce the external and internal structures of the human heart.",
+        "Use the next and previous buttons to navigate through the steps."
+      ],
+      "objects": [
+        {
+          "prefab": "heartModelPrefab",
+          "name": "heartModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            90.0,
+            0.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "texture": "heart_muscle_albedo"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "rightAtriumLabel",
+          "parent": "heartModel",
+          "position": [
+            0.15,
+            0.1,
+            -0.1
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Right Atrium",
+              "fontSize": 0.05
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "rightVentricleLabel",
+          "parent": "heartModel",
+          "position": [
+            0.1,
+            -0.15,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Right Ventricle",
+              "fontSize": 0.05
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "leftAtriumLabel",
+          "parent": "heartModel",
+          "position": [
+            -0.15,
+            0.15,
+            -0.1
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Left Atrium",
+              "fontSize": 0.05
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "leftVentricleLabel",
+          "parent": "heartModel",
+          "position": [
+            -0.15,
+            -0.1,
+            0.05
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Left Ventricle",
+              "fontSize": 0.05
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_intro",
+          "audioClip": "heart_intro.wav",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartModel",
+              "components": [
+                {
+                  "componentType": "simpleRotation",
+                  "rotationTime": 20.0,
+                  "initialPosition": [
+                    0.0,
+                    1.0,
+                    0.0
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_rightChambers",
+          "audioClip": "heart_right_chambers.wav",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartModel",
+              "color": [
+                255.0,
+                255.0,
+                255.0,
+                128.0
+              ]
+            },
+            {
+              "target": "rightAtriumLabel",
+              "enabled": true
+            },
+            {
+              "target": "rightVentricleLabel",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_leftChambers",
+          "audioClip": "heart_left_chambers.wav",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rightAtriumLabel",
+              "enabled": false
+            },
+            {
+              "target": "rightVentricleLabel",
+              "enabled": false
+            },
+            {
+              "target": "leftAtriumLabel",
+              "enabled": true
+            },
+            {
+              "target": "leftVentricleLabel",
+              "enabled": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Blood Flow and Circulation",
+      "description": "Tracing the path of deoxygenated and oxygenated blood through the pulmonary and systemic circuits.",
+      "author": "Dr. Anya Sharma",
+      "institution": "University of Biology",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Trace the path of blood through the pulmonary circuit.",
+        "Trace the path of blood through the systemic circuit.",
+        "Explain the function of the heart valves in preventing backflow.",
+        "Relate the thickness of the left ventricular myocardium to its function in the systemic circuit."
+      ],
+      "instructions": [
+        "This module demonstrates how blood flows through the heart to the lungs and the rest of the body.",
+        "Observe the path of the blue (deoxygenated) and red (oxygenated) particles."
+      ],
+      "objects": [
+        {
+          "prefab": "heartModelPrefab",
+          "name": "heartModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            90.0,
+            0.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "texture": "heart_muscle_albedo",
+          "color": [
+            255.0,
+            255.0,
+            255.0,
+            100.0
+          ]
+        },
+        {
+          "prefab": "tinySphere",
+          "name": "deoxygenatedBlood",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.05,
+            0.15,
+            0.2
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "color": [
+            0.0,
+            100.0,
+            255.0,
+            255.0
+          ],
+          "components": []
+        },
+        {
+          "prefab": "tinySphere",
+          "name": "oxygenatedBlood",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.05,
+            0.15,
+            -0.2
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "color": [
+            255.0,
+            0.0,
+            0.0,
+            255.0
+          ],
+          "components": []
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "myocardiumLabel",
+          "parent": "heartModel",
+          "position": [
+            -0.25,
+            -0.15,
+            0.05
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Thick Myocardium\n(for Systemic Circulation)",
+              "fontSize": 0.04
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_pulmonaryIntro",
+          "audioClip": "flow_pulmonary_intro.wav",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "oxygenatedBlood",
+              "enabled": false
+            },
+            {
+              "target": "deoxygenatedBlood",
+              "enabled": true,
+              "color": [
+                0.0,
+                100.0,
+                255.0,
+                255.0
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_pulmonaryPath",
+          "audioClip": "flow_pulmonary_path.wav",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "deoxygenatedBlood",
+              "position": [
+                0.1,
+                -0.15,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_systemicIntro",
+          "audioClip": "flow_systemic_intro.wav",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "deoxygenatedBlood",
+              "enabled": false
+            },
+            {
+              "target": "oxygenatedBlood",
+              "enabled": true,
+              "color": [
+                255.0,
+                0.0,
+                0.0,
+                255.0
+              ],
+              "components": []
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_systemicPath",
+          "audioClip": "flow_systemic_path.wav",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "oxygenatedBlood",
+              "position": [
+                -0.1,
+                -0.15,
+                0.05
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip4_myocardium",
+          "audioClip": "flow_myocardium.wav",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "oxygenatedBlood",
+              "position": [
+                -0.1,
+                0.3,
+                0.0
+              ]
+            },
+            {
+              "target": "myocardiumLabel",
+              "enabled": true
+            },
+            {
+              "target": "heartModel",
+              "color": [
+                255.0,
+                255.0,
+                255.0,
+                50.0
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

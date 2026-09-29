@@ -1,0 +1,356 @@
+{
+  "workplace": {
+    "id": "wp_astronomy_retrograde",
+    "name": "Astronomy Lab: Apparent Retrograde Motion",
+    "origin": "det_origin",
+    "things": [
+      {
+        "id": "thing_sun",
+        "name": "Sun Globe Model",
+        "detectable": "det_sun",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "thing_mars",
+        "name": "Mars Globe Model",
+        "detectable": "det_mars",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "thing_earth",
+        "name": "Earth Globe Model",
+        "detectable": "det_earth",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "place_earth_observer",
+        "name": "Earth Surface Observation Platform",
+        "detectable": "det_earth_obs",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "place_solar_system",
+        "name": "Heliocentric Orrery Area",
+        "detectable": "det_solar_sys",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "det_origin",
+        "type": "anchor",
+        "url": "https://assets.example.com/anchors/origin.anchor"
+      },
+      {
+        "id": "det_earth_obs",
+        "type": "anchor",
+        "url": "https://assets.example.com/anchors/earth_obs.anchor"
+      },
+      {
+        "id": "det_solar_sys",
+        "type": "anchor",
+        "url": "https://assets.example.com/anchors/solar_sys.anchor"
+      },
+      {
+        "id": "det_sun",
+        "type": "marker",
+        "url": "https://assets.example.com/markers/sun.marker"
+      },
+      {
+        "id": "det_mars",
+        "type": "marker",
+        "url": "https://assets.example.com/markers/mars.marker"
+      },
+      {
+        "id": "det_earth",
+        "type": "marker",
+        "url": "https://assets.example.com/markers/earth.marker"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "label"
+      },
+      {
+        "id": "image",
+        "x_size": 100.0,
+        "y_size": 100.0
+      },
+      {
+        "id": "animation",
+        "x_size": 150.0,
+        "y_size": 150.0
+      },
+      {
+        "id": "audio",
+        "volume": 80
+      }
+    ],
+    "predicates": [
+      {
+        "id": "pred_mars_path",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/models/mars_retrograde_path.glb"
+      },
+      {
+        "id": "pred_geocentric_epicycle",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/models/geocentric_epicycle.glb"
+      },
+      {
+        "id": "pred_heliocentric_orbits",
+        "type": "animation",
+        "scale": 1.2,
+        "url": "https://assets.example.com/models/heliocentric_model.glb"
+      },
+      {
+        "id": "pred_pass_analogy",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/images/car_pass_analogy.png"
+      },
+      {
+        "id": "pred_comparison_chart",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/images/planetary_loops_comparison.png"
+      }
+    ]
+  },
+  "activity": {
+    "id": "act_retrograde_exploration",
+    "name": "Apparent Retrograde Motion Exploration",
+    "description": "An interactive astronomy lab guiding 100-level undergraduate students through the visual mystery of Mars's apparent retrograde motion, comparing the geocentric epicycle explanation to the elegant heliocentric overtaking model.",
+    "workplace": "wp_astronomy_retrograde",
+    "start": "step_1_intro",
+    "actions": [
+      {
+        "id": "step_1_intro",
+        "instruction": {
+          "title": "Apparent Path of Mars",
+          "description": "Observe Mars against the background stars of the zodiac. Notice how it normally drifts slowly eastward, slows down, loops westward (apparent retrograde motion) for several weeks, and then resumes its eastward journey. This puzzling loop was a major astronomical mystery for centuries."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "place_earth_observer",
+              "type": "predicate",
+              "augmentation": "pred_mars_path",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_2_geocentric"
+          }
+        ]
+      },
+      {
+        "id": "step_2_geocentric",
+        "instruction": {
+          "title": "The Geocentric Epicycle Explanation",
+          "description": "In the ancient geocentric model, the Earth was fixed at the center. To explain why Mars occasionally moved backward, astronomers like Ptolemy had to introduce 'epicycles'\u2014complex virtual circles riding on larger circular orbits. Look closely at the Mars globe to see the artificial mechanical complexity of this model."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "thing_mars",
+              "type": "predicate",
+              "augmentation": "pred_geocentric_epicycle",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "place_earth_observer",
+              "augmentation": "pred_mars_path",
+              "poi": "default"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_3_heliocentric"
+          }
+        ]
+      },
+      {
+        "id": "step_3_heliocentric",
+        "instruction": {
+          "title": "The Heliocentric Explanation (Overtaking)",
+          "description": "Switch to the heliocentric viewpoint. Watch as both Earth and Mars revolve around the Sun in smooth, concentric orbits. Because Earth is closer to the Sun, it travels faster. Watch Earth catch up to and overtake Mars on the inner track\u2014this overtaking event is exactly when Mars appears to go backward from Earth's point of view."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "place_solar_system",
+              "type": "predicate",
+              "augmentation": "pred_heliocentric_orbits",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "thing_mars",
+              "augmentation": "pred_geocentric_epicycle",
+              "poi": "default"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_4_analogy"
+          }
+        ]
+      },
+      {
+        "id": "step_4_analogy",
+        "instruction": {
+          "title": "The Highway Overtaking Analogy",
+          "description": "To visualize this overtaking, think of passing a slower car on the highway. As your faster car pulls alongside and passes, the slower car appears to drift backward relative to the distant trees and hills. Both cars are still moving forward, but relative motion creates the illusion of backward drift."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "place_earth_observer",
+              "type": "predicate",
+              "augmentation": "pred_pass_analogy",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "place_solar_system",
+              "augmentation": "pred_heliocentric_orbits",
+              "poi": "default"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_5_comparison"
+          }
+        ]
+      },
+      {
+        "id": "step_5_comparison",
+        "instruction": {
+          "title": "Comparing Outer Planets",
+          "description": "Compare the apparent retrograde loops of Mars, Jupiter, and Saturn. Because Jupiter and Saturn are much farther from Earth and the Sun, their relative-motion effect is less pronounced, resulting in smaller, tighter retrograde loops than Mars's dramatic loop. Observe this relationship in the holographic chart."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "place_solar_system",
+              "type": "predicate",
+              "augmentation": "pred_comparison_chart",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "place_earth_observer",
+              "augmentation": "pred_pass_analogy",
+              "poi": "default"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_6_complete"
+          }
+        ]
+      },
+      {
+        "id": "step_6_complete",
+        "instruction": {
+          "title": "Lab Completed",
+          "description": "You have completed the Apparent Retrograde Motion exploration. You should now understand how apparent planetary loop-backs are an elegant, natural consequence of Earth overtaking slower outer planets on our heliocentric journey. Click the trigger to restart."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "place_solar_system",
+              "augmentation": "pred_comparison_chart",
+              "poi": "default"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_1_intro"
+          }
+        ]
+      }
+    ]
+  }
+}

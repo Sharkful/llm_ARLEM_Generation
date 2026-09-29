@@ -1,0 +1,417 @@
+{
+  "workplace": {
+    "id": "astro_lab_workplace",
+    "name": "Astronomy Lab Workplace",
+    "origin": "detectable_origin",
+    "things": [
+      {
+        "id": "model_mars",
+        "name": "Mars Model",
+        "detectable": "detectable_mars",
+        "pois": []
+      },
+      {
+        "id": "model_jupiter",
+        "name": "Jupiter Model",
+        "detectable": "detectable_orrery",
+        "pois": []
+      },
+      {
+        "id": "model_saturn",
+        "name": "Saturn Model",
+        "detectable": "detectable_orrery",
+        "pois": []
+      }
+    ],
+    "places": [
+      {
+        "id": "station_night_sky",
+        "name": "Night Sky Observation Zone",
+        "detectable": "detectable_origin",
+        "pois": []
+      },
+      {
+        "id": "station_orrery",
+        "name": "Solar System Model Station",
+        "detectable": "detectable_orrery",
+        "pois": []
+      }
+    ],
+    "persons": [
+      {
+        "id": "student_01",
+        "name": "Learner",
+        "detectable": "detectable_origin",
+        "pois": [],
+        "persona": "learner"
+      }
+    ],
+    "sensors": [],
+    "devices": [
+      {
+        "id": "headset_01",
+        "type": "hololens",
+        "name": "University AR Headset",
+        "url": "wss://ar-headset-01.edu"
+      }
+    ],
+    "apps": [],
+    "detectables": [
+      {
+        "id": "detectable_origin",
+        "type": "anchor",
+        "sensor": "tracking",
+        "url": "https://assets.astrolab.edu/markers/origin.bundle"
+      },
+      {
+        "id": "detectable_mars",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.astrolab.edu/markers/mars.bundle"
+      },
+      {
+        "id": "detectable_orrery",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.astrolab.edu/markers/orrery.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "label"
+      },
+      {
+        "id": "animation"
+      },
+      {
+        "id": "audio"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "viewing_observation",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "viewing_geocentric",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "viewing_heliocentric",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "viewing_linkage",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "viewing_comparison",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "label_night_sky",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "label_epicycle",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "label_jupiter_saturn",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "anim_mars_loop",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.astrolab.edu/anims/mars_loop.glb"
+      },
+      {
+        "id": "anim_geocentric_model",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.astrolab.edu/anims/geocentric.glb"
+      },
+      {
+        "id": "anim_heliocentric_view",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.astrolab.edu/anims/heliocentric.glb"
+      },
+      {
+        "id": "anim_synchronized_view",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.astrolab.edu/anims/sync_view.glb"
+      },
+      {
+        "id": "anim_outer_planets",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.astrolab.edu/anims/outer_planets.glb"
+      }
+    ],
+    "warnings": []
+  },
+  "activity": {
+    "id": "astro_retrograde_lab",
+    "name": "Apparent Retrograde Motion Lab",
+    "description": "A module exploring why outer planets appear to move backward in the night sky using geocentric and heliocentric models.",
+    "language": "en",
+    "workplace": "astro_lab_workplace",
+    "start": "step_01_observation",
+    "actions": [
+      {
+        "id": "step_01_observation",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset_01",
+        "location": "station_night_sky",
+        "predicate": "viewing_observation",
+        "instruction": {
+          "title": "The Retrograde Puzzle",
+          "description": "Observe the red point of Mars drifting against the background constellations. Notice how it eventually slows, reverses into a loop, and resumes its path."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "station_night_sky",
+              "type": "predicate",
+              "augmentation": "label_night_sky",
+              "poi": "default"
+            },
+            {
+              "target": "model_mars",
+              "type": "predicate",
+              "augmentation": "anim_mars_loop",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "station_night_sky",
+              "type": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step_02_geocentric",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_02_geocentric",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset_01",
+        "location": "station_orrery",
+        "predicate": "viewing_geocentric",
+        "instruction": {
+          "title": "The Geocentric Explanation",
+          "description": "The geocentric model explains this motion using epicycles. Notice how Mars moves on a small circle that orbits Earth, creating the apparent backward loop."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "model_mars",
+              "type": "predicate",
+              "augmentation": "label_epicycle",
+              "poi": "default"
+            },
+            {
+              "target": "station_orrery",
+              "type": "predicate",
+              "augmentation": "anim_geocentric_model",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "station_orrery",
+              "type": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step_03_heliocentric",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_03_heliocentric",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset_01",
+        "location": "station_orrery",
+        "predicate": "viewing_heliocentric",
+        "instruction": {
+          "title": "The Heliocentric Solution",
+          "description": "Observe the solar system from above. Earth orbits faster than Mars. The retrograde loop occurs naturally as Earth overtakes Mars on the inside track."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "station_orrery",
+              "type": "predicate",
+              "augmentation": "anim_heliocentric_view",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "station_orrery",
+              "type": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step_04_linkage",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_04_linkage",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset_01",
+        "location": "station_orrery",
+        "predicate": "viewing_linkage",
+        "instruction": {
+          "title": "Linking Perspectives",
+          "description": "Compare the two views. The line-of-sight from Earth to Mars shows that the apparent backward motion is a direct consequence of relative orbital geometry."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "station_orrery",
+              "type": "predicate",
+              "augmentation": "anim_synchronized_view",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "station_orrery",
+              "type": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "step_05_comparison",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "step_05_comparison",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "headset_01",
+        "location": "station_orrery",
+        "predicate": "viewing_comparison",
+        "instruction": {
+          "title": "Planetary Comparisons",
+          "description": "Compare Mars, Jupiter, and Saturn. Notice how more distant planets produce smaller retrograde loops due to the change in parallax geometry."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "model_jupiter",
+              "type": "predicate",
+              "augmentation": "label_jupiter_saturn",
+              "poi": "default"
+            },
+            {
+              "target": "station_orrery",
+              "type": "predicate",
+              "augmentation": "anim_outer_planets",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "station_orrery",
+              "type": "*"
+            }
+          ],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step_05_comparison",
+            "operator": "equal"
+          }
+        ]
+      }
+    ]
+  }
+}

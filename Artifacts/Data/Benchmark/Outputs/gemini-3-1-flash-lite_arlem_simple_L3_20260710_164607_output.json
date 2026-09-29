@@ -1,0 +1,300 @@
+{
+  "workplace": {
+    "id": "heart-workplace-01",
+    "name": "Anatomy Lab Suite",
+    "origin": "marker-heart-table",
+    "things": [
+      {
+        "id": "heart-model",
+        "name": "3D Human Heart Model",
+        "detectable": "marker-heart-table",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "lab-station",
+        "name": "Main Lab Station",
+        "detectable": "marker-lab-station",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "student-handout",
+        "name": "Anatomy Guidebook",
+        "detectable": "marker-student-guide",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "marker-heart-table",
+        "type": "marker",
+        "url": "https://assets.example.com/marker-heart.bundle"
+      },
+      {
+        "id": "marker-lab-station",
+        "type": "marker",
+        "url": "https://assets.example.com/marker-station.bundle"
+      },
+      {
+        "id": "marker-student-guide",
+        "type": "marker",
+        "url": "https://assets.example.com/marker-guide.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "label"
+      },
+      {
+        "id": "animation"
+      },
+      {
+        "id": "audio"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "label-intro",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "label-valves",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "anim-blood-flow",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/blood-flow-anim.glb"
+      },
+      {
+        "id": "label-myocardium-diff",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "summary-audio",
+        "type": "audio",
+        "scale": 1.0,
+        "url": "https://assets.example.com/heart-summary.mp3"
+      }
+    ]
+  },
+  "activity": {
+    "id": "heart-anatomy-lab",
+    "name": "Heart Anatomy Lab",
+    "description": "A guided tour of the human heart anatomy, valve function, and blood circulation paths.",
+    "workplace": "heart-workplace-01",
+    "start": "step1-anatomy-identify",
+    "actions": [
+      {
+        "id": "step1-anatomy-identify",
+        "instruction": {
+          "title": "Anatomy Identification",
+          "description": "Locate the 3D heart model. Identify the 4 chambers: Right Atrium, Right Ventricle, Left Atrium, Left Ventricle."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart-model",
+              "type": "predicate",
+              "augmentation": "label-intro",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart-model",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "heart-model"
+          }
+        ]
+      },
+      {
+        "id": "step2-valves-function",
+        "instruction": {
+          "title": "Heart Valve Overview",
+          "description": "Observe the valves. Note the tricuspid and mitral (AV valves) and the pulmonary and aortic (semilunar valves). Tap to continue."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart-model",
+              "type": "predicate",
+              "augmentation": "label-valves",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart-model",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "heart-model"
+          }
+        ]
+      },
+      {
+        "id": "step3-blood-flow-pathway",
+        "instruction": {
+          "title": "Tracing Blood Flow",
+          "description": "Watch the animation to trace the blood flow. Note the dual-loop circulation: pulmonary vs. systemic. Tap to continue."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart-model",
+              "type": "predicate",
+              "augmentation": "anim-blood-flow",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart-model",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "heart-model"
+          }
+        ]
+      },
+      {
+        "id": "step4-myocardium-thickness",
+        "instruction": {
+          "title": "Myocardium Comparison",
+          "description": "Observe the left ventricle vs right ventricle wall thickness. The left ventricle is thicker for systemic pumping. Tap to continue."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart-model",
+              "type": "predicate",
+              "augmentation": "label-myocardium-diff",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart-model",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "heart-model"
+          }
+        ]
+      },
+      {
+        "id": "step5-summary-quiz",
+        "instruction": {
+          "title": "Cardiac Cycle Summary",
+          "description": "Listen to the summary of the cardiac cycle. Identify the vessels: Vena Cava, Pulmonary Arteries, Pulmonary Veins, Aorta."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "lab-station",
+              "type": "predicate",
+              "augmentation": "summary-audio",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "*",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "lab-station"
+          }
+        ]
+      }
+    ]
+  }
+}

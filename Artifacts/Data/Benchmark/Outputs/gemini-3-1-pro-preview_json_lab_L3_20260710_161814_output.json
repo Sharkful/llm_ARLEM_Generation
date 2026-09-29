@@ -1,0 +1,810 @@
+{
+  "version": "2.0",
+  "labId": "lab_vectors_projectile_motion",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Physics I (Mechanics)",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Students will represent a two-dimensional vector by its magnitude and direction, and equivalently by its horizontal and vertical components.",
+    "Students will add two or more vectors graphically using the tip-to-tail method and identify the resultant vector.",
+    "Students will decompose a vector into components along the x- and y-axes using right-triangle trigonometry.",
+    "Students will explain why the horizontal and vertical motions of a projectile are independent of one another.",
+    "Students will describe how velocities and positions change during flight, identifying apex properties.",
+    "Students will predict how changes in initial launch angle and speed affect trajectory, range, and max height."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Module 1: Vector Basics and Addition",
+      "description": "Introduction to vectors as abstract mathematical objects and graphically adding them using the tip-to-tail method.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Students will represent a two-dimensional vector by its magnitude and direction.",
+        "Students will add two vectors graphically using the tip-to-tail method and identify the resultant vector."
+      ],
+      "instructions": [
+        "Listen to the narrator explain vector properties.",
+        "Observe how vectors can be translated in space to add them together."
+      ],
+      "objects": [
+        {
+          "prefab": "arrowPrefab",
+          "name": "vectorA",
+          "position": [
+            -0.15,
+            0,
+            1
+          ],
+          "scale": [
+            0.1,
+            0.25,
+            0.1
+          ],
+          "texture": "solid_color_texture",
+          "color": [
+            0.2,
+            0.4,
+            1,
+            1
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vectorB",
+          "position": [
+            0.3,
+            0,
+            1
+          ],
+          "scale": [
+            0.1,
+            0.2,
+            0.1
+          ],
+          "texture": "solid_color_texture",
+          "color": [
+            1,
+            0.2,
+            0.2,
+            1
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vectorResultant",
+          "position": [
+            -0.15,
+            0,
+            1
+          ],
+          "scale": [
+            0.1,
+            0.32,
+            0.1
+          ],
+          "enabled": false,
+          "texture": "solid_color_texture",
+          "color": [
+            0.6,
+            0.2,
+            0.8,
+            1
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "resultantLabel",
+          "position": [
+            0.1,
+            0.1,
+            0.9
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Resultant Vector",
+              "color": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "fontSize": 30,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip_intro_vector_A",
+          "autoAdvance": false,
+          "changeMeaning": "Introduce the concept of a vector with magnitude and direction, showing Vector A.",
+          "narration": "Welcome to our exploration of vectors. A vector is a mathematical object that has both magnitude, or length, and a specific direction. Here we see Vector A."
+        },
+        {
+          "clipName": "clip_intro_vector_B",
+          "autoAdvance": false,
+          "changeMeaning": "Introduce Vector B as a separate vector in space.",
+          "narration": "Now, let's introduce Vector B. It has a different magnitude and points in a different direction. In physics, we often need to add vectors together, such as combining two forces or two displacements."
+        },
+        {
+          "clipName": "clip_tip_to_tail",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vectorB",
+              "position": [
+                0.05,
+                0.25,
+                1
+              ]
+            }
+          ],
+          "changeMeaning": "Move Vector B to demonstrate tip-to-tail addition without changing its orientation or length.",
+          "narration": "To add these vectors graphically, we use the tip-to-tail method. Notice how we slide Vector B so its tail sits exactly on the tip of Vector A. Its magnitude and direction remain completely unchanged."
+        },
+        {
+          "clipName": "clip_resultant",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vectorResultant",
+              "enabled": true
+            },
+            {
+              "target": "resultantLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Reveal the resultant vector that completes the triangle.",
+          "narration": "The sum of these two vectors is called the resultant vector. It is drawn from the tail of the first vector to the tip of the second. This single purple vector has the exact same physical effect as vectors A and B combined."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Module 2: Vector Decomposition",
+      "description": "Decomposing a single vector into its horizontal (x) and vertical (y) components using a geometric representation.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Students will decompose a vector into components along the x- and y-axes using right-triangle trigonometry.",
+        "Students will reconstruct the original vector from its components."
+      ],
+      "instructions": [
+        "Examine the original velocity vector.",
+        "Step forward to see how it is broken into independent X and Y components forming a right triangle."
+      ],
+      "objects": [
+        {
+          "prefab": "gridPlanePrefab",
+          "name": "gridBackground",
+          "position": [
+            0,
+            0,
+            1.1
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            1
+          ],
+          "texture": "graph_paper_texture",
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vectorMain",
+          "position": [
+            -0.2,
+            -0.2,
+            1
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            -30
+          ],
+          "scale": [
+            0.1,
+            0.4,
+            0.1
+          ],
+          "texture": "solid_color_texture",
+          "color": [
+            0.2,
+            0.8,
+            0.2,
+            1
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vectorX",
+          "position": [
+            -0.2,
+            -0.2,
+            1
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            -90
+          ],
+          "scale": [
+            0.1,
+            0.346,
+            0.1
+          ],
+          "enabled": false,
+          "texture": "solid_color_texture",
+          "color": [
+            0.9,
+            0.8,
+            0.1,
+            1
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelX",
+          "position": [
+            0,
+            -0.25,
+            1
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vx (Horizontal)",
+              "color": [
+                0.9,
+                0.8,
+                0.1,
+                1
+              ],
+              "fontSize": 30,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vectorY",
+          "position": [
+            0.146,
+            -0.2,
+            1
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.1,
+            0.2,
+            0.1
+          ],
+          "enabled": false,
+          "texture": "solid_color_texture",
+          "color": [
+            0.9,
+            0.5,
+            0.1,
+            1
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelY",
+          "position": [
+            0.25,
+            0,
+            1
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vy (Vertical)",
+              "color": [
+                0.9,
+                0.5,
+                0.1,
+                1
+              ],
+              "fontSize": 30,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip_intro_decomposition",
+          "autoAdvance": false,
+          "changeMeaning": "Show the main velocity vector representing an object moving diagonally.",
+          "narration": "Often, it is easier to work with vectors by breaking them down into perpendicular parts. Imagine an object moving diagonally across this grid; this green vector represents its velocity."
+        },
+        {
+          "clipName": "clip_x_component",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vectorX",
+              "enabled": true
+            },
+            {
+              "target": "labelX",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Highlight the horizontal X component of the vector.",
+          "narration": "We can decompose this velocity into a horizontal part, or x-component. This tells us how fast the object is moving strictly left-to-right, ignoring any vertical movement."
+        },
+        {
+          "clipName": "clip_y_component",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vectorY",
+              "enabled": true
+            },
+            {
+              "target": "labelY",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Highlight the vertical Y component of the vector.",
+          "narration": "Similarly, we can find the vertical y-component. Using right-triangle trigonometry, if we know the magnitude of the main vector and its angle, we can calculate these components using sine and cosine. Together, these independent components completely describe the original vector."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Module 3: Projectile Motion Basics",
+      "description": "Applying vector decomposition to projectile motion, demonstrating the independence of horizontal and vertical velocities.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Students will explain why the horizontal and vertical motions of a projectile are independent of one another.",
+        "Students will describe how horizontal and vertical velocities change over the course of the flight.",
+        "Students will identify the moment of maximum height as the point where vertical velocity is zero."
+      ],
+      "instructions": [
+        "Watch the projectile move through its parabolic trajectory.",
+        "Pay close attention to the lengths of the yellow (horizontal) and orange (vertical) velocity arrows."
+      ],
+      "objects": [
+        {
+          "prefab": "cannonPrefab",
+          "name": "cannon",
+          "position": [
+            -0.5,
+            -0.1,
+            1
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "texture": "cannon_metal_texture",
+          "color": [
+            0.5,
+            0.5,
+            0.5,
+            1
+          ]
+        },
+        {
+          "prefab": "moveableSphere",
+          "name": "projectile",
+          "position": [
+            -0.45,
+            -0.05,
+            1
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "texture": "baseball_texture",
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vxArrow",
+          "position": [
+            -0.45,
+            -0.05,
+            1
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            -90
+          ],
+          "scale": [
+            0.05,
+            0.15,
+            0.05
+          ],
+          "texture": "solid_color_texture",
+          "color": [
+            0.9,
+            0.8,
+            0.1,
+            1
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vyArrow",
+          "position": [
+            -0.45,
+            -0.05,
+            1
+          ],
+          "scale": [
+            0.05,
+            0.2,
+            0.05
+          ],
+          "texture": "solid_color_texture",
+          "color": [
+            0.9,
+            0.5,
+            0.1,
+            1
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "apexLabel",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vy = 0",
+              "color": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "fontSize": 25,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip_launch_start",
+          "autoAdvance": false,
+          "changeMeaning": "Initialize launch. Projectile is at the cannon with initial Vx and Vy.",
+          "narration": "Let's apply these vector concepts to projectile motion. When we fire a projectile, its initial velocity has both horizontal and vertical components. Gravity only pulls downwards, so it only affects the vertical component."
+        },
+        {
+          "clipName": "clip_apex",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile",
+              "position": [
+                0,
+                0.4,
+                1
+              ]
+            },
+            {
+              "target": "vxArrow",
+              "position": [
+                0,
+                0.4,
+                1
+              ]
+            },
+            {
+              "target": "vyArrow",
+              "position": [
+                0,
+                0.4,
+                1
+              ],
+              "scale": [
+                0,
+                0,
+                0
+              ]
+            },
+            {
+              "target": "apexLabel",
+              "position": [
+                0,
+                0.47,
+                1
+              ]
+            },
+            {
+              "target": "apexLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Move projectile to the apex of the trajectory. Vx remains constant, Vy shrinks to zero.",
+          "narration": "As the projectile rises, gravity slows its vertical velocity. At the exact highest point of the flight, the vertical velocity is zero! But notice the horizontal velocity hasn't changed at all. The horizontal and vertical motions are completely independent."
+        },
+        {
+          "clipName": "clip_descent",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile",
+              "position": [
+                0.5,
+                -0.1,
+                1
+              ]
+            },
+            {
+              "target": "vxArrow",
+              "position": [
+                0.5,
+                -0.1,
+                1
+              ]
+            },
+            {
+              "target": "vyArrow",
+              "position": [
+                0.5,
+                -0.1,
+                1
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                180
+              ],
+              "scale": [
+                0.05,
+                0.2,
+                0.05
+              ],
+              "enabled": true
+            },
+            {
+              "target": "apexLabel",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "Move projectile to the ground on the right. Vx is still constant, Vy points downward.",
+          "narration": "During descent, gravity accelerates the projectile downwards, so the vertical velocity increases in the negative direction. Meanwhile, the horizontal velocity remains perfectly constant, carrying the projectile forward at a steady rate."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Module 4: Manipulating Projectiles",
+      "description": "Interactive exploration of how launch angle affects trajectory, maximum height, and horizontal range.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Students will predict how changes in initial launch angle affect the trajectory, range, and maximum height.",
+        "Students will identify that a 45-degree launch angle produces maximum range for a given initial speed."
+      ],
+      "instructions": [
+        "Observe the different trajectory paths.",
+        "Compare the maximum height and total horizontal range of the 30, 45, and 75-degree launches."
+      ],
+      "objects": [
+        {
+          "prefab": "cannonPrefab",
+          "name": "cannonPlatform",
+          "position": [
+            -0.6,
+            -0.2,
+            1
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "texture": "cannon_metal_texture",
+          "color": [
+            0.3,
+            0.3,
+            0.3,
+            1
+          ]
+        },
+        {
+          "prefab": "trajectoryArcPrefab",
+          "name": "trajLow",
+          "position": [
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            0.4,
+            0.15,
+            1
+          ],
+          "color": [
+            0.2,
+            0.4,
+            1,
+            1
+          ]
+        },
+        {
+          "prefab": "trajectoryArcPrefab",
+          "name": "trajHigh",
+          "position": [
+            -0.3,
+            0.2,
+            1
+          ],
+          "scale": [
+            0.2,
+            0.5,
+            1
+          ],
+          "enabled": false,
+          "color": [
+            1,
+            0.2,
+            0.2,
+            1
+          ]
+        },
+        {
+          "prefab": "trajectoryArcPrefab",
+          "name": "trajOptimum",
+          "position": [
+            0.1,
+            0.1,
+            1
+          ],
+          "scale": [
+            0.6,
+            0.3,
+            1
+          ],
+          "enabled": false,
+          "color": [
+            0.2,
+            0.9,
+            0.2,
+            1
+          ]
+        },
+        {
+          "prefab": "bullseyeTargetPrefab",
+          "name": "targetMarker",
+          "position": [
+            0.7,
+            -0.2,
+            1
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            1,
+            0.8,
+            0,
+            1
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip_shallow_launch",
+          "autoAdvance": false,
+          "changeMeaning": "Show a shallow launch angle trajectory resulting in a short range and low max height.",
+          "narration": "Finally, let's look at how the launch angle affects the entire trajectory. If we launch at a shallow angle, like 30 degrees, the projectile has a large horizontal velocity but very little vertical velocity. It hits the ground quickly, resulting in a short range."
+        },
+        {
+          "clipName": "clip_steep_launch",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "trajLow",
+              "enabled": false
+            },
+            {
+              "target": "trajHigh",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Show a steep launch angle trajectory resulting in high max height but short range.",
+          "narration": "If we launch at a steep angle, like 75 degrees, the projectile goes very high. It stays in the air a long time, but because its horizontal velocity is so small, it doesn't travel very far forward. The range is again relatively short."
+        },
+        {
+          "clipName": "clip_optimal_launch",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "trajHigh",
+              "enabled": false
+            },
+            {
+              "target": "trajOptimum",
+              "enabled": true
+            },
+            {
+              "target": "targetMarker",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "simpleRotation",
+                  "timeRate": 1.0,
+                  "rotationTime": 4
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Show the optimal 45 degree launch angle yielding maximum range.",
+          "narration": "To maximize the horizontal distance, or range, we need a perfect balance. Launching at exactly 45 degrees gives equal initial horizontal and vertical components, keeping the projectile in the air long enough while moving forward fast enough to achieve the maximum possible range."
+        }
+      ]
+    }
+  ]
+}

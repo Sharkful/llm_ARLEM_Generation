@@ -1,0 +1,861 @@
+{
+  "workplace": {
+    "id": "wp_mech_vectors_projectile_lab",
+    "name": "AR Mechanics Lab: Vectors & 2D Projectile Motion",
+    "origin": "det_origin_anchor",
+    "things": [
+      {
+        "id": "thing_vector_arrow_handle",
+        "name": "Interactive Vector Arrow (draggable head; tail fixed at origin)",
+        "detectable": "det_vector_add_origin_marker",
+        "pois": [
+          {
+            "id": "poi_tail",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          },
+          {
+            "id": "poi_head",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "thing_vector_blue_green_set",
+        "name": "Tip-to-Tail Vector Set (blue + green draggable)",
+        "detectable": "det_vector_add_origin_marker",
+        "pois": []
+      },
+      {
+        "id": "thing_component_arrow_trio",
+        "name": "Axis Component Arrows (x,y,z color-coded draggable)",
+        "detectable": "det_vector_staging_plane",
+        "pois": []
+      },
+      {
+        "id": "thing_projectile_ball",
+        "name": "Projectile Ball (launches in the plane)",
+        "detectable": "det_launchpad_surface_marker",
+        "pois": []
+      },
+      {
+        "id": "thing_launch_controls_panel",
+        "name": "Launch Controls Panel (angle, speed, gravity, view)",
+        "detectable": "det_control_panel_anchor",
+        "pois": []
+      },
+      {
+        "id": "thing_target_marker",
+        "name": "Hit Target (appears on ground plane)",
+        "detectable": "det_target_zone_anchor",
+        "pois": []
+      }
+    ],
+    "places": [
+      {
+        "id": "place_vector_staging_plane",
+        "name": "Vector Display Plane (3D guide lines)",
+        "detectable": "det_vector_staging_plane",
+        "pois": []
+      },
+      {
+        "id": "place_projectile_vertical_plane",
+        "name": "2D Projectile Plane (x-right, y-up)",
+        "detectable": "det_projectile_plane_marker",
+        "pois": []
+      },
+      {
+        "id": "place_launch_pad",
+        "name": "Launch Pad Line (projectile starts here)",
+        "detectable": "det_launchpad_surface_marker",
+        "pois": []
+      },
+      {
+        "id": "place_target_zone",
+        "name": "Target Zone on Ground (same elevation)",
+        "detectable": "det_target_zone_anchor",
+        "pois": []
+      }
+    ],
+    "persons": [
+      {
+        "id": "person_learner_01",
+        "name": "Learner (hands-on)",
+        "detectable": "det_learner_marker",
+        "pois": [],
+        "persona": "learner"
+      }
+    ],
+    "sensors": [],
+    "devices": [
+      {
+        "id": "device_headset_01",
+        "type": "hololens",
+        "name": "AR Headset (instructional overlays)",
+        "owner": "person_learner_01"
+      }
+    ],
+    "apps": [],
+    "detectables": [
+      {
+        "id": "det_origin_anchor",
+        "type": "anchor",
+        "sensor": "mapping",
+        "url": "https://assets.example.com/detectables/origin_anchor.bundle"
+      },
+      {
+        "id": "det_learner_marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/detectables/learner_marker.bundle"
+      },
+      {
+        "id": "det_headset_anchor",
+        "type": "anchor",
+        "sensor": "mapping",
+        "url": "https://assets.example.com/detectables/headset_anchor.bundle"
+      },
+      {
+        "id": "det_vector_staging_plane",
+        "type": "anchor",
+        "sensor": "mapping",
+        "url": "https://assets.example.com/detectables/vector_plane_anchor.bundle"
+      },
+      {
+        "id": "det_vector_add_origin_marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/detectables/vector_add_origin_marker.bundle"
+      },
+      {
+        "id": "det_projectile_plane_marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/detectables/projectile_plane_marker.bundle"
+      },
+      {
+        "id": "det_launchpad_surface_marker",
+        "type": "marker",
+        "sensor": "tracking",
+        "url": "https://assets.example.com/detectables/launchpad_surface_marker.bundle"
+      },
+      {
+        "id": "det_target_zone_anchor",
+        "type": "anchor",
+        "sensor": "mapping",
+        "url": "https://assets.example.com/detectables/target_zone_anchor.bundle"
+      },
+      {
+        "id": "det_control_panel_anchor",
+        "type": "anchor",
+        "sensor": "mapping",
+        "url": "https://assets.example.com/detectables/control_panel_anchor.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "label",
+        "x_size": 10.0,
+        "y_size": 2.0,
+        "z_size": 0.1
+      },
+      {
+        "id": "audio",
+        "volume": 1
+      },
+      {
+        "id": "animation"
+      },
+      {
+        "id": "image",
+        "x_size": 20.0,
+        "y_size": 10.0,
+        "z_size": 0.1
+      },
+      {
+        "id": "video",
+        "x_size": 20.0,
+        "y_size": 10.0,
+        "z_size": 0.1
+      }
+    ],
+    "predicates": [
+      {
+        "id": "pred_vector_intro_arrow",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/ar/pred/vectors/vector_single_arrow_intro.glb"
+      },
+      {
+        "id": "pred_tip_to_tail_addition",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/ar/pred/vectors/tip_to_tail_addition.glb"
+      },
+      {
+        "id": "pred_vector_decomposition_components",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/ar/pred/vectors/vector_decomposition_components.glb"
+      },
+      {
+        "id": "pred_projectile_plane_setup",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/ar/pred/projectile/projectile_plane_setup.glb"
+      },
+      {
+        "id": "pred_projectile_components_dynamic",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/ar/pred/projectile/projectile_components_dynamic.glb"
+      },
+      {
+        "id": "pred_launch_controls_max_range",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/ar/pred/projectile/controls_max_range_panel.png"
+      },
+      {
+        "id": "pred_targeting_challenge",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/ar/pred/projectile/targeting_challenge_flow.glb"
+      },
+      {
+        "id": "pred_free_exploration_sandbox",
+        "type": "label",
+        "scale": 1.0,
+        "url": "https://assets.example.com/ar/pred/projectile/free_exploration_hints.json"
+      },
+      {
+        "id": "pred_recap_concepts_summary",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/ar/pred/recap/concepts_summary.png"
+      },
+      {
+        "id": "pred_audio_narration_vector_intro",
+        "type": "audio",
+        "scale": 1.0,
+        "url": "https://assets.example.com/audio/physics/vectors/vector_intro_narration_en.mp3"
+      },
+      {
+        "id": "pred_audio_narration_tip_to_tail",
+        "type": "audio",
+        "scale": 1.0,
+        "url": "https://assets.example.com/audio/physics/vectors/tip_to_tail_narration_en.mp3"
+      },
+      {
+        "id": "pred_audio_narration_decomposition",
+        "type": "audio",
+        "scale": 1.0,
+        "url": "https://assets.example.com/audio/physics/vectors/vector_decomposition_narration_en.mp3"
+      },
+      {
+        "id": "pred_audio_narration_projectile_setup",
+        "type": "audio",
+        "scale": 1.0,
+        "url": "https://assets.example.com/audio/physics/projectile/projectile_plane_setup_narration_en.mp3"
+      },
+      {
+        "id": "pred_audio_narration_projectile_components",
+        "type": "audio",
+        "scale": 1.0,
+        "url": "https://assets.example.com/audio/physics/projectile/projectile_components_independence_narration_en.mp3"
+      },
+      {
+        "id": "pred_audio_narration_max_range_45",
+        "type": "audio",
+        "scale": 1.0,
+        "url": "https://assets.example.com/audio/physics/projectile/max_range_45deg_narration_en.mp3"
+      },
+      {
+        "id": "pred_audio_narration_targeting",
+        "type": "audio",
+        "scale": 1.0,
+        "url": "https://assets.example.com/audio/physics/projectile/targeting_challenge_narration_en.mp3"
+      },
+      {
+        "id": "pred_audio_narration_free_exploration",
+        "type": "audio",
+        "scale": 1.0,
+        "url": "https://assets.example.com/audio/physics/projectile/free_exploration_hints_narration_en.mp3"
+      },
+      {
+        "id": "pred_audio_narration_recap",
+        "type": "audio",
+        "scale": 1.0,
+        "url": "https://assets.example.com/audio/physics/recap/recap_concepts_narration_en.mp3"
+      }
+    ],
+    "warnings": [
+      {
+        "id": "warn_gravity_extreme",
+        "type": "label",
+        "scale": 1.0,
+        "symbol": "ISO7010_W013_UvEx"
+      }
+    ]
+  },
+  "activity": {
+    "id": "act_vectors_projectile_arlem",
+    "name": "AR Lab: Vectors \u2192 Components \u2192 Projectile Motion",
+    "description": "Guided AR session to build intuition about vectors (magnitude & direction), tip-to-tail vector addition, and vector decomposition into x/y components, then apply these ideas to 2D projectile motion under gravity. Learner interacts with draggable arrows and observes live component behavior during projectile launches, then explores max-range and targeting.",
+    "language": "en",
+    "workplace": "wp_mech_vectors_projectile_lab",
+    "start": "action_01_vector_intro",
+    "actions": [
+      {
+        "id": "action_01_vector_intro",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "device_headset_01",
+        "location": "place_vector_staging_plane",
+        "predicate": "pred_vector_intro_arrow",
+        "instruction": {
+          "title": "Vectors are arrows: magnitude + direction",
+          "description": "Look at the floating arrow. Drag the arrow\u2019s head to change its direction and length. Notice how the magnitude label (length) and direction angles update relative to the x, y, z reference lines."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": []
+      },
+      {
+        "id": "action_01_vector_intro_done",
+        "viewport": "reactions",
+        "type": "reactions",
+        "device": "device_headset_01",
+        "location": "place_vector_staging_plane",
+        "instruction": {
+          "title": "Ready for tip-to-tail addition",
+          "description": "After you\u2019ve dragged the arrow and confirmed the magnitude/direction updates, tap to continue."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "trg_to_action_02",
+            "type": "action",
+            "viewport": "actions",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "action_02_tip_to_tail",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "device_headset_01",
+        "location": "place_vector_staging_plane",
+        "predicate": "pred_tip_to_tail_addition",
+        "instruction": {
+          "title": "Add vectors tip-to-tail",
+          "description": "Two draggable vectors appear: blue first, then green attached at the blue head. A red resultant is drawn from the tail of blue to the head of green and updates continuously."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": []
+      },
+      {
+        "id": "action_02_tip_to_tail_voice",
+        "viewport": "reactions",
+        "type": "reactions",
+        "device": "device_headset_01",
+        "location": "place_vector_staging_plane",
+        "instruction": {
+          "title": "Order doesn\u2019t matter (resultant stays the same)",
+          "description": "Say: \u201cSwap the order.\u201d Reorient which vector you place first and verify the red resultant points to the same final direction."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "trg_to_action_03",
+            "type": "action",
+            "viewport": "actions",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "action_03_decomposition",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "device_headset_01",
+        "location": "place_vector_staging_plane",
+        "predicate": "pred_vector_decomposition_components",
+        "instruction": {
+          "title": "Decompose a vector into components",
+          "description": "A neutral original vector appears. Three color-coded component arrows emerge from the origin along x, y, and z. Drag/resize components and watch the original vector update to match their tip-to-tail sum."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": []
+      },
+      {
+        "id": "action_03_decomposition_detect_done",
+        "viewport": "reactions",
+        "type": "reactions",
+        "device": "device_headset_01",
+        "location": "place_vector_staging_plane",
+        "instruction": {
+          "title": "Component arrows are set",
+          "description": "When you see the components correctly reconstruct the original vector, tap to proceed."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "trg_to_action_04",
+            "type": "tangible",
+            "viewport": "actions",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "action_04_projectile_transition",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "device_headset_01",
+        "location": "place_projectile_vertical_plane",
+        "predicate": "pred_projectile_plane_setup",
+        "instruction": {
+          "title": "Switch to 2D projectile motion",
+          "description": "A labeled 2D projectile plane appears. The ball launches from the left along an initial velocity vector at an angle. Gravity acts downward only, so the projectile problem is genuinely 2D in this plane."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": []
+      },
+      {
+        "id": "action_04_done",
+        "viewport": "reactions",
+        "type": "reactions",
+        "device": "device_headset_01",
+        "location": "place_projectile_vertical_plane",
+        "instruction": {
+          "title": "Ready to see components during the flight",
+          "description": "Tap to continue to the projectile component animation."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "trg_to_action_05",
+            "type": "action",
+            "viewport": "actions",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "action_05_projectile_components",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "device_headset_01",
+        "location": "place_projectile_vertical_plane",
+        "predicate": "pred_projectile_components_dynamic",
+        "instruction": {
+          "title": "Horizontal & vertical motions are independent",
+          "description": "Launch the projectile and watch: the horizontal component arrow stays constant, while the vertical component shrinks to zero at the peak and then grows downward. The ball\u2019s parabolic path is the combined result."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": []
+      },
+      {
+        "id": "action_05_overhead_check",
+        "viewport": "reactions",
+        "type": "reactions",
+        "device": "device_headset_01",
+        "location": "place_projectile_vertical_plane",
+        "instruction": {
+          "title": "Verify with overhead view",
+          "description": "Say: \u201cOverhead view.\u201d Confirm the trajectory appears as a straight horizontal line (x motion) in that view, then tap to proceed."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "voice",
+            "id": "trg_to_action_06",
+            "type": "action",
+            "viewport": "actions",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "action_06_max_range_discovery",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "device_headset_01",
+        "location": "place_projectile_vertical_plane",
+        "predicate": "pred_launch_controls_max_range",
+        "instruction": {
+          "title": "Find the maximum-range angle",
+          "description": "Use the on-screen controls to set launch angle (0\u201390\u00b0) and launch speed. Press launch to display range and record each attempt. Explore angles near 35\u201355\u00b0."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": []
+      },
+      {
+        "id": "action_06_done_to_targeting",
+        "viewport": "reactions",
+        "type": "reactions",
+        "device": "device_headset_01",
+        "location": "place_projectile_vertical_plane",
+        "instruction": {
+          "title": "Move to targeting practice",
+          "description": "Tap to start the hit-the-target challenge."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "trg_to_action_07",
+            "type": "action",
+            "viewport": "actions",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "action_07_targeting_challenge",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "device_headset_01",
+        "location": "place_target_zone",
+        "predicate": "pred_targeting_challenge",
+        "instruction": {
+          "title": "Targeting challenge",
+          "description": "A target appears at a fixed distance on the ground at the same elevation. Set angle and speed, press launch, and hit the target. Often there are two complementary angle solutions (\u03b8 and 90\u00b0\u2212\u03b8)."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": []
+      },
+      {
+        "id": "action_07_wait_success",
+        "viewport": "reactions",
+        "type": "reactions",
+        "device": "device_headset_01",
+        "location": "place_target_zone",
+        "instruction": {
+          "title": "Hit recorded\u2014advance",
+          "description": "Once the target registers a hit, tap to proceed to free exploration."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "trg_to_action_08",
+            "type": "tangible",
+            "viewport": "actions",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "action_08_free_exploration",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "device_headset_01",
+        "location": "place_projectile_vertical_plane",
+        "predicate": "pred_free_exploration_sandbox",
+        "instruction": {
+          "title": "Free exploration sandbox",
+          "description": "Now adjust launch angle, speed, launch height (up to ~50 m), and gravity strength (0 to 5g). Launch and investigate how the trajectory changes while the component arrows update live."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": []
+      },
+      {
+        "id": "action_08_to_recap",
+        "viewport": "reactions",
+        "type": "reactions",
+        "device": "device_headset_01",
+        "location": "place_projectile_vertical_plane",
+        "instruction": {
+          "title": "Ready for recap",
+          "description": "Tap to end the lab and review the key concept areas."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "trg_to_action_09",
+            "type": "action",
+            "viewport": "actions",
+            "operator": "equal"
+          }
+        ]
+      },
+      {
+        "id": "action_09_recap",
+        "viewport": "actions",
+        "type": "actions",
+        "device": "device_headset_01",
+        "location": "place_vector_staging_plane",
+        "predicate": "pred_recap_concepts_summary",
+        "instruction": {
+          "title": "Recap: what you learned",
+          "description": "Review: (1) vectors as magnitude & direction, (2) tip-to-tail vector addition, (3) decomposition as reverse addition, (4) projectile motion from components, (5) independence of horizontal/vertical motion, (6) 45\u00b0 maximum-range result."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": []
+      },
+      {
+        "id": "action_end",
+        "viewport": "reactions",
+        "type": "reactions",
+        "device": "device_headset_01",
+        "location": "place_vector_staging_plane",
+        "instruction": {
+          "title": "Session complete",
+          "description": "Great work. Use your course materials to practice component calculations and solve projectile problems."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [],
+          "messages": [],
+          "if_logic": []
+        },
+        "triggers": []
+      }
+    ]
+  }
+}

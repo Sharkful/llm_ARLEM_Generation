@@ -1,0 +1,285 @@
+{
+  "workplace": {
+    "id": "astronomy_lab_workplace",
+    "name": "Astronomy Lab Worksurface",
+    "origin": "origin_marker",
+    "things": [
+      {
+        "id": "heliocentric_display",
+        "name": "Heliocentric Model Display",
+        "detectable": "helio_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "night_sky_view",
+        "name": "Night Sky Observation Area",
+        "detectable": "night_sky_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "geocentric_display",
+        "name": "Geocentric Model Station",
+        "detectable": "geo_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "origin_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/origin.bundle"
+      },
+      {
+        "id": "night_sky_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/night_sky.bundle"
+      },
+      {
+        "id": "geo_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/geo.bundle"
+      },
+      {
+        "id": "helio_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/helio.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "animation"
+      },
+      {
+        "id": "image"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "mars_retrograde_trail",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/mars_loop.glb"
+      },
+      {
+        "id": "epicycle_model_animation",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/epicycles.glb"
+      },
+      {
+        "id": "heliocentric_orbit_animation",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/solar_orbits.glb"
+      },
+      {
+        "id": "line_of_sight_visualizer",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/los.glb"
+      },
+      {
+        "id": "comparison_chart",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/chart.png"
+      }
+    ]
+  },
+  "activity": {
+    "id": "retrograde_lab",
+    "name": "Astronomy: Apparent Retrograde Motion",
+    "description": "An exploration of Mars's apparent retrograde motion using geocentric and heliocentric models.",
+    "workplace": "astronomy_lab_workplace",
+    "start": "step1_observation",
+    "actions": [
+      {
+        "id": "step1_observation",
+        "instruction": {
+          "title": "The Retrograde Puzzle",
+          "description": "Observe Mars moving against the background stars. Note how it drifts eastward, pauses, and moves westward in a loop."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "night_sky_view",
+              "type": "predicate",
+              "augmentation": "mars_retrograde_trail",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step1_observation"
+          }
+        ]
+      },
+      {
+        "id": "step2_geocentric",
+        "instruction": {
+          "title": "Geocentric Perspective",
+          "description": "Examine the Ptolemaic model. See how epicycles were used to explain the retrograde loop from a stationary Earth perspective."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "geocentric_display",
+              "type": "predicate",
+              "augmentation": "epicycle_model_animation",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "night_sky_view",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step2_geocentric"
+          }
+        ]
+      },
+      {
+        "id": "step3_heliocentric",
+        "instruction": {
+          "title": "Heliocentric Perspective",
+          "description": "Observe the solar system from above. Watch Earth overtake Mars in their respective orbits. Notice how the loop disappears."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heliocentric_display",
+              "type": "predicate",
+              "augmentation": "heliocentric_orbit_animation",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "geocentric_display",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step3_heliocentric"
+          }
+        ]
+      },
+      {
+        "id": "step4_linkage",
+        "instruction": {
+          "title": "Linking Perspectives",
+          "description": "Observe the line-of-sight from Earth through Mars. See how this line sweeps backward against the stars as Earth overtakes Mars."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heliocentric_display",
+              "type": "predicate",
+              "augmentation": "line_of_sight_visualizer",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step4_linkage"
+          }
+        ]
+      },
+      {
+        "id": "step5_comparison",
+        "instruction": {
+          "title": "Comparing Outer Planets",
+          "description": "Compare the retrograde loops of Mars, Jupiter, and Saturn. Note how loop size decreases as planet distance increases."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heliocentric_display",
+              "type": "predicate",
+              "augmentation": "comparison_chart",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": true,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heliocentric_display",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step5_comparison"
+          }
+        ]
+      }
+    ]
+  }
+}

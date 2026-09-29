@@ -1,0 +1,1229 @@
+{
+  "version": "2.0",
+  "labId": "gp1_vectors_projectile_ar_01",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Physics I (Mechanics)",
+  "estimatedLength": "35 minutes",
+  "objectives": [
+    "Represent a 2D vector by its magnitude and direction, and equivalently by its horizontal and vertical components.",
+    "Add vectors geometrically using the tip-to-tail method and interpret the resultant\u2019s direction.",
+    "Decompose and reconstruct vectors along x- and y-axes using right-triangle relationships (sin/cos).",
+    "Explain projectile motion independence: horizontal motion unaffected by gravity; vertical motion accelerated by gravity.",
+    "Describe how projectile horizontal/vertical velocity and position evolve; identify maximum height when vy = 0.",
+    "Predict and compare how changing launch angle and launch speed changes range and maximum height; identify the intermediate angle that maximizes range for fixed speed."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1 \u2014 Vector as Arrow: Components and Trig",
+      "description": "Introduce 2D vectors as arrows in a tabletop coordinate plane, then decompose a chosen vector into x- and y-components using a right-triangle and sine/cosine relationships.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Interpret a vector\u2019s magnitude and direction as geometric properties of an arrow.",
+        "Connect the vector\u2019s direction angle \u03b8 to vx = v cos\u03b8 and vy = v sin\u03b8.",
+        "See how component vectors are perpendicular and sum to the original vector."
+      ],
+      "instructions": [
+        "Place your device so the tabletop plane is visible.",
+        "Follow along with the on-screen vectors; watch the right triangle appear when components are revealed."
+      ],
+      "objects": [
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "V_arrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0.4
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            50,
+            120,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "axisPlanePrefab",
+          "name": "xy_plane",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.04,
+            0.35
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "texture": "balldimpled"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_theta",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.1,
+            0.08,
+            0.42
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "\u03b8",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "rightTrianglePrefab",
+          "name": "tri_components",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.02,
+            0.0,
+            0.42
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "componentArrowPrefab",
+          "name": "Vx_arrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.05,
+            -0.01,
+            0.42
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "enabled": false,
+          "color": [
+            80,
+            220,
+            120,
+            255
+          ]
+        },
+        {
+          "prefab": "componentArrowPrefab",
+          "name": "Vy_arrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.07,
+            0.42
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            160,
+            70,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_V",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.02,
+            0.16,
+            0.42
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vector v",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_1",
+          "audioClip": "scene1_intro_vector_arrow",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "xy_plane"
+            },
+            {
+              "target": "V_arrow"
+            },
+            {
+              "target": "label_V"
+            }
+          ],
+          "changeMeaning": "The coordinate plane and the main vector arrow appear on the tabletop with a label for v, setting a spatial reference for the vector\u2019s magnitude and direction.",
+          "narration": "Here we treat a 2D vector as an arrow: its length is the magnitude, and its angle \u03b8 gives the direction."
+        },
+        {
+          "clipName": "clip1_2",
+          "audioClip": "scene1_show_trig_triangle",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "tri_components"
+            },
+            {
+              "target": "label_theta"
+            }
+          ],
+          "changeMeaning": "A right triangle is revealed between the vector and its projections, visually linking the angle \u03b8 to the component directions needed for trig.",
+          "narration": "To connect geometry to physics, we resolve the vector into perpendicular components: a horizontal component vx and a vertical component vy."
+        },
+        {
+          "clipName": "clip1_3",
+          "audioClip": "scene1_reveal_components_vx_vy",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Vx_arrow"
+            },
+            {
+              "target": "Vy_arrow"
+            },
+            {
+              "target": "label_V"
+            }
+          ],
+          "changeMeaning": "The horizontal (vx) and vertical (vy) component arrows appear orthogonally, emphasizing that their vector sum returns the original vector.",
+          "narration": "The component arrows show how vx = v cos\u03b8 and vy = v sin\u03b8. Adding the two components reconstructs the original vector."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2 \u2014 Tip-to-Tail Addition of Vectors",
+      "description": "Show two vectors added tip-to-tail to form a resultant vector. Animate the head-to-tail connection and then display the resultant magnitude and direction as a single arrow.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Perform vector addition geometrically using the tip-to-tail method.",
+        "Interpret how the resultant direction depends on the input vectors.",
+        "Connect the resultant concept to the idea of components (qualitatively)."
+      ],
+      "instructions": [
+        "Watch how vector B is repositioned so its tail starts at the head of vector A.",
+        "Notice the resultant arrow pointing from the original tail to the final head."
+      ],
+      "objects": [
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "A_arrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0.02,
+            0.35
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            15
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "color": [
+            90,
+            180,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "B_arrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.05,
+            0.14,
+            0.35
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            120
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "color": [
+            255,
+            120,
+            200,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_A",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.34,
+            0.09,
+            0.37
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "A",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_B",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.08,
+            0.21,
+            0.37
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "B",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "resultantArrowPrefab",
+          "name": "R_arrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.12,
+            0.1,
+            0.35
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            70
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.09
+          ],
+          "enabled": false,
+          "color": [
+            60,
+            220,
+            160,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_R",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.18,
+            0.2,
+            0.37
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "R = A + B",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "connectorLinePrefab",
+          "name": "tipTail_connector",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.15,
+            0.08,
+            0.36
+          ],
+          "scale": [
+            0.15,
+            0.01,
+            0.01
+          ],
+          "enabled": false,
+          "color": [
+            220,
+            220,
+            220,
+            255
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip2_1",
+          "audioClip": "scene2_intro_tip_to_tail",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "A_arrow"
+            },
+            {
+              "target": "B_arrow"
+            },
+            {
+              "target": "label_A"
+            },
+            {
+              "target": "label_B"
+            },
+            {
+              "target": "tipTail_connector"
+            },
+            {
+              "target": "R_arrow"
+            },
+            {
+              "target": "label_R"
+            }
+          ],
+          "changeMeaning": "Vectors A and B are shown to establish their initial directions, while the connector and resultant are hidden to set up the addition action.",
+          "narration": "Vector addition works by placing vectors head-to-tail. We start with A, then reposition B so its tail meets the head of A."
+        },
+        {
+          "clipName": "clip2_2",
+          "audioClip": "scene2_connect_head_tail",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "B_arrow"
+            },
+            {
+              "target": "B_arrow"
+            },
+            {
+              "target": "tipTail_connector"
+            },
+            {
+              "target": "tipTail_connector"
+            }
+          ],
+          "changeMeaning": "B is repositioned so the tail attaches to A\u2019s head, and the connector line appears to make the tip-to-tail construction explicit.",
+          "narration": "Now slide B so its tail coincides with the head of A. The connector line marks the connection rule."
+        },
+        {
+          "clipName": "clip2_3",
+          "audioClip": "scene2_show_resultant_R",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "R_arrow"
+            },
+            {
+              "target": "label_R"
+            },
+            {
+              "target": "R_arrow"
+            },
+            {
+              "target": "R_arrow"
+            }
+          ],
+          "changeMeaning": "The resultant arrow materializes once the vectors are connected, showing magnitude and direction as a single vector R and labeling it clearly.",
+          "narration": "The resultant R is the vector from A\u2019s original tail to B\u2019s new head. It\u2019s the single arrow that replaces the two."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3 \u2014 Projectile Motion Decomposed into Components",
+      "description": "Demonstrate projectile motion in 2D by decomposing the initial velocity into vx (constant) and vy (gravity-affected). Use markers to show the apex where vy = 0 and illustrate independent horizontal/vertical motion.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Explain why horizontal and vertical motions are independent when gravity acts only vertically.",
+        "Decompose an initial launch velocity into horizontal vx and vertical vy components.",
+        "Identify the maximum-height condition: vertical velocity vy = 0 at the apex."
+      ],
+      "instructions": [
+        "Watch how the horizontal component stays constant while the vertical component changes direction at the apex.",
+        "Use the apex marker to connect vy = 0 to the highest point."
+      ],
+      "objects": [
+        {
+          "prefab": "projectileScenePrefab",
+          "name": "proj_stage",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0.35
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_gravity",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.22,
+            0.22,
+            0.42
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Gravity: g \u2193",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "v0_arrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.05,
+            0.08,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            50
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.09
+          ],
+          "color": [
+            70,
+            140,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "componentArrowPrefab",
+          "name": "vx_arrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.12,
+            0.03,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            80,
+            220,
+            120,
+            255
+          ]
+        },
+        {
+          "prefab": "componentArrowPrefab",
+          "name": "vy_arrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.12,
+            0.09,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            255,
+            170,
+            90,
+            255
+          ]
+        },
+        {
+          "prefab": "projectileDotPrefab",
+          "name": "projectile_dot",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.02,
+            0.02,
+            0.4
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "trajectoryCurvePrefab",
+          "name": "traj_curve",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_vx_const",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.2,
+            0.01,
+            0.42
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "vx constant",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_vy_changes",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.2,
+            0.1,
+            0.42
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "vy changes",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "maxHeightMarkerPrefab",
+          "name": "apex_marker",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0.16,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip3_1",
+          "audioClip": "scene3_intro_decomposition",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "proj_stage"
+            },
+            {
+              "target": "v0_arrow"
+            },
+            {
+              "target": "vx_arrow"
+            },
+            {
+              "target": "vy_arrow"
+            },
+            {
+              "target": "label_gravity"
+            },
+            {
+              "target": "label_vx_const"
+            },
+            {
+              "target": "label_vy_changes"
+            },
+            {
+              "target": "traj_curve"
+            },
+            {
+              "target": "apex_marker"
+            }
+          ],
+          "changeMeaning": "The projectile stage appears with v0 and its component arrows plus labels highlighting constant vx and changing vy; the trajectory and apex marker start hidden.",
+          "narration": "Split the launch velocity into horizontal vx and vertical vy components. Horizontal motion stays uniform; vertical motion accelerates due to gravity."
+        },
+        {
+          "clipName": "clip3_2",
+          "audioClip": "scene3_apex_and_vy_zero",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "projectile_dot"
+            },
+            {
+              "target": "vy_arrow"
+            },
+            {
+              "target": "vy_arrow"
+            },
+            {
+              "target": "apex_marker"
+            },
+            {
+              "target": "traj_curve"
+            },
+            {
+              "target": "traj_curve"
+            }
+          ],
+          "changeMeaning": "The dot moves to the apex location; vy shrinks toward zero and an apex marker appears, tying maximum height to the vertical-velocity condition vy = 0.",
+          "narration": "As the projectile rises, vy decreases toward zero. At maximum height, vy = 0; then it reverses and grows downward."
+        },
+        {
+          "clipName": "clip3_3",
+          "audioClip": "scene3_descending_vy_downwards",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile_dot"
+            },
+            {
+              "target": "vy_arrow"
+            },
+            {
+              "target": "vy_arrow"
+            }
+          ],
+          "changeMeaning": "The projectile dot advances down and right; vy flips downward and grows while vx stays constant conceptually, reinforcing independence of horizontal and vertical motion.",
+          "narration": "After the apex, vx remains unchanged while vy rotates downward and increases in magnitude\u2014this combination produces the parabolic trajectory."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 4 \u2014 Changing Angle and Speed: Range and Maximum Height",
+      "description": "Compare projectile launches by changing initial angle (fixed speed) and changing speed (fixed conditions conceptually). Highlight how maximum height and range change, and connect the intermediate angle idea to maximum range for a given speed.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Predict qualitative changes in range and maximum height when launch angle changes.",
+        "Identify (qualitatively) that an intermediate angle gives maximum range for fixed speed.",
+        "Explain how increasing speed increases both vx and vy, increasing height and range."
+      ],
+      "instructions": [
+        "Compare Trial 1 vs Trial 2: look at where each lands (range) and where it peaks (maximum height).",
+        "Then compare the low-speed and high-speed launches."
+      ],
+      "objects": [
+        {
+          "prefab": "projectileTrialPrefab",
+          "name": "trial_angle_fixed",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0.4
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "prefab": "trajectoryCurvePrefab",
+          "name": "traj_angle_low",
+          "parent": "trial_angle_fixed",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "trajectoryCurvePrefab",
+          "name": "traj_angle_high",
+          "parent": "trial_angle_fixed",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "projectileDotPrefab",
+          "name": "dot_angle_low",
+          "parent": "trial_angle_fixed",
+          "position": [
+            -0.05,
+            0.02,
+            0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "color": [
+            70,
+            140,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "projectileDotPrefab",
+          "name": "dot_angle_high",
+          "parent": "trial_angle_fixed",
+          "position": [
+            -0.05,
+            0.02,
+            0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            120,
+            200,
+            255
+          ]
+        },
+        {
+          "prefab": "maxHeightMarkerPrefab",
+          "name": "apex_angle_low",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.12,
+            0.14,
+            0.4
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "maxHeightMarkerPrefab",
+          "name": "apex_angle_high",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.22,
+            0.2,
+            0.4
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "rangeMarkerPrefab",
+          "name": "range_angle_low",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.42,
+            0.02,
+            0.4
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "rangeMarkerPrefab",
+          "name": "range_angle_high",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.52,
+            0.02,
+            0.4
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_trial_angles",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.18,
+            0.22,
+            0.45
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Same speed, different angles",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "projectileTrialPrefab",
+          "name": "trial_speed",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0,
+            0.62
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "prefab": "trajectoryCurvePrefab",
+          "name": "traj_speed_low",
+          "parent": "trial_speed",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "trajectoryCurvePrefab",
+          "name": "traj_speed_high",
+          "parent": "trial_speed",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "projectileDotPrefab",
+          "name": "dot_speed_low",
+          "parent": "trial_speed",
+          "position": [
+            -0.05,
+            0.02,
+            0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "color": [
+            120,
+            200,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "projectileDotPrefab",
+          "name": "dot_speed_high",
+          "parent": "trial_speed",
+          "position": [
+            -0.05,
+            0.02,
+            0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            200,
+            80,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_speed_compare",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.18,
+            0.06,
+            0.68
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Higher speed \u2192 larger vx and vy",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip4_1",
+          "audioClip": "scene4_compare_angles_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "traj_angle_low"
+            },
+            {
+              "target": "traj_angle_high"
+            },
+            {
+              "target": "dot_angle_low"
+            },
+            {
+              "target": "dot_angle_high"
+            },
+            {
+              "target": "apex_angle_low"
+            },
+            {
+              "target": "apex_angle_high"
+            },
+            {
+              "target": "range_angle_low"
+            },
+            {
+              "target": "range_angle_high"
+            }
+          ],
+          "changeMeaning": "Trial 1 (lower angle) is shown while Trial 2 (higher angle) is hidden, creating a clear baseline to compare how angle affects landing distance and peak height.",
+          "narration": "Compare two launches with the same speed but different angles. Higher angles increase time aloft and maximum height; lower angles favor range."
+        },
+        {
+          "clipName": "clip4_2",
+          "audioClip": "scene4_show_trial2_and_outcomes",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "traj_angle_high"
+            },
+            {
+              "target": "dot_angle_high"
+            },
+            {
+              "target": "dot_angle_low"
+            },
+            {
+              "target": "dot_angle_high"
+            },
+            {
+              "target": "apex_angle_low"
+            },
+            {
+              "target": "apex_angle_high"
+            },
+            {
+              "target": "range_angle_low"
+            },
+            {
+              "target": "range_angle_high"
+            }
+          ],
+          "changeMeaning": "Both trajectories are visible; dots move to their landing points, while apex and range markers highlight how maximum height and range compare between launch angles.",
+          "narration": "Overlay Trial 2. Look for the landing point (range) and the highest point (maximum height). For fixed speed, an intermediate angle produces maximum range."
+        },
+        {
+          "clipName": "clip4_3",
+          "audioClip": "scene4_compare_speeds_low_vs_high",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "traj_speed_low"
+            },
+            {
+              "target": "traj_speed_high"
+            },
+            {
+              "target": "dot_speed_low"
+            },
+            {
+              "target": "dot_speed_high"
+            },
+            {
+              "target": "dot_speed_high"
+            }
+          ],
+          "changeMeaning": "Switch to a speed comparison: low-speed and high-speed trajectories/dots appear together and move to their respective landing points, illustrating increased range and height with speed.",
+          "narration": "Now increase launch speed. Both vx and vy components become larger, so the projectile reaches a higher peak and lands farther away."
+        }
+      ]
+    }
+  ]
+}

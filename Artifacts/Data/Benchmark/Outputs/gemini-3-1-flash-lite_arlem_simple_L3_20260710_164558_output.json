@@ -1,0 +1,292 @@
+{
+  "workplace": {
+    "id": "astro_lab_room",
+    "name": "Astronomy Lab Classroom",
+    "origin": "room_origin",
+    "things": [
+      {
+        "id": "sun_model",
+        "name": "Central Sun Model",
+        "detectable": "floor_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "earth_globe",
+        "name": "Earth Globe",
+        "detectable": "wall_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "mars_globe",
+        "name": "Mars Globe",
+        "detectable": "table_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "display_console",
+        "name": "Instructional Console",
+        "detectable": "poster_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "solar_system_model",
+        "name": "Solar System Tabletop",
+        "detectable": "table_marker",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "table_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/marker1.bundle"
+      },
+      {
+        "id": "poster_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/marker2.bundle"
+      },
+      {
+        "id": "floor_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/marker3.bundle"
+      },
+      {
+        "id": "wall_marker",
+        "type": "marker",
+        "url": "https://assets.example.com/marker4.bundle"
+      },
+      {
+        "id": "room_origin",
+        "type": "anchor"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "animation"
+      },
+      {
+        "id": "label"
+      },
+      {
+        "id": "image"
+      },
+      {
+        "id": "video"
+      },
+      {
+        "id": "audio"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "label_intro",
+        "type": "label",
+        "scale": 1.0,
+        "url": "https://assets.example.com/label_intro.txt"
+      },
+      {
+        "id": "label_overtake_physics",
+        "type": "label",
+        "scale": 1.0,
+        "url": "https://assets.example.com/physics.txt"
+      },
+      {
+        "id": "anim_earth_mars_view",
+        "type": "animation",
+        "scale": 1.5,
+        "url": "https://assets.example.com/mars_retrograde.glb"
+      },
+      {
+        "id": "anim_jupiter_saturn_comp",
+        "type": "animation",
+        "scale": 1.2,
+        "url": "https://assets.example.com/outer_planets.glb"
+      }
+    ]
+  },
+  "activity": {
+    "id": "retrograde_lab_001",
+    "name": "Retrograde Motion Explorer",
+    "description": "A lab demonstrating retrograde motion through Earth-based and space-based perspectives.",
+    "workplace": "astro_lab_room",
+    "start": "step_1_intro",
+    "actions": [
+      {
+        "id": "step_1_intro",
+        "instruction": {
+          "title": "Introduction to Retrograde Motion",
+          "description": "Welcome. We will explore why Mars appears to move backward in the night sky. Tap the console to begin."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "display_console",
+              "type": "predicate",
+              "augmentation": "label_intro",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "display_console"
+          }
+        ]
+      },
+      {
+        "id": "step_2_geocentric_view",
+        "instruction": {
+          "title": "The Geocentric Perspective",
+          "description": "Observe the apparent path of Mars from Earth. Notice how it drifts east, loops west, then continues east. Click the model when finished observing."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "solar_system_model",
+              "type": "predicate",
+              "augmentation": "anim_earth_mars_view",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "solar_system_model"
+          }
+        ]
+      },
+      {
+        "id": "step_3_heliocentric_view",
+        "instruction": {
+          "title": "The Heliocentric Reality",
+          "description": "Now view the solar system from above. Notice Earth's faster orbit overtaking Mars. Click the Sun to continue."
+        },
+        "enter": {
+          "remove_self": true,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "solar_system_model",
+              "type": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "sun_model"
+          }
+        ]
+      },
+      {
+        "id": "step_4_explanation",
+        "instruction": {
+          "title": "Physics of the Overtake",
+          "description": "Like passing a car on the highway, Earth 'laps' Mars, creating the illusion of retrograde motion. Click the console to proceed."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "display_console",
+              "type": "predicate",
+              "augmentation": "label_overtake_physics",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "display_console"
+          }
+        ]
+      },
+      {
+        "id": "step_5_comparison",
+        "instruction": {
+          "title": "Planetary Comparison",
+          "description": "Finally, observe how more distant planets like Jupiter and Saturn show smaller loops. Tap the model to conclude the lab."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "solar_system_model",
+              "type": "predicate",
+              "augmentation": "anim_jupiter_saturn_comp",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "solar_system_model"
+          }
+        ]
+      }
+    ]
+  }
+}

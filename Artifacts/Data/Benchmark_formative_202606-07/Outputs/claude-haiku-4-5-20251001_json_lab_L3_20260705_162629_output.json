@@ -1,0 +1,814 @@
+{
+  "version": "2.0",
+  "labId": "astronomy_retrograde_motion",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Introduction to Astronomy, 100-level",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Students will describe the apparent path of Mars across the night sky during a retrograde episode, including the eastward drift, westward loop, and return to eastward motion.",
+    "Students will explain why apparent retrograde motion occurs in the heliocentric model as a consequence of Earth overtaking a slower-moving outer planet.",
+    "Students will contrast the geocentric and heliocentric explanations of retrograde motion and articulate why the heliocentric model is preferred on grounds of parsimony.",
+    "Students will predict when retrograde motion will occur for a given outer planet based on the relative orbital positions of Earth and that planet.",
+    "Students will compare the apparent retrograde loops of Mars, Jupiter, and Saturn, and explain why more distant planets produce smaller loops."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Observing Mars from Earth: The Retrograde Loop",
+      "description": "From an observer's viewpoint on Earth, watch Mars appear to move eastward across the constellations, then slow, reverse course westward in a distinctive loop, and resume eastward motion. This is the observational puzzle that drove the scientific revolution.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Students will identify and describe the three phases of retrograde motion: eastward drift, westward reversal, and return to eastward motion.",
+        "Students will articulate how this apparent retrograde loop was the central observational puzzle that challenged the geocentric model."
+      ],
+      "instructions": [
+        "Observe Mars's motion against the background of stars as seen from Earth's surface.",
+        "Notice the three distinct phases: slow eastward drift, westward loop, and return to eastward motion.",
+        "Consider why this pattern was so puzzling to ancient and medieval astronomers."
+      ],
+      "objects": [
+        {
+          "prefab": "starfieldPrefab",
+          "name": "nightSkyBackground",
+          "position": [
+            0,
+            0,
+            -3
+          ],
+          "scale": [
+            5,
+            5,
+            0.1
+          ],
+          "color": [
+            25,
+            25,
+            40,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "constellationGrid",
+          "position": [
+            -2.5,
+            2,
+            -2.9
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "ZODIAC\nSTARS",
+              "color": [
+                200,
+                200,
+                220,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "marsPlanet",
+          "position": [
+            -1.5,
+            0.5,
+            -2.8
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "texture": "mars_surface_texture"
+        },
+        {
+          "prefab": "pathLinePrefab",
+          "name": "marsPathTrace",
+          "position": [
+            0,
+            0,
+            -2.85
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "color": [
+            255,
+            100,
+            50,
+            100
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_retrograde_intro",
+          "audioClip": "retrograde_motion_introduction",
+          "autoAdvance": false,
+          "changeMeaning": "Scene is set with the night sky background and constellation labels visible, establishing the observer's viewpoint from Earth's surface.",
+          "narration": "Over centuries of naked-eye observations, astronomers noticed something puzzling about the outer planets like Mars. Most of the time, Mars drifts slowly eastward across the background stars, night after night. But roughly every 26 months, something remarkable happens: Mars slows, stops, and reverses course, moving westward across the constellations for about two months, tracing a distinctive loop in the sky. Then it resumes its normal eastward motion."
+        },
+        {
+          "clipName": "clip1_eastward_motion",
+          "audioClip": "mars_eastward_drift",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsPlanet",
+              "position": [
+                -1.5,
+                0.5,
+                -2.8
+              ]
+            },
+            {
+              "target": "marsPathTrace",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Mars is positioned and path is revealed to show the eastward drift phase of retrograde motion.",
+          "narration": "For much of the time, Mars exhibits normal eastward motion. Here we see Mars drifting slowly to the right, moving through the zodiacal constellations over weeks and months."
+        },
+        {
+          "clipName": "clip2_westward_loop",
+          "audioClip": "mars_retrograde_reversal",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsPlanet",
+              "position": [
+                -0.5,
+                0.5,
+                -2.8
+              ]
+            }
+          ],
+          "changeMeaning": "Mars moves westward into the retrograde loop phase, illustrating the key observational phenomenon.",
+          "narration": "Then comes the retrograde phase. Mars slows its eastward motion, stops, and reverses direction, moving westward. Over about two months, it traces a distinctive loop backward against the stars, which seemed to defy the elegant circular motions that ancient astronomers expected."
+        },
+        {
+          "clipName": "clip3_resume_eastward",
+          "audioClip": "mars_resumes_motion",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsPlanet",
+              "position": [
+                0.5,
+                0.5,
+                -2.8
+              ]
+            }
+          ],
+          "changeMeaning": "Mars returns to eastward motion, completing the three-phase retrograde cycle and emphasizing the puzzle it posed.",
+          "narration": "After the retrograde loop completes, Mars resumes its normal eastward drift against the background stars. This cycle repeats roughly every 26 months. This pattern was the central puzzle that drove astronomers to reconsider whether Earth, or the Sun, truly sat at the center of the cosmos."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Heliocentrism Revealed: Earth and Mars in Orbit",
+      "description": "Step outside the solar system to view Earth and Mars orbiting the Sun. See how the retrograde loop emerges naturally from the relative motions of the two planets\u2014no epicycles needed. When faster Earth overtakes slower Mars, an observer on Earth sees Mars appear to move backward, just as a passing car appears to slide backward in your peripheral vision.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Students will understand that retrograde motion results from the relative orbital motion of Earth and outer planets around the Sun.",
+        "Students will explain the heliocentric solution as more parsimonious than the geocentric model with its awkward epicycles.",
+        "Students will apply the concept of relative motion (e.g., the overtaking car analogy) to planetary retrograde motion."
+      ],
+      "instructions": [
+        "View Earth and Mars as they orbit the Sun from an external vantage point.",
+        "Watch Earth's faster orbit carry it toward and then past Mars.",
+        "Observe how this relative motion creates the illusion of Mars moving backward from Earth's perspective."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "sunCentral",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "texture": "2k_sun"
+        },
+        {
+          "prefab": "orbitPathPrefab",
+          "name": "earthOrbit",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            0.01
+          ],
+          "color": [
+            100,
+            150,
+            255,
+            80
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earthPlanet",
+          "position": [
+            1.0,
+            0,
+            0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "texture": "2k_earth_daymap",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                1.0,
+                0,
+                0
+              ],
+              "orbitalPeriod": 12.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "orbitPathPrefab",
+          "name": "marsOrbitOuter",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.52,
+            1.52,
+            0.01
+          ],
+          "color": [
+            220,
+            100,
+            80,
+            80
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "marsPlanetOuter",
+          "position": [
+            1.52,
+            0,
+            0
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "texture": "mars_surface_texture",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                1.52,
+                0,
+                0
+              ],
+              "orbitalPeriod": 22.6,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "heliocentricLabel",
+          "position": [
+            0,
+            -1.2,
+            0
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "HELIOCENTRIC VIEW\n(External Solar System)\nEarth orbits faster (12 units/year)\nMars orbits slower (22.6 units/year)",
+              "color": [
+                200,
+                220,
+                200,
+                255
+              ],
+              "fontSize": 22
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip4_heliocentric_setup",
+          "audioClip": "heliocentric_model_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "sunCentral",
+              "enabled": true
+            },
+            {
+              "target": "earthOrbit",
+              "enabled": true
+            },
+            {
+              "target": "marsOrbitOuter",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The heliocentric system is set up with the Sun, Earth's orbit, and Mars's orbit visible, establishing the proper orbital geometry.",
+          "narration": "Now let's step outside the solar system and see what's actually happening. Here is the Sun at the center. Earth orbits at one astronomical unit\u2014closer to the Sun and moving faster in its orbit. Mars orbits farther out, at 1.52 AU, moving more slowly. The key to understanding retrograde motion is relative motion."
+        },
+        {
+          "clipName": "clip5_orbital_motion",
+          "audioClip": "relative_orbital_motion",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "earthPlanet",
+              "enabled": true
+            },
+            {
+              "target": "marsPlanetOuter",
+              "enabled": true
+            },
+            {
+              "target": "heliocentricLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Earth and Mars are now active in their orbits, illustrating the relative speed difference that causes retrograde motion.",
+          "narration": "Watch as both planets move in their orbits. Earth, closer to the Sun, completes its orbit much faster\u2014in one Earth year. Mars, farther out, takes about 1.88 Earth years to orbit once. This difference in orbital speed is crucial. Think of a car race: the inner lane moves the same lap faster than the outer lane."
+        },
+        {
+          "clipName": "clip6_overtaking_event",
+          "audioClip": "earth_overtakes_mars",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "earthPlanet",
+              "position": [
+                1.2,
+                0.3,
+                0
+              ]
+            },
+            {
+              "target": "marsPlanetOuter",
+              "position": [
+                1.35,
+                0.15,
+                0
+              ]
+            }
+          ],
+          "changeMeaning": "Earth and Mars are repositioned to show the moment of overtaking, when Earth's faster motion makes Mars appear to reverse direction in the night sky.",
+          "narration": "Every 26 months or so, Earth's faster orbit brings it from behind Mars. As Earth, moving in the inner lane, passes the slower Mars in the outer lane, something remarkable happens from Earth's perspective: Mars appears to slow down, stop, and move backward. This is not because Mars is actually reversing\u2014it continues moving forward in its orbit around the Sun. Instead, Earth's faster motion creates the illusion. It's exactly like watching a truck on the highway: when your car passes the truck, the truck appears to slide backward past your window, even though it's still moving forward."
+        },
+        {
+          "clipName": "clip7_heliocentric_resolution",
+          "audioClip": "heliocentric_elegance",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "earthPlanet",
+              "position": [
+                0.8,
+                -0.6,
+                0
+              ]
+            },
+            {
+              "target": "marsPlanetOuter",
+              "position": [
+                1.52,
+                0,
+                0
+              ]
+            }
+          ],
+          "changeMeaning": "The scene resets to show the overall heliocentric system, emphasizing the elegance and parsimony of the explanation.",
+          "narration": "The heliocentric model explains retrograde motion with simple orbital mechanics: relative motion between two objects moving at different speeds in different orbits. No epicycles, no artificial circular loops within loops. Just the elegant consequence of Kepler's laws and Newton's physics. Copernicus and Kepler recognized that retrograde motion was not a defect in the cosmos\u2014it was a consequence of viewing the planets from a moving Earth. This simple, parsimonious explanation is one of the great triumphs of heliocentrism."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Comparing Outer Planets: Mars, Jupiter, and Saturn",
+      "description": "See how retrograde motion varies across the outer planets. Mars produces a tight loop, while Jupiter's loop is broader, and Saturn's is broader still. Why? Because more distant planets move slower and are overtaken less dramatically by Earth\u2014the relative velocity effect is smaller, so the illusion of backward motion is less pronounced.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Students will compare the apparent retrograde loops of Mars, Jupiter, and Saturn.",
+        "Students will explain why more distant planets produce smaller, less dramatic retrograde loops.",
+        "Students will predict the relative sizes of retrograde loops based on orbital position and relative velocity."
+      ],
+      "instructions": [
+        "Observe the retrograde loops traced by Mars, Jupiter, and Saturn in the night sky.",
+        "Compare the angular size and shape of each loop.",
+        "Relate the loop size to the planet's distance from the Sun and the strength of the relative-motion effect."
+      ],
+      "objects": [
+        {
+          "prefab": "starfieldPrefab",
+          "name": "comparisonSky1",
+          "position": [
+            -2,
+            1,
+            -2.5
+          ],
+          "scale": [
+            1.5,
+            1.5,
+            0.05
+          ],
+          "color": [
+            30,
+            30,
+            50,
+            255
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "marsInSky",
+          "position": [
+            -2,
+            1,
+            -2.45
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "mars_surface_texture"
+        },
+        {
+          "prefab": "pathLinePrefab",
+          "name": "marsLoopTrace",
+          "position": [
+            -2,
+            1,
+            -2.46
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            1
+          ],
+          "color": [
+            255,
+            100,
+            50,
+            120
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "marsLabel",
+          "position": [
+            -2.8,
+            0.5,
+            -2.4
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "MARS\nLoop Size: ~15\u00b0",
+              "color": [
+                255,
+                150,
+                100,
+                255
+              ],
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "starfieldPrefab",
+          "name": "comparisonSky2",
+          "position": [
+            0,
+            1,
+            -2.5
+          ],
+          "scale": [
+            1.5,
+            1.5,
+            0.05
+          ],
+          "color": [
+            30,
+            30,
+            50,
+            255
+          ]
+        },
+        {
+          "prefab": "jupiterPrefab",
+          "name": "jupiterInSky",
+          "position": [
+            0,
+            1,
+            -2.45
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "texture": "jupiter_texture"
+        },
+        {
+          "prefab": "pathLinePrefab",
+          "name": "jupiterLoopTrace",
+          "position": [
+            0,
+            1,
+            -2.46
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            1
+          ],
+          "color": [
+            200,
+            150,
+            80,
+            120
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "jupiterLabel",
+          "position": [
+            -0.8,
+            0.5,
+            -2.4
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "JUPITER\nLoop Size: ~9\u00b0",
+              "color": [
+                200,
+                150,
+                100,
+                255
+              ],
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "starfieldPrefab",
+          "name": "comparisonSky3",
+          "position": [
+            2,
+            1,
+            -2.5
+          ],
+          "scale": [
+            1.5,
+            1.5,
+            0.05
+          ],
+          "color": [
+            30,
+            30,
+            50,
+            255
+          ]
+        },
+        {
+          "prefab": "saturnPrefab",
+          "name": "saturnInSky",
+          "position": [
+            2,
+            1,
+            -2.45
+          ],
+          "scale": [
+            0.055,
+            0.055,
+            0.055
+          ],
+          "texture": "saturn_texture"
+        },
+        {
+          "prefab": "pathLinePrefab",
+          "name": "saturnLoopTrace",
+          "position": [
+            2,
+            1,
+            -2.46
+          ],
+          "scale": [
+            0.45,
+            0.45,
+            1
+          ],
+          "color": [
+            180,
+            140,
+            100,
+            120
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "saturnLabel",
+          "position": [
+            1.2,
+            0.5,
+            -2.4
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "SATURN\nLoop Size: ~6\u00b0",
+              "color": [
+                180,
+                140,
+                120,
+                255
+              ],
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "explanationText",
+          "position": [
+            0,
+            -0.5,
+            -2.4
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "More distant planets move slower in their orbits.\nEarth's relative motion overtakes them less dramatically.\nResult: smaller, less pronounced retrograde loops.",
+              "color": [
+                200,
+                220,
+                240,
+                255
+              ],
+              "fontSize": 20,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip8_comparison_setup",
+          "audioClip": "comparing_retrograde_loops",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "comparisonSky1",
+              "enabled": true
+            },
+            {
+              "target": "comparisonSky2",
+              "enabled": true
+            },
+            {
+              "target": "comparisonSky3",
+              "enabled": true
+            },
+            {
+              "target": "marsInSky",
+              "enabled": true
+            },
+            {
+              "target": "jupiterInSky",
+              "enabled": true
+            },
+            {
+              "target": "saturnInSky",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Three side-by-side night sky scenes are established, each showing a different outer planet positioned for retrograde motion observation.",
+          "narration": "Retrograde motion is not unique to Mars. All outer planets\u2014Jupiter, Saturn, Uranus, and Neptune\u2014exhibit this behavior. However, the retrograde loops vary dramatically in size. Here we compare three outer planets as seen from Earth's night sky during their retrograde episodes. Mars produces a tight, distinctive loop, while Jupiter's loop is broader, and Saturn's is broader still."
+        },
+        {
+          "clipName": "clip9_loop_shapes",
+          "audioClip": "retrograde_loop_shapes",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsLoopTrace",
+              "enabled": true
+            },
+            {
+              "target": "jupiterLoopTrace",
+              "enabled": true
+            },
+            {
+              "target": "saturnLoopTrace",
+              "enabled": true
+            },
+            {
+              "target": "marsLabel",
+              "enabled": true
+            },
+            {
+              "target": "jupiterLabel",
+              "enabled": true
+            },
+            {
+              "target": "saturnLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The retrograde loops are traced for each planet, making their different sizes visually apparent and labeled with approximate angular sizes.",
+          "narration": "The retrograde loops have strikingly different sizes. Mars, the closest outer planet at 1.52 AU, traces a tight loop spanning about 15 degrees of the sky. Jupiter, at 5.2 AU, produces a broader loop of about 9 degrees. Saturn, at 9.5 AU, produces an even broader loop of about 6 degrees. The pattern is not simply that farther planets make smaller loops\u2014it's more subtle."
+        },
+        {
+          "clipName": "clip10_distance_effect",
+          "audioClip": "distance_and_relative_velocity",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "explanationText",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "An explanatory text is added that connects loop size to the concept of relative velocity and orbital distance, providing the conceptual framework for understanding the pattern.",
+          "narration": "Why do the loops shrink for more distant planets? The answer lies in relative velocity. Earth's orbital speed is constant, but the farther out a planet orbits, the slower it moves. When Earth overtakes Mars, the relative velocity difference is large\u2014Earth is moving much faster than Mars. This large relative velocity produces a pronounced retrograde loop. But when Earth overtakes Jupiter or Saturn, the relative velocity difference is smaller because these planets move only slightly slower than their orbital geometry would predict. The result: Earth's overtaking effect is weaker, producing a smaller loop in the sky. The farther the planet, the closer its orbital velocity matches the general pattern, and the smaller the retrograde loop appears."
+        }
+      ]
+    }
+  ]
+}

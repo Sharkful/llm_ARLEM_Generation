@@ -1,0 +1,2101 @@
+{
+  "version": "2.0",
+  "labId": "VSEPR_Theory_AR",
+  "author": "AI Educational Content Designer",
+  "courseName": "General Chemistry I",
+  "estimatedLength": "60 minutes",
+  "objectives": [
+    "Determine the steric number of a central atom from its Lewis structure by counting bonding pairs and lone pairs.",
+    "Predict the electron-domain geometry of a molecule from its steric number, identifying the linear, trigonal planar, tetrahedral, trigonal bipyramidal, or octahedral arrangement.",
+    "Distinguish electron-domain geometry from molecular geometry, and identify the molecular shape produced when one or more domains is a lone pair.",
+    "Explain why lone pairs occupy more angular space than bonding pairs, and predict the direction of bond-angle deviations from idealized values.",
+    "Apply VSEPR predictions to specific molecules and compare predicted geometries to experimentally observed structures."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Introduction to VSEPR Theory",
+      "description": "Introduces VSEPR theory and the concept of electron domain repulsion.",
+      "author": "AI Educational Content Designer",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Understand the core principle of VSEPR theory: electron pairs arrange to minimize repulsion.",
+        "Identify how to count electron domains from a Lewis structure."
+      ],
+      "instructions": [
+        "Welcome to the VSEPR Theory lab!",
+        "This lab explores how molecules achieve their 3D shapes.",
+        "We'll start by understanding the fundamental principle: electron pairs around a central atom repel each other and spread out as much as possible.",
+        "In this first scene, you'll see a central atom and learn how to count electron domains from a Lewis structure."
+      ],
+      "objects": [
+        {
+          "prefab": "centralAtomPrefab",
+          "name": "CentralAtom",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "grey_metal_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "TheoryTitle",
+          "parent": "CentralAtom",
+          "position": [
+            0.0,
+            0.5,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "VSEPR Theory",
+              "fontSize": 100.0,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "TheoryDescription",
+          "parent": "CentralAtom",
+          "position": [
+            0.0,
+            -0.5,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Electron pairs repel. Molecules adopt shapes that minimize this repulsion.",
+              "fontSize": 80.0,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "lewisStructurePanelPrefab",
+          "name": "LewisStructurePanel",
+          "position": [
+            1.2,
+            0.5,
+            0.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "texture": "panel_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "LewisStructureLabel",
+          "parent": "LewisStructurePanel",
+          "position": [
+            0.0,
+            1.2,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Water (H2O) Lewis Structure",
+              "fontSize": 60.0,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "waterLewisStructurePrefab",
+          "name": "WaterLewisStructure",
+          "parent": "LewisStructurePanel",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "DomainCountRule",
+          "parent": "LewisStructurePanel",
+          "position": [
+            0.0,
+            -1.3,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Rule: Single, double, triple bonds, and lone pairs EACH count as one electron domain.",
+              "fontSize": 50.0,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_IntroNarration",
+          "audioClip": "vsepr_intro_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "CentralAtom",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "VSEPR Theory",
+                  "fontSize": 100.0
+                }
+              ]
+            },
+            {
+              "target": "TheoryDescription",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Electron pairs repel. Molecules adopt shapes that minimize this repulsion."
+                }
+              ]
+            },
+            {
+              "target": "LewisStructurePanel",
+              "enabled": true
+            },
+            {
+              "target": "LewisStructureLabel",
+              "enabled": true
+            },
+            {
+              "target": "WaterLewisStructure",
+              "enabled": true
+            },
+            {
+              "target": "DomainCountRule",
+              "enabled": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Electron Domain Repulsion",
+      "description": "Demonstrates how electron domains arrange to minimize repulsion, building from linear to tetrahedral geometry.",
+      "author": "AI Educational Content Designer",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Observe and understand the minimum-repulsion principle in action.",
+        "Identify linear, trigonal planar, and tetrahedral electron-domain geometries."
+      ],
+      "instructions": [
+        "In this module, we'll see VSEPR theory in action!",
+        "Watch as electron domains arrange themselves to be as far apart as possible.",
+        "We'll start with two domains, then add a third, and finally a fourth, observing the resulting geometries."
+      ],
+      "objects": [
+        {
+          "prefab": "centralAtomPrefab",
+          "name": "CentralAtomEDR",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "grey_metal_texture"
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "Domain1",
+          "parent": "CentralAtomEDR",
+          "position": [
+            0.2,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            150.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "drag": 0.5,
+              "angularDrag": 0.5,
+              "useGravity": false
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "Domain2",
+          "parent": "CentralAtomEDR",
+          "position": [
+            -0.2,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            150.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "drag": 0.5,
+              "angularDrag": 0.5,
+              "useGravity": false
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "EDR_Status",
+          "parent": "CentralAtomEDR",
+          "position": [
+            0.0,
+            0.8,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Two Electron Domains",
+              "fontSize": 80.0,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_TwoDomains",
+          "audioClip": "vsepr_two_domains_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Domain1",
+              "position": [
+                0.5,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "Domain2",
+              "position": [
+                -0.5,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "EDR_Status",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Linear Geometry (180\u00b0)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_AddThirdDomain",
+          "audioClip": "vsepr_add_third_domain_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "Domain1",
+              "position": [
+                0.5,
+                0.0,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "Domain2",
+              "position": [
+                -0.5,
+                0.0,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "isKinematic": false
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomEDR",
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "mass": 0.1,
+                  "drag": 0.5,
+                  "angularDrag": 0.5,
+                  "useGravity": false,
+                  "xConstraint": false,
+                  "yConstraint": false,
+                  "zConstraint": false
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomEDR",
+              "components": [
+                {
+                  "componentType": "pointerReceiver",
+                  "draggable": true,
+                  "kinematicWhileIdle": true,
+                  "faceWhileDragging": true
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomEDR",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 10.0,
+                  "orbitalScale": 0.5,
+                  "synchronousRotation": true
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomEDR",
+              "components": [
+                {
+                  "componentType": "simpleRotation",
+                  "timeRate": 0.5
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomEDR",
+              "components": [
+                {
+                  "componentType": "checkAngle",
+                  "azmTarget": 120,
+                  "altTarget": 0,
+                  "audioClipSuccess": "geometry_success",
+                  "callBackObjects": [
+                    "CentralAtomEDR"
+                  ]
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomEDR",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Adding third domain...",
+                  "fontSize": 80.0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_Tetrahedral",
+          "audioClip": "vsepr_tetrahedral_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "CentralAtomEDR",
+              "components": [
+                {
+                  "componentType": "checkAngle",
+                  "azmTarget": 109,
+                  "altTarget": 0,
+                  "audioClipSuccess": "geometry_success",
+                  "callBackObjects": [
+                    "CentralAtomEDR"
+                  ]
+                }
+              ]
+            },
+            {
+              "target": "EDR_Status",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Tetrahedral Geometry (109.5\u00b0)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Extended Geometries",
+      "description": "Demonstrates trigonal bipyramidal and octahedral electron-domain geometries.",
+      "author": "AI Educational Content Designer",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Identify trigonal bipyramidal and octahedral electron-domain geometries.",
+        "Understand the arrangement of domains in these geometries."
+      ],
+      "instructions": [
+        "Now let's explore the geometries for 5 and 6 electron domains.",
+        "These arrangements allow domains to get even further apart.",
+        "Observe the trigonal bipyramidal and octahedral shapes."
+      ],
+      "objects": [
+        {
+          "prefab": "centralAtomPrefab",
+          "name": "CentralAtomExtended",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "grey_metal_texture"
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DomainA",
+          "parent": "CentralAtomExtended",
+          "position": [
+            0.5,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            150.0
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DomainB",
+          "parent": "CentralAtomExtended",
+          "position": [
+            -0.5,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            150.0
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DomainC",
+          "parent": "CentralAtomExtended",
+          "position": [
+            0.0,
+            0.5,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            150.0
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "ExtendedStatus",
+          "parent": "CentralAtomExtended",
+          "position": [
+            0.0,
+            0.8,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Five Electron Domains",
+              "fontSize": 80.0,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_TrigBipyramidal",
+          "audioClip": "vsepr_trig_bipyramidal_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "DomainA",
+              "position": [
+                0.5,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.5,
+                0.5,
+                0.5
+              ]
+            },
+            {
+              "target": "DomainB",
+              "position": [
+                -0.5,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.5,
+                0.5,
+                0.5
+              ]
+            },
+            {
+              "target": "DomainC",
+              "position": [
+                0.0,
+                0.4,
+                -0.4
+              ],
+              "scale": [
+                0.5,
+                0.5,
+                0.5
+              ]
+            },
+            {
+              "target": "CentralAtomExtended",
+              "components": [
+                {
+                  "componentType": "checkAngle",
+                  "azmTarget": 90,
+                  "altTarget": 0,
+                  "audioClipSuccess": "geometry_success",
+                  "callBackObjects": [
+                    "CentralAtomExtended"
+                  ]
+                }
+              ]
+            },
+            {
+              "target": "ExtendedStatus",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Trigonal Bipyramidal Geometry"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_Octahedral",
+          "audioClip": "vsepr_octahedral_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "DomainA",
+              "position": [
+                0.5,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.5,
+                0.5,
+                0.5
+              ]
+            },
+            {
+              "target": "DomainB",
+              "position": [
+                -0.5,
+                0.0,
+                0.0
+              ],
+              "scale": [
+                0.5,
+                0.5,
+                0.5
+              ]
+            },
+            {
+              "target": "DomainC",
+              "position": [
+                0.0,
+                0.5,
+                0.0
+              ],
+              "scale": [
+                0.5,
+                0.5,
+                0.5
+              ]
+            },
+            {
+              "target": "CentralAtomExtended",
+              "components": [
+                {
+                  "componentType": "checkAngle",
+                  "azmTarget": 90,
+                  "altTarget": 90,
+                  "audioClipSuccess": "geometry_success",
+                  "callBackObjects": [
+                    "CentralAtomExtended"
+                  ]
+                }
+              ]
+            },
+            {
+              "target": "ExtendedStatus",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Octahedral Geometry (90\u00b0)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Electron vs. Molecular Geometry",
+      "description": "Distinguishes between electron-domain and molecular geometry using examples like CH4, NH3, and H2O.",
+      "author": "AI Educational Content Designer",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Differentiate between electron-domain geometry and molecular geometry.",
+        "Predict molecular geometry based on electron-domain geometry and the number of lone pairs."
+      ],
+      "instructions": [
+        "Electron domains determine the overall shape, but lone pairs aren't counted as part of the molecular shape.",
+        "We'll look at methane (CH4), ammonia (NH3), and water (H2O) to see this distinction."
+      ],
+      "objects": [
+        {
+          "prefab": "centralAtomPrefab",
+          "name": "CentralAtomMMG",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "grey_metal_texture"
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "CH4_Bond1",
+          "parent": "CentralAtomMMG",
+          "position": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "color": [
+            255.0,
+            0.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "CH4_Bond2",
+          "parent": "CentralAtomMMG",
+          "position": [
+            -0.3,
+            0.3,
+            0.3
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "color": [
+            0.0,
+            255.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "CH4_Bond3",
+          "parent": "CentralAtomMMG",
+          "position": [
+            0.3,
+            -0.3,
+            0.3
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "color": [
+            0.0,
+            0.0,
+            255.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "CH4_Bond4",
+          "parent": "CentralAtomMMG",
+          "position": [
+            -0.3,
+            -0.3,
+            0.3
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "color": [
+            255.0,
+            255.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "MMG_Status",
+          "parent": "CentralAtomMMG",
+          "position": [
+            0.0,
+            0.8,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Methane (CH4): Tetrahedral",
+              "fontSize": 70.0,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_Methane",
+          "audioClip": "vsepr_methane_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "CentralAtomMMG",
+              "scale": [
+                0.2,
+                0.2,
+                0.2
+              ]
+            },
+            {
+              "target": "CH4_Bond1",
+              "enabled": true
+            },
+            {
+              "target": "CH4_Bond2",
+              "enabled": true
+            },
+            {
+              "target": "CH4_Bond3",
+              "enabled": true
+            },
+            {
+              "target": "CH4_Bond4",
+              "enabled": true
+            },
+            {
+              "target": "MMG_Status",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Methane (CH4): Tetrahedral EDG, Tetrahedral MDG"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_Ammonia",
+          "audioClip": "vsepr_ammonia_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "CH4_Bond4",
+              "enabled": false
+            },
+            {
+              "target": "CentralAtomMMG",
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "mass": 0.1,
+                  "drag": 0.5,
+                  "angularDrag": 0.5,
+                  "useGravity": false,
+                  "xConstraint": false,
+                  "yConstraint": false,
+                  "zConstraint": false
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomMMG",
+              "components": [
+                {
+                  "componentType": "pointerReceiver",
+                  "draggable": true,
+                  "kinematicWhileIdle": true,
+                  "faceWhileDragging": true
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomMMG",
+              "components": [
+                {
+                  "componentType": "simpleOrbit",
+                  "orbitalPeriod": 10.0,
+                  "orbitalScale": 0.5,
+                  "synchronousRotation": true
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomMMG",
+              "components": [
+                {
+                  "componentType": "simpleRotation",
+                  "timeRate": 0.5
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomMMG",
+              "components": [
+                {
+                  "componentType": "checkAngle",
+                  "azmTarget": 109,
+                  "altTarget": 0,
+                  "audioClipSuccess": "geometry_success",
+                  "callBackObjects": [
+                    "CentralAtomMMG"
+                  ]
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomMMG",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Adding lone pair...",
+                  "fontSize": 70.0
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomMMG",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Ammonia (NH3): Tetrahedral EDG, Trigonal Pyramidal MDG"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_Water",
+          "audioClip": "vsepr_water_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "CH4_Bond3",
+              "enabled": false
+            },
+            {
+              "target": "CentralAtomMMG",
+              "components": [
+                {
+                  "componentType": "checkAngle",
+                  "azmTarget": 104,
+                  "altTarget": 0,
+                  "audioClipSuccess": "geometry_success",
+                  "callBackObjects": [
+                    "CentralAtomMMG"
+                  ]
+                }
+              ]
+            },
+            {
+              "target": "MMG_Status",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Water (H2O): Tetrahedral EDG, Bent MDG"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Lone Pair Repulsion Asymmetry",
+      "description": "Explains why lone pairs occupy more space and affect bond angles, comparing CH4, NH3, and H2O.",
+      "author": "AI Educational Content Designer",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Explain the greater spatial extent of lone pairs compared to bonding pairs.",
+        "Predict the effect of lone pairs on bond angles."
+      ],
+      "instructions": [
+        "Lone pairs push bonding pairs closer together.",
+        "See how the bond angles change as lone pairs increase.",
+        "Observe the visual representation of lone pairs taking up more space."
+      ],
+      "objects": [
+        {
+          "prefab": "centralAtomPrefab",
+          "name": "CentralAtomLPA",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "grey_metal_texture"
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "CH4_BondLPA1",
+          "parent": "CentralAtomLPA",
+          "position": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "color": [
+            255.0,
+            0.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "CH4_BondLPA2",
+          "parent": "CentralAtomLPA",
+          "position": [
+            -0.3,
+            0.3,
+            0.3
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "color": [
+            0.0,
+            255.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "CH4_BondLPA3",
+          "parent": "CentralAtomLPA",
+          "position": [
+            0.3,
+            -0.3,
+            0.3
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "color": [
+            0.0,
+            0.0,
+            255.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bondPrefab",
+          "name": "CH4_BondLPA4",
+          "parent": "CentralAtomLPA",
+          "position": [
+            -0.3,
+            -0.3,
+            0.3
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "color": [
+            255.0,
+            255.0,
+            0.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "LonePair1",
+          "parent": "CentralAtomLPA",
+          "position": [
+            -0.3,
+            -0.3,
+            -0.3
+          ],
+          "scale": [
+            0.6,
+            0.6,
+            0.6
+          ],
+          "color": [
+            150.0,
+            150.0,
+            255.0,
+            100.0
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "LPA_Status",
+          "parent": "CentralAtomLPA",
+          "position": [
+            0.0,
+            0.9,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "CH4: 109.5\u00b0",
+              "fontSize": 60.0,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_CH4",
+          "audioClip": "vsepr_ch4_angles_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "CH4_BondLPA1",
+              "enabled": true
+            },
+            {
+              "target": "CH4_BondLPA2",
+              "enabled": true
+            },
+            {
+              "target": "CH4_BondLPA3",
+              "enabled": true
+            },
+            {
+              "target": "CH4_BondLPA4",
+              "enabled": true
+            },
+            {
+              "target": "LonePair1",
+              "enabled": false
+            },
+            {
+              "target": "LPA_Status",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "CH4: 109.5\u00b0"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_NH3",
+          "audioClip": "vsepr_nh3_angles_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "CH4_BondLPA4",
+              "enabled": false
+            },
+            {
+              "target": "LonePair1",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "rigidBody",
+                  "mass": 0.1,
+                  "drag": 0.5,
+                  "angularDrag": 0.5,
+                  "useGravity": false
+                },
+                {
+                  "componentType": "pointerReceiver",
+                  "draggable": true,
+                  "kinematicWhileIdle": true,
+                  "faceWhileDragging": true
+                }
+              ]
+            },
+            {
+              "target": "CentralAtomLPA",
+              "components": [
+                {
+                  "componentType": "checkAngle",
+                  "azmTarget": 107,
+                  "altTarget": 0,
+                  "audioClipSuccess": "geometry_success",
+                  "callBackObjects": [
+                    "CentralAtomLPA"
+                  ]
+                }
+              ]
+            },
+            {
+              "target": "LPA_Status",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "NH3: ~107\u00b0 (Lone pair compresses bonds)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_H2O",
+          "audioClip": "vsepr_h2o_angles_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "CH4_BondLPA3",
+              "enabled": false
+            },
+            {
+              "target": "CentralAtomLPA",
+              "components": [
+                {
+                  "componentType": "checkAngle",
+                  "azmTarget": 104,
+                  "altTarget": 0,
+                  "audioClipSuccess": "geometry_success",
+                  "callBackObjects": [
+                    "CentralAtomLPA"
+                  ]
+                }
+              ]
+            },
+            {
+              "target": "LPA_Status",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "H2O: ~104.5\u00b0 (Two lone pairs compress bonds further)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Gallery of Molecules",
+      "description": "Showcases various molecules and their predicted geometries.",
+      "author": "AI Educational Content Designer",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Recognize common molecular geometries.",
+        "Connect molecular structures to their electron-domain geometries."
+      ],
+      "instructions": [
+        "Here's a gallery of real molecules.",
+        "See how VSEPR theory's predictions match their observed shapes.",
+        "Explore CO2, BF3, CH4, PF5, SF6, NH3, H2O, and XeF4."
+      ],
+      "objects": [
+        {
+          "prefab": "moleculeGalleryPrefab",
+          "name": "Gallery",
+          "position": [
+            0.0,
+            0.5,
+            0.0
+          ],
+          "scale": [
+            1.5,
+            1.5,
+            1.5
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_GalleryIntro",
+          "audioClip": "vsepr_gallery_intro_narration",
+          "autoAdvance": true,
+          "changes": []
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Prediction Activity: Drag Domains",
+      "description": "Students practice predicting molecular geometry by arranging electron domains.",
+      "author": "AI Educational Content Designer",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Apply VSEPR rules to predict electron-domain and molecular geometry.",
+        "Develop spatial reasoning skills for molecular shapes."
+      ],
+      "instructions": [
+        "Now it's your turn to predict!",
+        "Drag the electron domains to form the correct geometry.",
+        "Start with four domains, then try others."
+      ],
+      "objects": [
+        {
+          "prefab": "centralAtomPrefab",
+          "name": "CentralAtomDrag",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "grey_metal_texture"
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DragDomain1",
+          "parent": "CentralAtomDrag",
+          "position": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            150.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "drag": 0.5,
+              "angularDrag": 0.5,
+              "useGravity": false
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DragDomain2",
+          "parent": "CentralAtomDrag",
+          "position": [
+            -0.4,
+            0.4,
+            0.4
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            150.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "drag": 0.5,
+              "angularDrag": 0.5,
+              "useGravity": false
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DragDomain3",
+          "parent": "CentralAtomDrag",
+          "position": [
+            0.4,
+            -0.4,
+            0.4
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            150.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "drag": 0.5,
+              "angularDrag": 0.5,
+              "useGravity": false
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": true
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainPrefab",
+          "name": "DragDomain4",
+          "parent": "CentralAtomDrag",
+          "position": [
+            -0.4,
+            -0.4,
+            0.4
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "color": [
+            200.0,
+            200.0,
+            200.0,
+            150.0
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 0.1,
+              "drag": 0.5,
+              "angularDrag": 0.5,
+              "useGravity": false
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "DragStatus",
+          "parent": "CentralAtomDrag",
+          "position": [
+            0.0,
+            0.8,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Arrange 4 Domains: Tetrahedral",
+              "fontSize": 60.0,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_DragTetrahedral",
+          "audioClip": "vsepr_drag_tetrahedral_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "DragStatus",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Arrange 4 Domains: Tetrahedral"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_DragLinear",
+          "audioClip": "vsepr_drag_linear_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "DragDomain3",
+              "enabled": false
+            },
+            {
+              "target": "DragDomain4",
+              "enabled": false
+            },
+            {
+              "target": "DragStatus",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Arrange 2 Domains: Linear"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_DragTrigPyramidal",
+          "audioClip": "vsepr_drag_trig_pyramidal_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "DragDomain3",
+              "enabled": true
+            },
+            {
+              "target": "DragDomain4",
+              "enabled": false
+            },
+            {
+              "target": "DragStatus",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Arrange 4 Domains (1 lone pair): Trigonal Pyramidal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Prediction Activity: Select Shape",
+      "description": "Students select the correct molecular shape from options based on a Lewis structure.",
+      "author": "AI Educational Content Designer",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Apply VSEPR theory to predict molecular geometry from Lewis structures.",
+        "Reinforce understanding of various molecular shapes."
+      ],
+      "instructions": [
+        "Examine the Lewis structure and choose the correct 3D shape.",
+        "We'll look at SF4, ClF3, and BrF5."
+      ],
+      "objects": [
+        {
+          "prefab": "textPrefab",
+          "name": "SelectStatus",
+          "position": [
+            0.0,
+            0.8,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Select the shape for SF4 (Seesaw)",
+              "fontSize": 60.0,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "lewisStructurePanelPrefab",
+          "name": "SF4Lewis",
+          "position": [
+            -1.2,
+            0.3,
+            0.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "SF4LewisLabel",
+          "parent": "SF4Lewis",
+          "position": [
+            0.0,
+            1.2,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "SF4 Lewis Structure",
+              "fontSize": 50.0,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "sf4MoleculePrefab",
+          "name": "SF4Molecule",
+          "position": [
+            1.2,
+            0.3,
+            0.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "texture": "sf4_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "SF4ShapeLabel",
+          "parent": "SF4Molecule",
+          "position": [
+            0.0,
+            1.2,
+            0.0
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Seesaw",
+              "fontSize": 50.0,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_SF4",
+          "audioClip": "vsepr_select_sf4_narration",
+          "autoAdvance": true,
+          "changes": []
+        },
+        {
+          "clipName": "clip2_ClF3",
+          "audioClip": "vsepr_select_clf3_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "SF4Lewis",
+              "enabled": false
+            },
+            {
+              "target": "SF4Molecule",
+              "enabled": false
+            },
+            {
+              "target": "SelectStatus",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Select the shape for ClF3 (T-shaped)"
+                }
+              ]
+            },
+            {
+              "target": "SF4LewisLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "ClF3 Lewis Structure"
+                }
+              ]
+            },
+            {
+              "target": "SF4Lewis",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "ClF3 Lewis Structure",
+                  "fontSize": 50.0
+                }
+              ]
+            },
+            {
+              "target": "SF4Lewis",
+              "enabled": true
+            },
+            {
+              "target": "SF4Molecule",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "T-Shaped",
+                  "fontSize": 50.0
+                }
+              ]
+            },
+            {
+              "target": "SF4Molecule",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_BrF5",
+          "audioClip": "vsepr_select_brf5_narration",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "SF4Lewis",
+              "enabled": false
+            },
+            {
+              "target": "SF4Molecule",
+              "enabled": false
+            },
+            {
+              "target": "SelectStatus",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Select the shape for BrF5 (Square Pyramidal)"
+                }
+              ]
+            },
+            {
+              "target": "SF4Lewis",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "BrF5 Lewis Structure",
+                  "fontSize": 50.0
+                }
+              ]
+            },
+            {
+              "target": "SF4Lewis",
+              "enabled": true
+            },
+            {
+              "target": "SF4Molecule",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Square Pyramidal",
+                  "fontSize": 50.0
+                }
+              ]
+            },
+            {
+              "target": "SF4Molecule",
+              "enabled": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Lab Recap",
+      "description": "Summarizes the key concepts covered in the VSEPR theory lab.",
+      "author": "AI Educational Content Designer",
+      "institution": "Virtual University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Consolidate understanding of VSEPR theory principles.",
+        "Review the relationship between Lewis structures and 3D molecular geometry."
+      ],
+      "instructions": [
+        "You have successfully explored VSEPR theory!",
+        "Let's quickly recap the main concepts you've learned."
+      ],
+      "objects": [
+        {
+          "prefab": "textPrefab",
+          "name": "RecapTitle",
+          "position": [
+            0.0,
+            1.5,
+            0.0
+          ],
+          "scale": [
+            0.6,
+            0.6,
+            0.6
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "VSEPR Theory Lab Recap",
+              "fontSize": 100.0,
+              "wrapText": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "RecapPoint1",
+          "position": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "1. Minimum Repulsion Principle: Electron domains arrange to be as far apart as possible.",
+              "fontSize": 60.0,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "RecapPoint2",
+          "position": [
+            0.0,
+            0.5,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "2. Electron Domain Geometries: Linear, Trigonal Planar, Tetrahedral, Trigonal Bipyramidal, Octahedral.",
+              "fontSize": 60.0,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "RecapPoint3",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "3. Molecular vs. Electron Domain Geometry: Lone pairs affect molecular shape but not electron domain geometry.",
+              "fontSize": 60.0,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "RecapPoint4",
+          "position": [
+            0.0,
+            -0.5,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "4. Lone Pair Asymmetry: Lone pairs occupy more space, compressing bond angles.",
+              "fontSize": 60.0,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "RecapPoint5",
+          "position": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "scale": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "5. Application: VSEPR predicts the shapes of real molecules.",
+              "fontSize": 60.0,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_Recap",
+          "audioClip": "vsepr_recap_narration",
+          "autoAdvance": true,
+          "changes": []
+        }
+      ]
+    }
+  ]
+}

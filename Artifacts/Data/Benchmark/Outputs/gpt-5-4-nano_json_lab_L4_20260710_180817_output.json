@@ -1,0 +1,2135 @@
+{
+  "version": "2.0",
+  "labId": "GP1-AR-Vectors-Projectile-01",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Physics I (Mechanics)",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Represent a two-dimensional vector by its magnitude and direction, and equivalently by its horizontal and vertical components.",
+    "Add vectors graphically using the tip-to-tail method to identify the resultant.",
+    "Decompose a vector into components along x- and y-axes and reconstruct the original vector.",
+    "Explain why horizontal and vertical projectile motions are independent under gravity.",
+    "Describe projectile motion component-wise (horizontal constant, vertical accelerating) and identify maximum height when vertical velocity is zero.",
+    "Predict and test how launch angle and speed affect range and maximum height; identify the 45\u00b0 condition for maximum range at fixed speed on level ground."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1 \u2014 Vector as Magnitude & Direction",
+      "description": "Introduce a single draggable 3D vector with live-updating magnitude and direction readouts relative to visible axes.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Interpret a vector as a quantity with both magnitude and direction.",
+        "Relate the vector\u2019s length and orientation to numerical magnitude and angle indicators."
+      ],
+      "instructions": [
+        "Grab the vector arrowhead.",
+        "Drag the arrowhead to re-orient the vector.",
+        "Observe how magnitude and direction labels update in real time."
+      ],
+      "objects": [
+        {
+          "prefab": "moveableSphere",
+          "name": "vectorTailAnchor",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "color": [
+            20,
+            20,
+            20,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "magnitudeDirectionArrow",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            30
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "color": [
+            80,
+            220,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "magnitudeLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.25,
+            0.18,
+            0.05
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            60,
+            200,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "directionLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.25,
+            0.12,
+            0.08
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "color": [
+            255,
+            180,
+            60,
+            255
+          ]
+        },
+        {
+          "prefab": "axesGroundLinesPrefab",
+          "name": "axesGuides",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            -0.05
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_intro",
+          "audioClip": "vectors_scene1_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "axesGuides",
+              "enabled": true
+            },
+            {
+              "target": "magnitudeDirectionArrow",
+              "enabled": true
+            },
+            {
+              "target": "magnitudeLabel",
+              "enabled": true
+            },
+            {
+              "target": "directionLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Axis guides and the vector with its magnitude/direction labels appear, establishing a clear reference for subsequent vector manipulations.",
+          "narration": "Vectors represent quantities with both magnitude and direction. A vector is fully described only when you specify how long it is and where it points."
+        },
+        {
+          "clipName": "clip1_drag",
+          "audioClip": "vectors_scene1_drag_update",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "magnitudeDirectionArrow",
+              "components": [
+                {
+                  "componentType": "pointerReceiver",
+                  "draggable": false,
+                  "kinematicWhileIdle": true,
+                  "faceWhileDragging": false,
+                  "matchWallWhileDragging": false,
+                  "invertForward": false
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The arrow is made interactive for dragging; labels are intended to update live while keeping sparse scene changes.",
+          "narration": "Drag the arrowhead. Notice how the magnitude and direction readouts update to match the vector\u2019s orientation."
+        },
+        {
+          "clipName": "clip1_viewpoint",
+          "audioClip": "vectors_scene1_viewpoint_confirm",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "magnitudeDirectionArrow",
+              "eulerAngles": [
+                0,
+                0,
+                30
+              ]
+            }
+          ],
+          "changeMeaning": "The vector pose is held stable while the student changes viewpoint, emphasizing that the vector itself is unchanged.",
+          "narration": "Rotate your viewpoint around the vector. The geometry stays fixed; only your perceived angles change."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2 \u2014 Tip-to-Tail Vector Addition",
+      "description": "Show two draggable vectors (blue and green) laid tip-to-tail and compute a resultant (red) that updates continuously and supports commutativity verification.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Add vectors graphically using the tip-to-tail method.",
+        "Identify the resultant as the vector from the first tail to the final head.",
+        "Verify commutativity by swapping order."
+      ],
+      "instructions": [
+        "Grab and re-orient the blue or green vector.",
+        "Watch the red resultant anchored at the origin.",
+        "Swap the order of adding (toggle) and compare."
+      ],
+      "objects": [
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "blueVector",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            45
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "color": [
+            60,
+            140,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "greenVector",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            -15
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "color": [
+            80,
+            220,
+            140,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "redResultant",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            25
+          ],
+          "scale": [
+            0.22,
+            0.22,
+            0.22
+          ],
+          "color": [
+            255,
+            80,
+            80,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "additionLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.15,
+            0.22,
+            0.08
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.09
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "orderTogglePrefab",
+          "name": "addOrderToggle",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.15,
+            0.22,
+            0.0
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip2_setup",
+          "audioClip": "vectors_scene2_setup",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "additionLabel"
+            }
+          ],
+          "changeMeaning": "The instructional text cues the geometric construction so students know exactly how to position the second arrow.",
+          "narration": "To add vectors, lay them tip-to-tail. The resultant runs from the origin tail to the final head."
+        },
+        {
+          "clipName": "clip2_update",
+          "audioClip": "vectors_scene2_drag_vectors",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "redResultant"
+            }
+          ],
+          "changeMeaning": "A sparse update anchors the resultant conceptually; it is intended to remain consistent with the student\u2019s current blue/green orientations.",
+          "narration": "Reorient the vectors. The red resultant updates continuously as the tip-to-tail geometry changes."
+        },
+        {
+          "clipName": "clip2_commutativity",
+          "audioClip": "vectors_scene2_commutativity_toggle",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "addOrderToggle"
+            }
+          ],
+          "changeMeaning": "Swapping the addition order triggers the alternate construction and lets students compare resultant direction and location.",
+          "narration": "Now swap the order: lay green on top of blue. The resultant ends up in the same direction and location."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3 \u2014 Vector Decomposition (Reversed Addition)",
+      "description": "Break a single vector into axis-aligned component arrows that reconstruct the original as they are resized.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Decompose a vector into x and y components along chosen axes.",
+        "Interpret decomposition as reversed addition: components add tip-to-tail to reproduce the original vector."
+      ],
+      "instructions": [
+        "Grab and resize the component arrows.",
+        "Observe how the original vector reconstructs as the component sum changes."
+      ],
+      "objects": [
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "originalVectorNeutral",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            40
+          ],
+          "scale": [
+            0.22,
+            0.22,
+            0.22
+          ],
+          "color": [
+            180,
+            180,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "xComponentArrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "color": [
+            70,
+            170,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "yComponentArrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.12,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "color": [
+            255,
+            180,
+            70,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "decompositionLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.18,
+            0.23,
+            0.06
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.09
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "rightTriangleGuidePrefab",
+          "name": "triangleHint",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.16,
+            0.02,
+            0.08
+          ],
+          "scale": [
+            0.18,
+            0.12,
+            0.18
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip3_decompose_intro",
+          "audioClip": "vectors_scene3_decompose_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "originalVectorNeutral",
+              "enabled": true
+            },
+            {
+              "target": "xComponentArrow",
+              "enabled": true
+            },
+            {
+              "target": "yComponentArrow",
+              "enabled": true
+            },
+            {
+              "target": "triangleHint",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The original vector and the two main planar component arrows appear, with a right-triangle visual hint activated for 2D geometry.",
+          "narration": "Decomposition breaks a vector into components along chosen axes. It\u2019s reversed addition: the components add tip-to-tail to reproduce the original."
+        },
+        {
+          "clipName": "clip3_components_resize",
+          "audioClip": "vectors_scene3_components_resize",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "xComponentArrow",
+              "components": [
+                {
+                  "componentType": "pointerReceiver",
+                  "draggable": false,
+                  "kinematicWhileIdle": true,
+                  "faceWhileDragging": false,
+                  "matchWallWhileDragging": false,
+                  "invertForward": false
+                }
+              ]
+            },
+            {
+              "target": "yComponentArrow",
+              "components": [
+                {
+                  "componentType": "pointerReceiver",
+                  "draggable": false,
+                  "kinematicWhileIdle": true,
+                  "faceWhileDragging": false,
+                  "matchWallWhileDragging": false,
+                  "invertForward": false
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Sparse updates enable pointer control so students can resize the component lengths while the original vector reconstructs via their sum.",
+          "narration": "Grab and resize each component arrow. As you change them, the original vector reconstructs from their tip-to-tail sum."
+        },
+        {
+          "clipName": "clip3_right_triangle_recap",
+          "audioClip": "vectors_scene3_right_triangle_recap",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "decompositionLabel"
+            }
+          ],
+          "changeMeaning": "The label is updated to explicitly connect component lengths and vector magnitude through right-triangle intuition used later for projectiles.",
+          "narration": "For motion in a plane, x and y form right-triangle legs. The vector magnitude connects to those legs through right-triangle relationships."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 4 \u2014 Transition to Projectile Motion Plane",
+      "description": "Switch to a 2D vertical plane with labeled horizontal and vertical axes, showing a projectile ball and an initial velocity vector.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Represent projectile motion in a vertical analysis plane using x (horizontal) and y (vertical).",
+        "Justify component independence by noting gravity acts only vertically."
+      ],
+      "instructions": [
+        "Observe the axes labels on the plane.",
+        "Relate the initial velocity arrow\u2019s angle to its x and y components."
+      ],
+      "objects": [
+        {
+          "prefab": "projectilePlanePrefab",
+          "name": "projectileVerticalPlane",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.2,
+            0,
+            0.5
+          ],
+          "eulerAngles": [
+            0,
+            -90,
+            0
+          ],
+          "scale": [
+            1.0,
+            0.8,
+            1.0
+          ]
+        },
+        {
+          "prefab": "axesLabeled2DPrefab",
+          "name": "planeAxes2D",
+          "parent": "projectileVerticalPlane",
+          "position": [
+            0,
+            0,
+            0.01
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "axisLabelHint",
+          "parent": "projectileVerticalPlane",
+          "position": [
+            0.25,
+            0.32,
+            0.02
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.09
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "projectileBallPrefab",
+          "name": "projectileBall",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "texture": "balldimpled",
+          "color": [
+            40,
+            140,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "initialVelocityArrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            35
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "color": [
+            255,
+            215,
+            60,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "velocityLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.05,
+            0.22,
+            0.55
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip4_transition",
+          "audioClip": "projectile_scene4_transition_plane",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "projectileVerticalPlane",
+              "enabled": true
+            },
+            {
+              "target": "planeAxes2D",
+              "enabled": true
+            },
+            {
+              "target": "projectileBall",
+              "enabled": true
+            },
+            {
+              "target": "initialVelocityArrow",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The projectile analysis plane appears and the projectile + initial velocity arrow are placed at the launch point.",
+          "narration": "Now we apply vector tools to projectile motion in a vertical plane. The motion is genuinely two-dimensional even though the world is three-dimensional."
+        },
+        {
+          "clipName": "clip4_gravity_vertical_only",
+          "audioClip": "projectile_scene4_gravity_vertical_only",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "axisLabelHint"
+            }
+          ],
+          "changeMeaning": "The plane label is updated to emphasize that gravity affects only the vertical component, motivating independence of x and y motion.",
+          "narration": "Gravity accelerates only in the vertical direction, so the horizontal component can be treated as constant."
+        },
+        {
+          "clipName": "clip4_angle_frame",
+          "audioClip": "projectile_scene4_angle_frame",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "initialVelocityArrow",
+              "eulerAngles": [
+                0,
+                0,
+                35
+              ]
+            }
+          ],
+          "changeMeaning": "The initial velocity arrow\u2019s orientation is held steady to help students focus on how the launch angle sets x/y components.",
+          "narration": "The launch angle tells you how the initial velocity splits into horizontal and vertical components."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 5 \u2014 Projectile Motion with Component Arrows",
+      "description": "Launch a projectile and show live horizontal and vertical component arrows updating over time while the ball follows a parabolic path.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Interpret the horizontal component as constant during flight.",
+        "Interpret the vertical component as changing under gravity, vanishing at maximum height.",
+        "Explain the parabolic trajectory as combined independent x and y motions."
+      ],
+      "instructions": [
+        "Launch the projectile.",
+        "Watch the horizontal arrow keep the same length and the vertical arrow shrink to zero at the peak.",
+        "Switch view mode if available."
+      ],
+      "objects": [
+        {
+          "prefab": "projectileBallPrefab",
+          "name": "projectileBall5",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "texture": "balldimpled",
+          "color": [
+            60,
+            170,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "hComponentArrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "color": [
+            70,
+            170,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vComponentArrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "color": [
+            255,
+            180,
+            70,
+            255
+          ]
+        },
+        {
+          "prefab": "trajectoryTrailPrefab",
+          "name": "parabolaTrail",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0.45
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            255,
+            255,
+            120
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "independenceLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.05,
+            0.25,
+            0.55
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "cameraModeTogglePrefab",
+          "name": "viewToggle",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0.22,
+            0.45
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip5_setup_components",
+          "audioClip": "projectile_scene5_setup_components",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "parabolaTrail",
+              "enabled": true
+            },
+            {
+              "target": "hComponentArrow",
+              "enabled": true
+            },
+            {
+              "target": "vComponentArrow",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Enables the trajectory trail and both component arrows so the subsequent launch can be interpreted as independent x and y motions.",
+          "narration": "We\u2019ll split the initial velocity into horizontal (constant) and vertical (gravity-affected) components."
+        },
+        {
+          "clipName": "clip5_launch_and_update",
+          "audioClip": "projectile_scene5_launch_update_components",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "parabolaTrail",
+              "enabled": true
+            },
+            {
+              "target": "hComponentArrow",
+              "scale": [
+                0.12,
+                0.12,
+                0.12
+              ]
+            },
+            {
+              "target": "vComponentArrow",
+              "scale": [
+                0.08,
+                0.08,
+                0.08
+              ]
+            }
+          ],
+          "changeMeaning": "During the flight, the horizontal component scale is held fixed (constant), while the vertical component is updated sparsely to represent changing magnitude over time.",
+          "narration": "Launch and watch closely: the horizontal component stays the same length, while the vertical component changes as the ball moves up and down."
+        },
+        {
+          "clipName": "clip5_max_height_peak",
+          "audioClip": "projectile_scene5_max_height_peak",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "independenceLabel"
+            },
+            {
+              "target": "vComponentArrow",
+              "scale": [
+                0,
+                0,
+                0
+              ]
+            }
+          ],
+          "changeMeaning": "At peak height the vertical component is set to zero length, visually marking the moment when vertical velocity becomes zero.",
+          "narration": "At maximum height, the vertical velocity is zero. That\u2019s when the vertical component arrow has zero length."
+        },
+        {
+          "clipName": "clip5_overhead_view_compare",
+          "audioClip": "projectile_scene5_overhead_view_compare",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "viewToggle"
+            }
+          ],
+          "changeMeaning": "Overhead mode changes the visual interpretation to emphasize the uniform horizontal progression when viewing the same trajectory.",
+          "narration": "Try overhead view to see the horizontal progression more directly."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 6 \u2014 Discovery of Maximum Range (45\u00b0)",
+      "description": "Provide launch controls for repeated trials. Display range and keep a history panel so students identify the angle that maximizes range at fixed speed.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Test how launch angle affects projectile range at fixed speed.",
+        "Identify the maximum-range condition at 45\u00b0 for equal launch/landing height.",
+        "Relate the result to equal horizontal and vertical component magnitudes at launch."
+      ],
+      "instructions": [
+        "Set a launch speed and try different angles.",
+        "After each launch, record the range.",
+        "Look for the largest range and then test complementary angles. "
+      ],
+      "objects": [
+        {
+          "prefab": "projectileControlPanelPrefab",
+          "name": "launchControls",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.25,
+            0.25,
+            0
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ]
+        },
+        {
+          "prefab": "projectileBallPrefab",
+          "name": "projectileBall6",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "texture": "balldimpled",
+          "color": [
+            60,
+            170,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "hComponentArrow6",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            70,
+            170,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vComponentArrow6",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            180,
+            70,
+            255
+          ]
+        },
+        {
+          "prefab": "rangeReadoutPrefab",
+          "name": "rangeReadout",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.05,
+            0.33,
+            0.55
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "historyPanelPrefab",
+          "name": "historyPanel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.05,
+            0.18,
+            0.55
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "trajectoryTrailPrefab",
+          "name": "parabolaTrail6",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0.45
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            255,
+            255,
+            120
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip6_prompt_explore",
+          "audioClip": "projectile_scene6_prompt_explore",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "historyPanel",
+              "enabled": true
+            },
+            {
+              "target": "parabolaTrail6",
+              "enabled": true
+            },
+            {
+              "target": "rangeReadout"
+            }
+          ],
+          "changeMeaning": "Enables the history and range readout so each launch attempt can be compared side-by-side.",
+          "narration": "Set a fixed launch speed, then try different launch angles. After each launch, record the displayed range."
+        },
+        {
+          "clipName": "clip6_observe_symmetry",
+          "audioClip": "projectile_scene6_observe_symmetry",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "historyPanel"
+            },
+            {
+              "target": "historyPanel"
+            }
+          ],
+          "changeMeaning": "Adds two sample history entries showing complementary angles yield the same range on level ground for fixed speed.",
+          "narration": "Notice the symmetry: angles symmetric about 45\u00b0, like 30\u00b0 and 60\u00b0, give the same range for the same speed."
+        },
+        {
+          "clipName": "clip6_confirm_45",
+          "audioClip": "projectile_scene6_confirm_45deg",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "rangeReadout"
+            }
+          ],
+          "changeMeaning": "The range readout is updated to explicitly confirm the discovered maximum-range condition at 45\u00b0.",
+          "narration": "For any fixed launch speed, the range is maximized at about 45\u00b0 on level ground."
+        },
+        {
+          "clipName": "clip6_component_logic",
+          "audioClip": "projectile_scene6_component_logic_explain",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "hComponentArrow6",
+              "scale": [
+                0.12,
+                0.12,
+                0.12
+              ]
+            },
+            {
+              "target": "vComponentArrow6",
+              "scale": [
+                0.12,
+                0.12,
+                0.12
+              ]
+            }
+          ],
+          "changeMeaning": "Sparsely sets both component arrow scales equal to visually represent the \u2018equal components\u2019 condition at 45\u00b0.",
+          "narration": "At 45\u00b0, the horizontal and vertical component magnitudes match. That balance produces the maximum range."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 7 \u2014 Targeting Challenge",
+      "description": "Targeting task: set launch angle and speed to hit a fixed ground target. Each successful hit advances to the next target distance.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Apply projectile motion reasoning to hit a target at fixed height.",
+        "Recognize typical existence of two complementary launch angles for the same target distance.",
+        "Transfer decomposition intuition into a practical prediction task."
+      ],
+      "instructions": [
+        "Hit the red target by selecting launch angle and speed.",
+        "Try a complementary angle pair for at least one target (optional).",
+        "When you hit, proceed to the next target."
+      ],
+      "objects": [
+        {
+          "prefab": "projectileControlPanelPrefab",
+          "name": "targetingControls",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.25,
+            0.25,
+            0
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ]
+        },
+        {
+          "prefab": "projectileBallPrefab",
+          "name": "projectileBall7",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "texture": "balldimpled",
+          "color": [
+            60,
+            170,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "targetMarkerPrefab",
+          "name": "groundTarget",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.25,
+            0,
+            0.45
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            255,
+            80,
+            80,
+            255
+          ]
+        },
+        {
+          "prefab": "rangeReadoutPrefab",
+          "name": "hitFeedback",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.02,
+            0.33,
+            0.55
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "twoSolutionsHint",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.02,
+            0.22,
+            0.55
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.09
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "trajectoryTrailPrefab",
+          "name": "parabolaTrail7",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0.45
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            255,
+            255,
+            120
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "hComponentArrow7",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            70,
+            170,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vComponentArrow7",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            180,
+            70,
+            255
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip7_intro_target1",
+          "audioClip": "projectile_scene7_intro_target",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "groundTarget",
+              "enabled": true
+            },
+            {
+              "target": "twoSolutionsHint"
+            },
+            {
+              "target": "hitFeedback"
+            },
+            {
+              "target": "parabolaTrail7",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Spawns the first target, enables feedback and trajectory trail, and reminds students about the two-solution pattern.",
+          "narration": "Your mission: choose launch angle and speed so the projectile lands on the target. For many distances, two different angles can work."
+        },
+        {
+          "clipName": "clip7_attempts_and_hit",
+          "audioClip": "projectile_scene7_hit_feedback",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "hitFeedback"
+            },
+            {
+              "target": "groundTarget",
+              "color": [
+                255,
+                80,
+                80,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Updates feedback text to a checking state for a sparse success detection loop.",
+          "narration": "Launch and watch where it lands. When you hit, feedback will confirm success and advance you."
+        },
+        {
+          "clipName": "clip7_next_target",
+          "audioClip": "projectile_scene7_advance_target2",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "groundTarget",
+              "position": [
+                0.4,
+                0,
+                0.45
+              ]
+            },
+            {
+              "target": "hitFeedback"
+            }
+          ],
+          "changeMeaning": "Sparse update moves the target farther away at the same elevation and prompts a new attempt.",
+          "narration": "Next target. Use the same component reasoning to reach the new distance."
+        },
+        {
+          "clipName": "clip7_recap_two_angles",
+          "audioClip": "projectile_scene7_recap_complementary_angles",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "twoSolutionsHint"
+            }
+          ],
+          "changeMeaning": "Reinforces the complementary-angle strategy at the end of the challenge for consolidation.",
+          "narration": "Remember: once you find one solution angle, its complement often yields the same range. Try it if you want."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 8 \u2014 Free Exploration Sandbox & Recap Prompt",
+      "description": "Sandbox: adjust launch angle, speed, initial height, and gravity strength (0 to 5g). Live component arrows and trajectory trail remain visible.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Investigate how gravity strength and initial height affect flight and range.",
+        "Explore limiting cases (0g, strong gravity).",
+        "Consolidate independence of x and y motion under varying g."
+      ],
+      "instructions": [
+        "Try halving gravity and compare range.",
+        "Try 5g and observe the change.",
+        "Launch from a ~50 m platform and test whether 45\u00b0 is still optimal."
+      ],
+      "objects": [
+        {
+          "prefab": "projectileSandboxControlsPrefab",
+          "name": "sandboxControls",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.25,
+            0.25,
+            0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ]
+        },
+        {
+          "prefab": "projectileBallPrefab",
+          "name": "projectileBall8",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "texture": "balldimpled",
+          "color": [
+            60,
+            170,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "hComponentArrow8",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            70,
+            170,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vComponentArrow8",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0,
+            0.45
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            180,
+            70,
+            255
+          ]
+        },
+        {
+          "prefab": "trajectoryTrailPrefab",
+          "name": "parabolaTrail8",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0.45
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            255,
+            255,
+            120
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "sandboxQuestions",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.12,
+            0.36,
+            0.55
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "gravityMeterPrefab",
+          "name": "gravityMeter",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.08,
+            0.25,
+            0.55
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "enabled": false,
+          "color": [
+            100,
+            255,
+            180,
+            255
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip8_sandbox_intro",
+          "audioClip": "projectile_scene8_sandbox_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "sandboxQuestions"
+            },
+            {
+              "target": "parabolaTrail8",
+              "enabled": true
+            },
+            {
+              "target": "gravityMeter",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Enables the trajectory trail and gravity indicator and provides guiding questions for exploration.",
+          "narration": "Free exploration time. Adjust launch angle, speed, initial height, and gravity strength while watching the component arrows."
+        },
+        {
+          "clipName": "clip8_zero_gravity_demo",
+          "audioClip": "projectile_scene8_zero_gravity_demo",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "sandboxControls"
+            },
+            {
+              "target": "vComponentArrow8",
+              "scale": [
+                0.1,
+                0.1,
+                0.1
+              ]
+            },
+            {
+              "target": "parabolaTrail8",
+              "color": [
+                180,
+                255,
+                255,
+                140
+              ]
+            }
+          ],
+          "changeMeaning": "Sets gravity to zero and uses a sparse scale cue to show vertical component behavior without parabolic curvature.",
+          "narration": "If gravity is zero, vertical velocity doesn\u2019t accelerate. The trajectory becomes a straight line in the x-y plane."
+        },
+        {
+          "clipName": "clip8_strong_gravity_range",
+          "audioClip": "projectile_scene8_strong_gravity_range",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "sandboxControls"
+            },
+            {
+              "target": "parabolaTrail8",
+              "color": [
+                255,
+                180,
+                80,
+                160
+              ]
+            },
+            {
+              "target": "vComponentArrow8",
+              "scale": [
+                0.03,
+                0.03,
+                0.03
+              ]
+            }
+          ],
+          "changeMeaning": "Increases gravity to 5g and sparsely reduces the vertical component arrow size to indicate faster vertical change and shorter flight.",
+          "narration": "With 5g, vertical motion changes much faster. Expect a shorter flight and a different range than on Earth gravity."
+        },
+        {
+          "clipName": "clip8_high_platform_optimal",
+          "audioClip": "projectile_scene8_high_platform_optimal_angle",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "sandboxControls"
+            },
+            {
+              "target": "sandboxQuestions"
+            }
+          ],
+          "changeMeaning": "Focuses the prompt on the high-platform scenario, preparing students to test whether the 45\u00b0 rule generalizes.",
+          "narration": "From a high platform, the assumptions behind the 45\u00b0 result can change. Test it\u2014does the optimal angle shift?"
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 9 \u2014 Recap & Concept Map",
+      "description": "Recap the conceptual sequence with a concept board and highlighted markers.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Recall key stages: magnitude/direction, addition, decomposition, projectile application, independence, and 45\u00b0 maximum range.",
+        "Integrate how component reasoning explains trajectory features."
+      ],
+      "instructions": [
+        "Watch the recap highlights.",
+        "Mentally link each highlight to the corresponding scene."
+      ],
+      "objects": [
+        {
+          "prefab": "conceptRecapBoardPrefab",
+          "name": "recapBoard",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.05,
+            0.7
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.9,
+            0.6,
+            0.1
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "recapTitle",
+          "parent": "recapBoard",
+          "position": [
+            0,
+            0.23,
+            0.02
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "highlightMarkerPrefab",
+          "name": "highlightVectors",
+          "parent": "recapBoard",
+          "position": [
+            -0.28,
+            0.06,
+            0.02
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            70,
+            170,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "highlightMarkerPrefab",
+          "name": "highlightAddition",
+          "parent": "recapBoard",
+          "position": [
+            -0.05,
+            0.06,
+            0.02
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            80,
+            220,
+            140,
+            255
+          ]
+        },
+        {
+          "prefab": "highlightMarkerPrefab",
+          "name": "highlightDecomposition",
+          "parent": "recapBoard",
+          "position": [
+            0.18,
+            0.06,
+            0.02
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            180,
+            70,
+            255
+          ]
+        },
+        {
+          "prefab": "highlightMarkerPrefab",
+          "name": "highlightProjectile",
+          "parent": "recapBoard",
+          "position": [
+            -0.28,
+            -0.15,
+            0.02
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            215,
+            60,
+            255
+          ]
+        },
+        {
+          "prefab": "highlightMarkerPrefab",
+          "name": "highlightIndependence",
+          "parent": "recapBoard",
+          "position": [
+            -0.05,
+            -0.15,
+            0.02
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            180,
+            120,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "highlightMarkerPrefab",
+          "name": "highlight45",
+          "parent": "recapBoard",
+          "position": [
+            0.18,
+            -0.15,
+            0.02
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            80,
+            80,
+            255
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip9_open",
+          "audioClip": "vectors_projectile_recap_open",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "recapBoard",
+              "enabled": true
+            },
+            {
+              "target": "highlightVectors",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The recap board appears and highlights the first concept (vectors as magnitude and direction).",
+          "narration": "Let\u2019s connect the full story: we started with vectors, then used addition and decomposition."
+        },
+        {
+          "clipName": "clip9_step_vector_addition_decomposition",
+          "audioClip": "vectors_projectile_recap_steps_1_3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "highlightVectors",
+              "enabled": true
+            },
+            {
+              "target": "highlightAddition",
+              "enabled": true
+            },
+            {
+              "target": "highlightDecomposition",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Highlights advance to vector addition and decomposition, connecting each concept stage visually.",
+          "narration": "Tip-to-tail addition gives the resultant. Decomposition is reversed addition: components add back to the original vector."
+        },
+        {
+          "clipName": "clip9_projectile_independence",
+          "audioClip": "vectors_projectile_recap_steps_4_5",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "highlightProjectile",
+              "enabled": true
+            },
+            {
+              "target": "highlightIndependence",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Highlights focus on applying component reasoning to projectile motion and the independence of horizontal and vertical motion.",
+          "narration": "For projectiles, horizontal velocity stays constant while vertical velocity accelerates under gravity. Together they produce the parabolic path."
+        },
+        {
+          "clipName": "clip9_final_45",
+          "audioClip": "vectors_projectile_recap_final_45",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "highlight45",
+              "enabled": true
+            },
+            {
+              "target": "highlight45",
+              "scale": [
+                0.12,
+                0.12,
+                0.12
+              ]
+            }
+          ],
+          "changeMeaning": "The final marker emphasizes the 45\u00b0 maximum-range result to complete the conceptual chain.",
+          "narration": "Finally, on level ground with fixed launch speed, maximum range occurs at 45\u00b0. That\u2019s when the initial horizontal and vertical components balance."
+        }
+      ]
+    }
+  ]
+}

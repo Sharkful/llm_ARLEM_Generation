@@ -1,0 +1,278 @@
+{
+  "workplace": {
+    "id": "vsepr_lab_workplace",
+    "name": "VSEPR Chemistry Lab",
+    "origin": "marker_origin",
+    "things": [
+      {
+        "id": "molecular_model_kit",
+        "name": "Molecular Model Kit",
+        "detectable": "marker_kit",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "central_atom_station",
+        "name": "Central Atom Workstation",
+        "detectable": "marker_station1",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "chemistry_bench",
+        "name": "Chemistry Bench",
+        "detectable": "marker_bench1",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "marker_origin",
+        "type": "marker",
+        "url": "https://assets.chem-lab.edu/origin.bundle"
+      },
+      {
+        "id": "marker_station1",
+        "type": "marker",
+        "url": "https://assets.chem-lab.edu/station1.bundle"
+      },
+      {
+        "id": "marker_bench1",
+        "type": "marker",
+        "url": "https://assets.chem-lab.edu/bench.bundle"
+      },
+      {
+        "id": "marker_kit",
+        "type": "marker",
+        "url": "https://assets.chem-lab.edu/kit.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "label"
+      },
+      {
+        "id": "animation"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "label_intro",
+        "type": "label",
+        "scale": 1.0
+      },
+      {
+        "id": "model_methane",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.chem-lab.edu/methane.glb"
+      },
+      {
+        "id": "model_water",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.chem-lab.edu/water.glb"
+      },
+      {
+        "id": "model_pf5",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.chem-lab.edu/pf5.glb"
+      },
+      {
+        "id": "model_sf6",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.chem-lab.edu/sf6.glb"
+      }
+    ]
+  },
+  "activity": {
+    "id": "vsepr_lab_01",
+    "name": "VSEPR Theory Explorer",
+    "description": "A guided exploration of VSEPR theory using interactive 3D molecular models.",
+    "workplace": "vsepr_lab_workplace",
+    "start": "step_1_intro",
+    "actions": [
+      {
+        "id": "step_1_intro",
+        "instruction": {
+          "title": "Introduction to VSEPR",
+          "description": "Welcome. We will explore VSEPR theory by analyzing electron domains around a central atom. Locate the central atom workstation to begin."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "central_atom_station",
+              "type": "predicate",
+              "augmentation": "label_intro",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "central_atom_station"
+          }
+        ]
+      },
+      {
+        "id": "step_2_tetrahedral",
+        "instruction": {
+          "title": "Tetrahedral Geometry",
+          "description": "Observe the Methane (CH4) model. With 4 bonding pairs, the electron domain geometry is tetrahedral. Click the model to proceed."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "central_atom_station",
+              "type": "predicate",
+              "augmentation": "model_methane",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "central_atom_station",
+              "type": "*",
+              "augmentation": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "central_atom_station"
+          }
+        ]
+      },
+      {
+        "id": "step_3_lone_pairs",
+        "instruction": {
+          "title": "Effect of Lone Pairs",
+          "description": "Observe Water (H2O). The 2 lone pairs take up more space, compressing the H-O-H bond angle to 104.5 degrees. Click the model to see the next molecule."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "central_atom_station",
+              "type": "predicate",
+              "augmentation": "model_water",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "central_atom_station",
+              "type": "*",
+              "augmentation": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "central_atom_station"
+          }
+        ]
+      },
+      {
+        "id": "step_4_trigonal_bipyramidal",
+        "instruction": {
+          "title": "Expanding Domains",
+          "description": "Look at the PF5 model on the Chemistry Bench. It exhibits trigonal bipyramidal geometry. Detect the bench to analyze the SF6 molecule."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "chemistry_bench",
+              "type": "predicate",
+              "augmentation": "model_pf5",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "central_atom_station",
+              "type": "*",
+              "augmentation": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "detect",
+            "id": "chemistry_bench"
+          }
+        ]
+      },
+      {
+        "id": "step_5_octahedral",
+        "instruction": {
+          "title": "Octahedral Geometry",
+          "description": "This is Sulfur Hexafluoride (SF6). It demonstrates octahedral geometry, where 6 domains minimize repulsion at 90-degree angles. Lab complete."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "chemistry_bench",
+              "type": "predicate",
+              "augmentation": "model_sf6",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "chemistry_bench",
+              "type": "*",
+              "augmentation": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "chemistry_bench"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,700 @@
+{
+  "version": "2.0",
+  "labId": "anatomyHeartBloodFlow",
+  "author": "Dr. Anya Sharma",
+  "courseName": "Human Anatomy and Physiology I",
+  "estimatedLength": "30 minutes",
+  "objectives": [
+    "Students will identify and name the four chambers of the heart, the four heart valves, and the major vessels entering and leaving the heart.",
+    "Students will trace the path of blood through the heart's dual circulation, naming each chamber, valve, and vessel in order.",
+    "Students will distinguish the pulmonary circuit from the systemic circuit and explain why the right and left sides of the heart serve different circulatory functions.",
+    "Students will explain why the left ventricle has a substantially thicker myocardium than the right ventricle, relating wall thickness to the pressure required to perfuse the systemic versus pulmonary circuits.",
+    "Students will describe the function of the atrioventricular and semilunar valves in preventing backflow, and identify which valves separate which chambers or chamber-vessel pairs."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "1. Gross Anatomy of the Heart",
+      "description": "An introduction to the external and internal structures of the human heart, including chambers, valves, and major vessels.",
+      "author": "Dr. Anya Sharma",
+      "institution": "State University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Identify the four chambers of the heart.",
+        "Identify the four valves of the heart.",
+        "Identify the major vessels connected to the heart.",
+        "Correlate internal structures with external landmarks."
+      ],
+      "instructions": [
+        "This module will introduce the major structures of the human heart.",
+        "Use your finger to rotate the models and view them from any angle."
+      ],
+      "objects": [
+        {
+          "prefab": "robotIdle",
+          "name": "heartModelsParent",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.2
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 0.2
+            }
+          ]
+        },
+        {
+          "prefab": "heartPrefab",
+          "name": "heartIntact",
+          "parent": "heartModelsParent",
+          "position": [
+            -0.15,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "heart_exterior_texture"
+        },
+        {
+          "prefab": "heartCutawayPrefab",
+          "name": "heartCutaway",
+          "parent": "heartModelsParent",
+          "position": [
+            0.15,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "heart_interior_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "mainLabel",
+          "parent": "heartModelsParent",
+          "position": [
+            0.0,
+            0.15,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": true,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Human Heart: Exterior and Interior Views",
+              "fontSize": 0.025,
+              "wrapText": false,
+              "initialPosition": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "orbitalPeriod": 0.0
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "structureLabel",
+          "parent": "heartModelsParent",
+          "position": [
+            0.3,
+            0.1,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 0.02,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_Intro",
+          "audioClip": "heart_m1_c0_intro.mp3",
+          "autoAdvance": true
+        },
+        {
+          "clipName": "clip1_Chambers",
+          "audioClip": "heart_m1_c1_chambers.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "mainLabel",
+              "enabled": false
+            },
+            {
+              "target": "structureLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Right Atrium\nRight Ventricle\nLeft Atrium\nLeft Ventricle"
+                }
+              ]
+            },
+            {
+              "target": "heartCutaway",
+              "color": [
+                255.0,
+                220.0,
+                220.0,
+                255.0
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_Valves",
+          "audioClip": "heart_m1_c2_valves.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "structureLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Tricuspid Valve\nPulmonary Valve\nMitral (Bicuspid) Valve\nAortic Valve"
+                }
+              ]
+            },
+            {
+              "target": "heartCutaway",
+              "color": [
+                220.0,
+                255.0,
+                220.0,
+                255.0
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_Vessels",
+          "audioClip": "heart_m1_c3_vessels.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "structureLabel",
+              "position": [
+                -0.3,
+                0.1,
+                0.0
+              ],
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Superior/Inferior Vena Cava\nPulmonary Artery\nPulmonary Veins\nAorta"
+                }
+              ]
+            },
+            {
+              "target": "heartCutaway",
+              "color": [
+                220.0,
+                220.0,
+                255.0,
+                255.0
+              ]
+            },
+            {
+              "target": "heartIntact",
+              "color": [
+                220.0,
+                220.0,
+                255.0,
+                255.0
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "2. Blood Flow and Circulation",
+      "description": "Traces the path of a red blood cell through the pulmonary and systemic circuits.",
+      "author": "Dr. Anya Sharma",
+      "institution": "State University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Trace the complete path of blood through the heart.",
+        "Distinguish the pulmonary circuit (right heart) from the systemic circuit (left heart).",
+        "Correlate blood color (blue/red) with oxygenation state."
+      ],
+      "instructions": [
+        "This module shows the path of blood through the heart.",
+        "Press the 'Next' button to advance the red blood cell to the next location in its journey."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCutawayPrefab",
+          "name": "heartCirculation",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.2
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ],
+          "texture": "heart_interior_texture"
+        },
+        {
+          "prefab": "moveableSphere",
+          "name": "rbc",
+          "parent": "heartCirculation",
+          "position": [
+            0.08,
+            0.08,
+            0.0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": false,
+          "color": [
+            0.0,
+            0.0,
+            255.0,
+            255.0
+          ]
+        },
+        {
+          "prefab": "bloodFlowPrefab",
+          "name": "flowOverlay",
+          "parent": "heartCirculation",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.01,
+            1.01,
+            1.01
+          ],
+          "enabled": false,
+          "texture": "dual_circuit_flow_texture"
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_Intro",
+          "audioClip": "heart_m2_c0_circuits.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "flowOverlay",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_TraceStart",
+          "audioClip": "heart_m2_c1_start.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "flowOverlay",
+              "enabled": false
+            },
+            {
+              "target": "rbc",
+              "enabled": true,
+              "color": [
+                80.0,
+                80.0,
+                255.0,
+                255.0
+              ],
+              "components": []
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_RightAtrium",
+          "audioClip": "heart_m2_c2_ra.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rbc",
+              "position": [
+                0.06,
+                0.04,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_RightVentricle",
+          "audioClip": "heart_m2_c3_rv.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rbc",
+              "position": [
+                0.06,
+                -0.05,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip4_PulmonaryArtery",
+          "audioClip": "heart_m2_c4_pa.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rbc",
+              "position": [
+                0.0,
+                0.08,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip5_PulmonaryVein",
+          "audioClip": "heart_m2_c5_pv.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rbc",
+              "position": [
+                -0.06,
+                0.06,
+                0.0
+              ],
+              "color": [
+                255.0,
+                50.0,
+                50.0,
+                255.0
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip6_LeftAtrium",
+          "audioClip": "heart_m2_c6_la.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rbc",
+              "position": [
+                -0.08,
+                0.03,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip7_LeftVentricle",
+          "audioClip": "heart_m2_c7_lv.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rbc",
+              "position": [
+                -0.08,
+                -0.06,
+                0.0
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip8_Aorta",
+          "audioClip": "heart_m2_c8_aorta.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "rbc",
+              "position": [
+                -0.02,
+                0.1,
+                0.0
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "3. Functional Anatomy",
+      "description": "Examines the relationship between structure and function in the ventricles and valves.",
+      "author": "Dr. Anya Sharma",
+      "institution": "State University",
+      "dateCreated": "2023-10-27",
+      "educationalObjectives": [
+        "Explain the functional reason for the difference in myocardial thickness between the left and right ventricles.",
+        "Describe the coordinated action of the atrioventricular and semilunar valves during the cardiac cycle."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCrossSectionPrefab",
+          "name": "crossSection",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.2
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "thicknessLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            -0.15,
+            0.2
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 0.02
+            }
+          ]
+        },
+        {
+          "prefab": "heartCutawayPrefab",
+          "name": "valveHeart",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.2
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ],
+          "enabled": false,
+          "texture": "heart_valves_highlight_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "recapText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            0.2
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Lab Recap:\n1. Heart Structures\n2. Blood Circulation\n3. Ventricular Asymmetry\n4. Valve Function",
+              "fontSize": 0.03,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_AsymmetryIntro",
+          "audioClip": "heart_m3_c0_asymmetry.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "crossSection",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip1_RV_Wall",
+          "audioClip": "heart_m3_c1_rv.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "crossSection",
+              "color": [
+                200.0,
+                200.0,
+                255.0,
+                255.0
+              ]
+            },
+            {
+              "target": "thicknessLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Right Ventricle pumps to lungs (low pressure)\nWall thickness: 3-5 mm"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip2_LV_Wall",
+          "audioClip": "heart_m3_c2_lv.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "crossSection",
+              "color": [
+                255.0,
+                200.0,
+                200.0,
+                255.0
+              ]
+            },
+            {
+              "target": "thicknessLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Left Ventricle pumps to body (high pressure)\nWall thickness: 10-15 mm"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip3_ValveIntro",
+          "audioClip": "heart_m3_c3_valves.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "crossSection",
+              "enabled": false
+            },
+            {
+              "target": "thicknessLabel",
+              "enabled": false
+            },
+            {
+              "target": "valveHeart",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip4_Systole",
+          "audioClip": "heart_m3_c4_systole.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "valveHeart",
+              "enabled": true,
+              "color": [
+                255.0,
+                255.0,
+                255.0,
+                255.0
+              ],
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Ventricular Contraction (Systole):\nAV Valves: CLOSED\nSemilunar Valves: OPEN",
+                  "fontSize": 0.02
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip5_Diastole",
+          "audioClip": "heart_m3_c5_diastole.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "valveHeart",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Ventricular Relaxation (Diastole):\nAV Valves: OPEN\nSemilunar Valves: CLOSED",
+                  "fontSize": 0.02
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip6_Recap",
+          "audioClip": "heart_m3_c6_recap.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "valveHeart",
+              "enabled": false
+            },
+            {
+              "target": "recapText",
+              "enabled": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

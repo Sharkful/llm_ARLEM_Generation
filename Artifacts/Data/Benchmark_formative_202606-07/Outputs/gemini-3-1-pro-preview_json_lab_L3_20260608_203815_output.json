@@ -1,0 +1,470 @@
+{
+  "version": "2.0",
+  "labId": "astro-101-retrograde",
+  "author": "Dr. E. Hubble",
+  "courseName": "Introduction to Astronomy",
+  "estimatedLength": "30 minutes",
+  "objectives": [
+    "Describe the apparent path of Mars across the night sky during a retrograde episode.",
+    "Explain why apparent retrograde motion occurs in the heliocentric model.",
+    "Contrast geocentric and heliocentric explanations of retrograde motion.",
+    "Predict retrograde occurrences based on relative orbital positions.",
+    "Compare the retrograde loops of Mars, Jupiter, and Saturn."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: The View from Earth",
+      "description": "Observe Mars's apparent retrograde loop against the background constellations over several months.",
+      "author": "Dr. E. Hubble",
+      "institution": "Department of Astronomy",
+      "dateCreated": "2023-10-15",
+      "educationalObjectives": [
+        "Describe the eastward drift, westward loop, and return to eastward motion of Mars."
+      ],
+      "instructions": [
+        "Watch the red dot representing Mars as it moves across the star map.",
+        "Use the Next button to step through the months and observe its path."
+      ],
+      "objects": [
+        {
+          "prefab": "starMapPrefab",
+          "name": "nightSkyBackground",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.0,
+            2.0
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            2.0,
+            1.0,
+            0.1
+          ],
+          "enabled": true,
+          "texture": "constellations_map_hires"
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "marsSkyPoint",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.6,
+            0.0,
+            1.9
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": true,
+          "texture": "2k_mars",
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Mars",
+              "fontSize": 0.1,
+              "wrapText": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip_prograde_motion",
+          "audioClip": "mars_drifts_east.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsSkyPoint",
+              "position": [
+                -0.2,
+                0.05,
+                1.9
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip_retrograde_loop",
+          "audioClip": "mars_loops_west.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsSkyPoint",
+              "position": [
+                -0.35,
+                0.15,
+                1.9
+              ]
+            }
+          ]
+        },
+        {
+          "clipName": "clip_resume_prograde",
+          "audioClip": "mars_resumes_east.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "marsSkyPoint",
+              "position": [
+                0.5,
+                0.0,
+                1.9
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: The Heliocentric Explanation",
+      "description": "View the solar system from the outside to see how Earth overtaking Mars creates the retrograde illusion.",
+      "author": "Dr. E. Hubble",
+      "institution": "Department of Astronomy",
+      "dateCreated": "2023-10-15",
+      "educationalObjectives": [
+        "Explain why retrograde motion occurs due to Earth overtaking a slower outer planet."
+      ],
+      "instructions": [
+        "Observe the orbits of Earth and Mars around the Sun.",
+        "Notice how Earth moves faster on its inner track."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "sunModel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            -0.2,
+            1.5
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "enabled": true,
+          "texture": "sun_texture"
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earthModel",
+          "parent": "sunModel",
+          "position": [
+            0.4,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "enabled": true,
+          "texture": "2k_earth_daymap",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 10.0,
+              "orbitalScale": 0.4,
+              "synchronousRotation": false
+            }
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "marsModel",
+          "parent": "sunModel",
+          "position": [
+            0.6,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": true,
+          "texture": "2k_mars",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 18.8,
+              "orbitalScale": 0.6,
+              "synchronousRotation": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip_heliocentric_intro",
+          "audioClip": "heliocentric_orbits.mp3",
+          "autoAdvance": true,
+          "changes": []
+        },
+        {
+          "clipName": "clip_overtaking_event",
+          "audioClip": "earth_overtakes_mars.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "earthModel",
+              "scale": [
+                0.06,
+                0.06,
+                0.06
+              ]
+            },
+            {
+              "target": "marsModel",
+              "scale": [
+                0.05,
+                0.05,
+                0.05
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: Comparing the Outer Planets",
+      "description": "Examine how distance affects the size of the retrograde loop by comparing Mars, Jupiter, and Saturn.",
+      "author": "Dr. E. Hubble",
+      "institution": "Department of Astronomy",
+      "dateCreated": "2023-10-15",
+      "educationalObjectives": [
+        "Compare retrograde loops and explain why more distant planets exhibit smaller loops."
+      ],
+      "instructions": [
+        "Observe the added orbits of Jupiter and Saturn.",
+        "Listen to the explanation of how relative distance minimizes the apparent retrograde effect."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "sunModelFinal",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            -0.2,
+            1.5
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "enabled": true,
+          "texture": "sun_texture"
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "earthModelFinal",
+          "parent": "sunModelFinal",
+          "position": [
+            0.3,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "enabled": true,
+          "texture": "2k_earth_daymap",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 10.0,
+              "orbitalScale": 0.3,
+              "synchronousRotation": false
+            }
+          ]
+        },
+        {
+          "prefab": "marsPrefab",
+          "name": "marsModelFinal",
+          "parent": "sunModelFinal",
+          "position": [
+            0.45,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "enabled": true,
+          "texture": "2k_mars",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 18.8,
+              "orbitalScale": 0.45,
+              "synchronousRotation": false
+            }
+          ]
+        },
+        {
+          "prefab": "jupiterPrefab",
+          "name": "jupiterModel",
+          "parent": "sunModelFinal",
+          "position": [
+            0.8,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "enabled": false,
+          "texture": "2k_jupiter",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 118.6,
+              "orbitalScale": 0.8,
+              "synchronousRotation": false
+            }
+          ]
+        },
+        {
+          "prefab": "saturnPrefab",
+          "name": "saturnModel",
+          "parent": "sunModelFinal",
+          "position": [
+            1.1,
+            0.0,
+            0.0
+          ],
+          "eulerAngles": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "enabled": false,
+          "texture": "2k_saturn",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "orbitalPeriod": 294.6,
+              "orbitalScale": 1.1,
+              "synchronousRotation": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip_reveal_gas_giants",
+          "audioClip": "introducing_jupiter_saturn.mp3",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "jupiterModel",
+              "enabled": true
+            },
+            {
+              "target": "saturnModel",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "clipName": "clip_distance_effect",
+          "audioClip": "distance_and_loop_size.mp3",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "jupiterModel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Jupiter",
+                  "fontSize": 0.08,
+                  "wrapText": false
+                }
+              ]
+            },
+            {
+              "target": "saturnModel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Saturn",
+                  "fontSize": 0.08,
+                  "wrapText": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1161 @@
+{
+  "version": "2.0",
+  "labId": "physics_vectors_projectile_motion_101",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Physics I (Mechanics)",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Students will represent a two-dimensional vector by its magnitude and direction, and equivalently by its horizontal and vertical components.",
+    "Students will add two or more vectors graphically using the tip-to-tail method and identify the resultant vector.",
+    "Students will decompose a vector into components along the x- and y-axes using right-triangle trigonometry, and reconstruct the original vector from its components.",
+    "Students will explain why the horizontal and vertical motions of a projectile are independent of one another, given that gravity acts only in the vertical direction.",
+    "Students will describe how the horizontal velocity, vertical velocity, and position of a projectile change over the course of its flight, and identify the moment of maximum height as the point where the vertical velocity is zero.",
+    "Students will predict how changes in initial launch angle and launch speed affect the trajectory, range, and maximum height of a projectile, and identify the launch angle that produces maximum range for a given speed."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Vector Fundamentals: Magnitude, Direction, and Components",
+      "description": "Students explore vectors as abstract mathematical objects with both magnitude and direction. They learn to represent vectors using components along the x- and y-axes, and discover the relationship between a vector's magnitude, direction angle, and its component values through right-triangle trigonometry.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Represent a two-dimensional vector by its magnitude and direction.",
+        "Express a vector equivalently using its horizontal and vertical components.",
+        "Apply right-triangle trigonometry to relate magnitude, direction angle, and components."
+      ],
+      "objects": [
+        {
+          "prefab": "gridPrefab",
+          "name": "coordinateGrid",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            2,
+            2,
+            0.1
+          ],
+          "color": [
+            200,
+            200,
+            200,
+            100
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vectorA",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            35
+          ],
+          "scale": [
+            0.1,
+            1,
+            0.1
+          ],
+          "color": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vector A\n|A| = 10 m\n\u03b8 = 35\u00b0",
+              "color": [
+                255,
+                0,
+                0,
+                255
+              ],
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "componentX",
+          "position": [
+            0,
+            0,
+            -0.2
+          ],
+          "scale": [
+            0.08,
+            0.81,
+            0.08
+          ],
+          "enabled": false,
+          "color": [
+            0,
+            0,
+            255,
+            200
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Ax = 8.19 m",
+              "color": [
+                0,
+                0,
+                255,
+                255
+              ],
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "componentY",
+          "position": [
+            0.81,
+            0,
+            -0.2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.08,
+            0.57,
+            0.08
+          ],
+          "enabled": false,
+          "color": [
+            0,
+            255,
+            0,
+            200
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Ay = 5.73 m",
+              "color": [
+                0,
+                255,
+                0,
+                255
+              ],
+              "fontSize": 20
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0_intro",
+          "audioClip": "vector_fundamentals_intro",
+          "autoAdvance": false,
+          "changeMeaning": "Initial scene setup with coordinate grid and a single vector displayed, establishing the visual framework for understanding vectors.",
+          "narration": "Vectors are mathematical objects that represent quantities with both magnitude and direction. Today we'll explore how to describe vectors and use them to solve problems. Let's start by looking at a single vector displayed here."
+        },
+        {
+          "clipName": "clip1_vector_properties",
+          "audioClip": "vector_magnitude_direction",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vectorA",
+              "color": [
+                255,
+                100,
+                100,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Highlighting the vector's magnitude (10 m) and direction angle (35\u00b0), emphasizing that these two quantities completely specify the vector.",
+          "narration": "This vector has a magnitude of 10 meters\u2014that's its length. The direction is 35 degrees above the horizontal, or above the x-axis. We can describe this vector completely by stating its magnitude and angle, but there's another useful way to express it."
+        },
+        {
+          "clipName": "clip2_decomposition_intro",
+          "audioClip": "vector_decomposition_setup",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "componentX",
+              "enabled": true
+            },
+            {
+              "target": "componentY",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Revealing the x and y components by enabling them, showing how they combine geometrically to form the original vector.",
+          "narration": "We can break any vector into components along the x- and y-axes. The horizontal component, Ax, runs along the x-axis. The vertical component, Ay, runs along the y-axis. Together, these components form a right triangle."
+        },
+        {
+          "clipName": "clip3_trigonometry",
+          "audioClip": "component_trigonometry",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vectorA",
+              "color": [
+                200,
+                50,
+                50,
+                200
+              ]
+            },
+            {
+              "target": "componentX",
+              "color": [
+                0,
+                100,
+                255,
+                255
+              ]
+            },
+            {
+              "target": "componentY",
+              "color": [
+                0,
+                200,
+                100,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Reinforcing the trigonometric relationships that connect the magnitude and angle to the component values, emphasizing the right-triangle geometry.",
+          "narration": "To find the components from magnitude and angle, we use trigonometry. The horizontal component is Ax equals magnitude times cosine of theta. That's 10 times cosine of 35 degrees, which gives 8.19 meters. The vertical component is Ay equals magnitude times sine of theta. That's 10 times sine of 35 degrees, which gives 5.73 meters."
+        },
+        {
+          "clipName": "clip4_reconstruction",
+          "audioClip": "component_reconstruction",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vectorA",
+              "color": [
+                255,
+                150,
+                0,
+                255
+              ]
+            },
+            {
+              "target": "componentX",
+              "color": [
+                100,
+                150,
+                255,
+                200
+              ]
+            },
+            {
+              "target": "componentY",
+              "color": [
+                100,
+                255,
+                150,
+                200
+              ]
+            }
+          ],
+          "changeMeaning": "Showing the complete equivalence between the two representations, with all three quantities (magnitude, angle, and components) visible and highlighted.",
+          "narration": "Conversely, if we know the components, we can find the magnitude and direction. The magnitude is the square root of Ax squared plus Ay squared. The direction angle is the inverse tangent of Ay divided by Ax. This equivalence\u2014between magnitude-and-angle representation and component representation\u2014is fundamental to vector analysis."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Vector Addition: Tip-to-Tail Method and Resultant",
+      "description": "Students learn to add vectors graphically using the tip-to-tail method, discovering how to construct a resultant vector from two or more input vectors. They observe that vector addition is commutative and see how the magnitude and direction of the resultant depend on the magnitudes and relative directions of the input vectors.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Add two or more vectors using the tip-to-tail graphical method.",
+        "Identify the resultant vector as the vector sum.",
+        "Understand that vector addition is commutative."
+      ],
+      "objects": [
+        {
+          "prefab": "arrowPrefab",
+          "name": "vectorBase",
+          "position": [
+            -0.6,
+            0,
+            0
+          ],
+          "scale": [
+            0.1,
+            0.8,
+            0.1
+          ],
+          "color": [
+            255,
+            0,
+            0,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vector A",
+              "color": [
+                255,
+                0,
+                0,
+                255
+              ],
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "vectorToAdd",
+          "position": [
+            -0.6,
+            0.8,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            60
+          ],
+          "scale": [
+            0.1,
+            0.6,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            0,
+            0,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vector B",
+              "color": [
+                0,
+                0,
+                255,
+                255
+              ],
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "resultantVector",
+          "position": [
+            -0.6,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            25
+          ],
+          "scale": [
+            0.1,
+            1.2,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            0,
+            200,
+            0,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Resultant\nA + B",
+              "color": [
+                0,
+                200,
+                0,
+                255
+              ],
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "instructionText",
+          "position": [
+            0.5,
+            1.2,
+            0
+          ],
+          "scale": [
+            0.01,
+            0.01,
+            0.01
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Tip-to-Tail\nAddition",
+              "color": [
+                100,
+                100,
+                100,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip5_addition_intro",
+          "audioClip": "vector_addition_intro",
+          "autoAdvance": false,
+          "changes": [],
+          "changeMeaning": "Introduction to vector addition with the first vector (A) displayed and the instructional context established.",
+          "narration": "Now let's explore how to add vectors. We have vector A shown here in red, with magnitude 10 meters and no angle\u2014it points straight up. To add a second vector to it, we use a method called the tip-to-tail method."
+        },
+        {
+          "clipName": "clip6_tip_to_tail",
+          "audioClip": "tip_to_tail_method",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vectorToAdd",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Revealing vector B positioned at the tip of vector A, demonstrating the first step of the tip-to-tail method.",
+          "narration": "The tip-to-tail method works like this: place the tail of the second vector at the tip of the first vector. Here, vector B\u2014shown in blue, with magnitude 6 meters at a 60-degree angle\u2014is placed with its tail at the tip of vector A."
+        },
+        {
+          "clipName": "clip7_resultant_vector",
+          "audioClip": "resultant_definition",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "resultantVector",
+              "enabled": true
+            },
+            {
+              "target": "vectorBase",
+              "color": [
+                200,
+                100,
+                100,
+                200
+              ]
+            },
+            {
+              "target": "vectorToAdd",
+              "color": [
+                100,
+                100,
+                200,
+                200
+              ]
+            }
+          ],
+          "changeMeaning": "Showing the resultant vector, which visually completes the triangle formed by the two input vectors and their vector sum.",
+          "narration": "The resultant vector, shown in green, is drawn from the tail of the first vector to the tip of the second vector. The resultant vector is the vector sum A plus B. Its magnitude and direction are determined entirely by the magnitudes and directions of the two input vectors."
+        },
+        {
+          "clipName": "clip8_commutativity",
+          "audioClip": "vector_addition_commutative",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "resultantVector",
+              "color": [
+                50,
+                255,
+                50,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Emphasizing the commutative property of vector addition by highlighting the resultant vector, showing that it represents the complete sum regardless of addition order.",
+          "narration": "An important property: vector addition is commutative. Whether we add A to B or B to A, we get the same resultant. The order doesn't matter. This is different from subtraction or from operations on scalars, where order sometimes matters."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Projectile Motion: Independence of Horizontal and Vertical Motion",
+      "description": "Students explore how a projectile launched at an angle exhibits two independent motions: constant horizontal velocity (because no horizontal force acts) and uniformly accelerated vertical motion (because gravity acts downward). By examining the trajectory and velocity components at different times, students develop intuition for how these independent motions combine to produce the parabolic path.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Explain that horizontal and vertical motions of a projectile are independent.",
+        "Justify this independence by noting that only gravity (a vertical force) acts on the projectile.",
+        "Describe how horizontal and vertical velocities change over the course of flight."
+      ],
+      "objects": [
+        {
+          "prefab": "platformPrefab",
+          "name": "launchPad",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.3,
+            0.05,
+            0.3
+          ],
+          "color": [
+            100,
+            100,
+            100,
+            255
+          ]
+        },
+        {
+          "prefab": "spherePrefab",
+          "name": "projectile",
+          "position": [
+            0,
+            0.1,
+            0
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "color": [
+            255,
+            150,
+            0,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Projectile",
+              "color": [
+                255,
+                150,
+                0,
+                255
+              ],
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "curvePrefab",
+          "name": "trajectoryPath",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.5,
+            1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            200,
+            200,
+            255,
+            100
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "velocityIndicator",
+          "position": [
+            0,
+            0.1,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            45
+          ],
+          "scale": [
+            0.08,
+            0.5,
+            0.08
+          ],
+          "enabled": false,
+          "color": [
+            100,
+            200,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "v initial",
+              "color": [
+                100,
+                200,
+                255,
+                255
+              ],
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "horizontalComponent",
+          "position": [
+            0,
+            0,
+            -0.2
+          ],
+          "scale": [
+            0.06,
+            0.35,
+            0.06
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            0,
+            100,
+            200
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "vx = constant",
+              "color": [
+                255,
+                0,
+                100,
+                255
+              ],
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "arrowPrefab",
+          "name": "verticalComponent",
+          "position": [
+            0.35,
+            0,
+            -0.2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.06,
+            0.35,
+            0.06
+          ],
+          "enabled": false,
+          "color": [
+            100,
+            255,
+            0,
+            200
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "vy = changes",
+              "color": [
+                100,
+                255,
+                0,
+                255
+              ],
+              "fontSize": 20
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip9_projectile_launch",
+          "audioClip": "projectile_motion_intro",
+          "autoAdvance": false,
+          "changes": [],
+          "changeMeaning": "Setting the scene for projectile motion with the launch pad and projectile in their initial positions.",
+          "narration": "Now we apply vectors to real motion. Here is a projectile on a launch pad. We'll launch it at an angle and watch what happens. The key insight is that the horizontal and vertical motions of a projectile are completely independent of each other."
+        },
+        {
+          "clipName": "clip10_launch_velocity",
+          "audioClip": "initial_velocity_decomposition",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "velocityIndicator",
+              "enabled": true
+            },
+            {
+              "target": "horizontalComponent",
+              "enabled": true
+            },
+            {
+              "target": "verticalComponent",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Showing the initial velocity vector and its decomposition into horizontal and vertical components, establishing the independence principle.",
+          "narration": "At launch, the projectile has an initial velocity at a 45-degree angle. This velocity vector can be decomposed into a horizontal component and a vertical component. The horizontal component will remain constant throughout the flight because no horizontal force acts on the projectile."
+        },
+        {
+          "clipName": "clip11_forces_and_motion",
+          "audioClip": "gravity_acts_vertically",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "trajectoryPath",
+              "enabled": true
+            },
+            {
+              "target": "projectile",
+              "position": [
+                0.3,
+                0.4,
+                0
+              ]
+            }
+          ],
+          "changeMeaning": "Emphasizing that gravity acts only vertically, explaining why the horizontal motion remains constant while the vertical motion accelerates.",
+          "narration": "The only force acting on the projectile is gravity, which acts straight downward. Since gravity is purely vertical, it affects only the vertical motion. The vertical velocity changes at a constant rate\u2014it decreases during ascent as gravity opposes the upward motion, reaches zero at the peak of the trajectory, and then increases downward during descent."
+        },
+        {
+          "clipName": "clip12_parabolic_path",
+          "audioClip": "combined_motion_trajectory",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile",
+              "position": [
+                0.5,
+                0.15,
+                0
+              ]
+            },
+            {
+              "target": "trajectoryPath",
+              "color": [
+                150,
+                180,
+                255,
+                150
+              ]
+            }
+          ],
+          "changeMeaning": "Showing the complete parabolic trajectory and illustrating how the combination of the two independent motions produces the observed curved path.",
+          "narration": "The parabolic trajectory emerges from the combination of constant horizontal velocity and uniformly accelerated vertical motion. The projectile moves horizontally at a steady rate while falling under gravity. The result is the characteristic parabolic arc we observe."
+        },
+        {
+          "clipName": "clip13_independence_principle",
+          "audioClip": "independence_summary",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile",
+              "position": [
+                0.8,
+                0.05,
+                0
+              ],
+              "color": [
+                255,
+                200,
+                100,
+                255
+              ]
+            },
+            {
+              "target": "horizontalComponent",
+              "color": [
+                255,
+                100,
+                100,
+                255
+              ]
+            },
+            {
+              "target": "verticalComponent",
+              "color": [
+                100,
+                255,
+                100,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Final summary scene reiterating the independence principle with the full trajectory and component vectors visible.",
+          "narration": "This independence of horizontal and vertical motion is counterintuitive but absolutely central to understanding projectile motion. The horizontal motion is unaffected by what happens vertically, and vice versa. By thinking about the two motions separately, we can predict where a projectile will land and how high it will climb."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Launch Angle and Speed: Optimization and Trajectory Control",
+      "description": "Students investigate how changes to launch angle and speed affect the trajectory, range, and maximum height of a projectile. Through interactive manipulation and observation, they discover that 45 degrees produces maximum range for a given launch speed, and they develop intuition about the trade-off between horizontal range and vertical height.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Predict how changes in launch angle affect trajectory shape, range, and maximum height.",
+        "Predict how changes in launch speed affect trajectory, range, and maximum height.",
+        "Identify the launch angle that maximizes range for a given speed."
+      ],
+      "objects": [
+        {
+          "prefab": "platformPrefab",
+          "name": "launchSite",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.4,
+            0.05,
+            0.4
+          ],
+          "color": [
+            120,
+            120,
+            120,
+            255
+          ]
+        },
+        {
+          "prefab": "spherePrefab",
+          "name": "projectileA",
+          "position": [
+            0,
+            0.1,
+            0
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "color": [
+            255,
+            100,
+            100,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "30\u00b0",
+              "color": [
+                255,
+                100,
+                100,
+                255
+              ],
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "curvePrefab",
+          "name": "trajectoryA",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.2,
+            0.6,
+            0.1
+          ],
+          "color": [
+            255,
+            150,
+            150,
+            100
+          ]
+        },
+        {
+          "prefab": "spherePrefab",
+          "name": "projectileB",
+          "position": [
+            0,
+            0.1,
+            -0.2
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "enabled": false,
+          "color": [
+            100,
+            100,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "45\u00b0",
+              "color": [
+                100,
+                100,
+                255,
+                255
+              ],
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "curvePrefab",
+          "name": "trajectoryB",
+          "position": [
+            0,
+            0,
+            -0.2
+          ],
+          "scale": [
+            1.4,
+            0.8,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            150,
+            150,
+            255,
+            100
+          ]
+        },
+        {
+          "prefab": "spherePrefab",
+          "name": "projectileC",
+          "position": [
+            0,
+            0.1,
+            -0.4
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "enabled": false,
+          "color": [
+            100,
+            255,
+            100,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "60\u00b0",
+              "color": [
+                100,
+                255,
+                100,
+                255
+              ],
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "curvePrefab",
+          "name": "trajectoryC",
+          "position": [
+            0,
+            0,
+            -0.4
+          ],
+          "scale": [
+            1.0,
+            1.2,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            150,
+            255,
+            150,
+            100
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip14_angle_exploration",
+          "audioClip": "launch_angle_exploration",
+          "autoAdvance": false,
+          "changes": [],
+          "changeMeaning": "Introducing the first launch condition (30 degrees) and establishing the visual baseline for comparing different trajectories.",
+          "narration": "Let's explore how changing the launch angle changes the trajectory. Here, a projectile is launched at 30 degrees. Notice the trajectory\u2014it's relatively flat and has a limited vertical height."
+        },
+        {
+          "clipName": "clip15_angle_comparison_45",
+          "audioClip": "45_degree_launch",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectileB",
+              "enabled": true
+            },
+            {
+              "target": "trajectoryB",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Adding the 45-degree trajectory to show the comparison and highlighting its superior range and height characteristics.",
+          "narration": "Now let's launch at 45 degrees with the same initial speed. The trajectory is more balanced\u2014greater height and, notably, greater range. For a given launch speed, 45 degrees produces the maximum range."
+        },
+        {
+          "clipName": "clip16_angle_comparison_60",
+          "audioClip": "steep_angle_launch",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectileC",
+              "enabled": true
+            },
+            {
+              "target": "trajectoryC",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Adding the 60-degree trajectory to demonstrate the trade-off between height and range, showing that steeper angles sacrifice range for altitude.",
+          "narration": "At 60 degrees, the launch is steeper. The projectile reaches a much greater height but travels a shorter horizontal distance. The maximum height increases, but the range decreases compared to 45 degrees."
+        },
+        {
+          "clipName": "clip17_speed_effect",
+          "audioClip": "launch_speed_effect",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectileA",
+              "color": [
+                200,
+                150,
+                150,
+                200
+              ]
+            },
+            {
+              "target": "projectileC",
+              "color": [
+                150,
+                200,
+                150,
+                200
+              ]
+            }
+          ],
+          "changeMeaning": "Transitioning from angle variation to speed variation, showing how launch speed affects trajectory dimensions while the angle remains constant.",
+          "narration": "Now let's vary the launch speed while keeping the angle at 45 degrees. A higher launch speed increases both the range and the maximum height of the projectile. The trajectory becomes stretched\u2014the projectile travels farther and higher before landing."
+        },
+        {
+          "clipName": "clip18_optimization_summary",
+          "audioClip": "trajectory_optimization_summary",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectileA",
+              "color": [
+                255,
+                120,
+                120,
+                255
+              ]
+            },
+            {
+              "target": "projectileB",
+              "color": [
+                120,
+                120,
+                255,
+                255
+              ]
+            },
+            {
+              "target": "projectileC",
+              "color": [
+                120,
+                255,
+                120,
+                255
+              ]
+            },
+            {
+              "target": "trajectoryA",
+              "color": [
+                255,
+                180,
+                180,
+                120
+              ]
+            },
+            {
+              "target": "trajectoryB",
+              "color": [
+                180,
+                180,
+                255,
+                120
+              ]
+            },
+            {
+              "target": "trajectoryC",
+              "color": [
+                180,
+                255,
+                180,
+                120
+              ]
+            }
+          ],
+          "changeMeaning": "Final summary scene showing all three trajectories together, illustrating the complete picture of how angle and speed interact to determine trajectory characteristics.",
+          "narration": "In summary, launch angle and speed are both crucial parameters. The 45-degree angle maximizes range for a given speed. Steeper angles sacrifice range for height. Higher speeds increase both range and maximum height proportionally. Understanding these relationships allows us to predict and optimize projectile motion in applications from sports to ballistics."
+        }
+      ]
+    }
+  ]
+}

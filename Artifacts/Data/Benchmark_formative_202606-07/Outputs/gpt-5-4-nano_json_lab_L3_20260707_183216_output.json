@@ -1,0 +1,1115 @@
+{
+  "version": "2.0",
+  "labId": "gp1_vec_projectile_ar_01",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Physics I (Mechanics)",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Represent 2D vectors using magnitude/direction and equivalently x- and y-components.",
+    "Add vectors using the tip-to-tail graphical method to obtain a resultant.",
+    "Decompose and reconstruct vectors using right-triangle trigonometry relationships.",
+    "Apply vector decomposition to 2D projectile motion and explain independence of horizontal and vertical motion (a_x = 0, gravity only vertical).",
+    "Track how projectile vertical velocity reaches zero at maximum height and interpret the corresponding position/trajectory.",
+    "Predict qualitative effects of changing launch angle and speed on range and maximum height; identify maximum-range angle for fixed speed."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: Vectors as Directed Quantities (Magnitude & Direction)",
+      "description": "Students see a single 2D vector arrow and identify magnitude and direction, then preview the component triangle used later.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Identify magnitude and direction from an arrow representation.",
+        "Use the idea of components to prepare for trig-based decomposition later."
+      ],
+      "instructions": [
+        "Look at the arrow vector in the AR workspace.",
+        "Use Next to see the component triangle conceptually appear."
+      ],
+      "objects": [
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vArrowA",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.02,
+            0.15,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            35
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "color": [
+            60,
+            180,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "tinySphere",
+          "name": "vTailDot",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            0.05,
+            0.4
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "color": [
+            60,
+            180,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "tinySphere",
+          "name": "vHeadDot",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.08,
+            0.18,
+            0.4
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "color": [
+            60,
+            180,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelMagDir",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0.35,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.25,
+            0.08,
+            0.01
+          ]
+        },
+        {
+          "prefab": "rightTrianglePrefab",
+          "name": "compTrianglePreview",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.14,
+            0.12,
+            0.4
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.01
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_intro",
+          "audioClip": "vectors_scene1_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "labelMagDir",
+              "enabled": true
+            },
+            {
+              "target": "compTrianglePreview",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "Enables the main label so students anchor the concept of magnitude and direction while the component triangle remains hidden for step-by-step buildup.",
+          "narration": "A vector in 2D has magnitude (arrow length) and direction (arrow angle). In this scene, the arrow and its tail/head markers represent one vector."
+        },
+        {
+          "clipName": "clip2_angle_and_triangle_preview",
+          "audioClip": "vectors_scene1_angle_triangle_preview",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "vArrowA",
+              "eulerAngles": [
+                0,
+                0,
+                35
+              ]
+            },
+            {
+              "target": "vHeadDot",
+              "position": [
+                -0.08,
+                0.18,
+                0.4
+              ]
+            },
+            {
+              "target": "compTrianglePreview",
+              "scale": [
+                0.14,
+                0.14,
+                0.01
+              ],
+              "enabled": true
+            },
+            {
+              "target": "labelMagDir",
+              "position": [
+                0.18,
+                0.37,
+                0.4
+              ]
+            }
+          ],
+          "changeMeaning": "Rotates the vector to a non-axis-aligned direction, positions the head marker consistently, and reveals a triangle preview to foreshadow component decomposition.",
+          "narration": "To connect direction to components later, we imagine a right triangle: the original vector is the hypotenuse, and the horizontal and vertical legs become the components."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: Tip-to-Tail Addition of Vectors (Resultant)",
+      "description": "Students add two vectors by translating them tip-to-tail and identify the resultant from the first tail to the final head.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Use the tip-to-tail method to construct a resultant.",
+        "Estimate how the resultant direction relates to the original two directions."
+      ],
+      "instructions": [
+        "Observe vector A and vector B.",
+        "Use Next to place B tip-to-tail on A and reveal the resultant."
+      ],
+      "objects": [
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vectorA",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.22,
+            0.1,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            20
+          ],
+          "scale": [
+            0.16,
+            0.16,
+            0.16
+          ],
+          "color": [
+            255,
+            120,
+            40,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vectorB",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.06,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            75
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "color": [
+            80,
+            220,
+            140,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "resultantR",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.1,
+            0.13,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            45
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "enabled": false,
+          "color": [
+            160,
+            120,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelTipTail",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.12,
+            0.38,
+            0.4
+          ],
+          "scale": [
+            0.32,
+            0.08,
+            0.01
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_add_intro",
+          "audioClip": "vectors_scene2_intro_tip_tail",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "labelTipTail",
+              "enabled": true
+            },
+            {
+              "target": "resultantR",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "Shows the guiding label while the resultant is hidden so students focus on the construction process rather than the final answer.",
+          "narration": "Vector addition works tip-to-tail: keep each vector\u2019s magnitude and direction, and move the second so its tail touches the first\u2019s head."
+        },
+        {
+          "clipName": "clip2_place_vectorB_tip_to_tail",
+          "audioClip": "vectors_scene2_place_vectorB_tip_to_tail",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "vectorB",
+              "position": [
+                -0.07,
+                0.23,
+                0.4
+              ]
+            },
+            {
+              "target": "vectorB",
+              "eulerAngles": [
+                0,
+                0,
+                75
+              ]
+            },
+            {
+              "target": "labelTipTail",
+              "position": [
+                0.12,
+                0.36,
+                0.4
+              ]
+            }
+          ],
+          "changeMeaning": "Moves vector B to the correct tip-to-tail position while preserving its direction, creating the geometry needed for the resultant.",
+          "narration": "We translate vector B until its tail starts where vector A\u2019s head ends\u2014this forms the tip-to-tail chain."
+        },
+        {
+          "clipName": "clip3_resultant_emerge",
+          "audioClip": "vectors_scene2_resultant_emerge",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "resultantR",
+              "enabled": true
+            },
+            {
+              "target": "resultantR",
+              "eulerAngles": [
+                0,
+                0,
+                45
+              ]
+            },
+            {
+              "target": "resultantR",
+              "position": [
+                -0.12,
+                0.15,
+                0.4
+              ]
+            }
+          ],
+          "changeMeaning": "Enables and positions the resultant arrow so it matches the tail-to-final-head displacement created by the tip-to-tail construction.",
+          "narration": "The resultant vector R goes from the tail of the first vector to the head of the last vector. Its direction lies between the two directions."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: Decomposing a Vector into x and y Components (Trig Reconstruction)",
+      "description": "Students decompose a vector into x and y components, visualize right-triangle geometry, then reconstruct the original vector.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Decompose a vector into orthogonal x and y components.",
+        "Relate components to magnitude/direction using right-triangle trig concepts.",
+        "Reconstruct the original vector from its components."
+      ],
+      "instructions": [
+        "Look for the x and y component arrows.",
+        "Use Next to see reconstruction of the original vector."
+      ],
+      "objects": [
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vOriginal",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.05,
+            0.12,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            40
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "color": [
+            60,
+            180,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vXcomponent",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.16,
+            0.06,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "color": [
+            255,
+            215,
+            70,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vYcomponent",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.02,
+            0.18,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "color": [
+            255,
+            120,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "rightTrianglePrefab",
+          "name": "compRightTriangle",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.12,
+            0.1,
+            0.4
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.01
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelTrig",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0.33,
+            0.4
+          ],
+          "scale": [
+            0.35,
+            0.09,
+            0.01
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelReconstruct",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0.22,
+            0.4
+          ],
+          "scale": [
+            0.35,
+            0.09,
+            0.01
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_decomposition_intro",
+          "audioClip": "vectors_scene3_decomposition_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "compRightTriangle",
+              "enabled": false
+            },
+            {
+              "target": "labelTrig",
+              "enabled": true
+            },
+            {
+              "target": "labelReconstruct",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "Keeps the geometry hidden while showing the trig relationships label, so students understand decomposition conceptually before seeing triangle structure.",
+          "narration": "Any 2D vector can be decomposed into perpendicular components along the x-axis and y-axis. The original vector is the hypotenuse of the right triangle formed by those components."
+        },
+        {
+          "clipName": "clip2_components_appear_triangle_reveals",
+          "audioClip": "vectors_scene3_components_appear",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "vXcomponent",
+              "position": [
+                -0.16,
+                0.06,
+                0.4
+              ]
+            },
+            {
+              "target": "vYcomponent",
+              "position": [
+                -0.02,
+                0.18,
+                0.4
+              ]
+            },
+            {
+              "target": "compRightTriangle",
+              "scale": [
+                0.14,
+                0.14,
+                0.01
+              ],
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Positions the x and y component arrows to visually form right-triangle geometry with the original vector as the hypotenuse.",
+          "narration": "When the x-component is horizontal and the y-component is vertical, placing them tip-to-tail reconstructs the original direction. The right triangle connects component lengths to the vector magnitude."
+        },
+        {
+          "clipName": "clip3_reconstruction_check",
+          "audioClip": "vectors_scene3_reconstruction_check",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "vOriginal",
+              "position": [
+                -0.05,
+                0.12,
+                0.4
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                40
+              ]
+            },
+            {
+              "target": "labelReconstruct",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Re-centers the original vector and reveals the reconstruction confirmation label after the components are aligned.",
+          "narration": "Now compare: the tip-to-tail combination of v_x and v_y yields the same resultant as the original vector\u2014confirming the decomposition is equivalent."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 4: Projectile Motion from Vector Decomposition (Independence of x & y)",
+      "description": "Students connect projectile motion to constant horizontal velocity and gravity-driven vertical motion by visualizing v0 components and a trajectory arc.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Explain why horizontal and vertical projectile motions are independent in the absence of air resistance.",
+        "Describe how v_x remains constant while v_y changes uniformly under gravity.",
+        "Identify maximum height as the moment when v_y becomes zero."
+      ],
+      "instructions": [
+        "Watch how the trajectory arc relates to velocity components.",
+        "Use Next to highlight maximum height at v_y = 0."
+      ],
+      "objects": [
+        {
+          "prefab": "projectilePrefab",
+          "name": "proj",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.28,
+            0.05,
+            0.4
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            230,
+            230,
+            230,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "v0_total",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.28,
+            0.12,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            35
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "color": [
+            60,
+            180,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "v0x",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.24,
+            0.06,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "color": [
+            255,
+            215,
+            70,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "v0y",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.28,
+            0.15,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "color": [
+            255,
+            120,
+            180,
+            255
+          ]
+        },
+        {
+          "prefab": "trajectoryCurvePrefab",
+          "name": "trajectory",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.15,
+            0.06,
+            0.4
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelIndependence",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.1,
+            0.36,
+            0.4
+          ],
+          "scale": [
+            0.35,
+            0.09,
+            0.01
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelMaxHeight",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.1,
+            0.25,
+            0.4
+          ],
+          "scale": [
+            0.35,
+            0.09,
+            0.01
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_launch_intro",
+          "audioClip": "projectile_scene4_launch_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "trajectory",
+              "enabled": false
+            },
+            {
+              "target": "proj",
+              "position": [
+                -0.28,
+                0.05,
+                0.4
+              ]
+            },
+            {
+              "target": "labelIndependence",
+              "enabled": true
+            },
+            {
+              "target": "labelMaxHeight",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "Places the projectile at the launch point and emphasizes the independence idea while keeping the trajectory hidden until components are established.",
+          "narration": "Decompose the initial velocity into horizontal and vertical components. Since gravity acts only vertically, the horizontal acceleration is zero, so v_x stays constant."
+        },
+        {
+          "clipName": "clip2_show_components_and_arc",
+          "audioClip": "projectile_scene4_show_components_and_arc",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "v0_total",
+              "enabled": true
+            },
+            {
+              "target": "v0x",
+              "enabled": true
+            },
+            {
+              "target": "v0y",
+              "enabled": true
+            },
+            {
+              "target": "trajectory",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Enables v0, v0x, v0y and the trajectory arc together, linking component behavior to the final path.",
+          "narration": "The horizontal component controls the projectile\u2019s sideways motion, while the vertical component changes under gravity. Their combination produces the parabolic trajectory."
+        },
+        {
+          "clipName": "clip3_max_height_vy_zero",
+          "audioClip": "projectile_scene4_max_height_vy_zero",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "proj",
+              "position": [
+                0.06,
+                0.28,
+                0.4
+              ]
+            },
+            {
+              "target": "v0y",
+              "scale": [
+                0.01,
+                0.12,
+                0.01
+              ]
+            },
+            {
+              "target": "labelMaxHeight",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Moves the projectile to an apex position, shrinks the vertical-velocity arrow to indicate v_y = 0, and displays the maximum-height label.",
+          "narration": "Maximum height occurs where the vertical velocity becomes zero. At that instant the projectile stops rising but continues moving horizontally with constant v_x."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 5: Manipulating Launch Angle and Speed (Range & Maximum Height)",
+      "description": "Students compare trajectories for different launch angles and speeds to infer their effects on maximum height and range.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Predict how changing launch angle affects range and maximum height at fixed speed.",
+        "Predict how increasing launch speed affects range and maximum height at fixed angle.",
+        "State that maximum range occurs at 45\u00b0 for symmetric launch/landing conditions without air resistance."
+      ],
+      "instructions": [
+        "Compare Case A and Case B trajectories.",
+        "Then observe how increasing speed scales range and height."
+      ],
+      "objects": [
+        {
+          "prefab": "projectilePrefab",
+          "name": "projA",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.28,
+            0.05,
+            0.4
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "enabled": false,
+          "color": [
+            70,
+            200,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "trajectoryCurvePrefab",
+          "name": "trajA",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.15,
+            0.06,
+            0.4
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "projectilePrefab",
+          "name": "projB",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.28,
+            0.05,
+            0.4
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            140,
+            70,
+            255
+          ]
+        },
+        {
+          "prefab": "trajectoryCurvePrefab",
+          "name": "trajB",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.15,
+            0.06,
+            0.4
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelCase",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0.28,
+            0.4
+          ],
+          "scale": [
+            0.35,
+            0.09,
+            0.01
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelControls",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0.38,
+            0.4
+          ],
+          "scale": [
+            0.42,
+            0.09,
+            0.01
+          ],
+          "enabled": true
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_caseA_show",
+          "audioClip": "projectile_scene5_caseA_show",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "projA",
+              "enabled": true
+            },
+            {
+              "target": "trajA",
+              "enabled": true
+            },
+            {
+              "target": "projB",
+              "enabled": false
+            },
+            {
+              "target": "trajB",
+              "enabled": false
+            },
+            {
+              "target": "labelCase",
+              "enabled": true
+            },
+            {
+              "target": "labelCase",
+              "position": [
+                0.18,
+                0.28,
+                0.4
+              ]
+            }
+          ],
+          "changeMeaning": "Activates Case A projectile and trajectory while keeping Case B hidden, allowing a clean single-scenario observation.",
+          "narration": "Case A uses a 30\u00b0 launch angle at speed v0. For equal speed, moving the angle toward 45\u00b0 generally increases range and can increase maximum height compared with smaller angles."
+        },
+        {
+          "clipName": "clip2_switch_to_caseB",
+          "audioClip": "projectile_scene5_caseB_optimal_angle_compare",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "projA",
+              "enabled": false
+            },
+            {
+              "target": "trajA",
+              "enabled": false
+            },
+            {
+              "target": "projB",
+              "enabled": true
+            },
+            {
+              "target": "trajB",
+              "enabled": true
+            },
+            {
+              "target": "labelCase",
+              "position": [
+                0.18,
+                0.28,
+                0.4
+              ]
+            }
+          ],
+          "changeMeaning": "Turns off Case A and enables Case B to compare how the launch angle shift changes trajectory extent (range) for fixed speed.",
+          "narration": "Switch to Case B at 45\u00b0 (same speed). For symmetric launch and landing heights with no air resistance, maximum range occurs at 45\u00b0."
+        },
+        {
+          "clipName": "clip3_speed_increase_effect",
+          "audioClip": "projectile_scene5_increase_speed_effect",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "trajB",
+              "scale": [
+                1.25,
+                1.25,
+                1.25
+              ]
+            },
+            {
+              "target": "projB",
+              "position": [
+                0.18,
+                0.26,
+                0.4
+              ]
+            },
+            {
+              "target": "labelCase",
+              "position": [
+                0.18,
+                0.28,
+                0.4
+              ]
+            }
+          ],
+          "changeMeaning": "Scales Case B\u2019s trajectory footprint and moves the projectile to a higher/further snapshot to represent increased initial speed effects.",
+          "narration": "Now increase the launch speed while keeping the angle at 45\u00b0. Larger initial speed increases both range and maximum height because the initial velocity components are larger."
+        }
+      ]
+    }
+  ]
+}

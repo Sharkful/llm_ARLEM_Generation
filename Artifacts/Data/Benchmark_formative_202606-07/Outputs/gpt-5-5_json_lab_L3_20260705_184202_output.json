@@ -1,0 +1,1733 @@
+{
+  "version": "2.0",
+  "labId": "phys101_vectors_projectile_motion_ar_v2",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Physics I (Mechanics)",
+  "estimatedLength": "35 minutes",
+  "objectives": [
+    "Represent a two-dimensional vector by magnitude and direction and equivalently by horizontal and vertical components.",
+    "Add vectors graphically using the tip-to-tail method and identify the resultant vector.",
+    "Decompose a vector into x- and y-components using right-triangle trigonometry and reconstruct the original vector from its components.",
+    "Explain the independence of horizontal and vertical projectile motion when gravity acts only vertically.",
+    "Describe how horizontal velocity, vertical velocity, and position change during projectile flight, including the zero vertical velocity at maximum height.",
+    "Predict how launch angle and launch speed affect projectile trajectory, range, and maximum height."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: Vectors as Directed Quantities",
+      "description": "Students view vectors as arrows with magnitude and direction, then add two vectors using the tip-to-tail method to form a resultant.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Identify a vector's magnitude as arrow length and direction as arrow orientation.",
+        "Graphically add vectors by placing the tail of one vector at the tip of another.",
+        "Interpret the resultant vector as the single vector equivalent to the combined displacement."
+      ],
+      "instructions": [
+        "Place the tabletop scene on a flat surface with at least one meter of clear space.",
+        "Use Next to progress through the guided vector addition demonstration.",
+        "Observe how the second vector moves tip-to-tail and how the resultant connects the starting point to the final point."
+      ],
+      "objects": [
+        {
+          "prefab": "xyGridPlanePrefab",
+          "name": "coordinate_grid",
+          "position": [
+            0,
+            -0.02,
+            0.45
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.2,
+            1,
+            1.2
+          ],
+          "texture": "light_gray_xy_grid_texture",
+          "color": [
+            230,
+            230,
+            230,
+            180
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vector_A",
+          "position": [
+            -0.45,
+            0.02,
+            0.25
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            28
+          ],
+          "scale": [
+            0.42,
+            0.04,
+            0.04
+          ],
+          "texture": "matte_blue_arrow_texture",
+          "color": [
+            40,
+            120,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vector_B",
+          "position": [
+            0.02,
+            0.02,
+            0.48
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            -38
+          ],
+          "scale": [
+            0.34,
+            0.04,
+            0.04
+          ],
+          "texture": "matte_green_arrow_texture",
+          "color": [
+            40,
+            190,
+            90,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "resultant_R",
+          "position": [
+            -0.45,
+            0.04,
+            0.25
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            2
+          ],
+          "scale": [
+            0.66,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "texture": "matte_red_arrow_texture",
+          "color": [
+            230,
+            60,
+            60,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_vector_A",
+          "position": [
+            -0.26,
+            0.13,
+            0.36
+          ],
+          "eulerAngles": [
+            65,
+            0,
+            0
+          ],
+          "scale": [
+            0.035,
+            0.035,
+            0.035
+          ],
+          "color": [
+            40,
+            120,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vector A: magnitude + direction",
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "label_vector_sum",
+          "position": [
+            0.1,
+            0.14,
+            0.15
+          ],
+          "eulerAngles": [
+            65,
+            0,
+            0
+          ],
+          "scale": [
+            0.035,
+            0.035,
+            0.035
+          ],
+          "enabled": false,
+          "color": [
+            230,
+            60,
+            60,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Resultant R = A + B",
+              "fontSize": 20
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_vector_intro",
+          "audioClip": "vectors_magnitude_direction_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vector_A",
+              "scale": [
+                0.46,
+                0.05,
+                0.05
+              ],
+              "color": [
+                20,
+                100,
+                255,
+                255
+              ]
+            },
+            {
+              "target": "label_vector_A",
+              "enabled": true
+            },
+            {
+              "target": "vector_B",
+              "enabled": false
+            },
+            {
+              "target": "resultant_R",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "The coordinate grid and first vector are emphasized to introduce the idea that a vector encodes both size and orientation in the plane.",
+          "narration": "A vector is a quantity with both magnitude and direction. In this scene, the length of the arrow represents magnitude, while the angle of the arrow represents direction relative to the x-axis."
+        },
+        {
+          "clipName": "clip2_second_vector",
+          "audioClip": "vectors_second_arrow_as_displacement",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vector_B",
+              "position": [
+                -0.18,
+                0.02,
+                0.63
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                -38
+              ],
+              "enabled": true
+            },
+            {
+              "target": "label_vector_A",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "A and B each have magnitude and direction",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "A second vector appears separately, allowing students to compare two vectors with different magnitudes and directions before addition.",
+          "narration": "Here is a second vector, B. It has its own magnitude and direction. To add vectors graphically, we do not add just the lengths; we account for direction by arranging the arrows tip-to-tail."
+        },
+        {
+          "clipName": "clip3_tip_to_tail",
+          "audioClip": "vectors_tip_to_tail_method",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vector_B",
+              "position": [
+                -0.04,
+                0.03,
+                0.45
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                -38
+              ]
+            },
+            {
+              "target": "label_vector_A",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Tip-to-tail: move B to the tip of A",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Vector B is translated so that its tail sits at the tip of vector A, demonstrating the tip-to-tail construction without rotating or resizing B.",
+          "narration": "To find A plus B, slide vector B so its tail begins at the tip of vector A. A vector may be translated without changing it, as long as its magnitude and direction stay the same."
+        },
+        {
+          "clipName": "clip4_resultant",
+          "audioClip": "vectors_resultant_explanation",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "resultant_R",
+              "position": [
+                -0.45,
+                0.055,
+                0.25
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                3
+              ],
+              "scale": [
+                0.64,
+                0.055,
+                0.055
+              ],
+              "enabled": true
+            },
+            {
+              "target": "label_vector_sum",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The resultant vector is revealed from the original starting point to the final tip, connecting vector addition to a net displacement.",
+          "narration": "The red arrow is the resultant vector R. It starts at the tail of A and ends at the tip of the translated B. This one vector has the same overall effect as moving by A and then by B."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: Components and Right-Triangle Trigonometry",
+      "description": "Students decompose a single angled vector into horizontal and vertical components and connect the component lengths to sine, cosine, and tangent.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Resolve a vector into perpendicular x- and y-components.",
+        "Relate vector magnitude and direction to components using cosine and sine.",
+        "Reconstruct an original vector as the sum of its perpendicular components."
+      ],
+      "instructions": [
+        "Continue using the tabletop coordinate plane.",
+        "Watch the diagonal vector split into horizontal and vertical arrows.",
+        "Compare the component arrows to the right triangle formed beneath the vector."
+      ],
+      "objects": [
+        {
+          "prefab": "xyGridPlanePrefab",
+          "name": "component_grid",
+          "position": [
+            0,
+            -0.02,
+            0.45
+          ],
+          "scale": [
+            1.25,
+            1,
+            1.25
+          ],
+          "texture": "light_gray_xy_grid_texture",
+          "color": [
+            230,
+            230,
+            230,
+            180
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "main_vector_V",
+          "position": [
+            -0.42,
+            0.035,
+            0.2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            42
+          ],
+          "scale": [
+            0.62,
+            0.05,
+            0.05
+          ],
+          "texture": "matte_purple_arrow_texture",
+          "color": [
+            145,
+            80,
+            230,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "x_component",
+          "position": [
+            -0.42,
+            0.055,
+            0.2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.46,
+            0.035,
+            0.035
+          ],
+          "enabled": false,
+          "texture": "matte_orange_arrow_texture",
+          "color": [
+            245,
+            150,
+            35,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "y_component",
+          "position": [
+            0.04,
+            0.06,
+            0.2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.42,
+            0.035,
+            0.035
+          ],
+          "enabled": false,
+          "texture": "matte_teal_arrow_texture",
+          "color": [
+            35,
+            185,
+            200,
+            255
+          ]
+        },
+        {
+          "prefab": "rightTriangleWireframePrefab",
+          "name": "right_triangle_overlay",
+          "position": [
+            -0.19,
+            0.025,
+            0.34
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.48,
+            0.42,
+            0.02
+          ],
+          "enabled": false,
+          "texture": "white_triangle_wire_texture",
+          "color": [
+            255,
+            255,
+            255,
+            210
+          ]
+        },
+        {
+          "prefab": "angleArcPrefab",
+          "name": "theta_arc",
+          "position": [
+            -0.42,
+            0.065,
+            0.2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.16,
+            0.16,
+            0.16
+          ],
+          "enabled": false,
+          "texture": "yellow_angle_arc_texture",
+          "color": [
+            255,
+            220,
+            40,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "formula_label",
+          "position": [
+            0.15,
+            0.22,
+            0.62
+          ],
+          "eulerAngles": [
+            65,
+            0,
+            0
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vx = V cos\u03b8\nVy = V sin\u03b8",
+              "fontSize": 20
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_diagonal_vector",
+          "audioClip": "components_diagonal_vector_setup",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "main_vector_V",
+              "eulerAngles": [
+                0,
+                0,
+                42
+              ],
+              "scale": [
+                0.64,
+                0.055,
+                0.055
+              ],
+              "enabled": true
+            },
+            {
+              "target": "x_component",
+              "enabled": false
+            },
+            {
+              "target": "y_component",
+              "enabled": false
+            },
+            {
+              "target": "formula_label",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "The diagonal vector is highlighted as the original vector to be represented equivalently by perpendicular components.",
+          "narration": "A two-dimensional vector can be described by its magnitude and angle, but it can also be described by how much it points along the x-axis and how much it points along the y-axis."
+        },
+        {
+          "clipName": "clip2_show_components",
+          "audioClip": "components_resolve_into_x_y",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "x_component",
+              "position": [
+                -0.42,
+                0.055,
+                0.2
+              ],
+              "scale": [
+                0.46,
+                0.04,
+                0.04
+              ],
+              "enabled": true
+            },
+            {
+              "target": "y_component",
+              "position": [
+                0.04,
+                0.06,
+                0.2
+              ],
+              "scale": [
+                0.42,
+                0.04,
+                0.04
+              ],
+              "enabled": true
+            },
+            {
+              "target": "right_triangle_overlay",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Horizontal and vertical arrows appear under the diagonal vector, making the vector's component representation visible.",
+          "narration": "The orange arrow is the x-component, and the teal arrow is the y-component. Together, these perpendicular vectors reconstruct the same diagonal vector."
+        },
+        {
+          "clipName": "clip3_theta_and_trig",
+          "audioClip": "components_sine_cosine_relationships",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "theta_arc",
+              "enabled": true
+            },
+            {
+              "target": "formula_label",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "\u03b8 from +x axis\nVx = V cos\u03b8\nVy = V sin\u03b8",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The angle marker and formula label appear to connect the visual triangle to component calculations using trigonometry.",
+          "narration": "If theta is measured from the positive x-axis, the adjacent side is Vx and the opposite side is Vy. Therefore Vx equals V cosine theta, and Vy equals V sine theta."
+        },
+        {
+          "clipName": "clip4_reconstruct_vector",
+          "audioClip": "components_reconstruct_original_vector",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "main_vector_V",
+              "position": [
+                -0.42,
+                0.085,
+                0.2
+              ],
+              "color": [
+                175,
+                105,
+                255,
+                255
+              ]
+            },
+            {
+              "target": "x_component",
+              "color": [
+                255,
+                170,
+                45,
+                255
+              ]
+            },
+            {
+              "target": "y_component",
+              "color": [
+                40,
+                210,
+                230,
+                255
+              ]
+            },
+            {
+              "target": "formula_label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Vector form:\nV = Vx + Vy",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The component arrows brighten and the main vector is restored above them to emphasize that component addition recreates the original vector.",
+          "narration": "Components are not extra vectors added to the problem; they are an equivalent way to represent the original vector. Adding Vx and Vy tip-to-tail gives back V."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: Projectile Motion as Independent Components",
+      "description": "Students observe a launched projectile with velocity components, gravity, and a parabolic path produced by constant horizontal motion and accelerated vertical motion.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Decompose an initial projectile velocity into horizontal and vertical components.",
+        "Explain why horizontal velocity remains constant when no horizontal force acts.",
+        "Describe how vertical velocity changes due to gravitational acceleration.",
+        "Identify the maximum height as the instant when vertical velocity is zero."
+      ],
+      "instructions": [
+        "Place the launcher at the left side of your tabletop scene.",
+        "Watch the projectile's path and velocity arrows at launch, mid-flight, peak, and descent.",
+        "Focus on how the horizontal and vertical arrows change independently."
+      ],
+      "objects": [
+        {
+          "prefab": "measurementTrackPrefab",
+          "name": "projectile_ground",
+          "position": [
+            0,
+            -0.03,
+            0.55
+          ],
+          "scale": [
+            1.35,
+            0.03,
+            0.18
+          ],
+          "texture": "meter_ruler_ground_texture",
+          "color": [
+            210,
+            210,
+            210,
+            255
+          ]
+        },
+        {
+          "prefab": "angleLauncherPrefab",
+          "name": "launcher",
+          "position": [
+            -0.62,
+            0.02,
+            0.55
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            45
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "texture": "brushed_metal_launcher_texture",
+          "color": [
+            150,
+            150,
+            160,
+            255
+          ]
+        },
+        {
+          "prefab": "projectileSpherePrefab",
+          "name": "projectile_ball",
+          "position": [
+            -0.62,
+            0.12,
+            0.55
+          ],
+          "scale": [
+            0.065,
+            0.065,
+            0.065
+          ],
+          "texture": "matte_yellow_projectile_texture",
+          "color": [
+            255,
+            210,
+            45,
+            255
+          ]
+        },
+        {
+          "prefab": "parabolicTrajectoryLinePrefab",
+          "name": "trajectory_curve",
+          "position": [
+            0,
+            0.02,
+            0.55
+          ],
+          "scale": [
+            1.15,
+            0.48,
+            0.04
+          ],
+          "enabled": false,
+          "texture": "dashed_blue_trajectory_texture",
+          "color": [
+            80,
+            160,
+            255,
+            220
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "velocity_vector",
+          "position": [
+            -0.58,
+            0.18,
+            0.55
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            45
+          ],
+          "scale": [
+            0.28,
+            0.035,
+            0.035
+          ],
+          "texture": "matte_purple_arrow_texture",
+          "color": [
+            160,
+            80,
+            235,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vx_vector",
+          "position": [
+            -0.58,
+            0.135,
+            0.55
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.2,
+            0.028,
+            0.028
+          ],
+          "enabled": false,
+          "texture": "matte_orange_arrow_texture",
+          "color": [
+            245,
+            150,
+            35,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vy_vector",
+          "position": [
+            -0.38,
+            0.135,
+            0.55
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.2,
+            0.028,
+            0.028
+          ],
+          "enabled": false,
+          "texture": "matte_teal_arrow_texture",
+          "color": [
+            35,
+            185,
+            200,
+            255
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "gravity_arrow",
+          "position": [
+            0.54,
+            0.4,
+            0.55
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            -90
+          ],
+          "scale": [
+            0.22,
+            0.03,
+            0.03
+          ],
+          "texture": "matte_red_arrow_texture",
+          "color": [
+            230,
+            55,
+            55,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "projectile_label",
+          "position": [
+            0,
+            0.65,
+            0.62
+          ],
+          "eulerAngles": [
+            65,
+            0,
+            0
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Projectile motion: x and y are independent",
+              "fontSize": 20
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_launch_vector",
+          "audioClip": "projectile_initial_velocity_vector",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile_ball",
+              "position": [
+                -0.62,
+                0.12,
+                0.55
+              ]
+            },
+            {
+              "target": "launcher",
+              "eulerAngles": [
+                0,
+                0,
+                45
+              ]
+            },
+            {
+              "target": "velocity_vector",
+              "position": [
+                -0.58,
+                0.18,
+                0.55
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                45
+              ],
+              "enabled": true
+            },
+            {
+              "target": "trajectory_curve",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "The projectile sits at the launcher with a diagonal initial velocity vector, establishing launch speed and angle as initial conditions.",
+          "narration": "A projectile launched at an angle begins with an initial velocity vector. Its length represents launch speed, and its angle represents the launch direction."
+        },
+        {
+          "clipName": "clip2_decompose_initial_velocity",
+          "audioClip": "projectile_decompose_initial_velocity",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "vx_vector",
+              "position": [
+                -0.58,
+                0.135,
+                0.55
+              ],
+              "scale": [
+                0.2,
+                0.03,
+                0.03
+              ],
+              "enabled": true
+            },
+            {
+              "target": "vy_vector",
+              "position": [
+                -0.38,
+                0.135,
+                0.55
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                90
+              ],
+              "scale": [
+                0.2,
+                0.03,
+                0.03
+              ],
+              "enabled": true
+            },
+            {
+              "target": "projectile_label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "v\u2080x = v\u2080 cos\u03b8   |   v\u2080y = v\u2080 sin\u03b8",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Initial velocity component arrows appear, linking vector decomposition directly to projectile motion.",
+          "narration": "Just like any vector, the initial velocity can be decomposed. The horizontal component determines how fast the projectile moves sideways, and the vertical component determines its initial upward motion."
+        },
+        {
+          "clipName": "clip3_midflight_independence",
+          "audioClip": "projectile_horizontal_constant_vertical_changes",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "trajectory_curve",
+              "enabled": true
+            },
+            {
+              "target": "projectile_ball",
+              "position": [
+                -0.16,
+                0.37,
+                0.55
+              ]
+            },
+            {
+              "target": "velocity_vector",
+              "position": [
+                -0.12,
+                0.43,
+                0.55
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                18
+              ],
+              "scale": [
+                0.21,
+                0.032,
+                0.032
+              ]
+            },
+            {
+              "target": "vx_vector",
+              "position": [
+                -0.13,
+                0.36,
+                0.55
+              ],
+              "scale": [
+                0.2,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "vy_vector",
+              "position": [
+                0.07,
+                0.36,
+                0.55
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                90
+              ],
+              "scale": [
+                0.08,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "projectile_label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "No horizontal force \u2192 vx constant\nGravity changes vy",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The ball moves along the trajectory, the path appears, vx stays the same length, and vy shortens to show gravity reducing upward vertical velocity.",
+          "narration": "As the projectile rises, there is no horizontal force in the ideal model, so horizontal velocity remains constant. Gravity acts downward, so the upward vertical velocity decreases steadily."
+        },
+        {
+          "clipName": "clip4_peak_vy_zero",
+          "audioClip": "projectile_peak_vertical_velocity_zero",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile_ball",
+              "position": [
+                0.05,
+                0.46,
+                0.55
+              ]
+            },
+            {
+              "target": "velocity_vector",
+              "position": [
+                0.09,
+                0.51,
+                0.55
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                0.2,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "vx_vector",
+              "position": [
+                0.08,
+                0.45,
+                0.55
+              ],
+              "scale": [
+                0.2,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "vy_vector",
+              "position": [
+                0.28,
+                0.45,
+                0.55
+              ],
+              "scale": [
+                0.001,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "projectile_label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Maximum height: vy = 0, but vx \u2260 0",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The ball reaches the top of the parabola, the vertical velocity component is reduced to zero length, and the label identifies the maximum height condition.",
+          "narration": "At the maximum height, the vertical velocity is momentarily zero. The projectile is still moving horizontally, so the horizontal velocity arrow remains unchanged."
+        },
+        {
+          "clipName": "clip5_descent_gravity",
+          "audioClip": "projectile_descent_vertical_velocity_downward",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "projectile_ball",
+              "position": [
+                0.42,
+                0.24,
+                0.55
+              ]
+            },
+            {
+              "target": "velocity_vector",
+              "position": [
+                0.46,
+                0.29,
+                0.55
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                -42
+              ],
+              "scale": [
+                0.29,
+                0.033,
+                0.033
+              ]
+            },
+            {
+              "target": "vx_vector",
+              "position": [
+                0.45,
+                0.23,
+                0.55
+              ],
+              "scale": [
+                0.2,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "vy_vector",
+              "position": [
+                0.65,
+                0.23,
+                0.55
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                -90
+              ],
+              "scale": [
+                0.18,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "projectile_label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Descent: vy downward and increasing\nvx remains constant",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The ball descends, the vertical velocity arrow flips downward and grows, showing continuing gravitational acceleration while vx remains unchanged.",
+          "narration": "On the way down, gravity continues to accelerate the projectile downward. The vertical velocity now points downward and grows in magnitude, while horizontal velocity is still constant."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 4: Changing Launch Speed and Angle",
+      "description": "Students compare projectile trajectories for different launch angles and speeds, observing effects on range, height, and the maximum-range angle.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Predict how increasing launch speed changes range and maximum height.",
+        "Compare low, medium, and steep launch angles for a fixed initial speed.",
+        "Identify that a 45-degree launch angle maximizes range for ideal level-ground projectile motion.",
+        "Distinguish range from maximum height as separate trajectory outcomes."
+      ],
+      "instructions": [
+        "Compare the three trajectory arcs staged on the same ground track.",
+        "Use the labels to connect angle and speed choices with range and height.",
+        "Remember this idealized comparison assumes no air resistance and equal launch and landing heights."
+      ],
+      "objects": [
+        {
+          "prefab": "measurementTrackPrefab",
+          "name": "comparison_ground",
+          "position": [
+            0,
+            -0.03,
+            0.55
+          ],
+          "scale": [
+            1.45,
+            0.03,
+            0.18
+          ],
+          "texture": "meter_ruler_ground_texture",
+          "color": [
+            210,
+            210,
+            210,
+            255
+          ]
+        },
+        {
+          "prefab": "angleLauncherPrefab",
+          "name": "comparison_launcher",
+          "position": [
+            -0.65,
+            0.02,
+            0.55
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            45
+          ],
+          "scale": [
+            0.16,
+            0.16,
+            0.16
+          ],
+          "texture": "brushed_metal_launcher_texture",
+          "color": [
+            150,
+            150,
+            160,
+            255
+          ]
+        },
+        {
+          "prefab": "parabolicTrajectoryLinePrefab",
+          "name": "trajectory_30deg",
+          "position": [
+            -0.05,
+            0.02,
+            0.49
+          ],
+          "scale": [
+            1.05,
+            0.25,
+            0.035
+          ],
+          "enabled": false,
+          "texture": "dashed_orange_trajectory_texture",
+          "color": [
+            245,
+            150,
+            35,
+            230
+          ]
+        },
+        {
+          "prefab": "parabolicTrajectoryLinePrefab",
+          "name": "trajectory_45deg",
+          "position": [
+            0,
+            0.02,
+            0.55
+          ],
+          "scale": [
+            1.22,
+            0.42,
+            0.035
+          ],
+          "enabled": false,
+          "texture": "dashed_green_trajectory_texture",
+          "color": [
+            50,
+            200,
+            90,
+            240
+          ]
+        },
+        {
+          "prefab": "parabolicTrajectoryLinePrefab",
+          "name": "trajectory_60deg",
+          "position": [
+            -0.05,
+            0.02,
+            0.61
+          ],
+          "scale": [
+            1.05,
+            0.58,
+            0.035
+          ],
+          "enabled": false,
+          "texture": "dashed_teal_trajectory_texture",
+          "color": [
+            35,
+            185,
+            200,
+            230
+          ]
+        },
+        {
+          "prefab": "parabolicTrajectoryLinePrefab",
+          "name": "speed_boost_45deg",
+          "position": [
+            0.08,
+            0.02,
+            0.55
+          ],
+          "scale": [
+            1.42,
+            0.62,
+            0.04
+          ],
+          "enabled": false,
+          "texture": "solid_magenta_trajectory_texture",
+          "color": [
+            220,
+            70,
+            220,
+            240
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "angle_label",
+          "position": [
+            0,
+            0.68,
+            0.68
+          ],
+          "eulerAngles": [
+            65,
+            0,
+            0
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Compare launch angle and speed",
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "rangeBracketPrefab",
+          "name": "range_marker",
+          "position": [
+            0,
+            0.015,
+            0.38
+          ],
+          "scale": [
+            1,
+            0.08,
+            0.08
+          ],
+          "enabled": false,
+          "texture": "white_range_bracket_texture",
+          "color": [
+            255,
+            255,
+            255,
+            230
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip1_low_angle",
+          "audioClip": "launch_angle_low_trajectory",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "comparison_launcher",
+              "eulerAngles": [
+                0,
+                0,
+                30
+              ]
+            },
+            {
+              "target": "trajectory_30deg",
+              "enabled": true
+            },
+            {
+              "target": "trajectory_45deg",
+              "enabled": false
+            },
+            {
+              "target": "trajectory_60deg",
+              "enabled": false
+            },
+            {
+              "target": "speed_boost_45deg",
+              "enabled": false
+            },
+            {
+              "target": "angle_label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "30\u00b0: shallow path, lower height",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The 30-degree trajectory appears with the launcher tilted low, demonstrating a shallow path with relatively low maximum height.",
+          "narration": "With the same launch speed, a lower launch angle gives more of the initial velocity to horizontal motion and less to vertical motion. The path is shallow, with a lower maximum height."
+        },
+        {
+          "clipName": "clip2_fortyfive_max_range",
+          "audioClip": "launch_angle_45_max_range",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "comparison_launcher",
+              "eulerAngles": [
+                0,
+                0,
+                45
+              ]
+            },
+            {
+              "target": "trajectory_45deg",
+              "enabled": true,
+              "color": [
+                50,
+                230,
+                90,
+                255
+              ]
+            },
+            {
+              "target": "range_marker",
+              "position": [
+                0,
+                0.02,
+                0.38
+              ],
+              "scale": [
+                1.22,
+                0.08,
+                0.08
+              ],
+              "enabled": true
+            },
+            {
+              "target": "angle_label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "45\u00b0: maximum range at fixed speed",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The 45-degree trajectory is added and highlighted as having the greatest range for ideal level-ground motion at fixed speed.",
+          "narration": "For ideal projectile motion on level ground with no air resistance, a 45-degree launch angle gives the maximum range for a fixed launch speed. It balances horizontal and vertical components."
+        },
+        {
+          "clipName": "clip3_steep_angle",
+          "audioClip": "launch_angle_steep_trajectory",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "comparison_launcher",
+              "eulerAngles": [
+                0,
+                0,
+                60
+              ]
+            },
+            {
+              "target": "trajectory_60deg",
+              "enabled": true
+            },
+            {
+              "target": "range_marker",
+              "position": [
+                -0.05,
+                0.02,
+                0.38
+              ],
+              "scale": [
+                1.05,
+                0.08,
+                0.08
+              ]
+            },
+            {
+              "target": "angle_label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "60\u00b0: higher peak, shorter range than 45\u00b0",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The 60-degree trajectory appears, showing greater maximum height but reduced horizontal range compared with the 45-degree case.",
+          "narration": "A steeper angle puts more of the initial speed into vertical motion. The projectile climbs higher, but with less horizontal velocity its range is shorter than the 45-degree case."
+        },
+        {
+          "clipName": "clip4_increase_speed",
+          "audioClip": "launch_speed_increases_range_height",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "comparison_launcher",
+              "eulerAngles": [
+                0,
+                0,
+                45
+              ]
+            },
+            {
+              "target": "speed_boost_45deg",
+              "enabled": true
+            },
+            {
+              "target": "range_marker",
+              "position": [
+                0.08,
+                0.02,
+                0.36
+              ],
+              "scale": [
+                1.42,
+                0.08,
+                0.08
+              ]
+            },
+            {
+              "target": "angle_label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Greater speed: greater range and height",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "A higher-speed 45-degree arc appears beyond the original 45-degree arc, illustrating that increasing speed raises both range and maximum height.",
+          "narration": "If the angle stays the same but launch speed increases, both components increase. The projectile travels farther and reaches a higher maximum height."
+        },
+        {
+          "clipName": "clip5_summary_prediction",
+          "audioClip": "projectile_angle_speed_prediction_summary",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "trajectory_30deg",
+              "enabled": true,
+              "color": [
+                245,
+                150,
+                35,
+                210
+              ]
+            },
+            {
+              "target": "trajectory_45deg",
+              "enabled": true,
+              "color": [
+                50,
+                230,
+                90,
+                255
+              ]
+            },
+            {
+              "target": "trajectory_60deg",
+              "enabled": true,
+              "color": [
+                35,
+                185,
+                200,
+                210
+              ]
+            },
+            {
+              "target": "speed_boost_45deg",
+              "enabled": true,
+              "color": [
+                220,
+                70,
+                220,
+                245
+              ]
+            },
+            {
+              "target": "angle_label",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Predict: angle sets component balance; speed scales both components",
+                  "fontSize": 20
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "All comparison trajectories remain visible with labels, supporting a final synthesis of angle, speed, range, and height relationships.",
+          "narration": "Projectile motion combines constant horizontal velocity with uniformly accelerated vertical motion. Changing angle redistributes the same speed between components; changing speed increases the size of both components."
+        }
+      ]
+    }
+  ]
+}

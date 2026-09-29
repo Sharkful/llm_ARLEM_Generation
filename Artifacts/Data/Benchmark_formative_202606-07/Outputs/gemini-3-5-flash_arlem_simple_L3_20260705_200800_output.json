@@ -1,0 +1,333 @@
+{
+  "workplace": {
+    "id": "physics_vectors_wp",
+    "name": "Mechanics Vectors Lab Environment",
+    "origin": "marker_origin",
+    "things": [
+      {
+        "id": "thing_vector_board",
+        "name": "Interactive Vector Grid Board",
+        "detectable": "marker_vector_board",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "thing_launcher",
+        "name": "Miniature Projectile Launcher",
+        "detectable": "marker_launcher",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "thing_target_area",
+        "name": "Landing Target Zone",
+        "detectable": "marker_target_area",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "place_lab_bench",
+        "name": "Lab Bench Setup Area",
+        "detectable": "marker_origin",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      },
+      {
+        "id": "place_floor",
+        "name": "Launcher Demonstration Track",
+        "detectable": "marker_demonstration_floor",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "detectables": [
+      {
+        "id": "marker_origin",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_origin.bundle"
+      },
+      {
+        "id": "marker_demonstration_floor",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_floor.bundle"
+      },
+      {
+        "id": "marker_vector_board",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_vector_board.bundle"
+      },
+      {
+        "id": "marker_launcher",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_launcher.bundle"
+      },
+      {
+        "id": "marker_target_area",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_target_area.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "label",
+        "x_size": 10.0,
+        "y_size": 5.0
+      },
+      {
+        "id": "image",
+        "x_size": 30.0,
+        "y_size": 20.0
+      },
+      {
+        "id": "animation",
+        "x_size": 100.0,
+        "y_size": 50.0,
+        "z_size": 100.0
+      }
+    ],
+    "predicates": [
+      {
+        "id": "pred_vector_addition_img",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/vector_addition.png"
+      },
+      {
+        "id": "pred_vector_components_img",
+        "type": "image",
+        "scale": 1.0,
+        "url": "https://assets.example.com/vector_components.png"
+      },
+      {
+        "id": "pred_trajectory_anim",
+        "type": "animation",
+        "scale": 1.0,
+        "url": "https://assets.example.com/trajectory_simulation.glb"
+      }
+    ]
+  },
+  "activity": {
+    "id": "physics_vectors_act",
+    "name": "Vector Operations and Projectile Motion Lab",
+    "description": "An interactive lab introducing university physics students to vectors, component decomposition, and 2D projectile mechanics.",
+    "workplace": "physics_vectors_wp",
+    "start": "action_vector_addition",
+    "actions": [
+      {
+        "id": "action_vector_addition",
+        "instruction": {
+          "title": "Vector Addition (Tip-to-Tail)",
+          "description": "Look at the Vector Board. Two 2D vectors add graphically using the tip-to-tail method. The resultant vector starts from the tail of the first and ends at the tip of the second. Click the Vector Board to continue."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "thing_vector_board",
+              "type": "primitive",
+              "augmentation": "label",
+              "poi": "default",
+              "text": "Vector Board: Graphical Addition (A + B = Resultant)"
+            },
+            {
+              "target": "thing_vector_board",
+              "type": "predicate",
+              "augmentation": "pred_vector_addition_img",
+              "poi": "default"
+            }
+          ],
+          "deactivate": []
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "thing_vector_board"
+          }
+        ]
+      },
+      {
+        "id": "action_vector_decomposition",
+        "instruction": {
+          "title": "Vector Decomposition",
+          "description": "Observe how a single vector is decomposed into perpendicular components along the x and y axes. Trigonometry allows us to calculate these values. Click the Vector Board to proceed."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "thing_vector_board",
+              "type": "primitive",
+              "augmentation": "label",
+              "poi": "default",
+              "text": "Vector Resolution: Ax = A*cos(\u03b8), Ay = A*sin(\u03b8)"
+            },
+            {
+              "target": "thing_vector_board",
+              "type": "predicate",
+              "augmentation": "pred_vector_components_img",
+              "poi": "default"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "thing_vector_board",
+              "augmentation": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "thing_vector_board"
+          }
+        ]
+      },
+      {
+        "id": "action_launcher_setup",
+        "instruction": {
+          "title": "Initial Launch Components",
+          "description": "Examine the projectile launcher. At launch, the initial velocity vector is split into horizontal and vertical components. Click on the launcher to simulate a launch."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "thing_launcher",
+              "type": "primitive",
+              "augmentation": "label",
+              "poi": "default",
+              "text": "Launch Velocity Vector: V0 decomposed into V0x and V0y"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "thing_vector_board",
+              "augmentation": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "thing_launcher"
+          }
+        ]
+      },
+      {
+        "id": "action_trajectory_simulation",
+        "instruction": {
+          "title": "Independent 2D Motion",
+          "description": "Watch the simulated flight. Horizontal velocity remains constant because no horizontal force acts on the projectile. Vertical velocity decreases on the way up, is zero at the peak, and increases downward during descent. Click the target area to analyze range."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "thing_target_area",
+              "type": "predicate",
+              "augmentation": "pred_trajectory_anim",
+              "poi": "default"
+            },
+            {
+              "target": "thing_target_area",
+              "type": "primitive",
+              "augmentation": "label",
+              "poi": "default",
+              "text": "At Max Height, Vertical Velocity (Vy) = 0 m/s"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "thing_launcher",
+              "augmentation": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "thing_target_area"
+          }
+        ]
+      },
+      {
+        "id": "action_angle_optimization",
+        "instruction": {
+          "title": "Optimizing Launch Angle",
+          "description": "See how varying the initial launch angle alters the flight. Higher angles reach greater heights, but an angle of 45 degrees yields the maximum horizontal range. Click the target area to finish the lab."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "thing_target_area",
+              "type": "primitive",
+              "augmentation": "label",
+              "poi": "default",
+              "text": "45\u00b0 launch angle maximizes horizontal range!"
+            }
+          ],
+          "deactivate": [
+            {
+              "target": "thing_target_area",
+              "augmentation": "*"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "thing_target_area"
+          }
+        ]
+      }
+    ]
+  }
+}

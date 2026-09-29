@@ -1,0 +1,668 @@
+{
+  "version": "2.0",
+  "labId": "dna-structure-replication-201",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Introductory Molecular Biology",
+  "estimatedLength": "35 minutes",
+  "objectives": [
+    "Identify the structural components of DNA and describe their assembly into the double helix.",
+    "Apply complementary base-pairing rules (A-T, G-C) and explain the hydrogen bonding basis for each pair.",
+    "Describe the antiparallel orientation of DNA strands and relate it to 5'-to-3' backbone directionality.",
+    "Trace the roles of helicase, single-strand binding proteins, DNA polymerase, and DNA ligase at the replication fork.",
+    "Explain why leading and lagging strand synthesis differ, relating this to DNA polymerase's unidirectional activity on antiparallel templates.",
+    "Articulate the semiconservative model of DNA replication and predict daughter molecule composition after one and two rounds of replication."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "The Double Helix: Structure of DNA",
+      "description": "An interactive exploration of the three-dimensional structure of DNA, examining the sugar-phosphate backbones, nitrogenous bases, hydrogen bonding, and antiparallel orientation of the double helix.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Identify the sugar-phosphate backbone, nitrogenous bases, and hydrogen bonds as structural components of DNA.",
+        "Apply complementary base-pairing rules (A-T, G-C) and explain the differing number of hydrogen bonds in each pair.",
+        "Describe the antiparallel orientation of the two strands and relate it to 5'-to-3' backbone directionality."
+      ],
+      "instructions": [
+        "Observe the rotating DNA helix as it is introduced.",
+        "Watch as the backbones and base pairs are highlighted in sequence.",
+        "Note the directionality labels appearing on each strand."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaHelixPrefab",
+          "name": "mainHelix",
+          "position": [
+            0,
+            1.2,
+            1.0
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 12
+            }
+          ]
+        },
+        {
+          "prefab": "backboneStrandPrefab",
+          "name": "backboneLeft",
+          "position": [
+            -0.15,
+            1.2,
+            1.0
+          ],
+          "scale": [
+            0.05,
+            0.4,
+            0.05
+          ],
+          "enabled": false,
+          "color": [
+            70,
+            130,
+            220,
+            255
+          ]
+        },
+        {
+          "prefab": "backboneStrandPrefab",
+          "name": "backboneRight",
+          "position": [
+            0.15,
+            1.2,
+            1.0
+          ],
+          "scale": [
+            0.05,
+            0.4,
+            0.05
+          ],
+          "enabled": false,
+          "color": [
+            220,
+            100,
+            60,
+            255
+          ]
+        },
+        {
+          "prefab": "basePairPrefab",
+          "name": "basePairAT",
+          "position": [
+            0,
+            1.3,
+            1.0
+          ],
+          "scale": [
+            0.15,
+            0.02,
+            0.02
+          ],
+          "enabled": false,
+          "color": [
+            80,
+            200,
+            120,
+            255
+          ]
+        },
+        {
+          "prefab": "basePairPrefab",
+          "name": "basePairGC",
+          "position": [
+            0,
+            1.1,
+            1.0
+          ],
+          "scale": [
+            0.15,
+            0.02,
+            0.02
+          ],
+          "enabled": false,
+          "color": [
+            230,
+            200,
+            60,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "labelText",
+          "position": [
+            0,
+            1.75,
+            1.0
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "The DNA Double Helix",
+              "fontSize": 36
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "strandDirectionLabel5",
+          "position": [
+            -0.15,
+            1.65,
+            1.0
+          ],
+          "scale": [
+            0.015,
+            0.015,
+            0.015
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "5'",
+              "color": [
+                70,
+                130,
+                220,
+                255
+              ],
+              "fontSize": 28
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "strandDirectionLabel3",
+          "position": [
+            0.15,
+            1.65,
+            1.0
+          ],
+          "scale": [
+            0.015,
+            0.015,
+            0.015
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "3'",
+              "color": [
+                220,
+                100,
+                60,
+                255
+              ],
+              "fontSize": 28
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "dna_intro_helix",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "mainHelix",
+              "eulerAngles": [
+                0,
+                0,
+                0
+              ]
+            }
+          ],
+          "changeMeaning": "Initial state: helix rotates slowly to give students an overview before individual components are highlighted.",
+          "narration": "Welcome to the structure of DNA. Here you see the double helix \u2014 two strands spiraling around a common axis. Let's break down its components."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "dna_backbones_explained",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "backboneLeft",
+              "enabled": true
+            },
+            {
+              "target": "backboneRight",
+              "enabled": true
+            },
+            {
+              "target": "mainHelix",
+              "color": [
+                255,
+                255,
+                255,
+                100
+              ]
+            }
+          ],
+          "changeMeaning": "Reveal the two sugar-phosphate backbone strands, color-coded blue and orange, and dim the full helix to focus attention on them.",
+          "narration": "Each strand has a sugar-phosphate backbone, shown here in blue and orange. These backbones spiral around the helix's axis and provide its structural framework."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "dna_base_pairing_rules",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "basePairAT",
+              "enabled": true
+            },
+            {
+              "target": "basePairGC",
+              "enabled": true
+            },
+            {
+              "target": "labelText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Complementary Base Pairing: A-T (2 H-bonds), G-C (3 H-bonds)",
+                  "fontSize": 26,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Introduce the two types of base pairs (A-T and G-C), color-coded differently, to teach complementary base pairing and differing hydrogen bond counts.",
+          "narration": "The four nitrogenous bases \u2014 adenine, thymine, guanine, and cytosine \u2014 project inward from each backbone and pair across the helix. Adenine pairs with thymine via two hydrogen bonds, shown in green. Guanine pairs with cytosine via three hydrogen bonds, shown in yellow. These complementary base-pairing rules determine the sequence of the opposite strand."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "dna_antiparallel_orientation",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "strandDirectionLabel5",
+              "enabled": true
+            },
+            {
+              "target": "strandDirectionLabel3",
+              "enabled": true
+            },
+            {
+              "target": "labelText",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Antiparallel Strands: 5' to 3' vs 3' to 5'",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Add 5' and 3' directionality labels above each backbone strand to teach antiparallel orientation, and update the header text.",
+          "narration": "Notice the directionality of each backbone. One strand runs 5' to 3', while its complementary strand runs 3' to 5' in the opposite direction. This antiparallel arrangement is essential to how DNA is copied, as we'll see next."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "DNA Replication: The Semiconservative Process",
+      "description": "A guided walkthrough of DNA replication at the replication fork, covering helicase unwinding, single-strand binding proteins, DNA polymerase synthesis, leading vs. lagging strand asymmetry, and the semiconservative outcome.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-05",
+      "educationalObjectives": [
+        "Trace the roles of helicase, single-strand binding proteins, DNA polymerase, and DNA ligase at the replication fork.",
+        "Explain why the leading strand is synthesized continuously while the lagging strand is synthesized discontinuously as Okazaki fragments.",
+        "Articulate why DNA replication is semiconservative and predict daughter molecule composition after one and two rounds of replication."
+      ],
+      "instructions": [
+        "Watch the replication fork open as helicase unwinds the helix.",
+        "Observe single-strand binding proteins stabilize the exposed strands.",
+        "Follow DNA polymerase as it synthesizes the leading and lagging strands differently.",
+        "Observe DNA ligase joining Okazaki fragments.",
+        "Review the final semiconservative outcome across two rounds of replication."
+      ],
+      "objects": [
+        {
+          "prefab": "dnaForkPrefab",
+          "name": "replicationFork",
+          "position": [
+            0,
+            1.2,
+            1.0
+          ],
+          "scale": [
+            0.28,
+            0.28,
+            0.28
+          ]
+        },
+        {
+          "prefab": "enzymePrefab",
+          "name": "helicaseEnzyme",
+          "position": [
+            0,
+            1.45,
+            1.0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "enabled": false,
+          "color": [
+            200,
+            80,
+            200,
+            255
+          ]
+        },
+        {
+          "prefab": "ssbProteinPrefab",
+          "name": "ssbProteins",
+          "position": [
+            0,
+            1.35,
+            1.0
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "enabled": false,
+          "color": [
+            120,
+            220,
+            220,
+            255
+          ]
+        },
+        {
+          "prefab": "enzymePrefab",
+          "name": "polymeraseLeading",
+          "position": [
+            -0.2,
+            1.15,
+            1.0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "color": [
+            80,
+            200,
+            120,
+            255
+          ]
+        },
+        {
+          "prefab": "enzymePrefab",
+          "name": "polymeraseLagging",
+          "position": [
+            0.2,
+            1.05,
+            1.0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "color": [
+            230,
+            150,
+            60,
+            255
+          ]
+        },
+        {
+          "prefab": "okazakiFragmentPrefab",
+          "name": "okazakiFragments",
+          "position": [
+            0.2,
+            0.95,
+            1.0
+          ],
+          "scale": [
+            0.1,
+            0.02,
+            0.02
+          ],
+          "enabled": false,
+          "color": [
+            230,
+            150,
+            60,
+            255
+          ]
+        },
+        {
+          "prefab": "enzymePrefab",
+          "name": "ligaseEnzyme",
+          "position": [
+            0.2,
+            0.9,
+            1.0
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "enabled": false,
+          "color": [
+            180,
+            60,
+            200,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "replicationLabel",
+          "position": [
+            0,
+            1.8,
+            1.0
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "DNA Replication at the Fork",
+              "fontSize": 34
+            }
+          ]
+        },
+        {
+          "prefab": "daughterMoleculePrefab",
+          "name": "daughterMolecule1",
+          "position": [
+            -0.4,
+            0.6,
+            1.0
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "daughterMoleculePrefab",
+          "name": "daughterMolecule2",
+          "position": [
+            0.4,
+            0.6,
+            1.0
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "replication_intro_fork",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "helicaseEnzyme",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Introduce the replication fork and enable the helicase enzyme at the point of unwinding to begin the replication sequence.",
+          "narration": "DNA replication begins at the replication fork, where the double helix is unwound. Helicase, shown in purple, breaks the hydrogen bonds between base pairs to separate the two strands."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "replication_ssb_proteins",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "ssbProteins",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Enable single-strand binding proteins along the separated strands to show their stabilizing role immediately following helicase action.",
+          "narration": "As the strands separate, single-strand binding proteins, shown in teal, coat the exposed single strands to prevent them from re-annealing or being degraded."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "replication_leading_strand",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "polymeraseLeading",
+              "enabled": true
+            },
+            {
+              "target": "replicationLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Leading Strand: Continuous Synthesis",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Enable the leading-strand polymerase to demonstrate continuous synthesis, and update the header label to focus on this enzyme's action.",
+          "narration": "DNA polymerase, shown in green, synthesizes the leading strand continuously in the 5' to 3' direction, following the replication fork as it opens."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "replication_lagging_strand",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "polymeraseLagging",
+              "enabled": true
+            },
+            {
+              "target": "okazakiFragments",
+              "enabled": true
+            },
+            {
+              "target": "replicationLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Lagging Strand: Okazaki Fragments",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Enable the lagging-strand polymerase and its Okazaki fragments to show discontinuous synthesis, updating the label accordingly.",
+          "narration": "Because DNA polymerase can only synthesize in the 5' to 3' direction, the other template strand must be copied discontinuously. This lagging strand polymerase, shown in orange, synthesizes short Okazaki fragments moving away from the fork."
+        },
+        {
+          "clipName": "clip4",
+          "audioClip": "replication_ligase_joins",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "ligaseEnzyme",
+              "enabled": true
+            },
+            {
+              "target": "replicationLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "DNA Ligase Seals Okazaki Fragments",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Enable DNA ligase near the Okazaki fragments to show the final joining step of lagging strand synthesis.",
+          "narration": "DNA ligase, shown in magenta, seals the gaps between Okazaki fragments, joining them into a continuous strand."
+        },
+        {
+          "clipName": "clip5",
+          "audioClip": "replication_semiconservative_outcome",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "daughterMolecule1",
+              "enabled": true
+            },
+            {
+              "target": "daughterMolecule2",
+              "enabled": true
+            },
+            {
+              "target": "replicationFork",
+              "enabled": false
+            },
+            {
+              "target": "replicationLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Semiconservative Replication: One Old, One New Strand per Daughter",
+                  "fontSize": 26,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Reveal the two completed daughter molecules side by side, each colored to show one conserved parental strand and one new strand, illustrating the semiconservative outcome.",
+          "narration": "The result is two daughter DNA molecules, each containing one original parental strand and one newly synthesized strand. This is why the process is called semiconservative \u2014 half of each parent molecule is conserved in every daughter molecule, generation after generation."
+        }
+      ]
+    }
+  ]
+}

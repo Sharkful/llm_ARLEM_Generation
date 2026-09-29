@@ -1,0 +1,2058 @@
+{
+  "version": "2.0",
+  "labId": "phys-vectors-projectile-001",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Physics I (Mechanics)",
+  "estimatedLength": "35 minutes",
+  "objectives": [
+    "Represent two-dimensional vectors using magnitude and direction, and relate those descriptions to horizontal and vertical components.",
+    "Add vectors graphically using the tip-to-tail method and identify the resultant independent of addition order.",
+    "Decompose vectors into orthogonal components and reconstruct the original vector using geometric relationships.",
+    "Explain projectile motion as the combination of independent horizontal motion and vertically accelerated motion under gravity.",
+    "Predict how launch angle and speed affect trajectory, maximum height, and range, including the special role of 45 degrees for maximum range at fixed speed on level ground.",
+    "Apply vector reasoning to solve practical projectile targeting problems and explore how changing gravity or launch height alters outcomes."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: Vector Magnitude and Direction",
+      "description": "Introduces a single vector as an arrow with magnitude and direction referenced to visible coordinate axes.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Identify a vector as a quantity with both magnitude and direction.",
+        "Relate a vector's orientation to reference axes in space.",
+        "Interpret magnitude and angle labels as equivalent descriptions of the same vector."
+      ],
+      "instructions": [
+        "Walk around the vector to view it from different perspectives.",
+        "Observe how the labels describe the same arrow regardless of your viewpoint."
+      ],
+      "objects": [
+        {
+          "prefab": "axisFramePrefab",
+          "name": "axes",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.2,
+            1.2
+          ],
+          "scale": [
+            0.6,
+            0.6,
+            0.6
+          ],
+          "texture": "grid_axis_texture"
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "mainVector",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.05,
+            1.2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            25
+          ],
+          "scale": [
+            0.35,
+            0.04,
+            0.04
+          ],
+          "texture": "vector_blue_texture",
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            },
+            {
+              "componentType": "newscript",
+              "scriptName": "DraggableVectorHeadComponent",
+              "scriptDescription": "Allows the learner to drag the vector head while updating linked magnitude and direction labels relative to the axis object."
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "magLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0.18,
+            1.2
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "|A| = 3.5 u",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "dirLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.2,
+            0.22,
+            1.2
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "\u03b8x=25\u00b0, \u03b8y=65\u00b0, \u03b8z=90\u00b0",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "scalarNote",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.42,
+            1.2
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Scalars have magnitude only; vectors have magnitude and direction.",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vectors_intro_quantity_with_direction",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "mainVector",
+              "enabled": true
+            },
+            {
+              "target": "magLabel",
+              "enabled": true
+            },
+            {
+              "target": "dirLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The central vector and its numerical labels are introduced so students can immediately connect the arrow's geometry to magnitude and direction descriptors.",
+          "narration": "A vector represents a quantity that has both magnitude and direction. Here the arrow's length shows magnitude, while its orientation relative to the axes shows direction."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vectors_reference_axes_explained",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "axes",
+              "scale": [
+                0.72,
+                0.72,
+                0.72
+              ]
+            },
+            {
+              "target": "dirLabel",
+              "position": [
+                -0.16,
+                0.26,
+                1.2
+              ]
+            }
+          ],
+          "changeMeaning": "The axis frame is enlarged slightly and the direction label is moved upward to emphasize that direction is always measured relative to a chosen coordinate system.",
+          "narration": "Direction is meaningful only relative to reference axes. The colored axes provide a frame for describing where the vector points."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vectors_scalar_contrast_and_viewpoint",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "scalarNote",
+              "enabled": true
+            },
+            {
+              "target": "mainVector",
+              "eulerAngles": [
+                0,
+                18,
+                25
+              ]
+            }
+          ],
+          "changeMeaning": "A scalar-versus-vector note appears and the vector is rotated in space to show that changing viewpoint does not change the underlying vector quantity.",
+          "narration": "Unlike a scalar such as mass or temperature, a vector cannot be described by size alone. If you walk around this scene, the arrow may look different from your viewpoint, but the vector itself has not changed."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: Vector Addition Tip-to-Tail",
+      "description": "Demonstrates graphical vector addition with two vectors arranged tip-to-tail and a resultant from start to finish.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Add two vectors graphically using the tip-to-tail method.",
+        "Identify the resultant as the vector from the original tail to the final head.",
+        "Recognize that vector addition is commutative for the same pair of vectors."
+      ],
+      "instructions": [
+        "Compare the blue and green vectors with the red resultant.",
+        "Observe what happens when the order of addition is swapped."
+      ],
+      "objects": [
+        {
+          "prefab": "axisFramePrefab",
+          "name": "axes2",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.2,
+            1.15
+          ],
+          "scale": [
+            0.55,
+            0.55,
+            0.55
+          ],
+          "texture": "grid_axis_texture"
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vecA",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            -0.05,
+            1.15
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            20
+          ],
+          "scale": [
+            0.28,
+            0.04,
+            0.04
+          ],
+          "texture": "vector_blue_texture",
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vecB",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.02,
+            0.05,
+            1.15
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            55
+          ],
+          "scale": [
+            0.22,
+            0.04,
+            0.04
+          ],
+          "texture": "vector_green_texture",
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "resultant",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.25,
+            -0.05,
+            1.15
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            36
+          ],
+          "scale": [
+            0.43,
+            0.045,
+            0.045
+          ],
+          "texture": "vector_red_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "addLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.27,
+            1.15
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "A + B = R",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "commuteLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.38,
+            1.15
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "A + B = B + A",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vector_addition_tip_to_tail_setup",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "vecB",
+              "position": [
+                0.02,
+                0.05,
+                1.15
+              ]
+            },
+            {
+              "target": "resultant",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "The second vector is explicitly placed at the head of the first, while the resultant is hidden briefly so students focus first on the tip-to-tail arrangement itself.",
+          "narration": "To add vectors graphically, place the tail of the second vector at the head of the first. This is called the tip-to-tail method."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vector_addition_resultant_revealed",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "resultant",
+              "enabled": true
+            },
+            {
+              "target": "addLabel",
+              "position": [
+                0.03,
+                0.3,
+                1.15
+              ]
+            }
+          ],
+          "changeMeaning": "The resultant vector appears from the starting tail to the final head, making the sum visible as a single displacement.",
+          "narration": "The resultant is drawn from the tail of the first vector to the head of the second. That red arrow represents the sum of the two vectors."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vector_addition_commutative_swap_order",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "vecA",
+              "position": [
+                -0.25,
+                -0.05,
+                1.15
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                55
+              ]
+            },
+            {
+              "target": "vecB",
+              "position": [
+                -0.12,
+                0.13,
+                1.15
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                20
+              ]
+            },
+            {
+              "target": "commuteLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The apparent order of the two vectors is swapped while the same endpoint is preserved, illustrating that changing addition order does not change the resultant.",
+          "narration": "Now the same two vectors are added in the opposite order. The path changes, but the final endpoint stays the same, so the resultant is unchanged."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: Vector Decomposition as Reverse Addition",
+      "description": "Shows a single vector broken into orthogonal components that add tip-to-tail to reconstruct it.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Interpret vector decomposition as the reverse of vector addition.",
+        "Identify x, y, and z components as projections along chosen axes.",
+        "Connect component lengths to the original vector through right-triangle reasoning, especially in two dimensions."
+      ],
+      "instructions": [
+        "Watch how the component arrows reconstruct the original vector.",
+        "Notice that changing component lengths changes the resultant sum."
+      ],
+      "objects": [
+        {
+          "prefab": "axisFramePrefab",
+          "name": "axes3",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.2,
+            1.2
+          ],
+          "scale": [
+            0.6,
+            0.6,
+            0.6
+          ],
+          "texture": "grid_axis_texture"
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "originalVec",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.15,
+            -0.05,
+            1.2
+          ],
+          "eulerAngles": [
+            -20,
+            0,
+            32
+          ],
+          "scale": [
+            0.42,
+            0.045,
+            0.045
+          ],
+          "texture": "vector_gray_texture"
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "xComp",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.15,
+            -0.05,
+            1.2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.2,
+            0.03,
+            0.03
+          ],
+          "texture": "vector_x_red_texture",
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "yComp",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.05,
+            -0.05,
+            1.2
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.18,
+            0.03,
+            0.03
+          ],
+          "texture": "vector_y_green_texture",
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "zComp",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.05,
+            0.13,
+            1.2
+          ],
+          "eulerAngles": [
+            -90,
+            0,
+            0
+          ],
+          "scale": [
+            0.12,
+            0.03,
+            0.03
+          ],
+          "texture": "vector_z_blue_texture",
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "decompLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.02,
+            0.28,
+            1.2
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "A = Ax + Ay + Az",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "pythLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.4,
+            1.2
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "In 2D: |A|\u00b2 = Ax\u00b2 + Ay\u00b2",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vector_decomposition_components_emerge",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "xComp",
+              "enabled": true
+            },
+            {
+              "target": "yComp",
+              "enabled": true
+            },
+            {
+              "target": "zComp",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The orthogonal component vectors appear in sequence with positions aligned tip-to-tail, making decomposition visible as a structured sum along axes.",
+          "narration": "Decomposition breaks one vector into pieces along chosen axes. Here the x, y, and z components add tip-to-tail to reach the head of the original vector."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vector_decomposition_reverse_addition",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "originalVec"
+            },
+            {
+              "target": "decompLabel",
+              "position": [
+                0.05,
+                0.31,
+                1.2
+              ]
+            }
+          ],
+          "changeMeaning": "The original vector is highlighted with a new color and the equation label is repositioned to emphasize that the resultant can be rebuilt from its components.",
+          "narration": "This is vector addition viewed in reverse. Instead of starting with separate vectors and forming a resultant, we start with the resultant and identify the component vectors that sum to it."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vector_decomposition_triangle_relation",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "xComp",
+              "scale": [
+                0.24,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "yComp",
+              "position": [
+                0.09,
+                -0.05,
+                1.2
+              ],
+              "scale": [
+                0.14,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "zComp",
+              "position": [
+                0.09,
+                0.09,
+                1.2
+              ],
+              "scale": [
+                0.08,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "originalVec",
+              "eulerAngles": [
+                -12,
+                0,
+                24
+              ],
+              "scale": [
+                0.38,
+                0.045,
+                0.045
+              ]
+            },
+            {
+              "target": "pythLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Component lengths are adjusted and the original vector updates to the new tip-to-tail sum, demonstrating that altering components changes the reconstructed vector while invoking the Pythagorean relation in 2D.",
+          "narration": "If the components change, the original vector changes with them. In two dimensions, the horizontal and vertical components form a right triangle with the vector's magnitude."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 4: Transition to Projectile Motion in a 2D Plane",
+      "description": "Reframes the abstract vector tools within a vertical plane for projectile motion.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Recognize projectile motion as a two-dimensional problem embedded in a three-dimensional world.",
+        "Identify the launch point, coordinate axes, and initial velocity vector of a projectile.",
+        "Connect the abstract notion of a vector to a concrete physical velocity."
+      ],
+      "instructions": [
+        "Look at the vertical plane and axis labels.",
+        "Identify the ball, the launch point, and the initial velocity vector."
+      ],
+      "objects": [
+        {
+          "prefab": "projectilePlanePrefab",
+          "name": "motionPlane",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.25,
+            1.4
+          ],
+          "scale": [
+            0.9,
+            0.6,
+            0.02
+          ],
+          "texture": "physics_grid_plane_texture"
+        },
+        {
+          "prefab": "axis2DPrefab",
+          "name": "axes4",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.35,
+            -0.22,
+            1.39
+          ],
+          "scale": [
+            0.8,
+            0.8,
+            0.8
+          ],
+          "texture": "2d_axis_texture"
+        },
+        {
+          "prefab": "projectileBallPrefab",
+          "name": "restBall",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.32,
+            -0.18,
+            1.38
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "balldimpled"
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "launchVector",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.32,
+            -0.18,
+            1.38
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            48
+          ],
+          "scale": [
+            0.28,
+            0.035,
+            0.035
+          ],
+          "texture": "vector_orange_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "planeLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0.22,
+            1.38
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Projectile motion occurs in a vertical plane",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "projectile_transition_to_2d_plane",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "motionPlane",
+              "enabled": true
+            },
+            {
+              "target": "axes4",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "A gridded vertical plane and labeled 2D axes appear, replacing the abstract 3D-only emphasis with a constrained motion plane suitable for projectile analysis.",
+          "narration": "We now apply vector ideas to projectile motion. Even though the world is three-dimensional, the motion of a launched projectile can be analyzed in a single vertical plane."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "projectile_launch_state_identified",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "restBall",
+              "enabled": true
+            },
+            {
+              "target": "launchVector",
+              "enabled": true
+            },
+            {
+              "target": "planeLabel",
+              "position": [
+                0.2,
+                0.26,
+                1.38
+              ]
+            }
+          ],
+          "changeMeaning": "The projectile and its initial velocity vector are revealed on the plane, connecting the abstract arrow model directly to a physical launch situation.",
+          "narration": "The ball begins at the launch point, and its initial velocity is a vector pointing up and to the right. That one vector encodes both the launch speed and the launch direction."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 5: Projectile Components and Independent Motion",
+      "description": "Demonstrates how horizontal and vertical velocity components evolve during projectile flight and combine into a parabolic path.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Decompose the initial velocity into horizontal and vertical components.",
+        "Describe horizontal velocity as constant and vertical velocity as changing under gravity.",
+        "Identify the highest point as the instant when vertical velocity is zero.",
+        "Explain the parabolic trajectory as the combination of independent horizontal and vertical motions."
+      ],
+      "instructions": [
+        "Watch the ball, the velocity component arrows, and the trail.",
+        "Pay special attention to the moment when the vertical component becomes zero at the peak."
+      ],
+      "objects": [
+        {
+          "prefab": "projectilePlanePrefab",
+          "name": "motionPlane5",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.25,
+            1.4
+          ],
+          "scale": [
+            0.9,
+            0.6,
+            0.02
+          ],
+          "texture": "physics_grid_plane_texture"
+        },
+        {
+          "prefab": "projectileBallPrefab",
+          "name": "flightBall",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.32,
+            -0.18,
+            1.38
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "balldimpled"
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "velocityVector",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.32,
+            -0.18,
+            1.38
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            52
+          ],
+          "scale": [
+            0.26,
+            0.035,
+            0.035
+          ],
+          "texture": "vector_orange_texture"
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vxArrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.32,
+            -0.18,
+            1.38
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.18,
+            0.03,
+            0.03
+          ],
+          "texture": "vector_x_red_texture"
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vyArrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.14,
+            -0.18,
+            1.38
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.16,
+            0.03,
+            0.03
+          ],
+          "texture": "vector_y_green_texture"
+        },
+        {
+          "prefab": "trajectoryTrailPrefab",
+          "name": "trail",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            1.38
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "texture": "faint_trail_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "peakLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.02,
+            0.18,
+            1.38
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "At maximum height: vy = 0",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "independenceLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            -0.38,
+            1.38
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Horizontal and vertical motions are independent",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "projectile_components_at_launch",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "vxArrow",
+              "enabled": true
+            },
+            {
+              "target": "vyArrow",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The initial velocity vector is split into horizontal and vertical component arrows at launch so students can see the two simultaneous motions from the start.",
+          "narration": "The launch velocity can be decomposed into a horizontal component and a vertical component. Together, these add back to the full initial velocity vector."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "projectile_ascent_vertical_slows",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "flightBall",
+              "position": [
+                -0.05,
+                0.08,
+                1.38
+              ]
+            },
+            {
+              "target": "velocityVector",
+              "position": [
+                -0.05,
+                0.08,
+                1.38
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                28
+              ],
+              "scale": [
+                0.2,
+                0.035,
+                0.035
+              ]
+            },
+            {
+              "target": "vxArrow",
+              "position": [
+                -0.05,
+                0.08,
+                1.38
+              ],
+              "scale": [
+                0.18,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "vyArrow",
+              "position": [
+                0.13,
+                0.08,
+                1.38
+              ],
+              "scale": [
+                0.07,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "trail",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The ball moves upward and rightward, the trail begins, the horizontal component stays constant, and the vertical component shrinks to represent slowing ascent under gravity.",
+          "narration": "During ascent, gravity reduces the upward vertical velocity. Notice that the horizontal component stays the same length, while the vertical component gets smaller."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "projectile_peak_vertical_zero",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "flightBall",
+              "position": [
+                0.12,
+                0.16,
+                1.38
+              ]
+            },
+            {
+              "target": "velocityVector",
+              "position": [
+                0.12,
+                0.16,
+                1.38
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                0.18,
+                0.035,
+                0.035
+              ]
+            },
+            {
+              "target": "vxArrow",
+              "position": [
+                0.12,
+                0.16,
+                1.38
+              ],
+              "scale": [
+                0.18,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "vyArrow",
+              "position": [
+                0.3,
+                0.16,
+                1.38
+              ],
+              "scale": [
+                0.001,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "peakLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "At the top of the trajectory, the vertical component is reduced essentially to zero while the horizontal component remains unchanged, marking maximum height clearly.",
+          "narration": "At the highest point, the vertical velocity is zero for an instant. The projectile is still moving horizontally, but it has stopped rising."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "projectile_descent_and_independence",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "flightBall",
+              "position": [
+                0.38,
+                -0.05,
+                1.38
+              ]
+            },
+            {
+              "target": "velocityVector",
+              "position": [
+                0.38,
+                -0.05,
+                1.38
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                -34
+              ],
+              "scale": [
+                0.24,
+                0.035,
+                0.035
+              ]
+            },
+            {
+              "target": "vxArrow",
+              "position": [
+                0.38,
+                -0.05,
+                1.38
+              ],
+              "scale": [
+                0.18,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "vyArrow",
+              "position": [
+                0.56,
+                -0.05,
+                1.38
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                -90
+              ],
+              "scale": [
+                0.13,
+                0.03,
+                0.03
+              ]
+            },
+            {
+              "target": "independenceLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The ball descends with a growing downward vertical component and unchanged horizontal component, reinforcing that the parabola emerges from independent motions combined.",
+          "narration": "As the ball falls, the vertical component grows downward while the horizontal component stays constant. The curved trajectory is simply the combination of these independent motions."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 6: Discovering Maximum Range",
+      "description": "Allows students to compare launches at different angles and speeds and infer the maximum-range condition on level ground.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Relate launch angle and speed to range and maximum height.",
+        "Recognize that, for fixed speed and equal launch and landing height, range is maximized at 45 degrees.",
+        "Identify complementary launch angles as producing equal ranges on level ground."
+      ],
+      "instructions": [
+        "Compare the displayed launch settings and ranges.",
+        "Look for patterns near 45 degrees and between complementary angles such as 30 and 60 degrees."
+      ],
+      "objects": [
+        {
+          "prefab": "projectilePlanePrefab",
+          "name": "rangePlane",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.25,
+            1.4
+          ],
+          "scale": [
+            0.95,
+            0.6,
+            0.02
+          ],
+          "texture": "physics_grid_plane_texture"
+        },
+        {
+          "prefab": "launcherBasePrefab",
+          "name": "launcher",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.35,
+            -0.18,
+            1.38
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "texture": "metal_launcher_texture"
+        },
+        {
+          "prefab": "projectileBallPrefab",
+          "name": "rangeBall",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.32,
+            -0.18,
+            1.38
+          ],
+          "scale": [
+            0.045,
+            0.045,
+            0.045
+          ],
+          "texture": "balldimpled"
+        },
+        {
+          "prefab": "trajectoryTrailPrefab",
+          "name": "rangeTrail",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            1.38
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "texture": "faint_trail_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "rangeReadout",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.28,
+            0.24,
+            1.38
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Angle 30\u00b0 | Speed 12 m/s | Range 12.7 m",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "historyPanel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.33,
+            -0.02,
+            1.38
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.09
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "History:\n30\u00b0, 12 m/s -> 12.7 m",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "maxRangeNote",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            -0.36,
+            1.38
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "For fixed speed on level ground, maximum range occurs at 45\u00b0",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "range_exploration_first_comparison",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "rangeReadout",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Angle 30\u00b0 | Speed 12 m/s | Range 12.7 m",
+                  "fontSize": 30
+                }
+              ]
+            },
+            {
+              "target": "historyPanel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "History:\n30\u00b0, 12 m/s -> 12.7 m",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The first trial data are displayed, introducing the idea that launch settings can be compared quantitatively through measured range.",
+          "narration": "As you vary launch conditions, the system records the angle, speed, and resulting range. This lets you compare projectile outcomes systematically."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "range_complementary_angles_equal",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "rangeReadout",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Angle 60\u00b0 | Speed 12 m/s | Range 12.7 m",
+                  "fontSize": 30
+                }
+              ]
+            },
+            {
+              "target": "historyPanel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "History:\n30\u00b0, 12 m/s -> 12.7 m\n60\u00b0, 12 m/s -> 12.7 m",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "A complementary-angle trial is added with the same speed and equal range, highlighting the symmetry of level-ground projectile motion.",
+          "narration": "Notice that 30 degrees and 60 degrees give the same range at the same launch speed. Angles symmetric about 45 degrees produce equal ranges."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "range_near_45_degrees_peak",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "rangeReadout",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Angle 45\u00b0 | Speed 12 m/s | Range 14.7 m",
+                  "fontSize": 30
+                }
+              ]
+            },
+            {
+              "target": "historyPanel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "History:\n30\u00b0, 12 m/s -> 12.7 m\n60\u00b0, 12 m/s -> 12.7 m\n45\u00b0, 12 m/s -> 14.7 m",
+                  "fontSize": 30
+                }
+              ]
+            },
+            {
+              "target": "maxRangeNote",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "A 45-degree launch is added and shown to exceed nearby equal-speed trials, making the maximum-range result explicit after comparative evidence has accumulated.",
+          "narration": "For a fixed launch speed on level ground, the range is greatest at 45 degrees. At this angle, the horizontal and vertical launch components are balanced."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 7: Targeting Challenge",
+      "description": "Applies projectile-vector reasoning to hit targets at different distances along level ground.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Use angle and speed choices to hit a target at a known horizontal distance.",
+        "Recognize that multiple launch-angle solutions can exist for the same target distance.",
+        "Connect practical targeting back to component reasoning and range symmetry."
+      ],
+      "instructions": [
+        "Aim to hit the target on the ground line.",
+        "If you want an extra challenge, try finding two different launch angles that work for the same target."
+      ],
+      "objects": [
+        {
+          "prefab": "projectilePlanePrefab",
+          "name": "targetPlane",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.25,
+            1.4
+          ],
+          "scale": [
+            0.95,
+            0.6,
+            0.02
+          ],
+          "texture": "physics_grid_plane_texture"
+        },
+        {
+          "prefab": "launcherBasePrefab",
+          "name": "targetLauncher",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.35,
+            -0.18,
+            1.38
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "texture": "metal_launcher_texture"
+        },
+        {
+          "prefab": "targetMarkerPrefab",
+          "name": "groundTarget",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.22,
+            -0.18,
+            1.38
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "texture": "bullseye_target_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "targetLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.22,
+            -0.08,
+            1.38
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Target 1: 11 m",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "challengeHint",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0.24,
+            1.38
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Often two launch angles can hit the same target.",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "targeting_challenge_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "groundTarget",
+              "enabled": true
+            },
+            {
+              "target": "targetLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "A ground target and distance label appear, turning the previous conceptual range ideas into a concrete hit-the-target task.",
+          "narration": "Now use projectile reasoning to hit a target at a known distance. You can adjust launch speed and angle until the projectile lands on the marker."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "targeting_dual_angle_hint",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "challengeHint",
+              "enabled": true
+            },
+            {
+              "target": "groundTarget",
+              "position": [
+                0.32,
+                -0.18,
+                1.38
+              ]
+            },
+            {
+              "target": "targetLabel",
+              "position": [
+                0.32,
+                -0.08,
+                1.38
+              ],
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Target 2: 14 m",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The target is moved farther away and a hint appears about dual-angle solutions, encouraging students to use complementary-angle reasoning while adapting to a new distance.",
+          "narration": "For many target distances, more than one launch angle works. A lower, faster-looking arc and a higher arc can land at the same point if the launch speed is chosen appropriately."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 8: Free Exploration Sandbox",
+      "description": "Removes structured constraints and opens parameter control over launch angle, speed, initial height, and gravity.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Explore how changing gravity, height, and launch conditions alters projectile motion.",
+        "Test whether previously learned results, such as the 45-degree rule, still hold under modified conditions.",
+        "Build intuition by comparing trajectories across extreme parameter choices."
+      ],
+      "instructions": [
+        "Experiment with angle, speed, initial height, and gravity.",
+        "Try the suggested questions about reduced gravity, high launch platforms, and strong gravity."
+      ],
+      "objects": [
+        {
+          "prefab": "projectilePlanePrefab",
+          "name": "sandboxPlane",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.25,
+            1.4
+          ],
+          "scale": [
+            0.95,
+            0.62,
+            0.02
+          ],
+          "texture": "physics_grid_plane_texture"
+        },
+        {
+          "prefab": "launcherBasePrefab",
+          "name": "sandboxLauncher",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.35,
+            -0.18,
+            1.38
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "texture": "metal_launcher_texture"
+        },
+        {
+          "prefab": "platformPrefab",
+          "name": "heightPlatform",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.35,
+            -0.02,
+            1.38
+          ],
+          "scale": [
+            0.12,
+            0.24,
+            0.12
+          ],
+          "enabled": false,
+          "texture": "concrete_platform_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "sandboxPrompt",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.22,
+            0.24,
+            1.38
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Try: half gravity, 5g gravity, or a 50 m launch height.",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "sandboxParams",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.26,
+            -0.02,
+            1.38
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Angle 45\u00b0 | Speed 12 m/s | Height 0 m | Gravity 1.0 g",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "sandbox_open_parameter_space",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "sandboxParams",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Angle 45\u00b0 | Speed 12 m/s | Height 0 m | Gravity 1.0 g",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The sandbox begins with standard Earth-like conditions to anchor exploration before students vary gravity, angle, speed, or launch height.",
+          "narration": "In this sandbox, you can change every major parameter of the projectile problem. Start from the familiar Earth case, then vary one condition at a time to build intuition."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "sandbox_reduced_gravity_and_height",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heightPlatform",
+              "enabled": true
+            },
+            {
+              "target": "sandboxParams",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Angle 40\u00b0 | Speed 12 m/s | Height 50 m | Gravity 0.5 g",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "A raised launch platform appears and the parameter display shifts to reduced gravity and nonzero height, prompting students to question whether the standard 45-degree result still applies.",
+          "narration": "When gravity is weaker or the launch height is higher, the trajectory changes dramatically. In these cases, the best launch angle for maximum range may no longer be exactly 45 degrees."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "sandbox_strong_gravity_contrast",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "sandboxParams",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Angle 45\u00b0 | Speed 12 m/s | Height 0 m | Gravity 5.0 g",
+                  "fontSize": 30
+                }
+              ]
+            },
+            {
+              "target": "sandboxPrompt",
+              "position": [
+                0.2,
+                0.28,
+                1.38
+              ]
+            }
+          ],
+          "changeMeaning": "The parameter readout is updated to a strong-gravity case and the prompt is repositioned to keep the comparison visible, emphasizing how quickly trajectories flatten under larger downward acceleration.",
+          "narration": "Under very strong gravity, the projectile has much less time aloft and its path bends downward sharply. Comparing cases like this helps you isolate gravity's role in shaping motion."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 9: Recap and Synthesis",
+      "description": "Reviews the major ideas from vectors through projectile motion and maximum range.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-07",
+      "educationalObjectives": [
+        "Summarize the sequence from vector description to projectile application.",
+        "Connect abstract vector operations to real physical predictions.",
+        "Reinforce the central conceptual milestones of the lab."
+      ],
+      "instructions": [
+        "Review each highlighted concept as the narration summarizes it.",
+        "Use the recap to connect the abstract vector scenes with the projectile scenes."
+      ],
+      "objects": [
+        {
+          "prefab": "summaryBoardPrefab",
+          "name": "summaryBoard",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            1.3
+          ],
+          "scale": [
+            0.8,
+            0.5,
+            0.05
+          ],
+          "texture": "clean_whiteboard_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "summaryText",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0.02,
+            1.28
+          ],
+          "scale": [
+            0.09,
+            0.09,
+            0.09
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "1. Vectors: magnitude and direction\n2. Addition tip-to-tail\n3. Decomposition into components\n4. Projectile launch vector\n5. Independent horizontal and vertical motion\n6. 45\u00b0 maximum range on level ground",
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "highlightLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            -0.28,
+            1.28
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Reviewing key ideas",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "recap_vectors_to_projectiles",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "highlightLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Vectors describe magnitude and direction",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The recap begins by highlighting the foundational definition of a vector so the summary starts from the core mathematical language used throughout the lab.",
+          "narration": "We began by defining vectors as quantities with both magnitude and direction, described either geometrically or through components."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "recap_operations_and_motion",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "highlightLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Addition and decomposition connect directly to projectile motion",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The highlight shifts from vector definition to operations, linking addition and decomposition to the later projectile scenes for conceptual continuity.",
+          "narration": "Next, you saw that vectors can be added tip-to-tail and decomposed into components. Those same operations let us analyze the velocity of a projectile."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "recap_independence_and_max_range",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "highlightLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Independent motion produces parabolas; 45\u00b0 maximizes range on level ground",
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "The final highlight synthesizes the motion principle and the range result, closing the lab with the two most important physical takeaways from the projectile application.",
+          "narration": "Finally, you learned that horizontal and vertical motions are independent under gravity alone, and that for fixed speed on level ground the maximum range occurs at a 45 degree launch angle."
+        }
+      ]
+    }
+  ]
+}

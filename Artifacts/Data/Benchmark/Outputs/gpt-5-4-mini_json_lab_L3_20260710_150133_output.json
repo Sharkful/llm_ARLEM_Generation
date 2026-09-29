@@ -1,0 +1,639 @@
+{
+  "version": "2.0",
+  "labId": "physics-vector-projectile-motion-ar-lab",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Physics I (Mechanics)",
+  "estimatedLength": "35 minutes",
+  "objectives": [
+    "Students will represent a two-dimensional vector by its magnitude and direction, and equivalently by its horizontal and vertical components.",
+    "Students will add two or more vectors graphically using the tip-to-tail method and identify the resultant vector.",
+    "Students will decompose a vector into components along the x- and y-axes using right-triangle trigonometry, and reconstruct the original vector from its components.",
+    "Students will explain why the horizontal and vertical motions of a projectile are independent of one another, given that gravity acts only in the vertical direction.",
+    "Students will describe how the horizontal velocity, vertical velocity, and position of a projectile change over the course of its flight, and identify the moment of maximum height as the point where the vertical velocity is zero.",
+    "Students will predict how changes in initial launch angle and launch speed affect the trajectory, range, and maximum height of a projectile, and identify the launch angle that produces maximum range for a given speed."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: Vector Addition and Components",
+      "description": "Students build intuition for vectors as arrows with magnitude and direction, then add vectors tip-to-tail and decompose a vector into x- and y-components.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Represent vectors by arrow length and orientation.",
+        "Use the tip-to-tail method to find a resultant vector.",
+        "Resolve a vector into perpendicular components and connect those components back to the original vector."
+      ],
+      "instructions": [
+        "Observe the vectors appear as arrows in the plane.",
+        "Use the narration to follow how one vector is translated tip-to-tail onto another.",
+        "Notice how the component arrows relate to the original vector and to the coordinate axes."
+      ],
+      "objects": [
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vectorA",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.45,
+            0.05,
+            0.15
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            28
+          ],
+          "scale": [
+            0.28,
+            0.28,
+            0.28
+          ],
+          "texture": "vector_blue_texture"
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "vectorB",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.05,
+            0.05,
+            0.12
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            -35
+          ],
+          "scale": [
+            0.22,
+            0.22,
+            0.22
+          ],
+          "texture": "vector_orange_texture"
+        },
+        {
+          "prefab": "vectorArrowPrefab",
+          "name": "resultantVector",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.12,
+            0.05,
+            0.14
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            8
+          ],
+          "scale": [
+            0.34,
+            0.34,
+            0.34
+          ],
+          "enabled": false,
+          "texture": "vector_green_texture"
+        },
+        {
+          "prefab": "axisGridPrefab",
+          "name": "xyAxes",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.9,
+            0.9,
+            0.9
+          ],
+          "texture": "graph_paper_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "vectorLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.2,
+            0.28,
+            0.1
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Vector Addition",
+              "fontSize": 30
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "componentArrowPrefab",
+          "name": "xComponent",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.0,
+            0.02,
+            0.05
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "enabled": false,
+          "texture": "vector_red_texture"
+        },
+        {
+          "prefab": "componentArrowPrefab",
+          "name": "yComponent",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0.18,
+            0.02,
+            0.05
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "enabled": false,
+          "texture": "vector_purple_texture"
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vector_introduction",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "vectorA",
+              "enabled": true
+            },
+            {
+              "target": "vectorB",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The two source vectors appear first so students can focus on their individual directions and relative lengths before any combination is shown.",
+          "narration": "A vector has both magnitude and direction. Here, two vectors are shown as arrows, and their lengths represent their sizes while their orientations show their directions."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "tip_to_tail_addition",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "resultantVector",
+              "enabled": true
+            },
+            {
+              "target": "resultantVector",
+              "position": [
+                0.05,
+                0.05,
+                0.13
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                12
+              ]
+            },
+            {
+              "target": "vectorB",
+              "position": [
+                0.16,
+                0.05,
+                0.16
+              ]
+            }
+          ],
+          "changeMeaning": "Vector B is translated tip-to-tail with vector A, revealing the graphical construction of the resultant vector.",
+          "narration": "To add vectors graphically, place one vector\u2019s tail at the other vector\u2019s tip. The resultant runs from the tail of the first vector to the tip of the last vector."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vector_components",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "xComponent",
+              "enabled": true
+            },
+            {
+              "target": "yComponent",
+              "enabled": true
+            },
+            {
+              "target": "xComponent",
+              "position": [
+                0.02,
+                0.02,
+                0.05
+              ],
+              "scale": [
+                0.14,
+                0.14,
+                0.14
+              ]
+            },
+            {
+              "target": "yComponent",
+              "position": [
+                0.16,
+                0.02,
+                0.05
+              ],
+              "scale": [
+                0.12,
+                0.12,
+                0.12
+              ]
+            }
+          ],
+          "changeMeaning": "Component vectors appear along the coordinate axes to show how a single vector can be resolved into perpendicular parts.",
+          "narration": "Any vector can be decomposed into horizontal and vertical components. These components form a right triangle with the original vector, so trigonometry connects magnitude, angle, and components."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: Projectile Motion with Initial Velocity",
+      "description": "Students apply vector ideas to projectile motion by decomposing launch velocity into horizontal and vertical components and observing their independent evolution under gravity.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Decompose an initial launch velocity into horizontal and vertical parts.",
+        "Explain why horizontal velocity remains constant while vertical velocity changes under gravity.",
+        "Connect the changing velocity components to the projectile\u2019s curved trajectory and identify the peak of the motion."
+      ],
+      "instructions": [
+        "Watch the launch speed and angle determine the initial velocity vector.",
+        "Follow the two component arrows separately to see how each changes during flight.",
+        "Compare the displayed path with the component motion to see why the trajectory is parabolic."
+      ],
+      "objects": [
+        {
+          "prefab": "projectileLauncherPrefab",
+          "name": "launcher",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.85,
+            0,
+            0.1
+          ],
+          "eulerAngles": [
+            0,
+            18,
+            0
+          ],
+          "scale": [
+            0.22,
+            0.22,
+            0.22
+          ],
+          "texture": "metal_brushed_texture"
+        },
+        {
+          "prefab": "projectilePrefab",
+          "name": "projectile",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.72,
+            0.18,
+            0.12
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "texture": "ball_dimpled_gray"
+        },
+        {
+          "prefab": "trajectoryPathPrefab",
+          "name": "trajectoryPath",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.78,
+            0,
+            0.08
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.9,
+            0.9,
+            0.9
+          ],
+          "enabled": false,
+          "texture": "parabola_glow_texture"
+        },
+        {
+          "prefab": "velocityVectorPrefab",
+          "name": "initialVelocity",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.72,
+            0.18,
+            0.12
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            35
+          ],
+          "scale": [
+            0.24,
+            0.24,
+            0.24
+          ],
+          "texture": "velocity_cyan_texture"
+        },
+        {
+          "prefab": "velocityComponentPrefab",
+          "name": "vxArrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.72,
+            0.12,
+            0.12
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "enabled": false,
+          "texture": "vector_blue_texture"
+        },
+        {
+          "prefab": "velocityComponentPrefab",
+          "name": "vyArrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.72,
+            0.12,
+            0.12
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.14,
+            0.14,
+            0.14
+          ],
+          "enabled": false,
+          "texture": "vector_red_texture"
+        },
+        {
+          "prefab": "gravityArrowPrefab",
+          "name": "gravityArrow",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.2,
+            0.95,
+            0.12
+          ],
+          "eulerAngles": [
+            90,
+            0,
+            0
+          ],
+          "scale": [
+            0.22,
+            0.22,
+            0.22
+          ],
+          "texture": "gravity_yellow_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "projectileLabel",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            -0.62,
+            0.38,
+            0.12
+          ],
+          "eulerAngles": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Initial Velocity",
+              "fontSize": 30
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "projectile_launch_setup",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "trajectoryPath",
+              "enabled": true
+            },
+            {
+              "target": "vxArrow",
+              "enabled": true
+            },
+            {
+              "target": "vyArrow",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "The launch path and velocity components appear to connect the initial vector decomposition with the projectile setup.",
+          "narration": "Now we apply vectors to projectile motion. The initial velocity points up and forward, and it can be split into a horizontal component and a vertical component."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "horizontal_vertical_independence",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "vxArrow",
+              "position": [
+                -0.55,
+                0.12,
+                0.12
+              ],
+              "scale": [
+                0.2,
+                0.2,
+                0.2
+              ]
+            },
+            {
+              "target": "vyArrow",
+              "position": [
+                -0.72,
+                0.28,
+                0.12
+              ],
+              "scale": [
+                0.11,
+                0.11,
+                0.11
+              ]
+            },
+            {
+              "target": "projectile",
+              "position": [
+                -0.38,
+                0.36,
+                0.12
+              ]
+            },
+            {
+              "target": "initialVelocity",
+              "position": [
+                -0.38,
+                0.36,
+                0.12
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                20
+              ]
+            }
+          ],
+          "changeMeaning": "The projectile moves along its flight while the horizontal component stays steady and the vertical component shrinks during ascent, emphasizing independent motions.",
+          "narration": "Gravity acts only vertically, so the horizontal velocity remains constant while the vertical velocity changes. This independence is what makes the path curve into a parabola."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "maximum_height_and_descent",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "projectile",
+              "position": [
+                -0.12,
+                0.42,
+                0.12
+              ]
+            },
+            {
+              "target": "vyArrow",
+              "position": [
+                -0.12,
+                0.42,
+                0.12
+              ],
+              "scale": [
+                0.02,
+                0.02,
+                0.02
+              ]
+            },
+            {
+              "target": "initialVelocity",
+              "position": [
+                -0.12,
+                0.42,
+                0.12
+              ],
+              "eulerAngles": [
+                0,
+                0,
+                0
+              ]
+            }
+          ],
+          "changeMeaning": "The projectile reaches the top of its path and the vertical velocity collapses to zero, marking the transition from ascent to descent.",
+          "narration": "At maximum height, the vertical component of velocity is momentarily zero. The horizontal component is still present, so the projectile continues to move forward even at the peak."
+        }
+      ]
+    }
+  ]
+}

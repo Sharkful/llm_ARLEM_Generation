@@ -1,0 +1,1445 @@
+{
+  "version": "2.0",
+  "labId": "heart_anatomy_circulation_lab",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Human Anatomy and Physiology I",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Identify and name the four chambers of the heart, the four heart valves, and the major vessels entering and leaving the heart.",
+    "Trace the path of blood through the heart's dual circulation, naming each chamber, valve, and vessel in order.",
+    "Distinguish the pulmonary circuit from the systemic circuit and explain why the right and left sides of the heart serve different circulatory functions.",
+    "Explain why the left ventricle has a substantially thicker myocardium than the right ventricle, relating wall thickness to perfusion pressure requirements.",
+    "Describe the function of the atrioventricular and semilunar valves in preventing backflow, and identify which valves separate which structures."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: Exterior and Cutaway Overview",
+      "description": "Introduces the gross anatomy of the heart using paired intact and cutaway models, establishing anatomical orientation.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Recognize the anatomical orientation of the heart (apex, base, right vs left side) as described from the patient's perspective.",
+        "Differentiate the exterior surface landmarks from the internal chambers exposed in a cutaway view."
+      ],
+      "instructions": [
+        "Rotate the heart models to explore them from different angles.",
+        "Notice how the right and left sides are labeled from the patient's point of view, not the viewer's."
+      ],
+      "objects": [
+        {
+          "prefab": "heartIntactPrefab",
+          "name": "heartIntact",
+          "position": [
+            -0.5,
+            1.2,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            20,
+            0
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "texture": "heart_exterior_texture",
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "heartCutawayPrefab",
+          "name": "heartCutaway",
+          "position": [
+            0.5,
+            1.2,
+            0
+          ],
+          "eulerAngles": [
+            0,
+            -20,
+            0
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "texture": "heart_interior_texture",
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "orientationLabel",
+          "position": [
+            0,
+            1.7,
+            0
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Patient's Right Side / Patient's Left Side",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "heart_intro_overview",
+          "autoAdvance": false,
+          "changeMeaning": "Initial spawn of both heart models side by side to establish the overview scene.",
+          "narration": "Here is a full-size human heart, shown in two forms: on the left, the intact exterior; on the right, a cutaway with the front wall removed so we can see inside."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "heart_orientation_explanation",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartIntact",
+              "eulerAngles": [
+                0,
+                45,
+                0
+              ]
+            },
+            {
+              "target": "heartCutaway",
+              "eulerAngles": [
+                0,
+                -45,
+                0
+              ]
+            }
+          ],
+          "changeMeaning": "Both heart models rotate slightly to demonstrate that the anatomical right/left labeling is reversed from the viewer's perspective.",
+          "narration": "Notice that anatomical structures are always described from the patient's own point of view. So the heart's right side appears on your left as you look at it."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: Guided Structural Tour",
+      "description": "A guided tour highlighting the four chambers, four valves, and major vessels in sequence, mapping interior structures to exterior landmarks.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Name the four chambers of the heart in the correct anatomical sequence.",
+        "Name the four valves and identify the structures each valve separates.",
+        "Name the major vessels entering and leaving the heart."
+      ],
+      "instructions": [
+        "Watch as each structure is highlighted in turn.",
+        "Compare the highlighted interior structure with its exterior landmark on the intact heart."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCutawayPrefab",
+          "name": "heartCutawayTour",
+          "position": [
+            0.4,
+            1.2,
+            0
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "texture": "heart_interior_texture"
+        },
+        {
+          "prefab": "heartIntactPrefab",
+          "name": "heartIntactTour",
+          "position": [
+            -0.4,
+            1.2,
+            0
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "texture": "heart_exterior_texture"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "structureLabel",
+          "position": [
+            0.4,
+            1.6,
+            0
+          ],
+          "scale": [
+            0.018,
+            0.018,
+            0.018
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 28
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "tour_right_atrium",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartCutawayTour",
+              "color": [
+                180,
+                180,
+                255,
+                255
+              ]
+            },
+            {
+              "target": "structureLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Right Atrium",
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the right atrium on the cutaway model and label it, with corresponding exterior region highlighted.",
+          "narration": "We begin with the right atrium, which receives deoxygenated blood returning from the body."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "tour_right_ventricle",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartCutawayTour",
+              "color": [
+                140,
+                140,
+                255,
+                255
+              ]
+            },
+            {
+              "target": "structureLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Right Ventricle",
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Advance the tour to highlight the right ventricle, updating the label and color accordingly.",
+          "narration": "Next is the right ventricle, which pumps blood to the lungs via the pulmonary trunk."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "tour_left_chambers",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "heartCutawayTour",
+              "color": [
+                255,
+                160,
+                160,
+                255
+              ]
+            },
+            {
+              "target": "structureLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Left Atrium / Left Ventricle",
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the left atrium and left ventricle in sequence, transitioning color to red tones to represent the oxygenated left side.",
+          "narration": "On the left side, the left atrium receives oxygenated blood from the lungs, and the left ventricle pumps it out to the entire body."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "tour_four_valves",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "structureLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Tricuspid \u2192 Pulmonary \u2192 Mitral/Bicuspid \u2192 Aortic",
+                  "fontSize": 24
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Shift focus to the four valves in sequence, updating the label to describe each valve and the chambers/vessels it connects.",
+          "narration": "Now the valves: tricuspid between right atrium and right ventricle, pulmonary between right ventricle and pulmonary trunk, mitral or bicuspid between left atrium and left ventricle, and aortic between left ventricle and aorta."
+        },
+        {
+          "clipName": "clip4",
+          "audioClip": "tour_major_vessels",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "structureLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "SVC / IVC \u2192 Pulmonary Arteries \u2192 Pulmonary Veins \u2192 Aorta",
+                  "fontSize": 22
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the major vessels in sequence on both models, completing the structural tour.",
+          "narration": "Finally, the major vessels: superior and inferior vena cava bring blood in, pulmonary arteries carry it to the lungs, pulmonary veins bring it back, and the aorta carries it out to the body."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: Dual-Circuit Color-Coded Blood Flow",
+      "description": "Demonstrates the continuous dual-loop circulation using color-coded blood streams within the cutaway heart model.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Distinguish deoxygenated (blue) blood flow from oxygenated (red) blood flow within the heart.",
+        "Identify the pulmonary circuit and systemic circuit as two distinct functional loops."
+      ],
+      "instructions": [
+        "Observe the continuous color-coded flow.",
+        "Watch as the pulmonary and systemic circuits are highlighted separately."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCutawayPrefab",
+          "name": "heartFlowModel",
+          "position": [
+            0,
+            1.2,
+            0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "heart_interior_texture"
+        },
+        {
+          "prefab": "bloodStreamPrefab",
+          "name": "bloodStream",
+          "position": [
+            0,
+            1.2,
+            0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "circuitLabel",
+          "position": [
+            0,
+            1.75,
+            0
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "dual_circuit_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "bloodStream",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "newscript",
+                  "scriptName": "bloodflowanimator",
+                  "scriptDescription": "Animates a continuous dual-color blood flow texture through the heart model mesh, cycling blue through right-side structures and pulmonary arteries, and red through left-side structures and pulmonary veins. Inputs: reference to heart mesh renderer, flow speed (units/sec), blue and red color values. Output: continuous scrolling color animation representing blood flow direction."
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Blood stream begins flowing with blue on the right side and red on the left side, establishing the steady-state dual circulation pattern.",
+          "narration": "Now let's add color to the flow. Blue represents deoxygenated blood on the right side of the heart, pulmonary arteries, and systemic veins. Red represents oxygenated blood on the left side, pulmonary veins, and systemic arteries."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "pulmonary_circuit_highlight",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "circuitLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Pulmonary Circuit",
+                  "fontSize": 32
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the pulmonary circuit loop specifically, dimming the systemic circuit temporarily to isolate it visually.",
+          "narration": "Here is the pulmonary circuit: the right side of the heart sends blood to the lungs and receives it back oxygenated."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "systemic_circuit_highlight",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "circuitLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Systemic Circuit",
+                  "fontSize": 32
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the systemic circuit loop, dimming the pulmonary circuit to show the two loops as distinct units.",
+          "narration": "And here is the systemic circuit: the left side of the heart sends oxygenated blood to the entire body and receives it back deoxygenated."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 4: Red Blood Cell Trace",
+      "description": "A step-by-step interactive trace of a single red blood cell through the entire dual circulation path.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Trace a single unit of blood through the complete pulmonary and systemic circuit in correct order.",
+        "Identify the point in the circuit where blood changes from deoxygenated to oxygenated."
+      ],
+      "instructions": [
+        "Press Next to advance the blood cell one step along its path.",
+        "Replay the trace as many times as you like."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCutawayPrefab",
+          "name": "heartTraceModel",
+          "position": [
+            0,
+            1.2,
+            0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "heart_interior_texture"
+        },
+        {
+          "prefab": "bloodCellPrefab",
+          "name": "rbcTracer",
+          "position": [
+            0.05,
+            1.55,
+            0.05
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "color": [
+            80,
+            80,
+            255,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "traceLabel",
+          "position": [
+            0,
+            1.75,
+            0
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Superior Vena Cava",
+              "fontSize": 28
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "trace_start_svc",
+          "autoAdvance": false,
+          "changeMeaning": "Spawn the blood cell in the superior vena cava, the starting point of the trace.",
+          "narration": "A single red blood cell begins its journey here, in the superior vena cava, carrying deoxygenated blood back toward the heart."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "trace_ra_to_rv",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rbcTracer",
+              "position": [
+                0.02,
+                1.25,
+                0.02
+              ]
+            },
+            {
+              "target": "traceLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Right Ventricle (via Tricuspid Valve)",
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Move the cell into the right atrium, then through the tricuspid valve into the right ventricle, updating the label.",
+          "narration": "The right atrium contracts, pushing the cell through the tricuspid valve into the right ventricle."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "trace_rv_to_pulm_arteries",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rbcTracer",
+              "position": [
+                0.15,
+                1.5,
+                0.1
+              ]
+            },
+            {
+              "target": "traceLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Pulmonary Arteries",
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Move the cell through the pulmonary valve into the pulmonary trunk and arteries, heading to the lungs.",
+          "narration": "The right ventricle contracts, pushing the cell through the pulmonary valve into the pulmonary trunk and out along the pulmonary arteries toward the lungs."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "trace_lung_capillaries",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rbcTracer",
+              "position": [
+                0.25,
+                1.6,
+                0.1
+              ],
+              "color": [
+                255,
+                60,
+                60,
+                255
+              ]
+            },
+            {
+              "target": "traceLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Lung Capillaries (Oxygenation)",
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Cell reaches the lung capillaries and visibly changes color from blue to red, representing oxygenation.",
+          "narration": "At the lung capillaries, the cell picks up oxygen and turns from blue to red."
+        },
+        {
+          "clipName": "clip4",
+          "audioClip": "trace_pulm_veins_to_lv",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rbcTracer",
+              "position": [
+                -0.05,
+                1.2,
+                -0.02
+              ]
+            },
+            {
+              "target": "traceLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Left Ventricle (via Mitral Valve)",
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Cell travels back via pulmonary veins into the left atrium, then through the mitral valve into the left ventricle.",
+          "narration": "Now oxygenated, the cell returns via the pulmonary veins to the left atrium, then passes through the mitral valve into the left ventricle."
+        },
+        {
+          "clipName": "clip5",
+          "audioClip": "trace_lv_to_aorta_and_return",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "rbcTracer",
+              "position": [
+                0.05,
+                1.55,
+                0.05
+              ],
+              "color": [
+                80,
+                80,
+                255,
+                255
+              ]
+            },
+            {
+              "target": "traceLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Superior Vena Cava (Loop Complete)",
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Cell is pumped through the aortic valve into the aorta and out to systemic circulation, then returns blue via systemic veins to complete the loop.",
+          "narration": "The left ventricle contracts, pushing the cell through the aortic valve into the aorta and out to the body. After delivering oxygen to the tissues, it returns blue through the systemic veins to the superior vena cava, completing the loop."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 5: Ventricular Wall Thickness Comparison",
+      "description": "Compares the myocardial wall thickness of the right and left ventricles using side-by-side cross-sections with scale markers.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Compare the relative myocardial wall thickness of the right and left ventricles.",
+        "Explain why the left ventricle's thicker wall relates to the higher pressure required for systemic circulation."
+      ],
+      "instructions": [
+        "Rotate the cross-sections to compare wall thickness directly.",
+        "Note the scale markers indicating millimeter thickness."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCrossSectionPrefab",
+          "name": "rvCrossSection",
+          "position": [
+            -0.45,
+            1.2,
+            0
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "texture": "myocardium_texture",
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "heartCrossSectionPrefab",
+          "name": "lvCrossSection",
+          "position": [
+            0.45,
+            1.2,
+            0
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "texture": "myocardium_texture",
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "thicknessLabel",
+          "position": [
+            0,
+            1.65,
+            0
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 28
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "rv_wall_thickness",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "rvCrossSection",
+              "color": [
+                180,
+                160,
+                255,
+                255
+              ]
+            },
+            {
+              "target": "thicknessLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Right Ventricle Wall: ~3-5 mm",
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the right ventricle cross-section and label its thin myocardium wall thickness.",
+          "narration": "Here is the right ventricle in cross-section. Its myocardium is thin, roughly 3 to 5 millimeters, since it only needs to pump blood the short distance to the lungs."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "lv_wall_thickness",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "lvCrossSection",
+              "color": [
+                255,
+                140,
+                140,
+                255
+              ]
+            },
+            {
+              "target": "thicknessLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Left Ventricle Wall: ~10-15 mm (approx. 3x thicker)",
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the left ventricle cross-section and label its thick myocardium wall, showing the roughly three-to-one ratio to the right ventricle.",
+          "narration": "By contrast, the left ventricle's myocardium is substantially thicker, roughly 10 to 15 millimeters, because it must generate enough pressure to pump blood through the entire body."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 6: Valve Function and Backflow Prevention",
+      "description": "Examines the open and closed states of the four heart valves, categorized into atrioventricular and semilunar valves.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Categorize the four heart valves into atrioventricular and semilunar groups.",
+        "Explain how valve leaflets open and close to prevent retrograde blood flow during the cardiac cycle."
+      ],
+      "instructions": [
+        "Step through each valve's open and closed states.",
+        "Note which valves are open versus closed during ventricular contraction and relaxation."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCutawayPrefab",
+          "name": "heartValveModel",
+          "position": [
+            0,
+            1.2,
+            0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "heart_interior_texture"
+        },
+        {
+          "prefab": "valveOpenPrefab",
+          "name": "valveOpenState",
+          "position": [
+            0,
+            1.2,
+            0.05
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "enabled": true
+        },
+        {
+          "prefab": "valveClosedPrefab",
+          "name": "valveClosedState",
+          "position": [
+            0,
+            1.2,
+            0.05
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "enabled": false
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "valvePhaseLabel",
+          "position": [
+            0,
+            1.7,
+            0
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 28
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "av_valves_intro",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "valvePhaseLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Atrioventricular Valves: Tricuspid & Mitral",
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Introduce the two valve categories by highlighting the tricuspid and mitral valves as atrioventricular valves.",
+          "narration": "The tricuspid and mitral valves are the atrioventricular valves, sitting between the atria and ventricles, preventing backflow into the atria during ventricular contraction."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "av_valves_closed_contraction",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "valveOpenState",
+              "enabled": false
+            },
+            {
+              "target": "valveClosedState",
+              "enabled": true
+            },
+            {
+              "target": "valvePhaseLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Ventricular Contraction: AV Valves Closed",
+                  "fontSize": 24
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Show the atrioventricular valve in the closed state during ventricular contraction, swapping the open model for the closed model.",
+          "narration": "During ventricular contraction, the atrioventricular valves close, their leaflets sealing shut to prevent blood from flowing back into the atria."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "semilunar_valves_open",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "valveOpenState",
+              "enabled": true
+            },
+            {
+              "target": "valveClosedState",
+              "enabled": false
+            },
+            {
+              "target": "valvePhaseLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Semilunar Valves: Pulmonary & Aortic - Open",
+                  "fontSize": 24
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Introduce the semilunar valves and show them open during ventricular contraction, contrasting with the closed AV valves.",
+          "narration": "Meanwhile, the semilunar valves - pulmonary and aortic - are open during contraction, allowing blood to be ejected into the pulmonary trunk and aorta."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "valve_states_relaxation",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "valveOpenState",
+              "enabled": true
+            },
+            {
+              "target": "valveClosedState",
+              "enabled": false
+            },
+            {
+              "target": "valvePhaseLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Ventricular Relaxation: AV Open, Semilunar Closed",
+                  "fontSize": 22
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Reverse the valve states to show ventricular relaxation: semilunar valves close and AV valves open, completing the cycle explanation.",
+          "narration": "During ventricular relaxation, the reverse occurs: the semilunar valves close to prevent backflow into the ventricles, while the atrioventricular valves open to allow the ventricles to refill."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 7: Structure Identification Quiz",
+      "description": "An interactive quiz where students identify highlighted chambers, valves, and vessels on an unlabeled cutaway heart.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Correctly identify chambers, valves, and vessels on an unlabeled heart model without visual aids."
+      ],
+      "instructions": [
+        "A structure will be highlighted. Select the correct name from the options presented.",
+        "Replay the quiz to reinforce identification."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCutawayPrefab",
+          "name": "heartQuizModel",
+          "position": [
+            0,
+            1.2,
+            0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "heart_interior_texture_unlabeled"
+        },
+        {
+          "prefab": "quizPanelPrefab",
+          "name": "quizOptionsPanel",
+          "position": [
+            0,
+            0.85,
+            0.15
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "quizFeedbackLabel",
+          "position": [
+            0,
+            1.7,
+            0
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 28
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "quiz_prompt_right_atrium",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "heartQuizModel",
+              "color": [
+                200,
+                200,
+                255,
+                255
+              ]
+            },
+            {
+              "target": "quizOptionsPanel",
+              "components": [
+                {
+                  "componentType": "newscript",
+                  "scriptName": "quizoptionselector",
+                  "scriptDescription": "Displays 3-4 candidate text answer buttons for the currently highlighted anatomical structure, tracks the student's selection, and invokes a callback with correct/incorrect result. Inputs: list of candidate answer strings, correct answer index, reference to feedback label object. Output: updates feedback label text with confirmation or correction on selection."
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the right atrium with no label, presenting multiple choice options for the student to select the correct structure name.",
+          "narration": "This structure is highlighted. Which chamber is it? Choose from the options shown."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "quiz_feedback_and_next_tricuspid",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "heartQuizModel",
+              "color": [
+                255,
+                220,
+                180,
+                255
+              ]
+            },
+            {
+              "target": "quizFeedbackLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Correct: Right Atrium",
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Provide feedback on the student's selection for the right atrium question and advance to highlight the next structure (tricuspid valve).",
+          "narration": "Correct - that is the right atrium. Now let's identify the valve just below it."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 8: Blood Flow Tracing Quiz",
+      "description": "An interactive quiz testing students' ability to sequence the full pulmonary and systemic circuit, including distinguishing pulmonary arteries from pulmonary veins.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Correctly sequence the complete path of blood through the pulmonary and systemic circuits.",
+        "Distinguish pulmonary arteries (deoxygenated blood) from pulmonary veins (oxygenated blood)."
+      ],
+      "instructions": [
+        "Given a starting structure, select the next correct structure in the path of blood flow.",
+        "Incorrect answers prompt a brief reminder of the path direction."
+      ],
+      "objects": [
+        {
+          "prefab": "heartCutawayPrefab",
+          "name": "heartFlowQuizModel",
+          "position": [
+            0,
+            1.2,
+            0
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "texture": "heart_interior_texture"
+        },
+        {
+          "prefab": "quizPanelPrefab",
+          "name": "flowQuizPanel",
+          "position": [
+            0,
+            0.85,
+            0.15
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "flowQuizLabel",
+          "position": [
+            0,
+            1.7,
+            0
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "A unit of blood has just entered the right atrium. What is next?",
+              "fontSize": 26
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "flow_quiz_start_ra",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "flowQuizPanel",
+              "components": [
+                {
+                  "componentType": "newscript",
+                  "scriptName": "flowsequencequiz",
+                  "scriptDescription": "Presents the current structure in the blood flow path along with 3-4 candidate next-structure options, checks the student's selection against the correct next step in the pulmonary/systemic sequence, and advances the quiz state on a correct answer. Inputs: ordered list of structure names representing the full circuit, current index, reference to the prompt label object. Output: updates prompt label with next question or a corrective reminder message on incorrect selection."
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Present the starting point of the flow-tracing quiz (right atrium) and quiz options for the next structure in the path.",
+          "narration": "A unit of blood has just entered the right atrium. What structure does it pass through next?"
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "flow_quiz_pulm_artery_vs_vein",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "flowQuizLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Pulmonary Arteries or Pulmonary Veins?",
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Advance the quiz to the pulmonary vessel distinction question, testing whether students know pulmonary arteries carry deoxygenated blood.",
+          "narration": "Blood has just left the right ventricle through the pulmonary valve. Does it now travel through the pulmonary arteries or the pulmonary veins?"
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 9: Lab Recap",
+      "description": "A summary screen reviewing the five key concept areas covered in the lab.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Synthesize and review the structural, functional, and physiological concepts covered across the lab."
+      ],
+      "instructions": [
+        "Review each highlighted concept area as it is discussed."
+      ],
+      "objects": [
+        {
+          "prefab": "recapPanelPrefab",
+          "name": "recapSummaryPanel",
+          "position": [
+            0,
+            1.3,
+            0
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.25
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "recapHighlightLabel",
+          "position": [
+            0,
+            1.75,
+            0
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 28
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "recap_structural_inventory",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "recapHighlightLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "1. Structural Inventory: Chambers, Valves, Vessels",
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Display the five concept areas as a summary list and highlight the first area, the structural inventory of chambers, valves, and vessels.",
+          "narration": "Let's recap. First, the structural inventory: four chambers, four valves, and the major vessels entering and leaving the heart."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "recap_dual_circuit",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "recapHighlightLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "2. Dual-Circuit Organization: Pulmonary & Systemic",
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the second concept area, the dual-circuit organization of pulmonary and systemic circulation.",
+          "narration": "Second, the dual-circuit organization: pulmonary circulation to the lungs, and systemic circulation to the body."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "recap_blood_path",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "recapHighlightLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "3. Path of Blood Through the Full Circuit",
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the third concept area, the path of a unit of blood through the full circuit.",
+          "narration": "Third, the path of a single unit of blood through the entire circuit, from superior vena cava back to superior vena cava."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "recap_wall_thickness",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "recapHighlightLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "4. Ventricular Wall Thickness Asymmetry",
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the fourth concept area, the wall thickness asymmetry between the left and right ventricles.",
+          "narration": "Fourth, the wall thickness asymmetry: the left ventricle's thicker myocardium reflects the higher pressure needed for systemic circulation."
+        },
+        {
+          "clipName": "clip4",
+          "audioClip": "recap_valve_function",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "recapHighlightLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "5. Valve Function: Preventing Backflow",
+                  "fontSize": 28
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the fifth and final concept area, valve function in preventing backflow, completing the recap.",
+          "narration": "And fifth, valve function: the atrioventricular and semilunar valves work together to prevent backflow throughout the cardiac cycle. That completes our exploration of the heart's anatomy and circulation."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,271 @@
+{
+  "workplace": {
+    "id": "heart_lab_workplace",
+    "name": "Anatomy Lab Workbench",
+    "origin": "marker_heart_base",
+    "things": [
+      {
+        "id": "heart_model_tangible",
+        "name": "Heart Model Display",
+        "detectable": "marker_heart_base",
+        "pois": [
+          {
+            "id": "default",
+            "x_offset": 0.0,
+            "y_offset": 0.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          },
+          {
+            "id": "heart_center",
+            "x_offset": 0.0,
+            "y_offset": 10.0,
+            "z_offset": 0.0,
+            "x_rotation": 0.0,
+            "y_rotation": 0.0,
+            "z_rotation": 0.0
+          }
+        ]
+      }
+    ],
+    "places": [
+      {
+        "id": "cross_section_place",
+        "name": "Cross Section Area",
+        "detectable": "marker_cross_section",
+        "pois": []
+      },
+      {
+        "id": "info_area_place",
+        "name": "Information Board",
+        "detectable": "marker_info_board",
+        "pois": []
+      }
+    ],
+    "detectables": [
+      {
+        "id": "marker_heart_base",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_heart.bundle"
+      },
+      {
+        "id": "marker_cross_section",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_xsec.bundle"
+      },
+      {
+        "id": "marker_info_board",
+        "type": "marker",
+        "url": "https://assets.example.com/marker_info.bundle"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "animation"
+      },
+      {
+        "id": "image"
+      },
+      {
+        "id": "label"
+      },
+      {
+        "id": "video"
+      }
+    ],
+    "predicates": [
+      {
+        "id": "label_chambers_pred",
+        "type": "label",
+        "scale": 1.0,
+        "url": "https://assets.example.com/label_chambers.txt"
+      }
+    ]
+  },
+  "activity": {
+    "id": "heart_lab_activity",
+    "name": "Heart Anatomy Lab",
+    "description": "An exploration of human heart anatomy and blood circulation.",
+    "workplace": "heart_lab_workplace",
+    "start": "step1_intro",
+    "actions": [
+      {
+        "id": "step1_intro",
+        "instruction": {
+          "title": "Heart Anatomy Overview",
+          "description": "Welcome. Observe the intact heart and the cutaway view. Note that left and right are oriented to the patient's perspective."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart_model_tangible",
+              "type": "predicate",
+              "augmentation": "label_chambers_pred",
+              "poi": "heart_center"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart_model_tangible",
+              "augmentation": "label_chambers_pred"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step1_intro"
+          }
+        ]
+      },
+      {
+        "id": "step2_tour",
+        "instruction": {
+          "title": "Structural Tour: Chambers",
+          "description": "The heart consists of 4 chambers: Right/Left Atria and Right/Left Ventricles. Observe the cutaway view."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart_model_tangible",
+              "type": "predicate",
+              "augmentation": "label_chambers_pred",
+              "poi": "heart_center"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart_model_tangible",
+              "augmentation": "label_chambers_pred"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step2_tour"
+          }
+        ]
+      },
+      {
+        "id": "step3_circulation",
+        "instruction": {
+          "title": "Dual-Circuit Circulation",
+          "description": "Blue signifies deoxygenated blood in the pulmonary circuit; red signifies oxygenated blood in the systemic circuit."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart_model_tangible",
+              "type": "predicate",
+              "augmentation": "label_chambers_pred",
+              "poi": "heart_center"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart_model_tangible",
+              "augmentation": "label_chambers_pred"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step3_circulation"
+          }
+        ]
+      },
+      {
+        "id": "step4_trace",
+        "instruction": {
+          "title": "Blood Flow Trace",
+          "description": "Watch the red blood cell follow the path from the Vena Cava through the lungs and back to the body."
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart_model_tangible",
+              "type": "predicate",
+              "augmentation": "label_chambers_pred",
+              "poi": "heart_center"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart_model_tangible",
+              "augmentation": "label_chambers_pred"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step4_trace"
+          }
+        ]
+      },
+      {
+        "id": "step5_myocardium",
+        "instruction": {
+          "title": "Ventricular Wall Thickness",
+          "description": "Compare the thin right ventricular wall to the thick, powerful left ventricular wall. Why the difference?"
+        },
+        "enter": {
+          "remove_self": false,
+          "activates": [
+            {
+              "target": "heart_model_tangible",
+              "type": "predicate",
+              "augmentation": "label_chambers_pred",
+              "poi": "heart_center"
+            }
+          ],
+          "deactivate": []
+        },
+        "exit": {
+          "remove_self": false,
+          "activates": [],
+          "deactivate": [
+            {
+              "target": "heart_model_tangible",
+              "augmentation": "label_chambers_pred"
+            }
+          ]
+        },
+        "triggers": [
+          {
+            "mode": "click",
+            "id": "step5_myocardium"
+          }
+        ]
+      }
+    ]
+  }
+}

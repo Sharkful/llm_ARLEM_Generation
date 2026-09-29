@@ -1,0 +1,163 @@
+Create a complete ARLEM AR training scenario for the topic described below.
+
+Build an ARLEMScenario with two parts: a Workplace (the static environment) and an
+Activity (the step-by-step logic).
+
+Workplace requirements:
+- Define at least 3 things (tools, models, or materials the learner interacts with)
+  and at least 2 places (workstations, zones, or surfaces).
+- Include exactly 1 person (the learner) and at least 1 device (the AR headset).
+- Define detectables (markers or anchors) for spatial tracking. The workplace `origin` must
+  reference one detectable, and every thing/place/person must reference a distinct detectable.
+- List the primitives (supported media types: label, image, audio, video, animation) and create
+  predicates (reusable instructional augmentations) that the activity steps will display.
+- Any POI with id "default" must sit at the origin (zero offsets); rotation is allowed.
+
+Activity requirements:
+- Create at least 5 sequential action steps with a clear pedagogical progression.
+- Each action has an instruction (title + description) and enter/exit flows that activate and
+  deactivate augmentations on workplace targets.
+- Advance between steps with triggers (mode "click", "voice", or "detect").
+- Every reference (activate/deactivate targets, augmentations, action location/device/predicate,
+  POIs) must resolve to something defined in the Workplace. The `start` field and any
+  action-to-action links must reference valid action ids. Language is the 2-letter ISO 639-1
+  code (e.g. "en").
+
+The scenario should read like a realistic hands-on AR training session where augmentations
+guide the learner through the topic.
+
+## Field
+chemistry
+
+## Course context
+General Chemistry I, 100-level undergraduate course (majors and non-majors)
+
+## Topic description
+An exploration of VSEPR theory and how it predicts the three-dimensional
+geometry of covalent molecules. Students start from a Lewis structure and
+apply the central idea of VSEPR — that electron pairs around a central
+atom arrange themselves to minimize mutual repulsion — to determine the
+arrangement of bonding and lone pairs in space. The lab walks through
+the five fundamental electron-domain geometries (linear, trigonal planar,
+tetrahedral, trigonal bipyramidal, octahedral) and shows how lone pairs
+modify the molecular geometry within each, producing the full set of
+common shapes: bent, trigonal pyramidal, seesaw, T-shaped, square planar,
+and square pyramidal. Students manipulate electron domains around a
+central atom and watch the geometry settle into its minimum-repulsion
+configuration, then compare to real molecules — water, ammonia, methane,
+PF5, SF6, XeF4 — to see VSEPR predictions matched against observed
+structures. The lab also addresses why lone pairs occupy more angular
+space than bonding pairs, producing the slight bond-angle deviations
+from the idealized geometries (the 104.5° angle in water versus 109.5°
+in methane).
+
+## Learning objectives
+- Students will determine the steric number of a central atom from its Lewis structure by counting bonding pairs and lone pairs.
+- Students will predict the electron-domain geometry of a molecule from its steric number, identifying the linear, trigonal planar, tetrahedral, trigonal bipyramidal, or octahedral arrangement.
+- Students will distinguish electron-domain geometry from molecular geometry, and identify the molecular shape produced when one or more domains is a lone pair.
+- Students will explain why lone pairs occupy more angular space than bonding pairs, and predict the direction of bond-angle deviations from idealized values.
+- Students will apply VSEPR predictions to specific molecules and compare predicted geometries to experimentally observed structures.
+
+## Detailed script
+The lab opens with a setup scene introducing VSEPR theory. A central atom
+appears at the center of the workspace, rendered as a labeled sphere. The
+scene introduces the core idea through narration: electrons in bonding
+pairs and lone pairs around a central atom repel one another, and the
+molecule adopts whatever geometry places these electron domains as far
+apart as possible. A small reference panel off to the side shows a sample
+Lewis structure (water, drawn flat) and reminds students how to count
+electron domains from it: each single bond, double bond, triple bond, or
+lone pair counts as one domain. Narration notes that VSEPR takes a flat
+Lewis structure as input and predicts the actual three-dimensional shape.
+
+The next scene demonstrates the minimum-repulsion principle directly. Two
+electron domains — rendered as mostly-opaque lobed clouds extending out
+from the central atom — appear at arbitrary starting positions. Students
+watch the domains drift apart, repelled by one another, until they settle
+180 degrees apart in a linear arrangement. A third domain is added; the
+three rearrange themselves into a trigonal planar configuration at 120
+degrees. A fourth produces a tetrahedron at 109.5 degrees. With each
+addition, faint repulsion vectors appear briefly between domains during
+the rearrangement and fade once the geometry stabilizes. Narration ties
+each settled configuration to its electron-domain geometry name.
+
+The third scene completes the geometry catalog. Building from the
+tetrahedron, a fifth electron domain is added; the geometry rearranges
+into trigonal bipyramidal, with three equatorial domains at 120 degrees
+and two axial domains at 90 degrees to the equatorial plane. A sixth
+domain produces an octahedral arrangement with all neighbors at 90
+degrees. Students can rotate the molecule freely and see the geometry
+from any angle. A summary panel at the end of the scene shows all five
+electron-domain geometries side by side with their domain counts (2, 3,
+4, 5, 6) and characteristic angles (180°, 120°, 109.5°, 90°/120°, 90°).
+
+The fourth scene introduces the distinction between electron-domain
+geometry and molecular geometry. The tetrahedral arrangement returns,
+this time with three bonding domains shown as solid bonds extending to
+terminal atoms (representing methane: CH4), while a label confirms the
+electron-domain geometry as tetrahedral and the molecular geometry as
+tetrahedral — they match when all domains are bonding. Then one of the
+bonded atoms is replaced with a lone pair: a hydrogen disappears and the
+domain in its place becomes a translucent lone-pair cloud (representing
+ammonia: NH3). The label updates: electron-domain geometry is still
+tetrahedral, but molecular geometry — the shape traced by the atoms
+alone — is now trigonal pyramidal. A second hydrogen is replaced with a
+lone pair (water: H2O); the molecular geometry becomes bent. Narration
+emphasizes that the underlying electron-domain geometry has stayed
+tetrahedral throughout, but the visible shape of the molecule has
+changed because lone pairs are not "seen" as part of the molecular
+shape.
+
+The fifth scene examines lone pair angular asymmetry. The three
+molecules from the previous scene — methane, ammonia, water — are
+displayed side by side, with bond angles labeled (109.5°, 107°,
+104.5°). The lone-pair clouds in ammonia and water are rendered larger
+than the bonding domains, visually conveying that they occupy more
+angular space. Narration explains that lone pairs are held only by the
+central atom rather than shared between two nuclei, so they spread out
+more and compress the remaining bonding angles. Students can toggle a
+view that overlays all three molecules at the central atom to directly
+compare how the H-X-H angle decreases as more lone pairs are added.
+
+The sixth scene is a gallery of real molecules covering all five
+electron-domain geometries. Six molecules appear arranged in space:
+CO2 (linear), BF3 (trigonal planar), CH4 (tetrahedral), PF5 (trigonal
+bipyramidal), SF6 (octahedral), and three lone-pair-containing examples
+worth highlighting separately — NH3 (trigonal pyramidal), H2O (bent),
+and XeF4 (square planar). Students can approach each molecule, see its
+Lewis structure displayed alongside its 3D structure, and confirm the
+count of bonding domains and lone pairs around the central atom.
+Narration walks through each example, naming the electron-domain
+geometry, the molecular geometry, and the bond angles.
+
+The seventh scene is the first prediction activity: drag the domains.
+A central atom appears with a specified number of electron domains
+(starting with four) floating loosely around it, not yet in any
+configuration. Students must drag the domains into the correct
+geometry. The system checks the angular arrangement; when domains are
+positioned within tolerance of the correct angles, the configuration
+snaps into place and is confirmed. The challenge repeats with two,
+three, five, and six domains. After the all-bonding versions, the
+challenge progresses to mixed configurations — for example, four
+domains where one is a lone pair, requiring students to recognize
+that the lone pair occupies a tetrahedral position even though the
+resulting molecular geometry is trigonal pyramidal.
+
+The eighth scene is the second prediction activity: pick from
+options. A Lewis structure of an unfamiliar molecule appears (for
+example, SF4, ClF3, BrF5, or I3-). Three or four candidate 3D
+structures are displayed alongside. Students examine the Lewis
+structure, determine the steric number and lone pair count, and
+select the matching 3D geometry. After each selection, the correct
+answer is confirmed or corrected, and narration walks through the
+reasoning: count the domains, identify the electron-domain geometry,
+account for lone pairs, name the molecular geometry. The challenge
+repeats for several molecules, sampling all five electron-domain
+geometries.
+
+The lab closes with a recap. A summary screen lists the five concept
+areas covered — the minimum-repulsion principle, the five electron-
+domain geometries and their angles, the distinction between
+electron-domain and molecular geometry, lone pair angular asymmetry,
+and the application to real molecules — with each area highlighted in
+turn as the narration reviews it.

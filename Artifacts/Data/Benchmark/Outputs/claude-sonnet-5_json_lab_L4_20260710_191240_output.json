@@ -1,0 +1,1884 @@
+{
+  "version": "2.0",
+  "labId": "vsepr_theory_lab_001",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "General Chemistry I",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Determine the steric number of a central atom from its Lewis structure by counting bonding pairs and lone pairs.",
+    "Predict the electron-domain geometry of a molecule from its steric number (linear, trigonal planar, tetrahedral, trigonal bipyramidal, octahedral).",
+    "Distinguish electron-domain geometry from molecular geometry, identifying the shape produced when one or more domains is a lone pair.",
+    "Explain why lone pairs occupy more angular space than bonding pairs and predict resulting bond-angle deviations.",
+    "Apply VSEPR predictions to real molecules and compare to experimentally observed structures."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Introduction to VSEPR Theory",
+      "description": "Introduces the core minimum-repulsion principle of VSEPR and how to count electron domains from a Lewis structure.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "State the central VSEPR principle: electron domains arrange to minimize mutual repulsion.",
+        "Count electron domains (bonds and lone pairs) from a Lewis structure."
+      ],
+      "instructions": [
+        "Watch the central atom and reference panel as the narrator introduces VSEPR theory."
+      ],
+      "objects": [
+        {
+          "prefab": "atomPrefab",
+          "name": "centralAtom",
+          "position": [
+            0,
+            1.2,
+            0.5
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "color": [
+            80,
+            130,
+            220,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Central Atom",
+              "fontSize": 28
+            }
+          ]
+        },
+        {
+          "prefab": "panelPrefab",
+          "name": "referencePanel",
+          "position": [
+            -0.8,
+            1.3,
+            0.3
+          ],
+          "scale": [
+            0.4,
+            0.3,
+            0.01
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            255,
+            255,
+            220
+          ]
+        },
+        {
+          "prefab": "lewisStructurePrefab",
+          "name": "waterLewisFlat",
+          "position": [
+            -0.8,
+            1.3,
+            0.31
+          ],
+          "scale": [
+            0.25,
+            0.25,
+            0.01
+          ],
+          "enabled": false,
+          "texture": "lewis_water_flat"
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_intro_principle",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "centralAtom",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Central atom sphere appears at the start of the scene to anchor the narration about VSEPR's core principle.",
+          "narration": "Welcome to VSEPR theory. In this lab, we'll explore how electron pairs around a central atom arrange themselves in three-dimensional space. The central idea is simple: electron domains repel one another and settle into whatever geometry keeps them as far apart as possible."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_counting_domains",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "referencePanel",
+              "enabled": true
+            },
+            {
+              "target": "waterLewisFlat",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Reference panel and flat Lewis structure of water fade in beside the central atom to demonstrate domain counting.",
+          "narration": "Here's a flat Lewis structure of water. To count electron domains around the central oxygen atom, count each single bond, double bond, triple bond, or lone pair as one domain. Water has two bonding pairs and two lone pairs, for a total steric number of four."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vsepr_2d_to_3d",
+          "autoAdvance": false,
+          "changeMeaning": "No visual change; narration bridges to the next scene where domains will be animated into 3D arrangements.",
+          "narration": "VSEPR takes this flat, two-dimensional Lewis structure as input and predicts the real three-dimensional shape the molecule adopts. That's what we'll build up next."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Minimum Repulsion in Action",
+      "description": "Demonstrates domains repelling and settling into linear, trigonal planar, and tetrahedral arrangements as domains are added one by one.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Observe how two, three, and four electron domains settle into minimum-repulsion configurations.",
+        "Name the linear, trigonal planar, and tetrahedral electron-domain geometries and their angles."
+      ],
+      "instructions": [
+        "Watch as electron domains are added one at a time and repel into stable geometries."
+      ],
+      "objects": [
+        {
+          "prefab": "atomPrefab",
+          "name": "coreAtom",
+          "position": [
+            0,
+            1.2,
+            0.5
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            80,
+            130,
+            220,
+            255
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "domain1",
+          "position": [
+            0.3,
+            1.3,
+            0.5
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "domain2",
+          "position": [
+            -0.2,
+            1.1,
+            0.6
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "domain3",
+          "position": [
+            0.1,
+            1.4,
+            0.3
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "domain4",
+          "position": [
+            -0.3,
+            1.0,
+            0.7
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ]
+        },
+        {
+          "prefab": "repulsionVectorPrefab",
+          "name": "repulsionLines",
+          "position": [
+            0,
+            1.2,
+            0.5
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            60,
+            60,
+            150
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_two_domains_start",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "repulsionLines",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Two domains appear at arbitrary, non-aligned starting positions around the core atom before repulsion animation begins.",
+          "narration": "Let's watch two electron domains find their minimum-repulsion arrangement. They start at arbitrary positions near the central atom."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_linear_settle",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "domain1",
+              "position": [
+                0.4,
+                1.2,
+                0.5
+              ]
+            },
+            {
+              "target": "domain2",
+              "position": [
+                -0.4,
+                1.2,
+                0.5
+              ]
+            },
+            {
+              "target": "repulsionLines",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "Domains 1 and 2 move to opposite sides of the core atom forming a 180-degree linear arrangement; repulsion vectors fade out.",
+          "narration": "Repelled by one another, the two domains drift apart until they settle exactly opposite each other, 180 degrees apart. This is the linear electron-domain geometry."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vsepr_trigonal_planar",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "domain3",
+              "enabled": true
+            },
+            {
+              "target": "repulsionLines",
+              "enabled": true
+            },
+            {
+              "target": "domain1",
+              "position": [
+                0.4,
+                1.2,
+                0.5
+              ]
+            },
+            {
+              "target": "domain2",
+              "position": [
+                -0.2,
+                1.2,
+                0.35
+              ]
+            },
+            {
+              "target": "domain3",
+              "position": [
+                -0.2,
+                1.2,
+                0.65
+              ]
+            }
+          ],
+          "changeMeaning": "A third domain appears and all three domains reposition into a flat, 120-degree trigonal planar arrangement.",
+          "narration": "Now let's add a third domain. Watch as all three repel and rearrange into a trigonal planar shape, each 120 degrees from its neighbors."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "vsepr_tetrahedral_settle",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "domain4",
+              "enabled": true
+            },
+            {
+              "target": "domain1",
+              "position": [
+                0.28,
+                1.35,
+                0.6
+              ]
+            },
+            {
+              "target": "domain2",
+              "position": [
+                -0.28,
+                1.35,
+                0.6
+              ]
+            },
+            {
+              "target": "domain3",
+              "position": [
+                0.28,
+                1.05,
+                0.4
+              ]
+            },
+            {
+              "target": "domain4",
+              "position": [
+                -0.28,
+                1.05,
+                0.4
+              ]
+            },
+            {
+              "target": "repulsionLines",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "A fourth domain is introduced and all four domains reposition into a tetrahedral arrangement at 109.5 degrees; repulsion vectors fade once stable.",
+          "narration": "A fourth domain pushes the arrangement into three dimensions, producing a tetrahedron with bond angles of 109.5 degrees. This is the tetrahedral electron-domain geometry, the most common of all."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Completing the Geometry Catalog",
+      "description": "Extends the domain model to five and six domains, producing trigonal bipyramidal and octahedral geometries, and summarizes all five electron-domain geometries.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Describe the trigonal bipyramidal geometry with equatorial (120 degree) and axial (90 degree) positions.",
+        "Describe the octahedral geometry with all neighbors at 90 degrees.",
+        "Recall all five electron-domain geometries with their domain counts and characteristic angles."
+      ],
+      "instructions": [
+        "Rotate the molecule freely to inspect the 3D structure from any angle."
+      ],
+      "objects": [
+        {
+          "prefab": "atomPrefab",
+          "name": "coreAtom2",
+          "position": [
+            0,
+            1.2,
+            0.5
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            80,
+            130,
+            220,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "eqDomain1",
+          "position": [
+            0.3,
+            1.2,
+            0.5
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "eqDomain2",
+          "position": [
+            -0.15,
+            1.2,
+            0.35
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "eqDomain3",
+          "position": [
+            -0.15,
+            1.2,
+            0.65
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "axDomain1",
+          "position": [
+            0,
+            1.4,
+            0.5
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "axDomain2",
+          "position": [
+            0,
+            1.0,
+            0.5
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "octDomain6",
+          "position": [
+            0,
+            1.2,
+            0.8
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ]
+        },
+        {
+          "prefab": "summaryPanelPrefab",
+          "name": "geometrySummaryPanel",
+          "position": [
+            0,
+            1.6,
+            0.2
+          ],
+          "scale": [
+            0.6,
+            0.4,
+            0.01
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            255,
+            255,
+            230
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "2: Linear 180\u00b0\\n3: Trigonal Planar 120\u00b0\\n4: Tetrahedral 109.5\u00b0\\n5: Trig. Bipyramidal 90\u00b0/120\u00b0\\n6: Octahedral 90\u00b0",
+              "fontSize": 24,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_trig_bipyramidal",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "axDomain1",
+              "enabled": true
+            },
+            {
+              "target": "axDomain2",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Five domains rearrange into trigonal bipyramidal geometry: three equatorial domains at 120 degrees and two axial domains added above and below at 90 degrees.",
+          "narration": "Starting from our tetrahedron, let's add a fifth domain. Three domains move into an equatorial plane at 120 degrees to each other, while two more take axial positions at 90 degrees to that plane."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_octahedral_settle",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "octDomain6",
+              "enabled": true
+            },
+            {
+              "target": "axDomain1",
+              "position": [
+                0,
+                1.4,
+                0.5
+              ]
+            },
+            {
+              "target": "axDomain2",
+              "position": [
+                0,
+                1.0,
+                0.5
+              ]
+            }
+          ],
+          "changeMeaning": "A sixth domain appears and the two axial domains reposition to complete a symmetric octahedral arrangement with all 90-degree angles.",
+          "narration": "Adding a sixth domain produces the octahedral geometry, where every neighboring domain is 90 degrees away. Feel free to rotate the molecule and inspect it from any angle."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vsepr_geometry_summary",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "geometrySummaryPanel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "A summary panel listing all five electron-domain geometries with domain counts and characteristic angles appears for review.",
+          "narration": "Here is the complete catalog of electron-domain geometries: two domains give linear at 180 degrees, three give trigonal planar at 120, four give tetrahedral at 109.5, five give trigonal bipyramidal with both 90 and 120 degree angles, and six give octahedral at a uniform 90 degrees."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Electron-Domain vs Molecular Geometry",
+      "description": "Uses methane, ammonia, and water to distinguish electron-domain geometry (always tetrahedral) from the observed molecular geometry when lone pairs are present.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Differentiate electron-domain geometry from molecular geometry.",
+        "Identify trigonal pyramidal and bent shapes as tetrahedral-derived molecular geometries."
+      ],
+      "instructions": [
+        "Watch as hydrogens are replaced by lone pairs and observe how the molecular geometry label changes."
+      ],
+      "objects": [
+        {
+          "prefab": "atomPrefab",
+          "name": "centralC_N_O",
+          "position": [
+            0,
+            1.2,
+            0.5
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            100,
+            100,
+            220,
+            255
+          ]
+        },
+        {
+          "prefab": "bondedAtomPrefab",
+          "name": "atomH1",
+          "position": [
+            0.28,
+            1.35,
+            0.6
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            220,
+            220,
+            220,
+            255
+          ]
+        },
+        {
+          "prefab": "bondedAtomPrefab",
+          "name": "atomH2",
+          "position": [
+            -0.28,
+            1.35,
+            0.6
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            220,
+            220,
+            220,
+            255
+          ]
+        },
+        {
+          "prefab": "bondedAtomPrefab",
+          "name": "atomH3",
+          "position": [
+            0.28,
+            1.05,
+            0.4
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            220,
+            220,
+            220,
+            255
+          ]
+        },
+        {
+          "prefab": "bondedAtomPrefab",
+          "name": "atomH4",
+          "position": [
+            -0.28,
+            1.05,
+            0.4
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            220,
+            220,
+            220,
+            255
+          ]
+        },
+        {
+          "prefab": "lonePairCloud",
+          "name": "lonePairA",
+          "position": [
+            -0.28,
+            1.35,
+            0.6
+          ],
+          "scale": [
+            0.18,
+            0.12,
+            0.12
+          ],
+          "enabled": false,
+          "color": [
+            200,
+            150,
+            255,
+            160
+          ]
+        },
+        {
+          "prefab": "lonePairCloud",
+          "name": "lonePairB",
+          "position": [
+            -0.28,
+            1.05,
+            0.4
+          ],
+          "scale": [
+            0.18,
+            0.12,
+            0.12
+          ],
+          "enabled": false,
+          "color": [
+            200,
+            150,
+            255,
+            160
+          ]
+        },
+        {
+          "prefab": "labelPrefab",
+          "name": "geometryLabel",
+          "position": [
+            0,
+            1.7,
+            0.4
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.01
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Electron-Domain: Tetrahedral\\nMolecular: Tetrahedral (CH4)",
+              "fontSize": 26,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_methane_match",
+          "autoAdvance": true,
+          "changeMeaning": "Methane's tetrahedral structure with four bonded hydrogens is displayed, establishing the baseline case where electron-domain and molecular geometry are identical.",
+          "narration": "Here is methane, CH4. All four domains around carbon are bonding pairs to hydrogen atoms. The electron-domain geometry is tetrahedral, and since every domain is a bond, the molecular geometry is also tetrahedral. They match."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_ammonia_pyramidal",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "atomH2",
+              "enabled": false
+            },
+            {
+              "target": "lonePairA",
+              "enabled": true
+            },
+            {
+              "target": "geometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Electron-Domain: Tetrahedral\\nMolecular: Trigonal Pyramidal (NH3)",
+                  "fontSize": 26,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "One hydrogen atom is removed and replaced by a translucent lone-pair cloud, transforming methane into ammonia; the label updates to reflect the new trigonal pyramidal molecular geometry.",
+          "narration": "Now watch what happens when we replace one hydrogen with a lone pair, giving us ammonia, NH3. The electron-domain geometry is still tetrahedral, but the molecular geometry -- the shape traced by the atoms alone -- is now trigonal pyramidal."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vsepr_water_bent",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "atomH3",
+              "enabled": false
+            },
+            {
+              "target": "lonePairB",
+              "enabled": true
+            },
+            {
+              "target": "geometryLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Electron-Domain: Tetrahedral\\nMolecular: Bent (H2O)",
+                  "fontSize": 26,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "A second hydrogen is removed and replaced by another lone-pair cloud, transforming ammonia into water; the label updates to show the bent molecular geometry.",
+          "narration": "Replacing a second hydrogen with another lone pair gives us water, H2O. The electron-domain geometry remains tetrahedral throughout, but the molecular geometry is now bent. The lone pairs aren't seen as part of the molecular shape, but they still occupy space and influence it."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Lone Pair Angular Asymmetry",
+      "description": "Compares methane, ammonia, and water side by side to show how lone pairs occupy more angular space and compress bonding angles.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Explain why lone pairs occupy more angular space than bonding pairs.",
+        "Predict the direction of bond-angle deviation as lone pairs replace bonding pairs (109.5\u00b0 to 107\u00b0 to 104.5\u00b0)."
+      ],
+      "instructions": [
+        "Toggle the overlay view to compare how the H-X-H angle decreases as lone pairs are added."
+      ],
+      "objects": [
+        {
+          "prefab": "moleculePrefab",
+          "name": "methaneDisplay",
+          "position": [
+            -0.8,
+            1.2,
+            0.4
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "CH4: 109.5\u00b0",
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "ammoniaDisplay",
+          "position": [
+            0,
+            1.2,
+            0.4
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "NH3: 107\u00b0",
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "waterDisplay",
+          "position": [
+            0.8,
+            1.2,
+            0.4
+          ],
+          "scale": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "H2O: 104.5\u00b0",
+              "fontSize": 24
+            }
+          ]
+        },
+        {
+          "prefab": "lonePairCloud",
+          "name": "ammoniaLP",
+          "position": [
+            0,
+            1.4,
+            0.5
+          ],
+          "scale": [
+            0.22,
+            0.15,
+            0.15
+          ],
+          "color": [
+            200,
+            150,
+            255,
+            170
+          ]
+        },
+        {
+          "prefab": "lonePairCloud",
+          "name": "waterLP1",
+          "position": [
+            0.72,
+            1.4,
+            0.5
+          ],
+          "scale": [
+            0.24,
+            0.17,
+            0.17
+          ],
+          "color": [
+            200,
+            150,
+            255,
+            180
+          ]
+        },
+        {
+          "prefab": "lonePairCloud",
+          "name": "waterLP2",
+          "position": [
+            0.88,
+            1.4,
+            0.5
+          ],
+          "scale": [
+            0.24,
+            0.17,
+            0.17
+          ],
+          "color": [
+            200,
+            150,
+            255,
+            180
+          ]
+        },
+        {
+          "prefab": "overlayCenterPrefab",
+          "name": "overlayComparison",
+          "position": [
+            0,
+            0.9,
+            0.4
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_angle_comparison_intro",
+          "autoAdvance": true,
+          "changeMeaning": "Three molecules with labeled bond angles are displayed side by side, with lone-pair clouds rendered larger than bonding domains to visually convey their greater angular extent.",
+          "narration": "Here are methane, ammonia, and water side by side. Notice the bond angles: 109.5 degrees in methane, 107 degrees in ammonia, and 104.5 degrees in water. Notice too that the lone-pair clouds are drawn larger than the bonding domains."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_lone_pair_explanation",
+          "autoAdvance": true,
+          "changeMeaning": "No new objects; narration explains the physical reasoning behind lone pair angular asymmetry while the three molecules remain visible for reference.",
+          "narration": "Why does this happen? A lone pair is held only by the central atom's nucleus, unlike a bonding pair which is shared and pulled between two nuclei. With less nuclear pull constraining it, the lone pair spreads out more, occupying greater angular space and compressing the neighboring bond angles."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vsepr_overlay_toggle",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "overlayComparison",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "An overlay view appears beneath the three molecules, aligning them at a common central point so students can directly compare decreasing bond angles.",
+          "narration": "Toggle this overlay to see all three molecules aligned at their central atoms. You can directly compare how the H-X-H angle shrinks as each successive lone pair is added."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Gallery of Real Molecules",
+      "description": "Presents a gallery of real molecules spanning all five electron-domain geometries, pairing Lewis structures with 3D shapes.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Identify the electron-domain and molecular geometry of CO2, BF3, CH4, PF5, SF6, NH3, H2O, and XeF4.",
+        "Confirm the count of bonding domains and lone pairs for each real molecule."
+      ],
+      "instructions": [
+        "Approach each molecule to see its Lewis structure displayed alongside its 3D structure."
+      ],
+      "objects": [
+        {
+          "prefab": "moleculePrefab",
+          "name": "co2Gallery",
+          "position": [
+            -1.2,
+            1.2,
+            0.3
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "CO2: Linear",
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "bf3Gallery",
+          "position": [
+            -0.7,
+            1.2,
+            0.5
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "BF3: Trigonal Planar",
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "ch4Gallery",
+          "position": [
+            -0.2,
+            1.2,
+            0.3
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "CH4: Tetrahedral",
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "pf5Gallery",
+          "position": [
+            0.3,
+            1.2,
+            0.5
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "PF5: Trig. Bipyramidal",
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "sf6Gallery",
+          "position": [
+            0.8,
+            1.2,
+            0.3
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "SF6: Octahedral",
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "nh3Gallery",
+          "position": [
+            -0.9,
+            1.2,
+            -0.2
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "NH3: Trigonal Pyramidal",
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "h2oGallery",
+          "position": [
+            0,
+            1.2,
+            -0.2
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "H2O: Bent",
+              "fontSize": 22
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "xef4Gallery",
+          "position": [
+            0.9,
+            1.2,
+            -0.2
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "XeF4: Square Planar",
+              "fontSize": 22
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_gallery_co2_bf3",
+          "autoAdvance": true,
+          "changeMeaning": "All eight gallery molecules appear arranged in the workspace; narration begins walking through the linear and trigonal planar examples.",
+          "narration": "Welcome to the gallery of real molecules. Here we have eight molecules covering all five electron-domain geometries. Let's start with CO2, a linear molecule with two double bonds and no lone pairs on carbon, and BF3, a trigonal planar molecule with three bonding domains and no lone pairs on boron."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_gallery_ch4_pf5_sf6",
+          "autoAdvance": true,
+          "changeMeaning": "Narration continues through the tetrahedral, trigonal bipyramidal, and octahedral examples where electron-domain and molecular geometries coincide.",
+          "narration": "Next, CH4 with four bonding domains gives a tetrahedral shape. PF5, with five bonding domains and no lone pairs, gives trigonal bipyramidal. SF6, with six bonding domains, gives octahedral. In each of these, all domains are bonding, so electron-domain and molecular geometry match."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vsepr_gallery_nh3_h2o_xef4",
+          "autoAdvance": false,
+          "changeMeaning": "Narration completes the gallery tour with the three lone-pair examples, explaining how their molecular geometries diverge from their electron-domain geometries.",
+          "narration": "Now the lone-pair-containing examples. NH3 has four domains, one a lone pair, giving trigonal pyramidal. H2O has four domains, two lone pairs, giving bent. XeF4 has six domains around xenon, two of them lone pairs, giving square planar -- the lone pairs occupy opposite axial-like positions, leaving four fluorines in a flat square."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Prediction Activity: Drag the Domains",
+      "description": "Interactive challenge where students drag floating electron domains into the correct minimum-repulsion geometry for varying domain counts, including mixed bonding/lone-pair cases.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Correctly arrange 2, 3, 4, 5, and 6 electron domains into their minimum-repulsion geometries.",
+        "Recognize that a lone pair occupies a normal electron-domain position even though it changes the resulting molecular geometry."
+      ],
+      "instructions": [
+        "Drag each floating domain into position around the central atom until the geometry snaps into place.",
+        "Complete the challenge for 2, 3, 4, 5, and 6 domains, then for mixed bonding/lone-pair cases."
+      ],
+      "objects": [
+        {
+          "prefab": "atomPrefab",
+          "name": "challengeCore",
+          "position": [
+            0,
+            1.2,
+            0.5
+          ],
+          "scale": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "color": [
+            80,
+            130,
+            220,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "checkAngle",
+              "azmTarget": 109,
+              "azmTolerance": 15,
+              "altTarget": 0,
+              "altTolerance": 15,
+              "audioClipSuccess": "vsepr_challenge_correct_tetrahedral",
+              "callBackObjects": [
+                "challengeFeedbackLabel"
+              ]
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "dragDomain1",
+          "position": [
+            0.5,
+            1.5,
+            0.2
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "dragDomain2",
+          "position": [
+            -0.5,
+            1.5,
+            0.2
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "dragDomain3",
+          "position": [
+            0.5,
+            0.9,
+            0.8
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "electronDomainCloud",
+          "name": "dragDomain4",
+          "position": [
+            -0.5,
+            0.9,
+            0.8
+          ],
+          "scale": [
+            0.15,
+            0.1,
+            0.1
+          ],
+          "color": [
+            255,
+            220,
+            100,
+            180
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            }
+          ]
+        },
+        {
+          "prefab": "labelPrefab",
+          "name": "challengeFeedbackLabel",
+          "position": [
+            0,
+            1.75,
+            0.4
+          ],
+          "scale": [
+            0.25,
+            0.15,
+            0.01
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Drag the domains into a tetrahedral arrangement (4 domains, 109.5\u00b0)",
+              "fontSize": 24,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_challenge_intro_four",
+          "autoAdvance": false,
+          "changeMeaning": "Four draggable electron domains appear at arbitrary loose positions around the central atom, awaiting student manipulation into a tetrahedral configuration.",
+          "narration": "Your challenge: drag these four floating electron domains into the correct minimum-repulsion arrangement. When you place them within tolerance of the correct tetrahedral angles, the geometry will snap into place."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_challenge_mixed_case",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "dragDomain4",
+              "color": [
+                200,
+                150,
+                255,
+                170
+              ]
+            },
+            {
+              "target": "challengeFeedbackLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Mixed case: 4 domains, 1 lone pair. Arrange tetrahedrally, then name the molecular geometry.",
+                  "fontSize": 24,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "One of the four domains is recolored/restyled to represent a lone pair, introducing the mixed bonding/lone-pair challenge variant while keeping the same tetrahedral target geometry.",
+          "narration": "Great work. Now let's try a mixed case: four domains again, but one of them is a lone pair. The lone pair still occupies a tetrahedral position -- but remember, the resulting molecular geometry, traced by atoms only, will be trigonal pyramidal."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Prediction Activity: Pick the Geometry",
+      "description": "Interactive challenge presenting unfamiliar Lewis structures (SF4, ClF3, BrF5, I3-) with candidate 3D structures for students to match.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Determine steric number and lone pair count from an unfamiliar Lewis structure.",
+        "Select the correct 3D molecular geometry from multiple candidates and justify the reasoning."
+      ],
+      "instructions": [
+        "Examine each Lewis structure, determine the steric number and lone pair count, and select the matching 3D geometry from the candidates."
+      ],
+      "objects": [
+        {
+          "prefab": "lewisStructurePrefab",
+          "name": "unknownLewis",
+          "position": [
+            -0.6,
+            1.3,
+            0.4
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.01
+          ],
+          "texture": "lewis_sf4_flat"
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "candidateA",
+          "position": [
+            0.2,
+            1.4,
+            0.5
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            },
+            {
+              "componentType": "textMeshPro",
+              "text": "Option A: Seesaw",
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "candidateB",
+          "position": [
+            0.6,
+            1.4,
+            0.5
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            },
+            {
+              "componentType": "textMeshPro",
+              "text": "Option B: Square Planar",
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "candidateC",
+          "position": [
+            0.2,
+            1.0,
+            0.7
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            },
+            {
+              "componentType": "textMeshPro",
+              "text": "Option C: T-Shaped",
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "moleculePrefab",
+          "name": "candidateD",
+          "position": [
+            0.6,
+            1.0,
+            0.7
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "components": [
+            {
+              "componentType": "pointerReceiver",
+              "draggable": false,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            },
+            {
+              "componentType": "textMeshPro",
+              "text": "Option D: Trigonal Bipyramidal",
+              "fontSize": 20
+            }
+          ]
+        },
+        {
+          "prefab": "labelPrefab",
+          "name": "reasoningLabel",
+          "position": [
+            0,
+            1.7,
+            0.4
+          ],
+          "scale": [
+            0.3,
+            0.15,
+            0.01
+          ],
+          "enabled": false,
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "",
+              "fontSize": 22,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_pick_sf4_prompt",
+          "autoAdvance": true,
+          "changeMeaning": "The Lewis structure for SF4 and four candidate 3D geometry options appear for students to examine and select from.",
+          "narration": "Here's the Lewis structure of SF4, sulfur tetrafluoride. Count the domains around sulfur: four bonding pairs plus one lone pair, giving a steric number of five. Which of these candidate 3D structures matches?"
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_pick_sf4_answer",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "reasoningLabel",
+              "enabled": true,
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Correct: Seesaw. Steric number 5, 1 lone pair in equatorial position (trigonal bipyramidal electron-domain geometry).",
+                  "fontSize": 22,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Reasoning label appears confirming option A as correct and explaining the steric number and lone-pair placement logic behind the seesaw shape.",
+          "narration": "The correct answer is A: seesaw. With a steric number of five, the electron-domain geometry is trigonal bipyramidal. Placing the lone pair in an equatorial position -- where it has the most room -- leaves four bonding fluorines in a seesaw shape."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vsepr_pick_more_examples",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "unknownLewis"
+            },
+            {
+              "target": "reasoningLabel",
+              "enabled": false
+            }
+          ],
+          "changeMeaning": "Lewis structure and candidates update to ClF3, continuing the challenge sequence and previewing further examples (BrF5, I3-) to cover octahedral and linear cases with lone pairs.",
+          "narration": "Let's try another: ClF3, chlorine trifluoride, has three bonding pairs and two lone pairs -- steric number five again, but this time both lone pairs go equatorial, producing a T-shape. Try BrF5 and I3- next, sampling octahedral and linear geometries with lone pairs."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Lab Recap",
+      "description": "Summarizes the five core concept areas covered in the lab: minimum repulsion, the five electron-domain geometries, electron-domain vs molecular geometry, lone pair asymmetry, and application to real molecules.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Recall and synthesize the five core concept areas of VSEPR theory covered in this lab."
+      ],
+      "instructions": [
+        "Review the summary screen as each concept area is highlighted."
+      ],
+      "objects": [
+        {
+          "prefab": "summaryPanelPrefab",
+          "name": "recapPanel",
+          "position": [
+            0,
+            1.3,
+            0.4
+          ],
+          "scale": [
+            0.7,
+            0.5,
+            0.01
+          ],
+          "color": [
+            255,
+            255,
+            255,
+            230
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "1. Minimum Repulsion Principle\\n2. Five Electron-Domain Geometries\\n3. Electron-Domain vs Molecular Geometry\\n4. Lone Pair Angular Asymmetry\\n5. Application to Real Molecules",
+              "fontSize": 26,
+              "wrapText": true
+            }
+          ]
+        },
+        {
+          "prefab": "highlightBoxPrefab",
+          "name": "highlightBox",
+          "position": [
+            0,
+            1.5,
+            0.42
+          ],
+          "scale": [
+            0.65,
+            0.08,
+            0.01
+          ],
+          "color": [
+            255,
+            240,
+            150,
+            200
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "vsepr_recap_1",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "highlightBox",
+              "position": [
+                0,
+                1.5,
+                0.42
+              ]
+            }
+          ],
+          "changeMeaning": "Recap panel appears with the highlight box positioned over the first concept area, the minimum-repulsion principle.",
+          "narration": "Let's recap what we've covered. First, the minimum-repulsion principle: electron domains around a central atom arrange themselves to be as far apart as possible."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "vsepr_recap_2",
+          "autoAdvance": true,
+          "changes": [
+            {
+              "target": "highlightBox",
+              "position": [
+                0,
+                1.42,
+                0.42
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight box moves down to the second concept area, the five electron-domain geometries.",
+          "narration": "Second, the five electron-domain geometries -- linear, trigonal planar, tetrahedral, trigonal bipyramidal, and octahedral -- each defined by domain count and characteristic angle."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "vsepr_recap_3_4_5",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "highlightBox",
+              "position": [
+                0,
+                1.2,
+                0.42
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight box moves through the remaining three concept areas in sequence as narration reviews electron-domain vs molecular geometry, lone pair asymmetry, and application to real molecules.",
+          "narration": "Third, the distinction between electron-domain geometry and molecular geometry -- they match only when every domain is a bonding pair. Fourth, lone pairs occupy more angular space than bonding pairs, compressing bond angles below idealized values. And fifth, applying all of this to real molecules like water, ammonia, methane, PF5, SF6, and XeF4 lets us match VSEPR predictions against observed structures."
+        }
+      ]
+    }
+  ]
+}

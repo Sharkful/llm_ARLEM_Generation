@@ -1,0 +1,2358 @@
+{
+  "version": "2.0",
+  "labId": "astro_retrograde_motion_101",
+  "author": "A Robot",
+  "institution": "MTSU",
+  "courseName": "Introduction to Astronomy",
+  "estimatedLength": "45 minutes",
+  "objectives": [
+    "Describe the apparent path of Mars across the night sky during a retrograde episode, including the eastward drift, westward loop, and return to eastward motion.",
+    "Explain why apparent retrograde motion occurs in the heliocentric model as a consequence of Earth overtaking a slower-moving outer planet.",
+    "Contrast the geocentric and heliocentric explanations of retrograde motion and articulate why the heliocentric model is preferred on grounds of parsimony.",
+    "Predict when retrograde motion will occur for a given outer planet based on the relative orbital positions of Earth and that planet.",
+    "Compare the apparent retrograde loops of Mars, Jupiter, and Saturn, and explain why more distant planets produce smaller loops."
+  ],
+  "modules": [
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 1: The Night-Sky Puzzle",
+      "description": "Students stand on a virtual Earth at night and watch Mars trace a retrograde loop against the labeled constellations of the ecliptic over about six months.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Describe the apparent eastward drift of Mars against the background stars.",
+        "Recognize the westward retrograde loop and its return to eastward motion.",
+        "Frame retrograde motion as the central puzzle of pre-modern astronomy."
+      ],
+      "instructions": [
+        "Look up at the starfield around you.",
+        "Locate the red point of Mars among the constellations.",
+        "Use Next to fast-forward through time and watch Mars's motion."
+      ],
+      "objects": [
+        {
+          "prefab": "starfieldDomePrefab",
+          "name": "Starfield",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            3,
+            3,
+            3
+          ],
+          "texture": "night_sky_ecliptic_starfield"
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "LabelLeo",
+          "position": [
+            -1.2,
+            1.4,
+            1.5
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Leo",
+              "color": [
+                200,
+                200,
+                255,
+                255
+              ],
+              "fontSize": 34
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "LabelVirgo",
+          "position": [
+            -0.2,
+            1.4,
+            1.8
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Virgo",
+              "color": [
+                200,
+                200,
+                255,
+                255
+              ],
+              "fontSize": 34
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "LabelLibra",
+          "position": [
+            0.9,
+            1.4,
+            1.6
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Libra",
+              "color": [
+                200,
+                200,
+                255,
+                255
+              ],
+              "fontSize": 34
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "LabelScorpio",
+          "position": [
+            1.6,
+            1.3,
+            1.0
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Scorpio",
+              "color": [
+                200,
+                200,
+                255,
+                255
+              ],
+              "fontSize": 34
+            }
+          ]
+        },
+        {
+          "prefab": "marsPointPrefab",
+          "name": "MarsPoint",
+          "position": [
+            -1.0,
+            1.3,
+            1.6
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "color": [
+            220,
+            70,
+            40,
+            255
+          ]
+        },
+        {
+          "prefab": "trailMarkerPrefab",
+          "name": "MarsTrail",
+          "position": [
+            0,
+            1.3,
+            1.6
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "retrograde_intro_nightsky",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "MarsPoint",
+              "position": [
+                -1.0,
+                1.3,
+                1.6
+              ]
+            }
+          ],
+          "changeMeaning": "Introduce the night sky and Mars at its starting position to establish the observational setup.",
+          "narration": "You are standing on Earth at night, looking up at the stars. Among the constellations of the ecliptic sits a distinctly reddish point of light: Mars. Watch how its position changes over the coming months."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "retrograde_eastward_drift",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "MarsTrail",
+              "enabled": true
+            },
+            {
+              "target": "MarsPoint",
+              "position": [
+                -0.2,
+                1.35,
+                1.75
+              ]
+            }
+          ],
+          "changeMeaning": "Move Mars eastward and enable its trail to show two months of normal prograde drift.",
+          "narration": "For the first two months, Mars drifts slowly eastward against the background stars, moving from Leo toward Virgo. This steady eastward motion is what a planet normally does."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "retrograde_westward_loop",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "MarsPoint",
+              "position": [
+                -0.6,
+                1.25,
+                1.7
+              ]
+            }
+          ],
+          "changeMeaning": "Move Mars back westward to trace the retrograde loop, the heart of the puzzle.",
+          "narration": "Then something strange happens. Mars slows, halts, and reverses. For about two months it moves westward, tracing a loop roughly fifteen degrees across. Why would a planet move backward?"
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "retrograde_resume_east",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "MarsPoint",
+              "position": [
+                0.6,
+                1.4,
+                1.55
+              ]
+            }
+          ],
+          "changeMeaning": "Move Mars eastward again past its earlier position to complete the loop and pose the central question.",
+          "narration": "Finally Mars slows again, reverses once more, and resumes its eastward march. The complete trail shows the full backward loop. For thousands of years, explaining this loop was astronomy's central challenge."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 2: The Geocentric Explanation",
+      "description": "The Ptolemaic model with epicycles and deferents is demonstrated, showing how Mars's backward loop was produced within an Earth-centered universe.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Identify the epicycle and deferent in the geocentric model.",
+        "Explain how combined circular motions produce an apparent backward loop.",
+        "Recognize the growing complexity of the epicycle model as observational data improved."
+      ],
+      "instructions": [
+        "Observe Earth at the center of the model.",
+        "Watch Mars ride its small epicycle atop the larger deferent.",
+        "Note when Mars appears to move backward."
+      ],
+      "objects": [
+        {
+          "prefab": "earthPrefab",
+          "name": "GeoEarth",
+          "position": [
+            0,
+            1.2,
+            1.2
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "texture": "2k_earth_daymap"
+        },
+        {
+          "prefab": "orbitRingPrefab",
+          "name": "Deferent",
+          "position": [
+            0,
+            1.2,
+            1.2
+          ],
+          "scale": [
+            0.7,
+            0.7,
+            0.7
+          ],
+          "color": [
+            180,
+            180,
+            220,
+            200
+          ]
+        },
+        {
+          "prefab": "epicycleHubPrefab",
+          "name": "EpicycleCenter",
+          "position": [
+            0.35,
+            1.2,
+            1.2
+          ],
+          "scale": [
+            0.03,
+            0.03,
+            0.03
+          ],
+          "color": [
+            150,
+            150,
+            200,
+            150
+          ],
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                0.35,
+                0,
+                0
+              ],
+              "orbitalPeriod": 24.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "orbitRingPrefab",
+          "name": "Epicycle",
+          "parent": "EpicycleCenter",
+          "position": [
+            0.35,
+            1.2,
+            1.2
+          ],
+          "scale": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "color": [
+            220,
+            160,
+            160,
+            200
+          ]
+        },
+        {
+          "prefab": "marsPointPrefab",
+          "name": "GeoMars",
+          "parent": "EpicycleCenter",
+          "position": [
+            0.5,
+            1.2,
+            1.2
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "color": [
+            220,
+            70,
+            40,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                0.15,
+                0,
+                0
+              ],
+              "orbitalPeriod": 6.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "DeferentLabel",
+          "position": [
+            -0.7,
+            0.9,
+            1.2
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Deferent",
+              "color": [
+                180,
+                180,
+                220,
+                255
+              ],
+              "fontSize": 30
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "EpicycleLabel",
+          "position": [
+            0.6,
+            1.5,
+            1.2
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Epicycle",
+              "color": [
+                220,
+                160,
+                160,
+                255
+              ],
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "geocentric_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "GeoEarth",
+              "enabled": true
+            },
+            {
+              "target": "Deferent",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Present the static geocentric setup with Earth centered and the deferent visible to orient the student.",
+          "narration": "In the geocentric model, Earth sits motionless at the center of the universe. Mars is carried around Earth on a large circle called the deferent."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "geocentric_epicycle",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "Epicycle",
+              "enabled": true
+            },
+            {
+              "target": "EpicycleLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Reveal and start the epicycle so students see Mars riding a small circle atop the deferent.",
+          "narration": "But a single circle cannot produce the backward loop. So astronomers added a second, smaller circle called an epicycle. Mars rides this epicycle, which itself rides the deferent around Earth."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "geocentric_backward",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "GeoMars",
+              "color": [
+                255,
+                120,
+                60,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight Mars near the inner part of the epicycle by tinting it to emphasize where the apparent backward motion occurs.",
+          "narration": "When Mars swings to the inner part of its epicycle, closest to Earth, its combined motion on the two circles makes it appear to move backward as seen from Earth. The model works, but only with carefully tuned sizes and speeds for each planet."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "geocentric_complexity",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "Epicycle",
+              "color": [
+                200,
+                140,
+                140,
+                120
+              ]
+            },
+            {
+              "target": "GeoMars",
+              "color": [
+                220,
+                70,
+                40,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Add a note about mounting complexity by adjusting the epicycle appearance to signal the model's fragility.",
+          "narration": "As astronomers gathered better data, this simple scheme failed. They had to stack epicycles on epicycles to keep predictions accurate. The model grew ever more complicated, hinting that something fundamental was wrong."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 3: The Heliocentric Resolution",
+      "description": "The viewpoint rises above the solar system to reveal the Sun at the center with Earth and Mars on smooth orbits at correct relative speeds, showing the loop vanish.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Describe the heliocentric arrangement of the Sun, Earth, and Mars.",
+        "Explain that Earth overtakes Mars roughly every 26 months.",
+        "Recognize that no epicycles are needed in the heliocentric model."
+      ],
+      "instructions": [
+        "Observe the Sun at the center of the solar system.",
+        "Watch Earth on its inner orbit and Mars on its outer orbit.",
+        "Notice how Earth catches up to and overtakes Mars."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "HelioSun",
+          "position": [
+            0,
+            1.1,
+            1.4
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "texture": "2k_sun",
+          "components": [
+            {
+              "componentType": "simpleRotation",
+              "timeRate": 1.0,
+              "rotationTime": 20
+            }
+          ]
+        },
+        {
+          "prefab": "orbitRingPrefab",
+          "name": "EarthOrbit",
+          "position": [
+            0,
+            1.1,
+            1.4
+          ],
+          "scale": [
+            0.35,
+            0.35,
+            0.35
+          ],
+          "color": [
+            120,
+            160,
+            255,
+            180
+          ]
+        },
+        {
+          "prefab": "orbitRingPrefab",
+          "name": "MarsOrbit",
+          "position": [
+            0,
+            1.1,
+            1.4
+          ],
+          "scale": [
+            0.53,
+            0.53,
+            0.53
+          ],
+          "color": [
+            220,
+            120,
+            90,
+            180
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "HelioEarth",
+          "position": [
+            0.35,
+            1.1,
+            1.4
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "texture": "2k_earth_daymap",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                0.35,
+                0,
+                0
+              ],
+              "orbitalPeriod": 8.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "marsPointPrefab",
+          "name": "HelioMars",
+          "position": [
+            0.53,
+            1.1,
+            1.4
+          ],
+          "scale": [
+            0.06,
+            0.06,
+            0.06
+          ],
+          "color": [
+            220,
+            70,
+            40,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                0.53,
+                0,
+                0
+              ],
+              "orbitalPeriod": 15.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "EarthAULabel",
+          "position": [
+            0.4,
+            0.85,
+            1.4
+          ],
+          "scale": [
+            0.018,
+            0.018,
+            0.018
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Earth 1 AU, 1 yr",
+              "color": [
+                120,
+                160,
+                255,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "MarsAULabel",
+          "position": [
+            0.55,
+            1.4,
+            1.4
+          ],
+          "scale": [
+            0.018,
+            0.018,
+            0.018
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Mars 1.52 AU, 1.88 yr",
+              "color": [
+                220,
+                120,
+                90,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "heliocentric_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "HelioSun",
+              "enabled": true
+            },
+            {
+              "target": "EarthOrbit",
+              "enabled": true
+            },
+            {
+              "target": "MarsOrbit",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Establish the heliocentric view with the Sun at center and the two orbit rings visible.",
+          "narration": "Now let us rise above the plane of the solar system. From here the picture changes completely. The Sun sits at the center, and both Earth and Mars circle it on separate orbits."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "heliocentric_orbits",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "HelioEarth",
+              "enabled": true
+            },
+            {
+              "target": "HelioMars",
+              "enabled": true
+            },
+            {
+              "target": "EarthAULabel",
+              "enabled": true
+            },
+            {
+              "target": "MarsAULabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Enable and start both planets orbiting at correct relative speeds to show the dynamics.",
+          "narration": "Earth orbits at one astronomical unit, completing a lap in one year. Mars orbits farther out at 1.52 astronomical units, taking 1.88 years. Because Earth is closer to the Sun, it moves faster."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "heliocentric_overtaking",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "HelioEarth",
+              "color": [
+                140,
+                200,
+                255,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight Earth as it overtakes Mars to make the passing event visually obvious.",
+          "narration": "Roughly every 26 months, faster Earth catches up to and overtakes slower Mars on the inside track. This is the very moment that produced the loop you saw in the night sky."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "heliocentric_no_epicycles",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "HelioEarth",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Reset Earth's tint to emphasize the elegant simplicity of two smooth orbits with no epicycles.",
+          "narration": "And notice: there are no epicycles here. Just two planets on two smooth orbits. The backward loop was never real motion by Mars. It is an illusion created by our own moving vantage point on Earth."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 4: Linking the Two Views",
+      "description": "A side-by-side view connects the heliocentric orbits to the night sky by drawing the Earth-Mars line of sight out to the stars and showing it sweep and reverse.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Connect the outside-view geometry to the night-sky appearance.",
+        "Explain how the line of sight sweeps eastward, then westward, then eastward.",
+        "Recognize retrograde motion as a real apparent motion produced by geometry."
+      ],
+      "instructions": [
+        "Watch the heliocentric model on one side and the night sky on the other.",
+        "Follow the line of sight drawn from Earth through Mars.",
+        "Notice how the line reverses when Earth overtakes Mars."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "LinkSun",
+          "position": [
+            -0.8,
+            1.1,
+            1.4
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "texture": "2k_sun"
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "LinkEarth",
+          "position": [
+            -0.5,
+            1.1,
+            1.4
+          ],
+          "scale": [
+            0.045,
+            0.045,
+            0.045
+          ],
+          "texture": "2k_earth_daymap"
+        },
+        {
+          "prefab": "marsPointPrefab",
+          "name": "LinkMars",
+          "position": [
+            -0.35,
+            1.1,
+            1.6
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "color": [
+            220,
+            70,
+            40,
+            255
+          ]
+        },
+        {
+          "prefab": "lineOfSightPrefab",
+          "name": "SightLine",
+          "position": [
+            -0.4,
+            1.1,
+            1.5
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "enabled": false,
+          "color": [
+            255,
+            240,
+            120,
+            220
+          ]
+        },
+        {
+          "prefab": "starfieldStripPrefab",
+          "name": "SkyStrip",
+          "position": [
+            0.7,
+            1.3,
+            1.6
+          ],
+          "scale": [
+            0.9,
+            0.6,
+            0.6
+          ],
+          "texture": "night_sky_ecliptic_starfield"
+        },
+        {
+          "prefab": "marsPointPrefab",
+          "name": "SkyMars",
+          "position": [
+            0.5,
+            1.3,
+            1.6
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "color": [
+            220,
+            70,
+            40,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "OutsideLabel",
+          "position": [
+            -0.6,
+            0.8,
+            1.4
+          ],
+          "scale": [
+            0.018,
+            0.018,
+            0.018
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Outside View",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "SkyLabel",
+          "position": [
+            0.7,
+            0.8,
+            1.6
+          ],
+          "scale": [
+            0.018,
+            0.018,
+            0.018
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Night Sky",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "link_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "SightLine",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Show both panels side by side and draw the line of sight from Earth through Mars to the stars.",
+          "narration": "Here are both views at once. On the left, the outside view of the orbits. On the right, the night sky. We draw a line from Earth through Mars, extended out to the background stars."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "link_eastward_sweep",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "LinkEarth",
+              "position": [
+                -0.35,
+                1.1,
+                1.25
+              ]
+            },
+            {
+              "target": "SkyMars",
+              "position": [
+                0.75,
+                1.3,
+                1.6
+              ]
+            }
+          ],
+          "changeMeaning": "Advance Earth and Mars and sweep the sky-Mars eastward to show normal prograde motion.",
+          "narration": "As Earth and Mars move along their orbits, the line of sight sweeps eastward across the constellations. In the night sky, Mars drifts eastward, just as we first observed."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "link_reversal",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "LinkEarth",
+              "position": [
+                -0.15,
+                1.1,
+                1.35
+              ]
+            },
+            {
+              "target": "SightLine",
+              "color": [
+                255,
+                150,
+                80,
+                220
+              ]
+            },
+            {
+              "target": "SkyMars",
+              "position": [
+                0.62,
+                1.28,
+                1.6
+              ]
+            }
+          ],
+          "changeMeaning": "Move Earth to overtake Mars and reverse the sky-Mars westward to show the retrograde reversal.",
+          "narration": "Now watch. As Earth begins to overtake Mars, the line of sight reverses and sweeps westward. At that exact moment in the night sky, Mars retraces its path backward. This is the retrograde loop."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "link_resume",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "LinkEarth",
+              "position": [
+                0.05,
+                1.1,
+                1.5
+              ]
+            },
+            {
+              "target": "SightLine",
+              "color": [
+                255,
+                240,
+                120,
+                220
+              ]
+            },
+            {
+              "target": "SkyMars",
+              "position": [
+                0.85,
+                1.32,
+                1.6
+              ]
+            }
+          ],
+          "changeMeaning": "Continue Earth past Mars and resume the eastward sweep to complete the linkage and reinforce that the motion is geometric.",
+          "narration": "Once Earth has passed Mars, the line resumes its eastward sweep and Mars again moves forward. The loop is a real apparent motion produced by geometry, not a trick of the eye."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 5: Embodied Overtaking",
+      "description": "Students walk around a small circle representing Earth's orbit while watching a stationary Mars, personally generating the retrograde effect with their own motion.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Experience retrograde motion as a consequence of the observer's own motion.",
+        "Connect walking past a fixed Mars to Earth overtaking Mars.",
+        "Reinforce the parallax-like nature of retrograde motion through embodiment."
+      ],
+      "instructions": [
+        "Stand at the center of the starfield.",
+        "Keep your gaze on the red Mars ahead of you.",
+        "Walk slowly around the circle on the floor and watch Mars shift against the stars."
+      ],
+      "objects": [
+        {
+          "prefab": "starfieldDomePrefab",
+          "name": "EmbodiedStars",
+          "parent": "[CURRENT_LAB]",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            3,
+            3,
+            3
+          ],
+          "texture": "night_sky_ecliptic_starfield"
+        },
+        {
+          "prefab": "marsPointPrefab",
+          "name": "FixedMars",
+          "position": [
+            0,
+            1.4,
+            2.5
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "color": [
+            220,
+            70,
+            40,
+            255
+          ]
+        },
+        {
+          "prefab": "orbitPathFloorPrefab",
+          "name": "EarthOrbitFloor",
+          "position": [
+            0,
+            0.02,
+            0
+          ],
+          "scale": [
+            0.8,
+            0.8,
+            0.8
+          ],
+          "color": [
+            120,
+            160,
+            255,
+            200
+          ]
+        },
+        {
+          "prefab": "footMarkerPrefab",
+          "name": "StartMarker",
+          "position": [
+            0,
+            0.03,
+            0.6
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ],
+          "color": [
+            255,
+            240,
+            120,
+            220
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "EmbodiedPrompt",
+          "position": [
+            0,
+            1.0,
+            1.5
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Walk the circle. Watch Mars.",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 30,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "embodied_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "EarthOrbitFloor",
+              "enabled": true
+            },
+            {
+              "target": "StartMarker",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Set up the embodied scene with a fixed Mars and the floor circle representing Earth's orbit.",
+          "narration": "Now it is your turn to be the Earth. A stationary Mars floats ahead of you against the distant stars. On the floor is a circle representing Earth's orbit. Stand on the glowing marker to begin."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "embodied_walk",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "EmbodiedPrompt",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Keep walking. As you pass closest approach, watch Mars reverse.",
+                  "color": [
+                    255,
+                    255,
+                    255,
+                    255
+                  ],
+                  "fontSize": 28,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Prompt the student to begin walking and update the on-screen instruction to guide the activity.",
+          "narration": "Walk slowly around the circle, keeping your gaze fixed on Mars. As you move along your orbit, notice how Mars appears to drift across the constellations behind it."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "embodied_reversal",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "FixedMars",
+              "color": [
+                255,
+                120,
+                60,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight Mars at the closest-approach moment to draw attention to the apparent reversal the student produces.",
+          "narration": "As you pass the point of closest approach to Mars, watch carefully: Mars appears to move backward against the stars. You are producing the retrograde effect with your own motion, exactly as Earth does when it overtakes Mars."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "embodied_complete",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "FixedMars",
+              "color": [
+                220,
+                70,
+                40,
+                255
+              ]
+            },
+            {
+              "target": "EmbodiedPrompt",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "You created retrograde motion!",
+                  "color": [
+                    180,
+                    255,
+                    180,
+                    255
+                  ],
+                  "fontSize": 30,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Reset Mars color and confirm completion of the loop to close the embodied activity.",
+          "narration": "Having completed the full loop, you have personally generated the retrograde pattern. Mars never moved. Your changing vantage point created the apparent reversal."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 6: Comparing Outer Planets",
+      "description": "The heliocentric view returns with Mars, Jupiter, and Saturn to compare retrograde loop sizes and explain why more distant planets produce smaller loops.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Compare the retrograde loop sizes of Mars, Jupiter, and Saturn.",
+        "Explain why farther planets show smaller loops using parallax-style geometry.",
+        "Relate loop size to the angle Earth's orbit subtends from each planet."
+      ],
+      "instructions": [
+        "Observe Earth, Mars, Jupiter, and Saturn on their orbits.",
+        "Step through a retrograde event for each planet.",
+        "Compare the angular size of each loop."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "CompareSun",
+          "position": [
+            0,
+            1.0,
+            1.6
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "texture": "2k_sun"
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "CompareEarth",
+          "position": [
+            0.2,
+            1.0,
+            1.6
+          ],
+          "scale": [
+            0.04,
+            0.04,
+            0.04
+          ],
+          "texture": "2k_earth_daymap",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                0.2,
+                0,
+                0
+              ],
+              "orbitalPeriod": 8.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "marsPointPrefab",
+          "name": "CompareMars",
+          "position": [
+            0.3,
+            1.0,
+            1.6
+          ],
+          "scale": [
+            0.05,
+            0.05,
+            0.05
+          ],
+          "color": [
+            220,
+            70,
+            40,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                0.3,
+                0,
+                0
+              ],
+              "orbitalPeriod": 15.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "jupiterPrefab",
+          "name": "CompareJupiter",
+          "position": [
+            0.55,
+            1.0,
+            1.6
+          ],
+          "scale": [
+            0.08,
+            0.08,
+            0.08
+          ],
+          "texture": "2k_jupiter",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                0.55,
+                0,
+                0
+              ],
+              "orbitalPeriod": 48.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "saturnPrefab",
+          "name": "CompareSaturn",
+          "position": [
+            0.8,
+            1.0,
+            1.6
+          ],
+          "scale": [
+            0.07,
+            0.07,
+            0.07
+          ],
+          "texture": "2k_saturn",
+          "components": [
+            {
+              "componentType": "simpleOrbit",
+              "initialPosition": [
+                0.8,
+                0,
+                0
+              ],
+              "orbitalPeriod": 88.0,
+              "timeRate": 1.0,
+              "orbitalScale": 1.0,
+              "synchronousRotation": true
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "LoopReadout",
+          "position": [
+            0,
+            1.5,
+            1.6
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Mars loop: ~15 degrees",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 30
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "compare_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "CompareJupiter",
+              "enabled": true
+            },
+            {
+              "target": "CompareSaturn",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Introduce the multi-planet heliocentric view with Earth, Mars, Jupiter, and Saturn all on their orbits.",
+          "narration": "Retrograde motion is not unique to Mars. Here we add Jupiter at 5.2 astronomical units and Saturn at 9.5. Every outer planet shows a retrograde loop when Earth overtakes it."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "compare_mars",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "CompareMars",
+              "color": [
+                255,
+                120,
+                60,
+                255
+              ]
+            },
+            {
+              "target": "LoopReadout",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Mars loop: ~15 degrees",
+                  "color": [
+                    220,
+                    120,
+                    90,
+                    255
+                  ],
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight Mars and set the readout to its loop size to anchor the comparison.",
+          "narration": "Mars, the closest outer planet, produces the largest loop: about fifteen degrees across. Because Mars is relatively near, Earth's orbital motion shifts its apparent position by a large angle."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "compare_jupiter",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "CompareMars",
+              "color": [
+                220,
+                70,
+                40,
+                255
+              ]
+            },
+            {
+              "target": "CompareJupiter",
+              "color": [
+                255,
+                220,
+                160,
+                255
+              ]
+            },
+            {
+              "target": "LoopReadout",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Jupiter loop: ~10 degrees",
+                  "color": [
+                    255,
+                    220,
+                    160,
+                    255
+                  ],
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Shift the highlight to Jupiter and update the readout to its smaller loop size.",
+          "narration": "Jupiter, more than three times farther, shows a smaller loop of about ten degrees. From that distance, Earth's motion subtends a smaller angle."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "compare_saturn",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "CompareJupiter",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "target": "CompareSaturn",
+              "color": [
+                255,
+                235,
+                190,
+                255
+              ]
+            },
+            {
+              "target": "LoopReadout",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "Saturn loop: ~7 degrees",
+                  "color": [
+                    255,
+                    235,
+                    190,
+                    255
+                  ],
+                  "fontSize": 30
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight Saturn and update the readout to the smallest loop, completing the distance-versus-loop comparison.",
+          "narration": "Saturn, farthest of all, shows the smallest loop, only about seven degrees. This is the same parallax geometry that makes nearby objects shift more than distant ones when you move your head. Distance shrinks the loop."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 7: Prediction Challenge",
+      "description": "Students drag Mars around its orbit to find the configuration near opposition where retrograde motion is observed from a fixed Earth, with a live inset showing the night sky.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Predict when retrograde motion occurs from relative orbital positions.",
+        "Identify opposition as the configuration producing retrograde motion.",
+        "Recognize that relative geometry, not absolute position, drives retrograde motion."
+      ],
+      "instructions": [
+        "Note Earth's fixed position on its orbit.",
+        "Drag Mars around its orbit.",
+        "Place Mars where retrograde motion would be seen; watch the inset confirm."
+      ],
+      "objects": [
+        {
+          "prefab": "SunPrefab",
+          "name": "ChallengeSun",
+          "position": [
+            -0.3,
+            1.1,
+            1.5
+          ],
+          "scale": [
+            0.12,
+            0.12,
+            0.12
+          ],
+          "texture": "2k_sun"
+        },
+        {
+          "prefab": "orbitRingPrefab",
+          "name": "ChallengeEarthOrbit",
+          "position": [
+            -0.3,
+            1.1,
+            1.5
+          ],
+          "scale": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "color": [
+            120,
+            160,
+            255,
+            180
+          ]
+        },
+        {
+          "prefab": "orbitRingPrefab",
+          "name": "ChallengeMarsOrbit",
+          "position": [
+            -0.3,
+            1.1,
+            1.5
+          ],
+          "scale": [
+            0.46,
+            0.46,
+            0.46
+          ],
+          "color": [
+            220,
+            120,
+            90,
+            180
+          ]
+        },
+        {
+          "prefab": "earthPrefab",
+          "name": "ChallengeEarth",
+          "position": [
+            0.0,
+            1.1,
+            1.5
+          ],
+          "scale": [
+            0.045,
+            0.045,
+            0.045
+          ],
+          "texture": "2k_earth_daymap"
+        },
+        {
+          "prefab": "marsPointPrefab",
+          "name": "ChallengeMars",
+          "position": [
+            0.16,
+            1.1,
+            1.5
+          ],
+          "scale": [
+            0.055,
+            0.055,
+            0.055
+          ],
+          "color": [
+            220,
+            70,
+            40,
+            255
+          ],
+          "components": [
+            {
+              "componentType": "rigidBody",
+              "mass": 1.0,
+              "drag": 0.0,
+              "angularDrag": 0.0,
+              "isKinematic": true,
+              "useGravity": false,
+              "xConstraint": false,
+              "yConstraint": false,
+              "zConstraint": false,
+              "xRotationConstraint": false,
+              "yRotationConstraint": false,
+              "zRotationConstraint": false
+            },
+            {
+              "componentType": "pointerReceiver",
+              "draggable": true,
+              "kinematicWhileIdle": true,
+              "faceWhileDragging": false,
+              "matchWallWhileDragging": false,
+              "invertForward": false
+            },
+            {
+              "componentType": "newscript",
+              "scriptName": "retrogradePredictionChecker",
+              "scriptDescription": "Constrains the dragged Mars object to move along its orbital ring (a circle of a set radius centered on the ChallengeSun reference) and evaluates whether Mars is within the retrograde arc relative to the ChallengeEarth object. Required inputs set in the inspector: a reference to the ChallengeSun transform (orbit center), a reference to the ChallengeEarth transform, the orbit radius (float), and the retrograde arc half-width in degrees (float, e.g. 20). It also takes a reference to the inset display object (RetrogradeInset) and its child SkyMars marker to update, and a reference to the ConfirmLabel text object. Behavior: while Mars is dragged, it snaps Mars to the nearest point on its orbit circle; it computes the angle between the Sun-Earth direction and the Sun-Mars direction; when Mars lies near opposition (Earth between Sun and Mars line-of-sight, i.e. Earth poised to overtake Mars) within the arc half-width, it sets a boolean isRetrograde true. Outputs: when isRetrograde becomes true it enables the retrograde loop animation on the inset SkyMars, tints ChallengeMars green, and sets ConfirmLabel text to 'Retrograde confirmed!'; otherwise it shows prograde drift on the inset and sets ConfirmLabel text to 'Drag Mars to find retrograde.'"
+            }
+          ]
+        },
+        {
+          "prefab": "insetPanelPrefab",
+          "name": "RetrogradeInset",
+          "position": [
+            0.7,
+            1.4,
+            1.5
+          ],
+          "scale": [
+            0.4,
+            0.3,
+            0.05
+          ],
+          "color": [
+            10,
+            10,
+            30,
+            230
+          ]
+        },
+        {
+          "prefab": "marsPointPrefab",
+          "name": "InsetSkyMars",
+          "parent": "RetrogradeInset",
+          "position": [
+            0.7,
+            1.4,
+            1.48
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "color": [
+            220,
+            70,
+            40,
+            255
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "ConfirmLabel",
+          "position": [
+            0.7,
+            1.05,
+            1.5
+          ],
+          "scale": [
+            0.018,
+            0.018,
+            0.018
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Drag Mars to find retrograde.",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 26,
+              "wrapText": true
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "challenge_intro",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "RetrogradeInset",
+              "enabled": true
+            },
+            {
+              "target": "ConfirmLabel",
+              "enabled": true
+            }
+          ],
+          "changeMeaning": "Present the interactive challenge with Earth fixed, a draggable Mars, and the live inset sky window.",
+          "narration": "Time to test your understanding. Earth is fixed on its orbit. Mars can be dragged around its own orbit. The inset window shows what an observer on Earth would see for the current configuration."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "challenge_drag",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "ChallengeMars",
+              "color": [
+                255,
+                120,
+                60,
+                255
+              ]
+            }
+          ],
+          "changeMeaning": "Instruct the student to drag Mars toward opposition and note the live inset feedback to guide the interaction.",
+          "narration": "Drag Mars to the position where retrograde motion would be observed from Earth. Remember: this happens near opposition, when Earth is lined up to overtake Mars on the inside track. Watch the inset update as you move Mars."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "challenge_repeat",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "ChallengeEarth",
+              "position": [
+                -0.15,
+                1.1,
+                1.75
+              ]
+            },
+            {
+              "target": "ChallengeMars",
+              "position": [
+                -0.05,
+                1.1,
+                1.95
+              ],
+              "color": [
+                220,
+                70,
+                40,
+                255
+              ]
+            },
+            {
+              "target": "ConfirmLabel",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "New Earth position. Find retrograde again.",
+                  "color": [
+                    255,
+                    255,
+                    255,
+                    255
+                  ],
+                  "fontSize": 26,
+                  "wrapText": true
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Move Earth to a new orbital position to repeat the challenge and reinforce that relative geometry matters.",
+          "narration": "Well done. Now Earth has moved to a different point on its orbit. Find the retrograde configuration again. Notice that the answer depends on the relative geometry between Earth and Mars, not on their absolute positions."
+        }
+      ]
+    },
+    {
+      "moduleType": "demo",
+      "prefab": "demoPrefab",
+      "moduleName": "Scene 8: Recap",
+      "description": "A summary screen lists the five concept areas covered and highlights each in turn as the narration reviews the lab.",
+      "author": "A Robot",
+      "institution": "MTSU",
+      "dateCreated": "2026-07-10",
+      "educationalObjectives": [
+        "Summarize the observed retrograde phenomenon.",
+        "Recall the geocentric and heliocentric explanations.",
+        "Consolidate the linkage of viewpoints and the outer-planet comparison."
+      ],
+      "instructions": [
+        "Review each concept area as it is highlighted.",
+        "Use Next to step through the summary."
+      ],
+      "objects": [
+        {
+          "prefab": "summaryPanelPrefab",
+          "name": "RecapPanel",
+          "position": [
+            0,
+            1.3,
+            1.5
+          ],
+          "scale": [
+            0.6,
+            0.5,
+            0.05
+          ],
+          "color": [
+            10,
+            10,
+            30,
+            230
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "RecapTitle",
+          "position": [
+            0,
+            1.7,
+            1.48
+          ],
+          "scale": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "Retrograde Motion: Recap",
+              "color": [
+                255,
+                255,
+                255,
+                255
+              ],
+              "fontSize": 36
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "Point1",
+          "position": [
+            0,
+            1.52,
+            1.48
+          ],
+          "scale": [
+            0.016,
+            0.016,
+            0.016
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "1. The observed phenomenon: Mars loops backward",
+              "color": [
+                180,
+                180,
+                180,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "Point2",
+          "position": [
+            0,
+            1.4,
+            1.48
+          ],
+          "scale": [
+            0.016,
+            0.016,
+            0.016
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "2. Geocentric model: epicycles",
+              "color": [
+                180,
+                180,
+                180,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "Point3",
+          "position": [
+            0,
+            1.28,
+            1.48
+          ],
+          "scale": [
+            0.016,
+            0.016,
+            0.016
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "3. Heliocentric resolution: Earth overtakes Mars",
+              "color": [
+                180,
+                180,
+                180,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "Point4",
+          "position": [
+            0,
+            1.16,
+            1.48
+          ],
+          "scale": [
+            0.016,
+            0.016,
+            0.016
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "4. Linking the two viewpoints",
+              "color": [
+                180,
+                180,
+                180,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        },
+        {
+          "prefab": "textPrefab",
+          "name": "Point5",
+          "position": [
+            0,
+            1.04,
+            1.48
+          ],
+          "scale": [
+            0.016,
+            0.016,
+            0.016
+          ],
+          "components": [
+            {
+              "componentType": "textMeshPro",
+              "text": "5. Comparing outer planets: distance shrinks loops",
+              "color": [
+                180,
+                180,
+                180,
+                255
+              ],
+              "fontSize": 26
+            }
+          ]
+        }
+      ],
+      "clips": [
+        {
+          "clipName": "clip0",
+          "audioClip": "recap_phenomenon",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "Point1",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "1. The observed phenomenon: Mars loops backward",
+                  "color": [
+                    255,
+                    240,
+                    120,
+                    255
+                  ],
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the first recap point about the observed phenomenon to begin the review.",
+          "narration": "Let us review. First, the phenomenon itself: Mars, and every outer planet, periodically appears to reverse direction, tracing a backward loop against the stars."
+        },
+        {
+          "clipName": "clip1",
+          "audioClip": "recap_geocentric",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "Point1",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "1. The observed phenomenon: Mars loops backward",
+                  "color": [
+                    180,
+                    180,
+                    180,
+                    255
+                  ],
+                  "fontSize": 26
+                }
+              ]
+            },
+            {
+              "target": "Point2",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "2. Geocentric model: epicycles",
+                  "color": [
+                    255,
+                    240,
+                    120,
+                    255
+                  ],
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Dim point one and highlight the geocentric epicycle point to continue the review.",
+          "narration": "Second, the geocentric explanation used epicycles riding on deferents. It reproduced the loop but grew ever more complex as data improved."
+        },
+        {
+          "clipName": "clip2",
+          "audioClip": "recap_heliocentric",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "Point2",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "2. Geocentric model: epicycles",
+                  "color": [
+                    180,
+                    180,
+                    180,
+                    255
+                  ],
+                  "fontSize": 26
+                }
+              ]
+            },
+            {
+              "target": "Point3",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "3. Heliocentric resolution: Earth overtakes Mars",
+                  "color": [
+                    255,
+                    240,
+                    120,
+                    255
+                  ],
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the heliocentric resolution point and dim the previous one.",
+          "narration": "Third, the heliocentric model resolved the puzzle with no epicycles at all. The loop is simply what we see when faster Earth overtakes slower Mars."
+        },
+        {
+          "clipName": "clip3",
+          "audioClip": "recap_linkage",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "Point3",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "3. Heliocentric resolution: Earth overtakes Mars",
+                  "color": [
+                    180,
+                    180,
+                    180,
+                    255
+                  ],
+                  "fontSize": 26
+                }
+              ]
+            },
+            {
+              "target": "Point4",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "4. Linking the two viewpoints",
+                  "color": [
+                    255,
+                    240,
+                    120,
+                    255
+                  ],
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the linkage point and dim the previous one.",
+          "narration": "Fourth, we linked the two viewpoints with a line of sight, showing exactly how orbital geometry becomes apparent sky motion."
+        },
+        {
+          "clipName": "clip4",
+          "audioClip": "recap_comparison",
+          "autoAdvance": false,
+          "changes": [
+            {
+              "target": "Point4",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "4. Linking the two viewpoints",
+                  "color": [
+                    180,
+                    180,
+                    180,
+                    255
+                  ],
+                  "fontSize": 26
+                }
+              ]
+            },
+            {
+              "target": "Point5",
+              "components": [
+                {
+                  "componentType": "textMeshPro",
+                  "text": "5. Comparing outer planets: distance shrinks loops",
+                  "color": [
+                    255,
+                    240,
+                    120,
+                    255
+                  ],
+                  "fontSize": 26
+                }
+              ]
+            }
+          ],
+          "changeMeaning": "Highlight the final comparison point and dim the previous one to conclude the recap.",
+          "narration": "And fifth, we compared Mars, Jupiter, and Saturn, finding that more distant planets trace smaller loops. You now understand why planets appear to wander backward, and why the heliocentric model won out. Well done."
+        }
+      ]
+    }
+  ]
+}
