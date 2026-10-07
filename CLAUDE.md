@@ -72,6 +72,14 @@ python "Code/Benchmark/benchmark.py" --list-models
 python "Code/Benchmark/benchmark.py" --list-labs
 ```
 
+Hierarchical generation (one module at a time: plan → asset plan → module; json_lab only):
+
+```bash
+python "Code/Hierarchical/generate_hierarchical.py" --model gpt-5.4-mini --lab apparent_retrograde_motion --level L4
+python "Code/Hierarchical/generate_hierarchical.py" --resume "Artifacts/Data/Hierarchical/Runs/<run name>"
+python "Code/Hierarchical/smoke_test.py"   # offline check, no API keys
+```
+
 Analysis and reporting (reads saved run artifacts, no LLM calls):
 
 ```bash
@@ -116,6 +124,10 @@ Benchmark runs:
                                        lab × level × spec × structure tuple)
   → Artifacts/Data/Errors/   ← instructor error logs (gitignored)
 
+Hierarchical runs (Code/Hierarchical/, json_lab only):
+  Lab YAML → plan (LabOutline) → per module: ModuleAssetPlan → PlannedDemoModule
+  → Lab assembled in code → Artifacts/Data/Hierarchical/{Runs,Outputs,Metrics}/
+
 Analysis (everything below reads run artifacts; nothing here calls an LLM):
   Artifacts/Data/Benchmark/Metrics/ + Outputs/
   → Code/Analysis/benchmark_dataframe.py  (load_runs → one tidy row per run)
@@ -148,6 +160,10 @@ tables alike, hand-authored and generated together.
 - `LabOutline` → `OutlineScene` (scene_name, brief_purpose, key_visuals, student_actions)
 - No discriminated unions or prefab refs — works on every provider including Gemini
 - Intentionally permissive; will be refined as L1 failure modes surface
+
+**`Code/Schemas/module_asset_plan.py`** — `ModuleAssetPlan`, the hierarchical pipeline's per-module plan:
+- objects (with `purpose`), components (free-form `component_type` + `rationale`, `is_new` for new single-purpose components), interactions, `clip_beats`
+- Validators: a component's `object_name` must match a planned object; under an `asset_plan_validation(catalog, allow_new=...)` ContextVar scope, `component_type` must be in the catalog or justified as new (instructor's `context=` is avoided because it Jinja-renders messages)
 
 **`Code/Schemas/arlem_full.py`** — Full ARLEM specification:
 - `ARLEMScenario` contains a `Workplace` (static environment) + `Activity` (logic/workflow)
@@ -197,6 +213,31 @@ Benchmark outputs go to `Artifacts/Data/Benchmark/`:
 `probes/` holds one-shot provider/schema diagnostics (`probe_gemini_unions.py`,
 `probe_unified_schema.py`, `probe_arlem_unified.py`). They are not part of the
 pipeline — they exist to re-test a provider quirk on demand.
+
+### Hierarchical Generation (`Code/Hierarchical/`)
+
+Second generation entry point (json_lab only). Builds a lab one module at a time
+instead of in one `Lab` call; see `HIERARCHICAL.md`.
+
+- **`pipeline.py`** — `HierarchicalPipeline`: plan (`LabOutline`) → per scene a
+  `ModuleAssetPlan` → a `PlannedDemoModule` (DemoModule + a check that every
+  `NewComponent` was planned or is in the catalog) → `Lab` assembled in code. Each step has its own
+  retry budget, is regenerated alone on terminal failure (`step_attempts`), is
+  saved to `Runs/<run>/`, and can be resumed. Imports the client factory, provider
+  kwargs, and transient retryer from `benchmark.py`, so the Gemini and Anthropic guards apply.
+- **`registry.py`** — component catalog (built-ins derived from the json_lab
+  classes plus NewComponents from accepted modules) and invented prefabs/textures,
+  carried forward into later prompts so they get reused.
+- **`review.py`** — `Checkpoint`, `Approve` / `Revise(feedback)` / `Replace(output)`,
+  `Reviewer` protocol, `AutoApproveReviewer` (default). Human-in-the-loop and LLM
+  self-critique reviewers plug in here.
+- **`prompts.py`** — templates for the plan, asset-plan and module steps.
+- **`generate_hierarchical.py`** — CLI. **`smoke_test.py`** — offline test (fake LLM + mock OpenAI server).
+
+Outputs go to `Artifacts/Data/Hierarchical/` and are never pooled with `Benchmark/`.
+Metrics keep the benchmark record's keys (`load_runs()` reads them), plus `steps[]`,
+`totals`, `plan_adherence`, `review_log`, `registry`. The tracker counts a failed
+parse attempt twice in `retry_count`; per-step `parse_errors` is the true reask count.
 
 ### Analysis System (`Code/Analysis/`)
 
@@ -261,7 +302,7 @@ Use `instructor.from_provider("provider/model-id")` — this is the unified API.
 
 **Gemini limitation (resolved for all specs)**: Gemini's function-calling schema validator rejects discriminated unions (`oneOf` + `discriminator`) and `const` tags. This is now resolved on the models themselves for **every** spec — `json_lab.py`, `arlem_full.py`, and `arlem_simplified.py` all inherit `ConstToEnumSchemaMixin` (`const`→`enum`, shared from `Code/Schemas/_schema_helpers.py`) and carry no field-level discriminated unions, so one provider-agnostic schema per spec runs on every provider via the free-decode `GENAI_TOOLS` path. All Gemini twins (`json_lab_gemini.py`, `arlem_full_gemini.py`, `arlem_simplified_gemini.py`) were retired (issues #26, #29), along with the constrained `GENAI_STRUCTURED_OUTPUTS` path and its response-schema-token estimation. `decode_mode_for()` in `benchmark.py` is the single source of truth for the per-run decode mode (recorded as `decode_mode` in metrics). Shared schema helpers (`ConstToEnumSchemaMixin`, `clamp_number`, `_coerce_number_list`) live in `_schema_helpers.py`.
 
-**Gemini retryability caveat (issue #44)**: the schema story above is resolved, but Gemini *retry* fairness is not intrinsic — it depends on the `instructor==1.15.4` pin (`requirements.txt`) plus a monkeypatch. `benchmark.py::_patch_genai_parallel_call_retry()` (applied lazily inside `create_instructor_client`, guarded by `try/except ImportError` so it degrades on other instructor versions) re-raises instructor's `parse_genai_tools` `AssertionError` as a retryable `ResponseParsingError`, restoring retryability for the *text + single-functionCall* response shape only. True ≥2-functionCall responses still hard-fail on reask (upstream bug). 1.15.4 also no longer blind-retries transient API errors or `max_tokens` truncation; the benchmark restores a bounded, transient-only retry around `create()` (`_transient_retryer`, 429/5xx/connection, issue #54) counted separately in `transient_retries`, while truncation stays a hard fail (review F9). Any new entry point must build its client through `create_instructor_client` (which applies the patch) *and* the Anthropic `tool_choice` guard, or it reintroduces the Gemini/Anthropic retry-death — the standalone `generate_lab.py` entry point was removed for exactly this reason rather than re-guarded (issue #55).
+**Gemini retryability caveat (issue #44)**: the schema story above is resolved, but Gemini *retry* fairness is not intrinsic — it depends on the `instructor==1.15.4` pin (`requirements.txt`) plus a monkeypatch. `benchmark.py::_patch_genai_parallel_call_retry()` (applied lazily inside `create_instructor_client`, guarded by `try/except ImportError` so it degrades on other instructor versions) re-raises instructor's `parse_genai_tools` `AssertionError` as a retryable `ResponseParsingError`, restoring retryability for the *text + single-functionCall* response shape only. True ≥2-functionCall responses still hard-fail on reask (upstream bug). 1.15.4 also no longer blind-retries transient API errors or `max_tokens` truncation; the benchmark restores a bounded, transient-only retry around `create()` (`_transient_retryer`, 429/5xx/connection, issue #54) counted separately in `transient_retries`, while truncation stays a hard fail (review F9). Any new entry point must build its client through `create_instructor_client` (which applies the patch) *and* the Anthropic `tool_choice` guard (`provider_create_kwargs`), or it reintroduces the Gemini/Anthropic retry-death — the standalone `generate_lab.py` entry point was removed for exactly this reason rather than re-guarded (issue #55).
 
 ## Code Patterns
 
