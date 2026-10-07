@@ -315,6 +315,39 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
     )
 
 
+def provider_create_kwargs(model_config: ModelConfig, response_model) -> dict:
+    """Provider-specific ``create()`` kwargs every entry point must pass.
+
+    Shared by ``run_single_benchmark`` and the hierarchical pipeline
+    (``Code/Hierarchical/``) so no entry point can drop the Anthropic guard and
+    reintroduce the issue #44 retry-death.
+    """
+    kwargs: dict = {}
+    # Anthropic requires an explicit max_tokens. 8192 truncated full L3-L4 labs
+    # (IncompleteOutputException); a rich lab runs ~18-22K completion tokens, so we
+    # cap at 32000 (~45% head-room). Exceeding the SDK's ~21,333 non-streaming
+    # threshold is allowed here because create_instructor_client() builds the
+    # Anthropic client with an explicit timeout, which disables that guard.
+    if model_config.provider == Provider.ANTHROPIC:
+        kwargs["max_tokens"] = 32000
+        # Forbid parallel tool calls: under instructor a parallel call always
+        # fails parsing, and its reask replays the assistant turn with only one
+        # tool_result, which the API 400s (issue #44 — Haiku 4.5 retry-death;
+        # unfixed upstream as of 1.15.4). Requires instructor>=1.15: earlier
+        # versions overwrite a caller-supplied tool_choice. The name must equal
+        # the tool instructor registers, which is model_json_schema()["title"];
+        # that equals __name__ only while no response model sets a custom title
+        # (ConfigDict(title=...)). None of our response models do, so this
+        # holds today — but a future custom title would 400 every Anthropic run
+        # (latent; review F13).
+        kwargs["tool_choice"] = {
+            "type": "tool",
+            "name": response_model.__name__,
+            "disable_parallel_tool_use": True,
+        }
+    return kwargs
+
+
 # ── Model Selection ──────────────────────────────────────────────────
 
 def get_response_model(spec_type: SpecType):
@@ -461,28 +494,7 @@ def run_single_benchmark(
         max_retries=run_config.max_retries,
     )
 
-    # Anthropic requires an explicit max_tokens. 8192 truncated full L3-L4 labs
-    # (IncompleteOutputException); a rich lab runs ~18-22K completion tokens, so we
-    # cap at 32000 (~45% head-room). Exceeding the SDK's ~21,333 non-streaming
-    # threshold is allowed here because create_instructor_client() builds the
-    # Anthropic client with an explicit timeout, which disables that guard.
-    if model_config.provider == Provider.ANTHROPIC:
-        create_kwargs["max_tokens"] = 32000
-        # Forbid parallel tool calls: under instructor a parallel call always
-        # fails parsing, and its reask replays the assistant turn with only one
-        # tool_result, which the API 400s (issue #44 — Haiku 4.5 retry-death;
-        # unfixed upstream as of 1.15.4). Requires instructor>=1.15: earlier
-        # versions overwrite a caller-supplied tool_choice. The name must equal
-        # the tool instructor registers, which is model_json_schema()["title"];
-        # that equals __name__ only while no response model sets a custom title
-        # (ConfigDict(title=...)). None of our five response models do, so this
-        # holds today — but a future custom title would 400 every Anthropic run
-        # (latent; review F13).
-        create_kwargs["tool_choice"] = {
-            "type": "tool",
-            "name": response_model.__name__,
-            "disable_parallel_tool_use": True,
-        }
+    create_kwargs.update(provider_create_kwargs(model_config, response_model))
 
     # Execute generation
     print(f"\n  Generating with {model_config.display_name}...")
