@@ -141,7 +141,8 @@ class StepRecord:
     calls: int = 0                 # tracked create() calls, incl. regenerations & revisions
     attempts: int = 0              # step-level generations (fresh or revision)
     failed_attempts: int = 0
-    retries: int = 0               # instructor parse retries summed over calls
+    retries: int = 0               # tracker retry_count summed over calls (same as benchmark runs)
+    parse_errors: int = 0          # failed parse/validation attempts (the actual reask count)
     revisions: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
@@ -402,6 +403,7 @@ class HierarchicalPipeline:
             for call in self.tracker.aggregate.calls[calls_before:]:
                 rec.calls += 1
                 rec.retries += call.retry_count
+                rec.parse_errors += call.parse_errors
                 rec.prompt_tokens += call.total_usage.prompt_tokens
                 rec.completion_tokens += call.total_usage.completion_tokens
                 rec.total_tokens += call.total_usage.total_tokens
@@ -493,7 +495,7 @@ class HierarchicalPipeline:
         steps = [asdict(s) for s in self.steps]
         totals = {
             k: sum(s[k] for s in steps)
-            for k in ("calls", "retries", "prompt_tokens", "completion_tokens",
+            for k in ("calls", "retries", "parse_errors", "prompt_tokens", "completion_tokens",
                       "total_tokens", "cost_usd", "wall_time_s")
         }
         record = {
