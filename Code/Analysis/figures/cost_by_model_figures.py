@@ -50,8 +50,6 @@ from figure_style import (
     BAR_WIDTH,
     GRID,
     INK,
-    INK_MUTED,
-    INK_SOFT,
     LEVEL_NAME,
     MODEL_ORDER,
     PROVIDER_COLOR,
@@ -65,6 +63,10 @@ ROOT = Path(__file__).resolve().parents[3]
 REPORTS = ROOT / "Artifacts" / "Data" / "Benchmark" / "Reports"
 FIGURES = ROOT / "Artifacts" / "Paper" / "figures"
 CSV_PATH = REPORTS / "benchmark_runs_wave2.csv"
+
+# Every text size in the figure, in one place for tuning legibility.
+FONT = {"suptitle": 18, "ylabel": 15, "yticks": 13, "xticks": 13,
+        "values": 12, "brackets": 14}
 
 
 # ── Data ─────────────────────────────────────────────────────────────
@@ -125,24 +127,26 @@ def draw_panel(ax, tbl, values, labels, ylabel, headroom=1.16):
 
     for x, v, lab in zip(xs, values, labels):
         ax.annotate(lab, (x, v), xytext=(0, 3), textcoords="offset points",
-                    ha="center", va="bottom", fontsize=8, color=INK)
+                    ha="center", va="bottom", fontsize=FONT["values"], color=INK)
 
-    ax.set_ylabel(ylabel, fontsize=9.5, color=INK, labelpad=6)
-    ax.tick_params(axis="y", labelsize=8.5, pad=2)
+    ax.set_ylabel(ylabel, fontsize=FONT["ylabel"], color=INK, labelpad=6)
+    ax.tick_params(axis="y", labelsize=FONT["yticks"], pad=2)
     ax.set_xticks(list(xs))
 
 
-def build_figure(df_slice: pd.DataFrame, *, title: str, sub: str) -> plt.Figure:
+def build_figure(df_slice: pd.DataFrame, *, title: str) -> plt.Figure:
     tbl = load_table(df_slice)
 
+    # Same width as the structure and timing figures, so the same point sizes
+    # read the same once LaTeX scales each to the text width.
     fig, (ax_tok, ax_cost) = plt.subplots(
-        2, 1, figsize=(7.4, 6.2), sharex=True,
+        2, 1, figsize=(10.4, 8.0), sharex=True,
         gridspec_kw={"height_ratios": [1, 1], "hspace": 0.13},
     )
     # Fix the axes geometry before any bars are drawn: rounded_bar converts a
     # point radius through transData, so a later subplots_adjust would silently
     # rescale corners that were computed against the old axes box.
-    fig.subplots_adjust(left=0.115, right=0.985, top=0.885, bottom=0.165)
+    fig.subplots_adjust(left=0.105, right=0.99, top=0.93, bottom=0.13)
 
     draw_panel(ax_tok, tbl, list(tbl["tokens"]),
                [f"{v / 1e3:.1f}k" for v in tbl["tokens"]],
@@ -156,27 +160,13 @@ def build_figure(df_slice: pd.DataFrame, *, title: str, sub: str) -> plt.Figure:
     ax_cost.yaxis.set_major_formatter(lambda v, _: f"{v:,.{cost_dp}f}" if v else "0")
 
     ax_tok.set_xticklabels([])
-    ax_cost.set_xticklabels(list(tbl["tick"]), fontsize=9, color=INK)
+    ax_cost.set_xticklabels(list(tbl["tick"]), fontsize=FONT["xticks"], color=INK)
     ax_cost.tick_params(axis="x", pad=4)
+    draw_provider_brackets(ax_cost, tbl, y_rule=-0.20, y_label=-0.235,
+                           fontsize=FONT["brackets"])
 
-    # Runs-OK row, then the provider brackets, in axes-fraction space below the
-    # tick labels. Tick labels are 1-2 lines, so the row sits clear of both.
-    trans = ax_cost.get_xaxis_transform()
-    y_n = -0.235
-    for x, row in enumerate(tbl.itertuples()):
-        weak = row.n_ok < row.n_runs
-        ax_cost.text(x, y_n, f"{row.n_ok}/{row.n_runs}", transform=trans,
-                     ha="center", va="top", fontsize=7.5,
-                     color=INK_SOFT if weak else INK_MUTED,
-                     fontweight="bold" if weak else "normal", clip_on=False)
-    ax_cost.text(-0.78, y_n, "runs OK", transform=trans, ha="right", va="top",
-                 fontsize=7.5, color=INK_MUTED, style="italic", clip_on=False)
-
-    draw_provider_brackets(ax_cost, tbl, y_rule=-0.30, y_label=-0.325)
-
-    fig.suptitle(title, fontsize=11.5, fontweight="bold", color=INK,
-                 x=0.055, ha="left", y=0.985)
-    fig.text(0.055, 0.945, sub, fontsize=8.5, color=INK_SOFT, ha="left", va="top")
+    fig.suptitle(title, fontsize=FONT["suptitle"], fontweight="bold", color=INK,
+                 x=0.5, ha="center", y=0.995)
     return fig
 
 
@@ -202,34 +192,19 @@ def main(argv=None):
     csv_path = args.runs_csv if args.runs_csv.is_absolute() else ROOT / args.runs_csv
     df = pd.read_csv(csv_path)
 
-    # A repriced table carries the as-recorded figure alongside the recomputed
-    # one; say so on the figure, since the cost axis then reflects the current
-    # price table rather than what was billed at run time.
-    rate_note = ""
-    if "cost_usd_recorded" in df.columns:
-        rate_note = "\nCosts recomputed at current published rates (see tracking/pricing.py)"
-
     set_style()
     FIGURES.mkdir(parents=True, exist_ok=True)
 
-    base_df = base_slice(df)
-    n_base = base_df.groupby("display_name").size()
-    l1_df = l1_slice(df)
-    n_l1 = l1_df.groupby("display_name").size()
-
+    # No subtitle: run counts, the failed-run note and any repricing note
+    # belong in the LaTeX caption, where they are legible.
     specs = [
-        (base_df, f"cost_tokens_by_model{args.suffix}",
-         "Mean token usage and cost per run, by model",
-         f"Wave-2 benchmark · {LEVEL_NAME['L3']} and {LEVEL_NAME['L4']} levels · "
-         f"{int(n_base.iloc[0])} runs per model, {int(n_base.sum())} total · "
-         "means include failed runs, which still consume tokens"),
-        (l1_df, f"cost_tokens_by_model_L1{args.suffix}",
-         f"Mean token usage and cost per run, by model ({LEVEL_NAME['L1']} level only)",
-         f"Wave-2 benchmark · {LEVEL_NAME['L1']} level · {int(n_l1.iloc[0])} runs per model, "
-         f"{int(n_l1.sum())} total · means include failed runs"),
+        (base_slice(df), f"cost_tokens_by_model{args.suffix}",
+         "Mean token usage and cost per run, by model"),
+        (l1_slice(df), f"cost_tokens_by_model_L1{args.suffix}",
+         f"Mean token usage and cost per run, by model ({LEVEL_NAME['L1']} level only)"),
     ]
-    for df_slice, stem, title, sub in specs:
-        fig = build_figure(df_slice, title=title, sub=sub + rate_note)
+    for df_slice, stem, title in specs:
+        fig = build_figure(df_slice, title=title)
         for ext in args.formats:
             out = FIGURES / f"{stem}.{ext}"
             fig.savefig(out, dpi=400 if ext == "png" else None,

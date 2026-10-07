@@ -336,14 +336,22 @@ def stack_segment(ax, x, y0, y1, width, color, round_top, hatch=None):
                            linewidth=0, zorder=3))
 
 
+# Every text size in the figure, in one place for tuning legibility.
+D_FONT = {"suptitle": 18, "legend": 14, "ylabel": 15, "yticks": 13,
+          "xticks": 13, "values": 12, "brackets": 14}
+
+
 def fig_time_decomposition(df: pd.DataFrame) -> plt.Figure:
     tbl = per_model(base_slice(df))
 
-    fig, ax = plt.subplots(figsize=(7.4, 5.1))
-    fig.subplots_adjust(left=0.105, right=0.985, top=0.775, bottom=0.235)
+    # Same width as the structure figures, so the same point sizes read the
+    # same once LaTeX scales both to \linewidth.
+    fig, ax = plt.subplots(figsize=(10.4, 5.8))
+    fig.subplots_adjust(left=0.1, right=0.99, top=0.85, bottom=0.17)
 
     style_panel(ax, len(tbl))
     ax.set_ylim(0, tbl["total_min"].max() * 1.17)
+    ax.tick_params(axis="y", labelsize=D_FONT["yticks"])
     fig.canvas.draw()
 
     # 2px surface gap between touching segments, expressed in data units.
@@ -364,36 +372,29 @@ def fig_time_decomposition(df: pd.DataFrame) -> plt.Figure:
             y = top
         ax.annotate(f"{row.total_min:.0f} min", (x, row.total_min), xytext=(0, 4),
                     textcoords="offset points", ha="center", va="bottom",
-                    fontsize=8, color=INK)
+                    fontsize=D_FONT["values"], color=INK)
 
     ax.set_ylabel("Wall-clock time spent\n(minutes, 30 runs per model)",
-                  fontsize=9.5, color=INK, labelpad=6)
-    ax.set_xticklabels(list(tbl["tick"]), fontsize=9, color=INK)
+                  fontsize=D_FONT["ylabel"], color=INK, labelpad=6)
+    ax.set_xticklabels(list(tbl["tick"]), fontsize=D_FONT["xticks"], color=INK)
     ax.tick_params(axis="x", pad=4)
-    # First-try counts, not runs-OK: the red band already carries the failures,
-    # and this row is the only way to read a violet segment thin enough to
-    # vanish (GPT-5.4 and 5.4 Mini were first-try valid on 1 run in 30).
-    counts_row(ax, tbl, y=-0.155, label="valid first try", numer="n_clean",
-               weak_when=lambda r: r.n_clean * 2 < r.n_runs)
     # Brackets stay muted ink here: the fills already spend the colour channel.
-    draw_provider_brackets(ax, tbl, y_rule=-0.225, y_label=-0.25,
-                           rule_color=INK_MUTED)
+    draw_provider_brackets(ax, tbl, y_rule=-0.145, y_label=-0.17,
+                           rule_color=INK_MUTED, fontsize=D_FONT["brackets"])
 
-    ax.legend(
+    fig.legend(
         handles=[Patch(facecolor=OUTCOME_COLOR[k], hatch=OUTCOME_HATCH[k] or None,
                        edgecolor=HATCH_COLOR, linewidth=0)
                  for k in ("clean", "repair", "failed")],
         labels=[OUTCOME_LABEL[k] for k in ("clean", "repair", "failed")],
-        loc="lower left", bbox_to_anchor=(0.0, 1.005), ncol=3, frameon=False,
-        fontsize=8.5, handlelength=1.8, handleheight=1.2, labelcolor=INK_SOFT,
-        columnspacing=1.4, borderpad=0.0,
+        loc="upper center", bbox_to_anchor=(0.5, 0.935), ncol=3, frameon=False,
+        fontsize=D_FONT["legend"], handlelength=1.8, handleheight=1.2,
+        labelcolor=INK, columnspacing=2.4, borderpad=0.0,
     )
 
-    titles(fig,
-           "Where the sweep's compute time went, by model",
-           "Wave-2 benchmark, 2026-07-10 \u00b7 30 Objectives/Script runs per "
-           "model \u00b7 6.6 h total\nRuns are bucketed whole: a run needing one schema repair "
-           "contributes all of its time to the repair band")
+    fig.suptitle("Where the sweep's compute time went, by model",
+                 fontsize=D_FONT["suptitle"], fontweight="bold", color=INK,
+                 x=0.5, ha="center", y=0.99)
     return fig
 
 

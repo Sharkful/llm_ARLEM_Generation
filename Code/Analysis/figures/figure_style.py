@@ -150,7 +150,8 @@ def rounded_bar(ax, x, height, width, color, hatch=None):
                            linewidth=0, zorder=3))
 
 
-def draw_provider_brackets(ax, tbl, y_rule, y_label, rule_color=None):
+def draw_provider_brackets(ax, tbl, y_rule, y_label, rule_color=None,
+                           fontsize=9.5):
     """Colour rule + ink label under each provider group.
 
     This is the identity encoding -- it sits directly beneath the marks it
@@ -173,5 +174,5 @@ def draw_provider_brackets(ax, tbl, y_rule, y_label, rule_color=None):
                     color=rule_color or PROVIDER_COLOR[prov], linewidth=2.4,
                     solid_capstyle="round", zorder=5)
             ax.text((lo + hi) / 2, y_label, PROVIDER_LABEL[prov], transform=trans,
-                    ha="center", va="top", fontsize=9.5, color=INK, clip_on=False)
+                    ha="center", va="top", fontsize=fontsize, color=INK, clip_on=False)
             start = i
