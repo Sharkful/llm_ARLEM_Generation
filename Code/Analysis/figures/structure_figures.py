@@ -9,7 +9,7 @@ whether they would function at all.
 Five figures, two LaTeX tables, written to Artifacts/Paper/.
 
     wave2_json_lab_size          size against the human-authored moon lab
-    wave2_authoring_burden       novel assets + prefab reuse collapse
+    wave2_authoring_burden       novel textures invented, per model
     wave2_arlem_validity         the OpenAI zero-activate defect
     wave2_specificity_elasticity what the Script level adds, format against format
     wave2_arlem_floor            how often models stop at the stated minimum
@@ -256,7 +256,7 @@ def counts_row(ax, tbl, y, label, values, weak_when, denom=None):
             fontsize=7.5, color=INK_MUTED, style="italic", clip_on=False)
 
 
-def reference_rule(ax, value, text):
+def reference_rule(ax, value, text, fontsize=7.5):
     """Dashed rule for the hand-authored lab, labelled just above its right end.
 
     The label sits inside the axes: hung off the right margin it overran the
@@ -264,8 +264,10 @@ def reference_rule(ax, value, text):
     """
     ax.axhline(value, color=INK_SOFT, linewidth=1.0, linestyle=(0, (4, 3)),
                zorder=2)
+    if text is None:  # the caller names the rule in a legend instead
+        return
     ax.text(-0.55, value, " " + text, ha="left", va="bottom",
-            fontsize=7.5, color=INK_SOFT, zorder=6,
+            fontsize=fontsize, color=INK_SOFT, zorder=6,
             path_effects=[pe.withStroke(linewidth=3.0, foreground=SURFACE)])
 
 
@@ -353,6 +355,10 @@ A_PANELS = [("num_modules", "Modules (scenes)"),
             ("num_objects", "Scene objects"),
             ("num_components", "Behaviour components")]
 
+# Every text size in the figure, in one place for tuning legibility.
+A_FONT = {"suptitle": 18, "legend": 14, "ylabel": 15, "yticks": 13,
+          "xticks": 13, "zero": 11, "brackets": 14}
+
 
 def fig_json_lab_size(df: pd.DataFrame) -> plt.Figure:
     jl = json_lab_slice(df)
@@ -382,116 +388,84 @@ def fig_json_lab_size(df: pd.DataFrame) -> plt.Figure:
                     # gap that reads as a failed run.
                     # Ink, not the series colour: position already says which
                     # level it is, and text never carries series identity.
-                    ax.text(bx, 0, "0", ha="center", va="bottom", fontsize=7,
-                            color=INK_MUTED)
-        reference_rule(ax, ref[col], REF_LINE)
-        ax.set_ylabel(label, fontsize=9)
+                    ax.text(bx, 0, "0", ha="center", va="bottom",
+                            fontsize=A_FONT["zero"], color=INK_MUTED)
+        # Named in the legend: an in-panel label collided with the bars.
+        reference_rule(ax, ref[col], None)
+        ax.yaxis.set_major_locator(plt.MaxNLocator(nbins=4, integer=True))
+        ax.set_ylabel(label, fontsize=A_FONT["ylabel"])
+        ax.tick_params(axis="y", labelsize=A_FONT["yticks"])
         top = max(ref[col],
                   jl.groupby(["display_name", "level"])[col].median().max())
-        ax.set_ylim(0, top * 1.16)
+        ax.set_ylim(0, top * 1.2)
 
-    axes[-1].set_xticklabels(tbl["tick"], fontsize=8.5)
-    counts_row(axes[-1], tbl, -0.155, "runs succeeded", list(tbl["n_ok"]),
-               lambda v, n_: v < n_)
-    draw_provider_brackets(axes[-1], tbl, -0.30, -0.34, rule_color=INK_MUTED)
+    axes[-1].set_xticklabels(tbl["tick"], fontsize=A_FONT["xticks"])
+    draw_provider_brackets(axes[-1], tbl, -0.27, -0.32, rule_color=INK_MUTED,
+                           fontsize=A_FONT["brackets"])
 
-    titles(fig, "Generated lab size against the hand-authored reference",
-           "Median over successful Objectives and Script runs per model. The reference lab is "
-           "the hand-authored Unity moon lab the schema was derived from.\n"
-           "Models come closest on objects and modules and fall furthest short "
-           "on clips — the reference lab's 76 steps are more than double the "
-           "best model median.",
-           y=0.99, ysub=0.965)
-    level_legend(fig, y=0.998)
-    fig.tight_layout(rect=(0.03, 0.055, 0.99, 0.935))
+    fig.suptitle("Generated lab size against the hand-authored reference",
+                 fontsize=A_FONT["suptitle"], fontweight="bold", color=INK,
+                 x=0.5, ha="center", y=0.995)
+    handles = [Patch(facecolor=LEVEL_COLOR[lv], hatch=LEVEL_HATCH[lv] or None,
+                     edgecolor=HATCH_COLOR, linewidth=0, label=LEVEL_LABEL[lv])
+               for lv in ("L3", "L4")]
+    handles.append(plt.Line2D([], [], color=INK_SOFT, linewidth=1.4,
+                              linestyle=(0, (4, 3)), label=REF_LINE))
+    fig.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 0.965),
+               ncols=3, frameon=False, fontsize=A_FONT["legend"],
+               handletextpad=0.5, handlelength=1.8, handleheight=1.2,
+               columnspacing=2.4)
+    # Set by hand so the legend sits just above the first panel.
+    fig.subplots_adjust(left=0.1, right=0.99, top=0.925, bottom=0.09,
+                        hspace=0.18)
     return fig
 
 
 # ---- Figure 2: authoring burden -------------------------------------
 
+# Every text size in the figure, in one place for tuning legibility.
+B_FONT = {"suptitle": 18, "ylabel": 15, "yticks": 13, "xticks": 13,
+          "values": 12.5, "brackets": 14}
+
+
 def fig_authoring_burden(df: pd.DataFrame) -> plt.Figure:
+    # Novel textures only. The prefab share is near-flat across models (the
+    # paper text carries it), and prefab reuse was cut for legibility.
+    # Bars are means, not medians: 46% of runs invent no texture, so a median
+    # reads 0 for five models and flattens the difference between them.
     jl = json_lab_slice(df)
     tbl = model_rows(jl)
-    ref = moon_lab_reference()
     n = len(tbl)
-    rng = np.random.default_rng(20260826)  # fixed: the strip must not move between runs
 
-    fig, (ax_share, ax_tex, ax_reuse) = plt.subplots(
-        3, 1, figsize=(10.4, 9.6), sharex=True,
-        gridspec_kw={"height_ratios": [1.0, 1.05, 1.0]})
-
-    # -- 2a: share of distinct prefabs that are novel --------------------
-    style_panel(ax_share, n)
+    fig, ax = plt.subplots(figsize=(10.4, 5.2))
+    style_panel(ax, n)
+    means = []
     for x, row in enumerate(tbl.itertuples()):
-        runs = jl[jl["ok"] & (jl["display_name"] == row.display)]["novel_share"].dropna()
-        if runs.empty:
-            continue
-        rounded_bar(ax_share, x, runs.median(), SLIM_WIDTH,
-                    PROVIDER_COLOR[row.provider],
-                    hatch=PROVIDER_HATCH[row.provider])
-        ring = [pe.withStroke(linewidth=3.1, foreground=SURFACE)]
-        ax_share.plot([x, x], [runs.quantile(0.25), runs.quantile(0.75)],
-                      color=INK, linewidth=1.1, solid_capstyle="butt",
-                      zorder=4, path_effects=ring)
-    pooled = jl[jl["ok"]]["novel_share"].median()
-    ax_share.axhline(pooled, color=INK_SOFT, linewidth=1.0,
-                     linestyle=(0, (4, 3)), zorder=2)
-    ax_share.text(n - 0.42, pooled, f"  pooled median {pooled:.0%}",
-                  ha="left", va="center", fontsize=7.5, color=INK_SOFT,
-                  clip_on=False)
-    ax_share.set_ylim(0, 1.06)
-    ax_share.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
-    ax_share.set_yticklabels(["0", "25%", "50%", "75%", "100%"])
-    ax_share.set_ylabel("Prefabs invented\n(share of distinct prefabs)", fontsize=9)
-
-    # -- 2b: novel textures, one dot per run ----------------------------
-    # 46% of runs invent none, so a box would report a median of 0 for five
-    # models and hide that the zeros are a mode. Ten runs per model is exactly
-    # the size a strip reads well at.
-    style_panel(ax_tex, n)
-    for x, row in enumerate(tbl.itertuples()):
-        vals = jl[jl["ok"] & (jl["display_name"] == row.display)]["novel_textures"].to_numpy()
+        vals = jl[jl["ok"] & (jl["display_name"] == row.display)]["novel_textures"]
+        means.append(vals.mean() if len(vals) else np.nan)
         if not len(vals):
             continue
-        jitter = rng.uniform(-0.14, 0.14, size=len(vals))
-        ax_tex.plot(x + jitter, vals, linestyle="none", marker="o",
-                    markersize=5.5, markerfacecolor=PROVIDER_COLOR[row.provider],
-                    markeredgecolor=SURFACE, markeredgewidth=1.5, alpha=0.95,
-                    zorder=3)
-        ax_tex.plot([x - 0.26, x + 0.26], [np.median(vals)] * 2, color=INK,
-                    linewidth=1.4, solid_capstyle="butt", zorder=4,
-                    path_effects=[pe.withStroke(linewidth=3.4, foreground=SURFACE)])
-    ax_tex.set_ylim(-1.6, jl["novel_textures"].max() * 1.1)
-    ax_tex.set_ylabel("Textures invented\n(one dot per run, bar = median)", fontsize=9)
-
-    # -- 2c: objects covered per distinct prefab ------------------------
-    style_panel(ax_reuse, n)
-    for x, row in enumerate(tbl.itertuples()):
-        runs = jl[jl["ok"] & (jl["display_name"] == row.display)]["reuse"].dropna()
-        if runs.empty:
-            continue
-        rounded_bar(ax_reuse, x, runs.median(), SLIM_WIDTH,
+        rounded_bar(ax, x, vals.mean(), SLIM_WIDTH,
                     PROVIDER_COLOR[row.provider],
                     hatch=PROVIDER_HATCH[row.provider])
-    reference_rule(ax_reuse, ref["reuse"],
-                   f"{REF_LINE}: {ref['reuse']:.0f}\u00d7")
-    ax_reuse.set_ylim(0, ref["reuse"] * 1.16)
-    ax_reuse.set_ylabel("Prefab reuse\n(objects per distinct prefab)", fontsize=9)
+    top = np.nanmax(means)
+    for x, m in enumerate(means):
+        if m == m:
+            ax.text(x, m + top * 0.02, f"{m:.1f}", ha="center", va="bottom",
+                    fontsize=B_FONT["values"], color=INK)
+    ax.set_ylim(0, top * 1.14)
+    ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+    ax.set_ylabel("Textures invented\n(mean per run)", fontsize=B_FONT["ylabel"])
+    ax.tick_params(axis="y", labelsize=B_FONT["yticks"])
+    ax.set_xticklabels(tbl["tick"], fontsize=B_FONT["xticks"])
+    draw_provider_brackets(ax, tbl, -0.14, -0.165,
+                           fontsize=B_FONT["brackets"])
 
-    ax_reuse.set_xticklabels(tbl["tick"], fontsize=8.5)
-    counts_row(ax_reuse, tbl, -0.22, "runs succeeded", list(tbl["n_ok"]),
-               lambda v, n_: v < n_)
-    draw_provider_brackets(ax_reuse, tbl, -0.34, -0.375)
-
-    titles(fig, "Authoring burden left behind by each generated lab",
-           "Successful Objectives and Script json_lab runs. \u201cInvented\u201d means the asset is "
-           "not in the moon-lab library the schema documents \u2014 someone would "
-           "have to model or paint it.\nThe share is near-flat across models, "
-           "levels and topics: library grounding fails uniformly, not just on "
-           "the weak models. Gemini 3.1 Flash-Lite is low only because its labs "
-           "are nearly empty.",
-           ysub=0.955)
-    fig.tight_layout(rect=(0.03, 0.06, 0.99, 0.905))
+    fig.suptitle("Amount of New Texture Names Created",
+                 fontsize=B_FONT["suptitle"], fontweight="bold", color=INK,
+                 x=0.5, ha="center", y=0.99)
+    # Set by hand: tight_layout left a wide band under the title.
+    fig.subplots_adjust(left=0.09, right=0.99, top=0.9, bottom=0.2)
     return fig
 
 
@@ -767,17 +741,12 @@ FIGURE_BLOCKS = [
      "\\texttt{LabOutline}, "
      "which has no modules, clips, objects or components to count."),
     ("wave2_authoring_burden", "fig:authoring-burden",
-     "Authoring work implied by each generated lab. Top: the share of distinct "
-     "prefabs a run references that do not exist in the documented moon-lab "
-     "library, bars median and whiskers interquartile range. Middle: novel "
-     "textures, one dot per run, drawn as a strip because 46\\% of runs invent "
-     "none and a box plot would report a median of zero for five models. "
-     "Bottom: how many scene objects each distinct prefab covers, against the "
-     "reference lab's 10. The invention rate is 88\\% pooled and near-flat "
-     "across models, levels and topics, so library grounding fails uniformly "
-     "rather than only on the weaker models; Gemini~3.1~Flash-Lite scores low "
-     "only because its labs are nearly empty. Novel counts are reported as a "
-     "share because absolute counts track lab size."),
+     "Novel textures per generated lab: textures a run references that do not "
+     "exist in the documented moon-lab library, and which someone would have "
+     "to paint. Bars are per-model means over the successful Objectives and "
+     "Script Lab JSON runs; means rather than medians because 46\\% of runs "
+     "invent none, and a median would read zero for five models. "
+     "Gemini~2.5~Flash-Lite has only 4 successful runs."),
     ("wave2_arlem_validity", "fig:arlem-validity",
      "ARLEM scenarios whose action flows never activate an augmentation. Such "
      "a scenario passes schema validation and cross-validation, and renders "
