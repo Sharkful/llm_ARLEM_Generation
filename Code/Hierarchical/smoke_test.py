@@ -120,8 +120,15 @@ class FakeLLM:
         return model.model_validate(m)
 
 
+# The replayed wave-2 modules were generated under lab-wide minimums, so they are
+# smaller than the pipeline's per-module defaults; replay runs use minimums the
+# source data meets (the minimum checks themselves are tested separately).
+REPLAY_MINIMUMS = {"min_objects": 1, "min_clips": 2}
+
+
 def make(fake, run_name, cfg=None, **kw):
-    pipe = P.HierarchicalPipeline("claude-haiku-4.5", LAB_NAME, P.PipelineConfig(**(cfg or {})),
+    config = P.PipelineConfig(**{**REPLAY_MINIMUMS, **(cfg or {})})
+    pipe = P.HierarchicalPipeline("claude-haiku-4.5", LAB_NAME, config,
                                   output_dir=TMP / "fake", run_name=run_name, call_fn=fake, **kw)
     fake.pipe = pipe
     return pipe
@@ -275,7 +282,7 @@ P.create_instructor_client = lambda mc, spec: instructor.from_provider(
     f"openai/{mc.model_id}", base_url=f"http://127.0.0.1:{srv.server_port}/v1", api_key="test")
 try:
     MOCK = TMP / "mock"
-    rec = P.HierarchicalPipeline("gpt-5.4-mini", LAB_NAME, P.PipelineConfig(),
+    rec = P.HierarchicalPipeline("gpt-5.4-mini", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
                                  output_dir=MOCK, run_name="mock").run()
 finally:
     P.create_instructor_client = _real_factory

@@ -133,7 +133,7 @@ class PipelineConfig:
     step_attempts: int = 2         # fresh regenerations of a step after a terminal failure
     max_revisions: int = 3         # reviewer Revise rounds per step before accepting
     allow_new_components: bool = True
-    min_objects: int = 4           # lab-wide minima, spread across modules
+    min_objects: int = 4           # per-module minimums (lab-wide in the one-shot runs)
     min_clips: int = 5
 
     def to_json(self) -> dict:
@@ -463,8 +463,6 @@ class HierarchicalPipeline:
                 cfg.plan_retries, "00_plan", "lab plan",
             )
             n = len(plan.scenes)
-            min_objects = prompts.per_module_minimum(cfg.min_objects, n, floor=1)
-            min_beats = prompts.per_module_minimum(cfg.min_clips, n, floor=2)
 
             for i in range(1, n + 1):
                 catalog = self.registry.catalog_names()
@@ -473,21 +471,29 @@ class HierarchicalPipeline:
                     prompts.build_asset_plan_prompt(
                         self.lab_context, plan, i, self.registry,
                         allow_new_components=cfg.allow_new_components,
-                        min_objects=min_objects, min_beats=min_beats,
+                        min_objects=cfg.min_objects, min_beats=cfg.min_clips,
                     ),
                     cfg.asset_plan_retries, f"{i:02d}_asset_plan", "module asset plan",
-                    scope=lambda: asset_plan_validation(catalog, allow_new=cfg.allow_new_components),
+                    scope=lambda: asset_plan_validation(
+                        catalog, allow_new=cfg.allow_new_components,
+                        min_objects=cfg.min_objects, min_clip_beats=cfg.min_clips,
+                    ),
                     context={"scene": plan.scenes[i - 1]},
                 )
                 allowed = prompts.allowed_new_component_names(asset_plan, self.registry)
                 module = self._run_step(
                     "module", i, PlannedDemoModule,
-                    prompts.build_module_prompt(self.lab_context, plan, i, self.registry, asset_plan),
+                    prompts.build_module_prompt(
+                        self.lab_context, plan, i, self.registry, asset_plan,
+                        min_objects=cfg.min_objects, min_clips=cfg.min_clips,
+                    ),
                     cfg.module_retries, f"{i:02d}_module", "module",
                     scope=lambda: module_validation(allowed),
                     context={"scene": plan.scenes[i - 1], "asset_plan": asset_plan},
                 )
-                self.registry.register_module(i, module)
+                self.registry.register_module(
+                    i, module, asset_plan, scene_purpose=plan.scenes[i - 1].brief_purpose
+                )
                 modules.append(module)
                 adherence.append({"index": i, **plan_adherence(asset_plan, module)})
 
@@ -549,8 +555,8 @@ class HierarchicalPipeline:
             "plan_adherence": adherence,
             "registry": {
                 "new_components": [asdict(c) for c in self.registry.components if not c.builtin],
-                "invented_prefabs": self.registry.invented_prefabs,
-                "invented_textures": self.registry.invented_textures,
+                "invented_prefabs": {k: asdict(v) for k, v in self.registry.invented_prefabs.items()},
+                "invented_textures": {k: asdict(v) for k, v in self.registry.invented_textures.items()},
             },
             "lab_metrics": lab_metrics,
             "asset_metrics": asset_metrics,

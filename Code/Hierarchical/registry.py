@@ -7,8 +7,9 @@ can reuse a prefab, texture, or new component instead of inventing a near-duplic
 - Component catalog: the built-in json_lab components (derived from the schema
   classes so it can't drift) plus every NewComponent an accepted module used.
 - Invented prefabs / textures: assets outside the moon-lab library that earlier
-  modules introduced.
-- Module summaries: one compact entry per accepted module for later prompts.
+  modules introduced, with the purpose the asset plan gave them.
+- Module summaries: one compact entry per accepted module for later prompts,
+  including what it covered (built in code, no LLM call).
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import _paths  # noqa: F401  (sys.path for Schemas / Benchmark)
 
 from json_lab import Component, DemoModule, NewComponent
 from lab_metrics import KNOWN_PREFABS, KNOWN_TEXTURES
+from module_asset_plan import ModuleAssetPlan, component_key
 
 
 # Display spelling of the moon-lab library. lab_metrics keeps the same sets
@@ -46,7 +48,7 @@ class CatalogEntry:
 
 def _builtin_catalog() -> list[CatalogEntry]:
     """One entry per json_lab component class except NewComponent (the mechanism
-    for new ones), described by its docstring plus a field summary."""
+    for new ones), described by its docstring plus every field's full description."""
     entries = []
     for cls in typing.get_args(Component):
         if cls is NewComponent:
@@ -55,7 +57,7 @@ def _builtin_catalog() -> list[CatalogEntry]:
         for fname, finfo in cls.model_fields.items():
             if fname in _TAG_FIELDS:
                 continue
-            desc = (finfo.description or "").split(". ")[0].strip()
+            desc = " ".join((finfo.description or "").split())
             fields.append(f"{fname} ({desc})" if desc else fname)
         doc = " ".join((cls.__doc__ or "").split())
         entries.append(CatalogEntry(
@@ -75,25 +77,37 @@ def _iter_module_components(module: DemoModule):
 
 
 @dataclass
+class InventedAsset:
+    module: int                   # 1-based module index that introduced it
+    purpose: str | None = None    # the planned object's purpose, when known
+
+    def render(self, name: str) -> str:
+        return f"{name} (module {self.module}: {self.purpose})" if self.purpose else \
+            f"{name} (module {self.module})"
+
+
+@dataclass
 class ModuleSummary:
     index: int  # 1-based
     module_name: str
     description: str
     object_names: list[str]
     num_clips: int
+    covered: str = ""
 
     def render(self) -> str:
-        return (
+        line = (
             f"Module {self.index} \"{self.module_name}\": {self.description} "
             f"(objects: {', '.join(self.object_names)}; {self.num_clips} clips)"
         )
+        return f"{line}\n  covered: {self.covered}" if self.covered else line
 
 
 @dataclass
 class AssetRegistry:
     components: list[CatalogEntry] = field(default_factory=_builtin_catalog)
-    invented_prefabs: dict[str, int] = field(default_factory=dict)   # name -> module index
-    invented_textures: dict[str, int] = field(default_factory=dict)
+    invented_prefabs: dict[str, InventedAsset] = field(default_factory=dict)
+    invented_textures: dict[str, InventedAsset] = field(default_factory=dict)
     modules: list[ModuleSummary] = field(default_factory=list)
 
     # ── queries ──────────────────────────────────────────────────────
@@ -104,12 +118,20 @@ class AssetRegistry:
         return [c.name for c in self.components if not c.builtin]
 
     def find_component(self, name: str) -> CatalogEntry | None:
-        key = name.strip().lower()
-        return next((c for c in self.components if c.name.lower() == key), None)
+        key = component_key(name)
+        return next((c for c in self.components if component_key(c.name) == key), None)
 
     # ── updates ──────────────────────────────────────────────────────
-    def register_module(self, index: int, module: DemoModule) -> None:
-        """Record an accepted module: its new components, novel assets, summary."""
+    def register_module(
+        self,
+        index: int,
+        module: DemoModule,
+        asset_plan: ModuleAssetPlan | None = None,
+        scene_purpose: str | None = None,
+    ) -> None:
+        """Record an accepted module: its new components, novel assets (with the
+        purpose its asset plan gave them), and a summary for later prompts."""
+        purposes = {o.name: o.purpose for o in asset_plan.objects} if asset_plan else {}
         for comp in _iter_module_components(module):
             if isinstance(comp, NewComponent) and self.find_component(comp.scriptName) is None:
                 self.components.append(CatalogEntry(
@@ -121,18 +143,21 @@ class AssetRegistry:
         known_prefabs = {p.lower() for p in BUILTIN_PREFABS} | {p.lower() for p in self.invented_prefabs}
         known_textures = {t.lower() for t in BUILTIN_TEXTURES} | {t.lower() for t in self.invented_textures}
         for obj in module.objects:
+            purpose = purposes.get(obj.name)
             if obj.prefab and obj.prefab.lower() not in known_prefabs:
-                self.invented_prefabs[obj.prefab] = index
+                self.invented_prefabs[obj.prefab] = InventedAsset(index, purpose)
                 known_prefabs.add(obj.prefab.lower())
             if obj.texture and obj.texture.lower() not in known_textures:
-                self.invented_textures[obj.texture] = index
+                self.invented_textures[obj.texture] = InventedAsset(index, purpose)
                 known_textures.add(obj.texture.lower())
+        covered = "; ".join(filter(None, [scene_purpose, *module.educationalObjectives]))
         self.modules.append(ModuleSummary(
             index=index,
             module_name=module.moduleName,
             description=module.description,
             object_names=[o.name for o in module.objects],
             num_clips=len(module.clips),
+            covered=covered,
         ))
 
     # ── prompt rendering ─────────────────────────────────────────────
@@ -144,16 +169,24 @@ class AssetRegistry:
             lines.append("")
             lines.append(
                 "New components already invented by earlier modules (reuse these by "
-                "their exact name when they fit):"
+                "their exact PascalCase name when they fit):"
             )
             lines += [
                 f"- {c.name} (from module {c.origin_module}): {c.description}" for c in new
             ]
         return "\n".join(lines)
 
+    def is_known_asset(self, prefab: str | None = None, texture: str | None = None) -> bool:
+        """True if the prefab/texture is built in or was invented by an earlier module."""
+        if prefab is not None:
+            return prefab.lower() in {p.lower() for p in (*BUILTIN_PREFABS, *self.invented_prefabs)}
+        if texture is not None:
+            return texture.lower() in {t.lower() for t in (*BUILTIN_TEXTURES, *self.invented_textures)}
+        return True
+
     def render_assets(self) -> str:
-        def _fmt(items: dict[str, int]) -> str:
-            return ", ".join(f"{n} (module {i})" for n, i in items.items()) or "none yet"
+        def _fmt(items: dict[str, InventedAsset]) -> str:
+            return "; ".join(a.render(n) for n, a in items.items()) or "none yet"
         return "\n".join([
             f"Built-in prefabs: {', '.join(BUILTIN_PREFABS)}",
             f"Built-in textures: {', '.join(BUILTIN_TEXTURES)}",

@@ -6,18 +6,22 @@ Three LLM steps, each with its own template:
   2. ASSET_PLAN_INSTRUCTION   one scene -> ModuleAssetPlan (objects, components, why)
   3. MODULE_INSTRUCTION       approved asset plan -> DemoModule
 
-Every prompt opens with the same lab-description block (prompt_builder's L3/L4
-context) so the source of truth is always in view; the plan, earlier modules, and
-the asset registry are appended as compact summaries rather than full JSON, so
-prompt size grows slowly with module count. Structural rules mirror
-prompt_builder.FULL_SPEC_MULTI_MODULE_INSTRUCTION so outputs stay comparable with
-one-shot runs.
+Prompt order is cache-friendly: every prompt *starts* with the same block (the
+lab description), and the asset-plan and module prompts continue with the same
+approved plan, before anything step- or module-specific. Providers with automatic
+prefix caching (OpenAI, Gemini) then bill that repeated opening at the cached
+rate on every call after the first. Anthropic needs explicit cache markers (#73).
+
+The plan, earlier modules, and the asset registry are appended as compact
+summaries rather than full JSON, so prompt size grows slowly with module count.
+Structural rules mirror prompt_builder.FULL_SPEC_MULTI_MODULE_INSTRUCTION so
+outputs stay comparable with one-shot runs, except that the object and clip
+minimums apply per module here (they are lab-wide in the one-shot runs).
 """
 
 from __future__ import annotations
 
 import json
-import math
 
 import _paths  # noqa: F401
 
@@ -26,7 +30,20 @@ from module_asset_plan import ModuleAssetPlan
 from registry import AssetRegistry
 
 
-PLAN_INSTRUCTION = """\
+# Shared openings. Keep these byte-identical across calls: any change here moves
+# the point where the cached prefix ends.
+LAB_BLOCK = """\
+# Lab description
+{lab_context}
+"""
+
+PLAN_BLOCK = """\
+# Approved lab plan (one module per scene)
+{plan}
+"""
+
+PLAN_INSTRUCTION = LAB_BLOCK + """
+# Task: plan the lab
 You are designing an AR lab that will be generated one module at a time. This first
 step is the lab plan: a scene-by-scene outline in which EACH SCENE BECOMES ONE MODULE
 of the final lab. Later steps will plan each module's assets and then write the
@@ -34,53 +51,45 @@ module itself, so do NOT specify prefabs, positions, components, or clip-level
 changes here.
 
 Requirements:
-- Aim for 3-8 scenes, in teaching order. Each scene should contribute one clear
+- Use 3-8 scenes, in teaching order. Each scene should contribute one clear
   pedagogical step toward the lab's goals.
 - Together the scenes must cover every learning objective{script_clause}.
 - For each scene give its purpose, the key visuals the student sees, and what the
   student does, in short prose.
 - top_level_objectives are the learning objectives for the lab as a whole.
-
-{lab_context}
 """
 
-ASSET_PLAN_INSTRUCTION = """\
-You are generating an AR lab one module at a time. The lab plan below has been
-approved. Before module {index} of {total} is written, plan the assets it needs:
-its scene objects, the components that give those objects behavior, the student
-interactions, and one beat per clip. Explain WHY each object and component is
-needed.
-
-{lab_context}
-
-## Approved lab plan
-{plan}
-
-## Module to plan now: module {index} of {total}
-{scene}
-
-## Modules already generated
-{previous}
-
-## Asset library
+ASSET_PLAN_INSTRUCTION = LAB_BLOCK + "\n" + PLAN_BLOCK + """
+# Asset library
 {assets}
 
-## Component catalog
+# Component catalog
 {catalog}
+
+# Modules already generated
+{previous}
+
+# Task: plan the assets for module {index} of {total}
+{scene}
+
+Before module {index} is written, plan the assets it needs: its scene objects, the
+components that give those objects behavior, the student interactions, and one beat
+per clip. Explain WHY each object and component is needed.
 
 Instructions:
 - Fill in design_notes FIRST: reason about what the student must see and do in this
   module to achieve its purpose, and what that requires of the scene.
-- List every scene object the module needs (at least {min_objects}), each with a
+- List every scene object the module needs: at least {min_objects}, each with a
   purpose. Object names must be unique within the module. Prefer built-in prefabs
   and textures, or ones invented by earlier modules, over new ones; set
   is_new_asset=true when you do invent one.
 - Plan the components each object needs. object_name must exactly match one of your
-  planned objects, and every component needs a rationale. Prefer catalog components,
-  and combinations of them, wherever they can produce the behavior.
+  planned objects, every component needs a rationale, and the same component should
+  not be planned twice on one object. Prefer catalog components, and combinations of
+  them, wherever they can produce the behavior.
 {new_component_rule}
-- interactions: what the student does in this module, with which object, and what
-  happens as a result.
+- interactions: each one names the planned object the student interacts with
+  (object_name), what the student does (action), and what happens (effect).
 - clip_beats: at least {min_beats} beats, one short line per clip in order, saying
   what changes in the scene and what is narrated.
 - Keep in mind the lab is a tabletop AR experience (objects within a ~3m workspace,
@@ -93,39 +102,35 @@ NEW_COMPONENTS_ALLOWED = """\
   when no catalog component, or combination of them, can provide the behavior. Keep
   each new component to ONE simple behavior with clear inputs and outputs; split
   complex behavior into several small components that later modules can reuse. Give
-  it a lowercase script name of at least 5 characters (e.g. 'pulseglow'), a
-  behavior_description, and why_existing_insufficient. Never re-invent a component
+  it a PascalCase script name of at least 5 letters or digits (e.g. 'PulseGlow'), a
+  behavior_description, and why_existing_insufficient. Declare it once (is_new=true)
+  and reference it by name if other objects use it too. Never re-invent a component
   that is already in the catalog: reference it by name with is_new=false."""
 
 NEW_COMPONENTS_DISABLED = """\
 - New components are disabled for this run: use only components from the catalog."""
 
-MODULE_INSTRUCTION = """\
-You are generating an AR lab one module at a time. Now write module {index} of
-{total} as a complete DemoModule, implementing its approved asset plan.
+MODULE_INSTRUCTION = LAB_BLOCK + "\n" + PLAN_BLOCK + """
+# Component catalog
+{catalog}
 
-{lab_context}
-
-## Approved lab plan
-{plan}
-
-## Module to write now: module {index} of {total}
-{scene}
-
-## Modules already generated
+# Modules already generated
 {previous}
+
+# Task: write module {index} of {total}
+{scene}
 
 ## Approved asset plan for this module
 {asset_plan}
 
-## Component catalog
-{catalog}
+Write module {index} as a complete DemoModule, implementing its approved asset plan.
 
 Requirements:
 - moduleName: "{module_name}". Give the module a short description and educational
   objectives drawn from the lab's objectives.
-- Create every planned object using exactly its planned name, prefab, and texture.
-  You may add minor supporting objects (such as text labels) if the clips need them.
+- Create every planned object using exactly its planned name, prefab, and texture
+  (at least {min_objects} objects). You may add minor supporting objects (such as
+  text labels) if the clips need them.
 - Attach each planned component to its planned object, either in the object's
   components or in a clip change if it should only take effect later.
 - Built-in components use their own type (e.g. SimpleOrbitComponent). A new
@@ -133,9 +138,12 @@ Requirements:
   whose scriptName is exactly its planned or catalog name; for a catalog component,
   reuse its description. Allowed NewComponent scriptNames for this module:
   {allowed_new}. Do not use NewComponent with any other scriptName.
-- Write the clips in the order of the clip beats, at least one clip per beat (you
-  may split a beat into several clips). Each clip uses sparse object changes,
-  states its changeMeaning, and gives narration and an audioClip name when narrated.
+- Write the clips in the order of the clip beats, at least one clip per beat and at
+  least {min_clips} clips in total (you may split a beat into several clips). Each
+  clip uses sparse object changes, states its changeMeaning, and gives narration and
+  an audioClip name when narrated.
+- Make the planned interactions possible (e.g. give interactive objects a
+  PointerReceiverComponent).
 - Every change target must name an object defined in this module.
 - Objects should have realistic positions (within a ~3m workspace centered on the
   user) and scales appropriate for a tabletop AR experience (typically 0.02-0.5 units).
@@ -161,20 +169,16 @@ def _render_scene(scene: OutlineScene) -> str:
     ])
 
 
-def render_plan(plan: LabOutline, current: int | None = None) -> str:
-    """The approved plan as a numbered scene list; ``current`` (1-based) is marked."""
+def render_plan(plan: LabOutline) -> str:
+    """The approved plan as a numbered scene list. Identical for every module of a
+    run (the current module is named in the task section instead), so it stays
+    part of the cacheable prefix."""
     lines = [f"Lab title: {plan.lab_title}", "Lab objectives:"]
     lines += [f"- {o}" for o in plan.top_level_objectives]
     lines.append("Modules (one per scene):")
     for i, scene in enumerate(plan.scenes, start=1):
-        marker = "  <-- this module" if i == current else ""
-        lines.append(f"{i}. {scene.scene_name}: {scene.brief_purpose}{marker}")
+        lines.append(f"{i}. {scene.scene_name}: {scene.brief_purpose}")
     return "\n".join(lines)
-
-
-def per_module_minimum(total_min: int, num_modules: int, floor: int) -> int:
-    """Spread a lab-wide minimum across modules, never below ``floor``."""
-    return max(floor, math.ceil(total_min / max(1, num_modules)))
 
 
 # ── Prompt builders ──────────────────────────────────────────────────
@@ -196,7 +200,7 @@ def build_asset_plan_prompt(
 ) -> str:
     return ASSET_PLAN_INSTRUCTION.format(
         lab_context=lab_context,
-        plan=render_plan(plan, current=index),
+        plan=render_plan(plan),
         index=index,
         total=len(plan.scenes),
         scene=_render_scene(plan.scenes[index - 1]),
@@ -230,11 +234,14 @@ def build_module_prompt(
     index: int,
     registry: AssetRegistry,
     asset_plan: ModuleAssetPlan,
+    *,
+    min_objects: int,
+    min_clips: int,
 ) -> str:
     allowed = allowed_new_component_names(asset_plan, registry)
     return MODULE_INSTRUCTION.format(
         lab_context=lab_context,
-        plan=render_plan(plan, current=index),
+        plan=render_plan(plan),
         index=index,
         total=len(plan.scenes),
         scene=_render_scene(plan.scenes[index - 1]),
@@ -243,6 +250,8 @@ def build_module_prompt(
         catalog=registry.render_component_catalog(),
         module_name=asset_plan.module_name,
         allowed_new=", ".join(allowed) if allowed else "none",
+        min_objects=min_objects,
+        min_clips=min_clips,
     )
 
 
