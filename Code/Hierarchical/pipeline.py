@@ -61,6 +61,20 @@ from review import Approve, AutoApproveReviewer, Checkpoint, Replace, Reviewer, 
 
 
 DEFAULT_OUTPUT_DIR = Path("Artifacts") / "Data" / "Hierarchical"
+_RUN_GROUP_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def output_dir_for(run_group: Optional[str]) -> Path:
+    """``Artifacts/Data/Hierarchical/[<run_group>/]``. A run group is a single folder
+    name, so test runs and data-collection runs can be kept apart."""
+    if run_group is None:
+        return DEFAULT_OUTPUT_DIR
+    if not _RUN_GROUP_RE.match(run_group):
+        raise ValueError(
+            f"Invalid run group {run_group!r}: use a single folder name made of "
+            "letters, digits, '_' or '-'"
+        )
+    return DEFAULT_OUTPUT_DIR / run_group
 
 # A step function: (response_model, messages, max_retries) -> validated model.
 CallFn = Callable[[Type[BaseModel], list[dict], int], BaseModel]
@@ -220,7 +234,8 @@ class HierarchicalPipeline:
         config: PipelineConfig,
         *,
         reviewer: Optional[Reviewer] = None,
-        output_dir: Path = DEFAULT_OUTPUT_DIR,
+        run_group: Optional[str] = None,
+        output_dir: Optional[Path] = None,
         run_name: Optional[str] = None,
         save: bool = True,
         call_fn: Optional[CallFn] = None,
@@ -245,7 +260,10 @@ class HierarchicalPipeline:
         safe_model = self.model_config.model_id.replace("/", "_").replace(".", "-")
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.base_name = run_name or f"{safe_model}_json_lab_{config.level.value}_{ts}"
-        self.output_dir = PROJECT_ROOT / output_dir
+        # ``output_dir`` overrides the run-group folder; it is for programmatic use
+        # (the smoke test points it at a temp dir), not exposed on the CLI.
+        self.run_group = run_group
+        self.output_dir = PROJECT_ROOT / (output_dir or output_dir_for(run_group))
         self.run_dir = self.output_dir / "Runs" / self.base_name
 
         self.tracker = InstructorTracker(
@@ -284,7 +302,8 @@ class HierarchicalPipeline:
         cfg = meta["config"] | (config_overrides or {})
         pipe = cls(
             meta["model_key"], meta["lab_name"], PipelineConfig.from_json(cfg),
-            reviewer=reviewer, output_dir=Path(meta["output_dir"]),
+            reviewer=reviewer, run_group=meta.get("run_group"),
+            output_dir=Path(meta["output_dir"]),
             run_name=run_dir.name, call_fn=call_fn,
         )
         metrics_path = pipe.output_dir / "Metrics" / f"{pipe.base_name}_metrics.json"
@@ -425,6 +444,7 @@ class HierarchicalPipeline:
             (self.run_dir / "run_config.json").write_text(json.dumps({
                 "model_key": self.model_key,
                 "lab_name": self.lab_name,
+                "run_group": self.run_group,
                 "output_dir": _rel(self.output_dir),
                 "config": cfg.to_json(),
             }, indent=2), encoding="utf-8")
@@ -511,6 +531,7 @@ class HierarchicalPipeline:
             "structure": "multi-module",
             "pipeline": "hierarchical",
             "granularity": "module",
+            "run_group": self.run_group,
             "reviewer": self.reviewer.name,
             "config": self.config.to_json(),
             "run_dir": _rel(self.run_dir),

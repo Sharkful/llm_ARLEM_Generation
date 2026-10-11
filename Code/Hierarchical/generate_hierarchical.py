@@ -8,13 +8,15 @@ Usage:
     python "Code/Hierarchical/generate_hierarchical.py" --model gpt-5.4-mini \
         --lab apparent_retrograde_motion --level L4
 
-    # several models / every lab, tighter module retry budget, no new components
+    # several models / every lab, into a named run group, tighter module retry
+    # budget, no new components
     python "Code/Hierarchical/generate_hierarchical.py" --model gpt-5.4-mini claude-haiku-4.5 \
-        --all-labs --level L3 --module-retries 2 --no-new-components
+        --all-labs --level L3 --run-group pilot --module-retries 2 --no-new-components
 
     # continue a failed or interrupted run from its first missing step
+    # (retry budgets may be changed on resume)
     python "Code/Hierarchical/generate_hierarchical.py" \
-        --resume "Artifacts/Data/Hierarchical/Runs/<run name>"
+        --resume "Artifacts/Data/Hierarchical/pilot/Runs/<run name>" --module-retries 5
 """
 
 from __future__ import annotations
@@ -29,10 +31,19 @@ from _paths import PROJECT_ROOT
 from benchmark_config import MODELS
 from prompt_builder import Level, discover_labs
 
-from pipeline import DEFAULT_OUTPUT_DIR, HierarchicalPipeline, PipelineConfig
+from pipeline import HierarchicalPipeline, PipelineConfig, output_dir_for
+
+# Settings that may be changed when resuming. The rest (level, minimums, the
+# new-component switch) shape what earlier steps already produced, so a resumed
+# run keeps the values it started with.
+RESUMABLE_SETTINGS = (
+    "plan_retries", "asset_plan_retries", "module_retries", "step_attempts", "max_revisions",
+)
+FIXED_SETTINGS = ("level", "allow_new_components", "min_objects", "min_clips")
 
 
 def parse_args():
+    defaults = PipelineConfig()
     p = argparse.ArgumentParser(
         description="Generate JSON Labs hierarchically (plan → asset plan → module)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -41,32 +52,46 @@ def parse_args():
     p.add_argument("--model", "-m", nargs="+", help="Model ID(s) from benchmark_config.MODELS")
     p.add_argument("--lab", nargs="+", help="Lab topic_name(s) in Artifacts/Lab Descriptions/")
     p.add_argument("--all-labs", action="store_true", help="Run every discovered lab YAML")
-    p.add_argument("--level", choices=["L3", "L4"], default="L4",
-                   help="Input specificity for the lab context (default: L4)")
-    p.add_argument("--plan-retries", type=int, default=3,
-                   help="instructor max_retries for the lab-plan step (default: 3)")
-    p.add_argument("--asset-plan-retries", type=int, default=3,
-                   help="instructor max_retries for each asset-plan step (default: 3)")
-    p.add_argument("--module-retries", type=int, default=3,
-                   help="instructor max_retries for each module step (default: 3)")
-    p.add_argument("--step-attempts", type=int, default=2,
-                   help="Fresh regenerations of a step after it fails terminally (default: 2)")
-    p.add_argument("--max-revisions", type=int, default=3,
-                   help="Reviewer revise rounds per step before accepting (default: 3)")
+    p.add_argument("--run-group",
+                   help="Folder under Artifacts/Data/Hierarchical/ for these runs, e.g. 'testing' "
+                        "or 'pilot_oct' (letters, digits, '_', '-'). Default: the "
+                        "Hierarchical/ folder itself")
+    # Settings default to None so --resume can tell which ones were given; unset
+    # ones fall back to the PipelineConfig defaults shown in the help.
+    p.add_argument("--level", choices=["L3", "L4"],
+                   help=f"Input specificity for the lab context (default: {defaults.level.value})")
+    p.add_argument("--plan-retries", type=int,
+                   help=f"instructor max_retries for the lab-plan step (default: {defaults.plan_retries})")
+    p.add_argument("--asset-plan-retries", type=int,
+                   help=f"instructor max_retries for each asset-plan step (default: {defaults.asset_plan_retries})")
+    p.add_argument("--module-retries", type=int,
+                   help=f"instructor max_retries for each module step (default: {defaults.module_retries})")
+    p.add_argument("--step-attempts", type=int,
+                   help="Fresh regenerations of a step after it fails terminally "
+                        f"(default: {defaults.step_attempts})")
+    p.add_argument("--max-revisions", type=int,
+                   help=f"Reviewer revise rounds per step before accepting (default: {defaults.max_revisions})")
     new = p.add_mutually_exclusive_group()
     new.add_argument("--allow-new-components", dest="allow_new_components",
-                     action="store_true", default=True,
+                     action="store_true", default=None,
                      help="Let asset plans propose new components (default)")
     new.add_argument("--no-new-components", dest="allow_new_components", action="store_false",
                      help="Restrict asset plans to the component catalog")
-    p.add_argument("--min-objects", type=int, default=4, help="Lab-wide object minimum (default: 4)")
-    p.add_argument("--min-clips", type=int, default=5, help="Lab-wide clip minimum (default: 5)")
-    p.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR,
-                   help=f"Output root, relative to the project (default: {DEFAULT_OUTPUT_DIR})")
+    p.add_argument("--min-objects", type=int,
+                   help=f"Minimum scene objects per module (default: {defaults.min_objects})")
+    p.add_argument("--min-clips", type=int,
+                   help=f"Minimum clips per module (default: {defaults.min_clips})")
+    p.add_argument("--no-save", action="store_true",
+                   help="Don't write any files (run dir, outputs, metrics); runs can't be resumed")
     p.add_argument("--resume", type=Path, help="Run directory to continue")
     p.add_argument("--list-models", action="store_true")
     p.add_argument("--list-labs", action="store_true")
     return p.parse_args()
+
+
+def _given(args, names) -> dict:
+    """The settings among ``names`` that were passed on the command line."""
+    return {n: getattr(args, n) for n in names if getattr(args, n) is not None}
 
 
 def main():
@@ -82,9 +107,17 @@ def main():
         return
 
     if args.resume:
+        fixed = _given(args, FIXED_SETTINGS)
+        if fixed or args.model or args.lab or args.all_labs or args.run_group or args.no_save:
+            sys.exit(
+                "Error: --resume continues a run with its original model, lab, run group "
+                f"and settings; only these may change: {', '.join(RESUMABLE_SETTINGS)}."
+            )
         run_dir = args.resume if args.resume.is_absolute() else PROJECT_ROOT / args.resume
-        record = HierarchicalPipeline.resume(run_dir).run()
-        sys.exit(0 if record["success"] else 1)
+        pipe = HierarchicalPipeline.resume(
+            run_dir, config_overrides=_given(args, RESUMABLE_SETTINGS)
+        )
+        sys.exit(0 if pipe.run()["success"] else 1)
 
     if not args.model:
         sys.exit("Error: --model is required (see --list-models).")
@@ -92,23 +125,24 @@ def main():
     if not labs:
         sys.exit("Error: pass --lab or --all-labs (see --list-labs).")
 
-    config = PipelineConfig(
-        level=Level(args.level),
-        plan_retries=args.plan_retries,
-        asset_plan_retries=args.asset_plan_retries,
-        module_retries=args.module_retries,
-        step_attempts=args.step_attempts,
-        max_revisions=args.max_revisions,
-        allow_new_components=args.allow_new_components,
-        min_objects=args.min_objects,
-        min_clips=args.min_clips,
-    )
+    try:
+        output_dir_for(args.run_group)  # validate before any run starts
+    except ValueError as e:
+        sys.exit(f"Error: {e}")
+
+    settings = _given(args, RESUMABLE_SETTINGS + FIXED_SETTINGS)
+    if "level" in settings:
+        settings["level"] = Level(settings["level"])
+    config = PipelineConfig(**settings)
 
     results = []
     for lab_name in labs:
         for model_key in args.model:
             try:
-                pipe = HierarchicalPipeline(model_key, lab_name, config, output_dir=args.output_dir)
+                pipe = HierarchicalPipeline(
+                    model_key, lab_name, config,
+                    run_group=args.run_group, save=not args.no_save,
+                )
                 results.append(pipe.run())
             except Exception as e:  # noqa: BLE001 — keep the sweep going
                 print(f"  FATAL ({model_key}, {lab_name}): {type(e).__name__}: {e}")
@@ -121,6 +155,11 @@ def main():
             status = "OK" if r["success"] else f"FAIL {r.get('failed_step') or ''}".strip()
             print(f"  {r.get('display_name', r['model']):<22} {r['lab_name']:<36} {status:<18} "
                   f"{t.get('total_tokens', 0):>9,} tok  ${t.get('cost_usd', 0):.4f}")
+
+    failed = sum(not r["success"] for r in results)
+    if failed:
+        print(f"\n{failed} of {len(results)} run(s) failed.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
