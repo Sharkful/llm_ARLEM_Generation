@@ -184,6 +184,11 @@ Other flags:
 
 A sweep exits 1 if any run failed.
 
+Before any run, the CLI checks the Python environment (`benchmark.require_environment`).
+It stops with a fix-it message if a requested model's provider SDK isn't installed,
+and warns if instructor doesn't match the `requirements.txt` pin. Both usually mean
+you're outside the project venv.
+
 ## Outputs (`Artifacts/Data/Hierarchical/[<run group>/]`)
 
 `--run-group NAME` (a single folder name) keeps test runs and data-collection runs
@@ -206,7 +211,9 @@ loads it as is. Fields added by the hierarchical pipeline:
 - `pipeline: "hierarchical"`, `granularity: "module"`, `run_group`, `reviewer`, `config`
 - `status`: `in_progress` while running, then `complete` or `failed`
 - `steps[]`: per-step calls, attempts, `retries`, `parse_errors`, revisions,
-  tokens, cost, wall time, `resumed`, `non_retryable`
+  tokens (including `cached_tokens`, the part of the input served from the
+  provider's prompt cache, reported by OpenAI and Gemini), cost, wall time,
+  `resumed`, `non_retryable`
 - `totals`: the sum over steps, including steps resumed from an earlier session
   (`tracking` covers only this session)
 - `normalizations`: every name or description rewrite (see above)
@@ -216,6 +223,10 @@ loads it as is. Fields added by the hierarchical pipeline:
   - interaction objects with no `PointerReceiverComponent`
   - `is_new_asset` claims that disagree with the registry
 - `registry`: new components, invented prefabs and textures (with their purposes)
+
+Cost is computed at the full input rate, so with prompt caching it is an upper bound.
+Pricing cached tokens is part of #73. Anthropic reports cache reads separately from
+`input_tokens`, and the tracker doesn't record them yet.
 
 `retries` is the tracker's `retry_count`, kept for comparability with one-shot
 runs. The tracker counts each failed parse attempt twice (#71), so `parse_errors` is

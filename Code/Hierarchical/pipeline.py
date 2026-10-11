@@ -204,6 +204,7 @@ class StepRecord:
     parse_errors: int = 0          # failed parse/validation attempts (the actual reask count)
     revisions: int = 0             # reviewer revision rounds (Revise, or a rejected Replace)
     prompt_tokens: int = 0
+    cached_tokens: int = 0         # of prompt_tokens, served from the provider's prompt cache
     completion_tokens: int = 0
     total_tokens: int = 0
     cost_usd: float = 0.0
@@ -604,6 +605,7 @@ class HierarchicalPipeline:
                 rec.retries += call.retry_count
                 rec.parse_errors += call.parse_errors
                 rec.prompt_tokens += call.total_usage.prompt_tokens
+                rec.cached_tokens += call.total_usage.cached_tokens
                 rec.completion_tokens += call.total_usage.completion_tokens
                 rec.total_tokens += call.total_usage.total_tokens
                 rec.cost_usd += self.tracker.pricing.calculate_cost(call.total_usage)
@@ -726,7 +728,8 @@ class HierarchicalPipeline:
         steps = [asdict(s) for s in self.steps]
         totals = {
             k: sum(s[k] for s in steps)
-            for k in ("calls", "retries", "parse_errors", "prompt_tokens", "completion_tokens",
+            for k in ("calls", "retries", "parse_errors", "prompt_tokens", "cached_tokens",
+                      "completion_tokens",
                       "total_tokens", "cost_usd", "wall_time_s")
         }
         return {
@@ -803,7 +806,8 @@ class HierarchicalPipeline:
         status = "OK" if record["success"] else f"FAILED at {record['failed_step']}"
         print(f"\n  [{status}] {record['display_name']} — hierarchical json_lab {record['level']}")
         print(f"  Steps: {len(record['steps'])} | calls: {t['calls']} | retries: {t['retries']}")
-        print(f"  Tokens: {t['prompt_tokens']:,} in / {t['completion_tokens']:,} out "
+        print(f"  Tokens: {t['prompt_tokens']:,} in ({t['cached_tokens']:,} cached) / "
+              f"{t['completion_tokens']:,} out "
               f"| Cost: ${t['cost_usd']:.6f} | Wall time: {record['wall_time_seconds']}s")
         lab = record.get("lab_metrics") or {}
         if lab:

@@ -397,6 +397,20 @@ check(any(a["is_new_asset_mismatches"] for a in rec["plan_adherence"]),
       "is_new_asset claims checked against the registry (fake always claims False)")
 
 
+# 15. environment preflight: a missing provider SDK stops the run with a fix-it message
+import benchmark  # noqa: E402
+import importlib.util  # noqa: E402
+_real_find_spec = importlib.util.find_spec
+importlib.util.find_spec = lambda name, *a: None if name == "anthropic" else _real_find_spec(name, *a)
+try:
+    errors, _ = benchmark.check_environment([P.MODELS["claude-haiku-4.5"], P.MODELS["gpt-5.4-mini"]])
+finally:
+    importlib.util.find_spec = _real_find_spec
+check(len(errors) == 1 and "'anthropic' is not installed" in errors[0],
+      "preflight reports a missing provider SDK")
+check(benchmark._pinned_version("instructor") == "1.15.4", "preflight reads the instructor pin")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"
@@ -427,7 +441,8 @@ class MockOpenAI(BaseHTTPRequestHandler):
                 "role": "assistant", "content": None,
                 "tool_calls": [{"id": "c1", "type": "function",
                                 "function": {"name": tool, "arguments": args}}]}}],
-            "usage": {"prompt_tokens": 1000, "completion_tokens": 200, "total_tokens": 1200},
+            "usage": {"prompt_tokens": 1000, "completion_tokens": 200, "total_tokens": 1200,
+                      "prompt_tokens_details": {"cached_tokens": 600}},
         }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -467,6 +482,8 @@ check(rec["totals"]["cost_usd"] > 0
       and abs(rec["totals"]["cost_usd"] - rec["tracking"]["cost"]["total_usd"]) < 1e-9,
       "per-step costs sum to the tracker cost")
 check((MOCK / "Runs" / "mock" / "errors.txt").exists(), "errors.txt written")
+check(rec["totals"]["cached_tokens"] == 600 * len(state["requests"]) and m2["cached_tokens"] == 1200,
+      "cached prompt tokens recorded per step and in totals")
 check(state["requests"][0] == ("LabPlan", 2), "first request is the plan (system + user)")
 sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
 from benchmark_dataframe import load_runs  # noqa: E402
