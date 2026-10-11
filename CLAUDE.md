@@ -75,9 +75,10 @@ python "Code/Benchmark/benchmark.py" --list-labs
 Hierarchical generation (one module at a time: plan → asset plan → module; json_lab only):
 
 ```bash
-python "Code/Hierarchical/generate_hierarchical.py" --model gpt-5.4-mini --lab apparent_retrograde_motion --level L4
-python "Code/Hierarchical/generate_hierarchical.py" --resume "Artifacts/Data/Hierarchical/Runs/<run name>"
-python "Code/Hierarchical/smoke_test.py"   # offline check, no API keys
+# --run-group NAME -> Artifacts/Data/Hierarchical/NAME/ (keeps test and data-collection runs apart)
+python "Code/Hierarchical/generate_hierarchical.py" --model gpt-5.4-mini --lab apparent_retrograde_motion --level L4 --run-group testing
+python "Code/Hierarchical/generate_hierarchical.py" --resume "Artifacts/Data/Hierarchical/testing/Runs/<run name>"
+python "Code/Hierarchical/smoke_test.py"   # offline check, no API keys (fake LLM + mock OpenAI/Anthropic)
 ```
 
 Analysis and reporting (reads saved run artifacts, no LLM calls):
@@ -125,8 +126,8 @@ Benchmark runs:
   → Artifacts/Data/Errors/   ← instructor error logs (gitignored)
 
 Hierarchical runs (Code/Hierarchical/, json_lab only):
-  Lab YAML → plan (LabOutline) → per module: ModuleAssetPlan → PlannedDemoModule
-  → Lab assembled in code → Artifacts/Data/Hierarchical/{Runs,Outputs,Metrics}/
+  Lab YAML → plan (LabPlan) → per module: ModuleAssetPlan → PlannedDemoModule
+  → Lab assembled in code → Artifacts/Data/Hierarchical/[<run group>/]{Runs,Outputs,Metrics}/
 
 Analysis (everything below reads run artifacts; nothing here calls an LLM):
   Artifacts/Data/Benchmark/Metrics/ + Outputs/
@@ -162,8 +163,8 @@ tables alike, hand-authored and generated together.
 - Intentionally permissive; will be refined as L1 failure modes surface
 
 **`Code/Schemas/module_asset_plan.py`** — `ModuleAssetPlan`, the hierarchical pipeline's per-module plan:
-- objects (with `purpose`), components (free-form `component_type` + `rationale`, `is_new` for new single-purpose components), interactions, `clip_beats`
-- Validators: a component's `object_name` must match a planned object; under an `asset_plan_validation(catalog, allow_new=...)` ContextVar scope, `component_type` must be in the catalog or justified as new (instructor's `context=` is avoided because it Jinja-renders messages)
+- `design_notes` first, objects (with `purpose`), components (free-form `component_type` + `rationale`, `is_new` for new single-purpose components, PascalCase names), interactions (`{object_name, action, effect}`), `clip_beats`
+- One validator reports **all** problems in a single error (one reask): components/interactions must name a planned object, no duplicate object names or object/component pairs, no conflicting `is_new` declarations; under an `asset_plan_validation(catalog, allow_new=..., min_objects=..., min_clip_beats=...)` ContextVar scope, `component_type` must be in the catalog or justified as new and per-module minimums apply (instructor's `context=` is avoided because it Jinja-renders messages)
 
 **`Code/Schemas/arlem_full.py`** — Full ARLEM specification:
 - `ARLEMScenario` contains a `Workplace` (static environment) + `Activity` (logic/workflow)
@@ -219,25 +220,43 @@ pipeline — they exist to re-test a provider quirk on demand.
 Second generation entry point (json_lab only). Builds a lab one module at a time
 instead of in one `Lab` call; see `HIERARCHICAL.md`.
 
-- **`pipeline.py`** — `HierarchicalPipeline`: plan (`LabOutline`) → per scene a
-  `ModuleAssetPlan` → a `PlannedDemoModule` (DemoModule + a check that every
-  `NewComponent` was planned or is in the catalog) → `Lab` assembled in code. Each step has its own
-  retry budget, is regenerated alone on terminal failure (`step_attempts`), is
-  saved to `Runs/<run>/`, and can be resumed. Imports the client factory, provider
+- **`pipeline.py`** — `HierarchicalPipeline`: plan (`LabPlan` = `LabOutline` + scene
+  cap, default 8) → per scene a `ModuleAssetPlan` → a `PlannedDemoModule` (DemoModule
+  + a check that every `NewComponent` was planned or is in the catalog) → `Lab`
+  assembled in code. Each step has its own retry budget, is regenerated alone on
+  terminal failure (`step_attempts`; 401/403/404/auth/config errors fail at once),
+  is saved to `Runs/<run>/`, and can be resumed; the metrics file is rewritten after
+  every step. Accepted steps get new-component names/descriptions normalized to one
+  canonical form (logged as `normalizations`). Imports the client factory, provider
   kwargs, and transient retryer from `benchmark.py`, so the Gemini and Anthropic guards apply.
-- **`registry.py`** — component catalog (built-ins derived from the json_lab
-  classes plus NewComponents from accepted modules) and invented prefabs/textures,
-  carried forward into later prompts so they get reused.
-- **`review.py`** — `Checkpoint`, `Approve` / `Revise(feedback)` / `Replace(output)`,
-  `Reviewer` protocol, `AutoApproveReviewer` (default). Human-in-the-loop and LLM
-  self-critique reviewers plug in here.
-- **`prompts.py`** — templates for the plan, asset-plan and module steps.
-- **`generate_hierarchical.py`** — CLI. **`smoke_test.py`** — offline test (fake LLM + mock OpenAI server).
+- **`registry.py`** — component catalog (built-ins with full field descriptions,
+  derived from the json_lab classes, plus NewComponents from accepted modules),
+  invented prefabs/textures with their planned purpose, and per-module summaries
+  with a `covered:` line, carried forward into later prompts so they get reused.
+- **`review.py`** — `Checkpoint` (with `feedback_history`, and `last_error` /
+  `rejected_output` when an edit failed validation), `Approve` / `Revise(feedback)` /
+  `Replace(output)`, `Reviewer` protocol, `AutoApproveReviewer` (default).
+  Human-in-the-loop and LLM self-critique reviewers (#69) plug in here.
+- **`prompts.py`** — templates for the plan, asset-plan and module steps. Every
+  prompt opens with the same lab-description + approved-plan block so providers
+  with prefix caching bill it at the cached rate (Anthropic: #73).
+- **`generate_hierarchical.py`** — CLI (`--run-group`, per-step retry budgets,
+  `--min-objects`/`--min-clips` **per module**, `--max-scenes`, `--no-save`,
+  `--resume`). **`smoke_test.py`** — offline test (fake LLM + mock OpenAI and
+  Anthropic servers).
 
-Outputs go to `Artifacts/Data/Hierarchical/` and are never pooled with `Benchmark/`.
-Metrics keep the benchmark record's keys (`load_runs()` reads them), plus `steps[]`,
-`totals`, `plan_adherence`, `review_log`, `registry`. The tracker counts a failed
-parse attempt twice in `retry_count`; per-step `parse_errors` is the true reask count.
+Outputs go to `Artifacts/Data/Hierarchical/[<run group>/]` and are never pooled with
+`Benchmark/`. Metrics keep the benchmark record's keys (`load_runs()` reads them),
+plus `status`, `steps[]`, `totals`, `normalizations`, `plan_adherence` (incl. soft
+metrics), `review_log`, `registry`. The tracker counts a failed parse attempt twice
+in `retry_count` (#71); per-step `parse_errors` is the true reask count. Per-module
+minimums make these labs deliberately bigger than one-shot runs (lab-wide minimums).
+
+**Script names are PascalCase.** `json_lab.NewComponent.scriptName` normalizes to
+PascalCase (`to_pascal_case` in `_schema_helpers.py`) instead of retrying, and
+`ModuleAssetPlan` does the same for new component names; compare names with
+`module_asset_plan.component_key()`. This also changes future one-shot runs' tool
+schema text and output casing (wave 2 is unaffected).
 
 ### Analysis System (`Code/Analysis/`)
 

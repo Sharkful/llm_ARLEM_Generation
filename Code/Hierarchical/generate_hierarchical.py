@@ -33,13 +33,13 @@ from prompt_builder import Level, discover_labs
 
 from pipeline import HierarchicalPipeline, PipelineConfig, output_dir_for
 
-# Settings that may be changed when resuming. The rest (level, minimums, the
-# new-component switch) shape what earlier steps already produced, so a resumed
+# Settings that may be changed when resuming. The rest (level, minimums, scene
+# cap, the new-component switch) shape what earlier steps already produced, so a resumed
 # run keeps the values it started with.
 RESUMABLE_SETTINGS = (
     "plan_retries", "asset_plan_retries", "module_retries", "step_attempts", "max_revisions",
 )
-FIXED_SETTINGS = ("level", "allow_new_components", "min_objects", "min_clips")
+FIXED_SETTINGS = ("level", "allow_new_components", "min_objects", "min_clips", "max_scenes")
 
 
 def parse_args():
@@ -81,6 +81,8 @@ def parse_args():
                    help=f"Minimum scene objects per module (default: {defaults.min_objects})")
     p.add_argument("--min-clips", type=int,
                    help=f"Minimum clips per module (default: {defaults.min_clips})")
+    p.add_argument("--max-scenes", type=int,
+                   help=f"Maximum scenes (= modules) in the lab plan (default: {defaults.max_scenes})")
     p.add_argument("--no-save", action="store_true",
                    help="Don't write any files (run dir, outputs, metrics); runs can't be resumed")
     p.add_argument("--resume", type=Path, help="Run directory to continue")

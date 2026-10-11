@@ -13,7 +13,7 @@ JSON Lab only (`multi-module` structure, L3 or L4 input).
 
 ```
 Lab YAML (L3/L4 context)
- ├─ 1. plan         LabOutline: one scene per future module            → checkpoint
+ ├─ 1. plan         LabPlan: one scene per future module (max 8)       → checkpoint
  ├─ for each scene i:
  │   ├─ 2. asset plan   ModuleAssetPlan: objects, components, why      → checkpoint
  │   └─ 3. module       PlannedDemoModule implementing that plan       → checkpoint
@@ -22,8 +22,8 @@ Lab YAML (L3/L4 context)
 
 | Step | Response model | Sees |
 |---|---|---|
-| plan | `lab_outline.LabOutline` (the L1 outline model, reused) | lab description |
-| asset plan | `module_asset_plan.ModuleAssetPlan` | lab description, approved plan, this scene, one-line summaries of earlier modules, asset library, component catalog |
+| plan | `pipeline.LabPlan` (the L1 `LabOutline` plus a scene cap) | lab description |
+| asset plan | `module_asset_plan.ModuleAssetPlan` | lab description, approved plan, asset library, component catalog, earlier-module summaries, this scene |
 | module | `pipeline.PlannedDemoModule` (a `DemoModule` with one extra check) | the same, plus the approved asset plan |
 
 The Lab wrapper is filled in by code: `labId` = slug of the plan's `lab_title`,
@@ -34,41 +34,79 @@ The Lab wrapper is filled in by code: `labId` = slug of the plan's `lab_title`,
 
 `ModuleAssetPlan` asks the model to reason before it writes the module:
 
-- `design_notes` comes **first**: what the student must see and do, and what that
-  requires of the scene.
-- Every object has a `purpose`, and every component has a `rationale`.
-- `clip_beats` gives one line per clip. The module step writes at least one clip per beat.
+- `design_notes` comes **first** (fields generate in order): what the student must
+  see and do, and what that requires of the scene.
+- Every object has a `purpose`, every component a `rationale`.
+- Each interaction is tied to an object: `{object_name, action, effect}`.
+- `clip_beats` gives one line per clip; the module writes at least one clip per beat.
 
-Validators make instructor reask on bad plans:
+Its validator reports **every problem in one error**, so a bad plan costs one reask
+instead of one per problem. It checks:
 
-- Every component's `object_name` must match a planned object, so each component
-  has an object to attach to.
-- `component_type` is a free string, **not** a fixed list. It must name a
-  **catalog** component, or set `is_new=true` with a single-purpose
-  `behavior_description` and `why_existing_insufficient`.
-- A new component that re-invents a catalog entry is rejected with "reuse `<name>`".
+- Unique object names, and components or interactions that name an unknown object.
+- The same component planned twice on one object.
+- **Per-module minimums**: at least `--min-objects` objects and `--min-clips` beats
+  (defaults 4 and 5).
+- `component_type` is free text, **not** a fixed list. It must name a **catalog**
+  component, or set `is_new=true` with a single-purpose `behavior_description` and
+  `why_existing_insufficient`.
+- A new component that re-invents a catalog entry is rejected with "reuse `<name>`",
+  and so is one declared twice with different descriptions.
 - With `--no-new-components`, any `is_new` is rejected.
+
+### Component names: PascalCase, one version per component
+
+New component names are **PascalCase** (C# class convention): `orbit_trail` and
+`orbitTrail` both become `OrbitTrail`.
+
+- `json_lab.NewComponent.scriptName` normalizes this in a `mode="before"`
+  validator, so the model is never re-asked over casing. The check then only
+  rejects names under 5 characters or starting with a digit.
+- `ModuleAssetPlan` normalizes new names the same way.
+- Names are compared through `component_key()`, so `pulse_glow`, `pulseGlow` and
+  `PulseGlow` count as one component.
+- **After a step is accepted**, every reference is rewritten to its canonical
+  form: the catalog's spelling, and for a reused component the catalog's
+  description. Every rewrite is logged under `normalizations` in the metrics. On
+  a real 9-module lab, this unified 21 divergent copies.
+
+> **Comparability:** the `json_lab` change also affects the one-shot benchmark's
+> tool schema and its output casing for future runs. The frozen wave-2 dataset is
+> unaffected; all 104 of its Lab-shaped outputs still validate.
 
 ### Component catalog and asset registry (`registry.py`)
 
-- The catalog starts with the built-in json_lab components. Their descriptions are
-  generated from the schema classes, so they can't drift from the schema.
-- When a module is accepted, every `NewComponent` it used is added to the catalog,
-  so later modules see it and can reuse it by name instead of inventing a
-  near-duplicate.
-- Prefabs and textures that earlier modules invented are carried forward the same
-  way.
+- The catalog starts with the built-in json_lab components. Their descriptions
+  (the docstring plus every field's full description) are generated from the
+  schema classes, so they can't drift.
+- When a module is accepted, every `NewComponent` it used joins the catalog, so
+  later modules can reuse it by name.
+- Prefabs and textures that earlier modules invented are carried forward with the
+  `purpose` their asset plan gave them.
+- Module summaries (built in code, no LLM call) list each earlier module's name,
+  description, objects and clip count, plus a `covered:` line made of its scene
+  purpose and educational objectives.
 - The prompts stress that a component can do almost anything, which is exactly why
   new ones should stay small: one behavior, clear inputs and outputs, and complex
   behavior split into reusable pieces.
-- `PlannedDemoModule` only accepts a `NewComponent` whose `scriptName` is planned in
-  this module's asset plan or already in the catalog. It serializes exactly like
+- `PlannedDemoModule` only accepts a `NewComponent` that this module's asset plan
+  introduces or that's already in the catalog. It serializes exactly like
   `DemoModule`.
 
-The catalog state reaches the validators through ContextVar scopes
-(`asset_plan_validation`, `module_validation`), **not** through instructor's
-`context=`. Passing `context=` also makes instructor render every message as a
-Jinja template, which would mangle prompts that embed JSON or text the model wrote.
+The validators get their per-run state (catalog, new-component switch, minimums,
+scene cap) through ContextVar scopes (`asset_plan_validation`, `module_validation`,
+`plan_validation`), **not** instructor's `context=`. Passing `context=` also makes
+instructor render every message as a Jinja template, which would mangle prompts
+that embed JSON or model-written text.
+
+### Prompt order (caching)
+
+Every step prompt opens with the same lab-description block. The asset-plan and
+module prompts continue with the same approved plan; the current module is named in
+the task section, not marked inside the plan. About 80% of each prompt is
+therefore a prefix shared with the previous call of the same step, which OpenAI and
+Gemini bill at their cached rate automatically. Anthropic needs explicit cache
+markers, tracked in #73.
 
 ## Reviewer hook (`review.py`)
 
@@ -78,46 +116,78 @@ the decision:
 | Decision | Effect |
 |---|---|
 | `Approve()` | accept and move on |
-| `Revise(feedback)` | re-run the step with the previous output and the feedback appended (up to `--max-revisions`) |
-| `Replace(output)` | accept an edited output (dict or model), re-validated against the step's model |
+| `Revise(feedback)` | re-run the step with the previous output and **every** round of feedback so far (up to `--max-revisions`) |
+| `Replace(output)` | accept an edited output (a dict or a model), re-validated against the step's model |
+
+If an edit fails validation, the run doesn't crash. The edit comes back to the
+reviewer with `Checkpoint.last_error` holding all of its validation errors and
+`rejected_output` holding the edit, so it can be fixed rather than redone. It counts
+as a revision round.
+
+The checkpoint also carries:
+- `feedback_history`
+- a `context` with the scene, the approved plan, the earlier-module summaries, the
+  asset plan (for module steps) and `run_dir`
 
 `AutoApproveReviewer` is the default. A human console reviewer or an LLM
-self-critique reviewer only has to implement `review()`. Every decision is written
-to `review_log.json`.
+self-critique reviewer (#69) only has to implement `review()`. Every decision is
+written to `review_log.json`.
 
 ## Retries and failures
 
-- `--plan-retries`, `--asset-plan-retries`, `--module-retries` set instructor's
+- `--plan-retries`, `--asset-plan-retries` and `--module-retries` set instructor's
   `max_retries` for each step type.
-- `--step-attempts` sets how many times a step is regenerated from scratch after it
-  fails terminally. Only that step is regenerated, never the whole lab.
+- `--step-attempts` regenerates a step from scratch after it fails terminally. Only
+  that step is regenerated, never the whole lab.
+- Errors a regeneration can't fix (401/403/404, authentication, permission,
+  not-found or configuration errors) fail the step at once. A provider 400 still
+  regenerates, because Gemini's parallel-call reask 400 (#44) is often survived by
+  a fresh attempt.
 - Transient API errors (429/5xx/connection) get the benchmark's bounded retry,
   counted in `transient_retries`.
-- If a step still fails, the run is recorded as failed with `failed_step`. Every
-  accepted step stays on disk, so `--resume <run dir>` continues from the first
-  missing step without paying for the earlier ones again.
+- The metrics file is rewritten after every step, so an interrupted run (Ctrl-C, a
+  crash) keeps its cost records.
+- `--resume <run dir>` continues from the first missing step without paying for the
+  earlier ones again. Retry budgets may be changed on resume; level, minimums, scene
+  cap and the new-component switch stay as the run started.
 
 All LLM calls go through `benchmark.create_instructor_client`,
 `benchmark.provider_create_kwargs` and `benchmark._transient_retryer`, the same
 Gemini and Anthropic guards as the one-shot runner.
 
+> Current Claude 5.5 / Fable 5.1 models reject the forced `tool_choice` that
+> `provider_create_kwargs` sends; see #72.
+
 ## Running
 
 ```bash
 python "Code/Hierarchical/generate_hierarchical.py" --model gpt-5.4-mini \
-    --lab apparent_retrograde_motion --level L4
+    --lab apparent_retrograde_motion --level L4 --run-group testing
 
 python "Code/Hierarchical/generate_hierarchical.py" --model claude-haiku-4.5 gemini-3.5-flash \
-    --all-labs --level L3 --module-retries 2 --no-new-components
+    --all-labs --level L3 --run-group pilot_oct --module-retries 2 --no-new-components
 
 python "Code/Hierarchical/generate_hierarchical.py" \
-    --resume "Artifacts/Data/Hierarchical/Runs/<run name>"
+    --resume "Artifacts/Data/Hierarchical/pilot_oct/Runs/<run name>" --module-retries 5
 
-# offline check (no API keys): fake LLM + local mock OpenAI server
+# offline check (no API keys): fake LLM + mock OpenAI and Anthropic servers
 python "Code/Hierarchical/smoke_test.py"
 ```
 
-## Outputs (`Artifacts/Data/Hierarchical/`)
+Other flags:
+
+| Flag | What it does |
+|---|---|
+| `--max-scenes` | the scene cap (default 8) |
+| `--min-objects` / `--min-clips` | the per-module minimums (defaults 4 / 5) |
+| `--no-save` | write nothing; the run can't be resumed |
+
+A sweep exits 1 if any run failed.
+
+## Outputs (`Artifacts/Data/Hierarchical/[<run group>/]`)
+
+`--run-group NAME` (a single folder name) keeps test runs and data-collection runs
+apart. Without it, runs go to `Hierarchical/` itself.
 
 ```
 Runs/{model}_json_lab_{level}_{ts}/
@@ -126,32 +196,41 @@ Runs/{model}_json_lab_{level}_{ts}/
     01_asset_plan.json, 01_asset_plan_prompt.txt, 01_module.json, 01_module_prompt.txt, ...
     review_log.json, errors.txt (if any)
 Outputs/{run}_output.json                    # assembled Lab (successful runs)
-Metrics/{run}_metrics.json                   # written for failed runs too
+Metrics/{run}_metrics.json                   # rewritten after every step
 ```
 
 The metrics record keeps the one-shot runner's top-level keys, so
-`Code/Analysis/benchmark_dataframe.load_runs(Path("Artifacts/Data/Hierarchical"))`
+`Code/Analysis/benchmark_dataframe.load_runs(Path("Artifacts/Data/Hierarchical/<group>"))`
 loads it as is. Fields added by the hierarchical pipeline:
 
-- `pipeline: "hierarchical"`, `granularity: "module"`, `reviewer`, `config`
+- `pipeline: "hierarchical"`, `granularity: "module"`, `run_group`, `reviewer`, `config`
+- `status`: `in_progress` while running, then `complete` or `failed`
 - `steps[]`: per-step calls, attempts, `retries`, `parse_errors`, revisions,
-  tokens, cost, wall time, `resumed`
+  tokens, cost, wall time, `resumed`, `non_retryable`
 - `totals`: the sum over steps, including steps resumed from an earlier session
   (`tracking` covers only this session)
-- `plan_adherence[]`: planned objects and components actually present in each module
-- `registry`: new components, invented prefabs, invented textures
+- `normalizations`: every name or description rewrite (see above)
+- `plan_adherence[]`, per module:
+  - planned objects and components actually present
+  - clip and object counts against the minimums
+  - interaction objects with no `PointerReceiverComponent`
+  - `is_new_asset` claims that disagree with the registry
+- `registry`: new components, invented prefabs and textures (with their purposes)
 
 `retries` is the tracker's `retry_count`, kept for comparability with one-shot
-runs. The tracker counts each failed parse attempt twice, so `parse_errors` is the
-actual number of reasks.
+runs. The tracker counts each failed parse attempt twice (#71), so `parse_errors` is
+the actual number of reasks.
 
-This folder is separate from `Artifacts/Data/Benchmark/` (the wave-2 paper
-dataset). Don't pool the two.
+Per-module minimums make hierarchical labs deliberately bigger than one-shot runs,
+whose minimums are lab-wide. Keep that in mind when comparing the two. This folder
+is separate from `Artifacts/Data/Benchmark/` (the wave-2 paper dataset); don't pool
+the two.
 
 ## Next steps
 
-- **Clip-level granularity**: after the asset plan, generate the module's objects,
-  then one clip per call against the fixed object list.
-- **LLM self-critique reviewer**: critique a plan against the objectives and asset
-  rules, return `Revise`, capped at N rounds.
-- **Human console reviewer**: approve, give feedback, or edit the JSON at each checkpoint.
+- #68 clip-level granularity (generate objects, then one clip per call)
+- #69 LLM self-critique reviewer and a human console reviewer
+- #70 instructor upgrade
+- #72 model roster / forced `tool_choice` on current Claude models
+- #73 Anthropic prompt caching
+- #74 structured inputs for new components

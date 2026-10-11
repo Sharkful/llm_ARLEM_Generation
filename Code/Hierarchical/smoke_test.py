@@ -7,16 +7,24 @@ Part 1 swaps the LLM for a fake call_fn that replays a committed wave-2
 multi-module output one module at a time (plan <- its module list, asset plan <-
 each module's objects/components, module <- the module itself), validated through
 the real response models and validation scopes. It covers the auto-approved run,
-Revise/Replace review decisions, failure + resume, the NewComponent check, and
+name/description normalization, Revise/Replace review decisions (including a
+rejected edit and accumulated feedback), failure + resume, an interrupted run,
+fail-fast errors, the scene cap, per-module minimums, all-errors-at-once asset-plan
+validation, run groups, PascalCase names, soft metrics, the NewComponent check, and
 the --no-new-components switch.
 
 Part 2 runs the real _llm_call path (instructor client, tracker, transient
 retryer, provider kwargs) against a local mock OpenAI server that replays part
 1's step files, with one invalid module response to force an instructor reask.
 
+Part 3 builds the real Anthropic client against a local mock Anthropic server and
+checks the request shape we send (forced tool_choice + disable_parallel_tool_use,
+max_tokens).
+
 Outputs go to a temp dir that is removed afterwards. Exit code 1 on any failure.
 """
 
+import atexit
 import json
 import os
 import re
@@ -32,7 +40,9 @@ sys.path.insert(0, str(HERE))
 
 import pipeline as P  # noqa: E402
 from _paths import PROJECT_ROOT  # noqa: E402
-from json_lab import DemoModule, Lab  # noqa: E402
+from json_lab import DemoModule, Lab, NewComponent  # noqa: E402
+from module_asset_plan import asset_plan_validation  # noqa: E402
+from pydantic import ValidationError  # noqa: E402
 from lab_outline import LabOutline  # noqa: E402
 from module_asset_plan import ModuleAssetPlan  # noqa: E402
 from review import Approve, Replace, Revise  # noqa: E402
@@ -44,6 +54,7 @@ LAB_NAME = "apparent_retrograde_motion"
 SOURCE = json.loads(SAMPLE.read_text(encoding="utf-8"))
 MODS = SOURCE["modules"]
 TMP = Path(tempfile.mkdtemp(prefix="hier_smoke_"))
+atexit.register(shutil.rmtree, TMP, ignore_errors=True)  # also on a crash
 
 _BUILTIN_BY_COMPONENT_TYPE = {
     "textMeshPro": "TextMeshProComponent", "simpleRotation": "SimpleRotationComponent",
@@ -69,16 +80,19 @@ def _comp_name(c):
 class FakeLLM:
     """call_fn replaying SOURCE; `pipe` is attached after construction."""
 
-    def __init__(self, fail_module=None):
+    def __init__(self, fail_module=None, fail_exc=None):
         self.pipe = None
         self.fail_module = fail_module
+        self.fail_exc = fail_exc        # exception (instance) to raise at fail_module
         self.calls = []
+        self.last_user = []             # last user message of every call
 
     def _index(self):
         return len(self.pipe.registry.modules) + 1
 
     def __call__(self, model, messages, max_retries):
         self.calls.append((model.__name__, len(messages)))
+        self.last_user.append(messages[-1]["content"])
         if issubclass(model, LabOutline):
             return model.model_validate({
                 "lab_title": "Apparent Retrograde Motion",
@@ -117,7 +131,7 @@ class FakeLLM:
                 "clip_beats": beats if len(beats) >= 2 else beats + ["recap"],
             })
         if self.fail_module == self._index():
-            raise ValueError(f"forced failure on module {self._index()}")
+            raise self.fail_exc or ValueError(f"forced failure on module {self._index()}")
         return model.model_validate(m)
 
 
@@ -261,6 +275,128 @@ prompt = (FAKE / "Runs" / "t5_nonew" / "01_asset_plan_prompt.txt").read_text(enc
 check("New components are disabled" in prompt, "prompt states the switch")
 
 
+# 6. --run-group resolves to one folder under Artifacts/Data/Hierarchical/
+check(P.output_dir_for("pilot_oct") == P.DEFAULT_OUTPUT_DIR / "pilot_oct"
+      and P.output_dir_for(None) == P.DEFAULT_OUTPUT_DIR, "run group folder")
+for bad in ("../x", "a/b", "", "has space"):
+    try:
+        P.output_dir_for(bad)
+        check(False, f"run group {bad!r} rejected")
+    except ValueError:
+        pass
+check(True, "invalid run group names rejected")
+
+# 7. PascalCase script names, shared schema and asset plan
+check(NewComponent(scriptName="orbit_trail", scriptDescription="d" * 25).scriptName == "OrbitTrail",
+      "json_lab NewComponent.scriptName normalized to PascalCase")
+
+# 8. every asset-plan problem reported in one error
+_obj = {"prefab": "SunPrefab", "purpose": "reference body in the scene", "is_new_asset": False}
+_bad_plan = {
+    "module_name": "M", "design_notes": "d" * 40, "clip_beats": ["a", "b"],
+    "objects": [{"name": "sun", **_obj}, {"name": "sun", **_obj}],
+    "components": [
+        {"object_name": "moon", "component_type": "SimpleOrbitComponent", "rationale": "r" * 20},
+        {"object_name": "sun", "component_type": "SimpleRotationComponent", "rationale": "r" * 20},
+        {"object_name": "sun", "component_type": "SimpleRotationComponent", "rationale": "r" * 20},
+    ],
+    "interactions": [{"object_name": "earth", "action": "drags it", "effect": "it moves"}],
+}
+with asset_plan_validation(["SimpleOrbitComponent", "SimpleRotationComponent"],
+                           min_objects=4, min_clip_beats=5):
+    try:
+        ModuleAssetPlan.model_validate(_bad_plan)
+        check(False, "all asset-plan problems reported at once")
+    except ValidationError as e:
+        msg = str(e)
+        check("6 problem(s)" in msg and all(t in msg for t in (
+            "Duplicate planned object", "at least 4 scene objects", "at least 5 clip beats",
+            "unknown object 'earth'", "unknown object", "planned more than once")),
+            "all asset-plan problems reported at once (duplicates, minimums, interactions)")
+
+# 9. per-module minimums are enforced on the asset plan (defaults 4 objects / 5 beats)
+rec = make(FakeLLM(), "t9_minimums",
+           cfg={"min_objects": 4, "min_clips": 5, "step_attempts": 1}).run()
+check(not rec["success"] and rec["failed_step"].startswith("asset_plan")
+      and "clip beats" in rec["error"], "per-module minimums enforced on the asset plan")
+
+# 10. scene cap
+rec = make(FakeLLM(), "t10_cap", cfg={"max_scenes": 8, "step_attempts": 1}).run()
+check(not rec["success"] and rec["failed_step"] == "plan" and "at most 8 scenes" in rec["error"],
+      f"plan with {len(MODS)} scenes rejected by the 8-scene cap")
+
+
+# 11. invalid Replace comes back with every error; feedback accumulates; context
+class TrickyReviewer:
+    name = "tricky"
+
+    def __init__(self):
+        self.seen = []
+
+    def review(self, cp):
+        self.seen.append(cp)
+        if cp.step == "plan" and cp.revision < 2:
+            return Revise(["Add a recap scene.", "Shorten scene 2."][cp.revision])
+        if cp.step == "asset_plan" and cp.index == 1 and cp.revision == 0:
+            bad = P._dump(cp.output)
+            bad["interactions"] = [{"object_name": "nope", "action": "pokes it", "effect": "nothing"}]
+            bad["objects"] = bad["objects"] + [bad["objects"][0]]
+            return Replace(bad)
+        return Approve()
+
+
+reviewer, fake = TrickyReviewer(), FakeLLM()
+rec = make(fake, "t11_review", reviewer=reviewer).run()
+check(rec["success"], "tricky-review run succeeds")
+second_revision = fake.last_user[2]
+check("1. Add a recap scene." in second_revision and "2. Shorten scene 2." in second_revision,
+      "second revision request carries both rounds of feedback")
+after_bad = next(cp for cp in reviewer.seen if cp.step == "asset_plan" and cp.last_error)
+check("2 problem(s)" in after_bad.last_error and "unknown object 'nope'" in after_bad.last_error
+      and "Duplicate planned object" in after_bad.last_error and after_bad.rejected_output,
+      "rejected Replace returns all its errors and the rejected edit to the reviewer")
+check(after_bad.revision == 1 and rec["steps"][1]["decision"] == "Approve",
+      "rejected edit counts as a revision round; last valid output kept")
+mod_cp = next(cp for cp in reviewer.seen if cp.step == "module")
+check({"scene", "plan", "previous_modules", "asset_plan", "run_dir"} <= set(mod_cp.context),
+      "module checkpoint context has plan, earlier modules, asset plan, run_dir")
+
+
+# 12. errors a regeneration can't fix fail the step at once
+class FakeAuthError(Exception):
+    status_code = 401
+
+
+rec = make(FakeLLM(fail_module=1, fail_exc=FakeAuthError("bad key")), "t12_failfast",
+           cfg={"step_attempts": 3}).run()
+m1 = rec["steps"][-1]
+check(not rec["success"] and m1["attempts"] == 1 and m1["non_retryable"]
+      and "not retryable" in rec["error"], "401 fails the step without regenerating")
+
+# 13. metrics survive an interruption, and resume keeps them
+try:
+    make(FakeLLM(fail_module=2, fail_exc=KeyboardInterrupt()), "t13_interrupt").run()
+except KeyboardInterrupt:
+    pass
+partial = json.loads((FAKE / "Metrics" / "t13_interrupt_metrics.json").read_text(encoding="utf-8"))
+check(partial["status"] == "in_progress"
+      and [s["step"] for s in partial["steps"]] == ["plan", "asset_plan", "module", "asset_plan"],
+      "metrics written after every step survive an interruption")
+fake = FakeLLM()
+pipe = P.HierarchicalPipeline.resume(FAKE / "Runs" / "t13_interrupt", call_fn=fake)
+fake.pipe = pipe
+rec = pipe.run()
+check(rec["success"] and rec["status"] == "complete"
+      and sum(s["resumed"] for s in rec["steps"]) == 4, "interrupted run resumes to completion")
+
+# 14. soft metrics recorded per module
+adh = rec["plan_adherence"][0]
+check({"below_min_objects", "below_min_clips", "interaction_objects_without_pointer",
+       "is_new_asset_mismatches"} <= set(adh), "soft metrics recorded in plan_adherence")
+check(any(a["is_new_asset_mismatches"] for a in rec["plan_adherence"]),
+      "is_new_asset claims checked against the registry (fake always claims False)")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"
@@ -332,6 +468,79 @@ check(rec["totals"]["cost_usd"] > 0
       "per-step costs sum to the tracker cost")
 check((MOCK / "Runs" / "mock" / "errors.txt").exists(), "errors.txt written")
 check(state["requests"][0] == ("LabPlan", 2), "first request is the plan (system + user)")
+sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
+from benchmark_dataframe import load_runs  # noqa: E402
+df = load_runs(MOCK)
+check(len(df) == 1 and bool(df.iloc[0]["success"]) and df.iloc[0]["structure"] == "multi-module",
+      "Code/Analysis load_runs() reads hierarchical metrics")
+
+
+# ── Part 3: the exact request we send Anthropic (mock Anthropic server) ──
+# Builds the client through the real create_instructor_client (pointed at the
+# mock via ANTHROPIC_BASE_URL), so this checks the shape of what we actually send:
+# the forced tool_choice with disable_parallel_tool_use (#44) and max_tokens.
+# Note: current Claude 5.5 / Fable 5.1 models reject a forced tool_choice (#72);
+# when that changes, update the expected request shape here.
+print("\n-- part 3: mock Anthropic server --")
+anth = {"asset": 0, "requests": []}
+
+
+class MockAnthropic(BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        tool = body["tools"][0]["name"]
+        anth["requests"].append(body)
+        if tool == "LabPlan":
+            data = (REPLAY / "00_plan.json").read_text(encoding="utf-8")
+        elif tool == "ModuleAssetPlan":
+            anth["asset"] += 1
+            data = (REPLAY / f"{anth['asset']:02d}_asset_plan.json").read_text(encoding="utf-8")
+        else:
+            data = (REPLAY / f"{anth['asset']:02d}_module.json").read_text(encoding="utf-8")
+        payload = json.dumps({
+            "id": "msg_mock", "type": "message", "role": "assistant", "model": body["model"],
+            "content": [{"type": "tool_use", "id": "toolu_mock", "name": tool,
+                         "input": json.loads(data)}],
+            "stop_reason": "tool_use", "stop_sequence": None,
+            "usage": {"input_tokens": 1000, "output_tokens": 200},
+        }).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+
+asrv = HTTPServer(("127.0.0.1", 0), MockAnthropic)
+threading.Thread(target=asrv.serve_forever, daemon=True).start()
+_saved_env = {k: os.environ.get(k) for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY")}
+os.environ["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{asrv.server_port}"
+os.environ["ANTHROPIC_API_KEY"] = "test"
+try:
+    rec = P.HierarchicalPipeline("claude-haiku-4.5", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
+                                 output_dir=TMP / "anthropic", run_name="anthropic").run()
+finally:
+    asrv.shutdown()
+    for k, v in _saved_env.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
+check(rec["success"], "mock-Anthropic run succeeds")
+reqs = anth["requests"]
+check(len(reqs) == 1 + 2 * len(MODS), f"one Anthropic request per step ({len(reqs)})")
+check(all(r["tool_choice"] == {"type": "tool", "name": r["tools"][0]["name"],
+                               "disable_parallel_tool_use": True} for r in reqs),
+      "every request forces its step's tool with disable_parallel_tool_use")
+check(all(r["max_tokens"] == 32000 for r in reqs), "every request sets max_tokens=32000")
+check([r["tools"][0]["name"] for r in reqs[:3]] == ["LabPlan", "ModuleAssetPlan", "PlannedDemoModule"],
+      "tool names follow the step response models")
+check(all(r["model"] == P.MODELS["claude-haiku-4.5"].model_id for r in reqs), "model id sent")
+check(rec["totals"]["prompt_tokens"] == 1000 * len(reqs), "Anthropic usage tracked per step")
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("\nALL PASSED" if not FAILED else "\nSOME FAILED")
