@@ -150,7 +150,8 @@ Requirements:
 """
 
 REVISION_INSTRUCTION = """\
-A reviewer asked for changes to your previous {what}:
+A reviewer asked for changes to your previous {what}. Address ALL of the feedback
+below; earlier items still apply unless a later item overrides them:
 
 {feedback}
 
@@ -255,5 +256,8 @@ def build_module_prompt(
     )
 
 
-def build_revision_message(what: str, feedback: str) -> str:
+def build_revision_message(what: str, feedback_history: list[str]) -> str:
+    """Revision request carrying every round of feedback for the step, oldest
+    first, so a later round doesn't silently drop an earlier request."""
+    feedback = "\n".join(f"{i}. {f}" for i, f in enumerate(feedback_history, start=1))
     return REVISION_INSTRUCTION.format(what=what, feedback=feedback)

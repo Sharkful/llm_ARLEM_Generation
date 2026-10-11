@@ -19,6 +19,7 @@ Outputs go to a temp dir that is removed afterwards. Exit code 1 on any failure.
 
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -78,7 +79,7 @@ class FakeLLM:
 
     def __call__(self, model, messages, max_retries):
         self.calls.append((model.__name__, len(messages)))
-        if model is LabOutline:
+        if issubclass(model, LabOutline):
             return model.model_validate({
                 "lab_title": "Apparent Retrograde Motion",
                 "top_level_objectives": SOURCE["objectives"],
@@ -123,7 +124,8 @@ class FakeLLM:
 # The replayed wave-2 modules were generated under lab-wide minimums, so they are
 # smaller than the pipeline's per-module defaults; replay runs use minimums the
 # source data meets (the minimum checks themselves are tested separately).
-REPLAY_MINIMUMS = {"min_objects": 1, "min_clips": 2}
+# The 9-module source also exceeds the default 8-scene cap.
+REPLAY_MINIMUMS = {"min_objects": 1, "min_clips": 2, "max_scenes": 12}
 
 
 def make(fake, run_name, cfg=None, **kw):
@@ -147,9 +149,37 @@ out = json.loads((FAKE / "Outputs" / "t1_auto_output.json").read_text(encoding="
 # Compare with the source as the current schema normalizes it (PascalCase
 # scriptNames), so the pipeline itself must not alter a module.
 SRC_NORMALIZED = [P._dump(DemoModule.model_validate(m)) for m in MODS]
-check(all({**a, "dateCreated": None} == {**b, "dateCreated": None}
-          for a, b in zip(out["modules"], SRC_NORMALIZED)),
-      "every module serializes identically to the validated source (besides dateCreated)")
+
+
+def _strip_scripts(node):
+    """Drop dateCreated and NewComponent name/description, which the pipeline
+    deliberately normalizes; everything else must come through untouched."""
+    if isinstance(node, dict):
+        return {k: _strip_scripts(v) for k, v in node.items()
+                if k not in ("dateCreated", "scriptName", "scriptDescription")}
+    if isinstance(node, list):
+        return [_strip_scripts(v) for v in node]
+    return node
+
+
+def _script_variants(lab_json):
+    """scriptName -> set of descriptions used for it across the whole lab."""
+    variants = {}
+    for m in lab_json["modules"]:
+        for c in re.findall(r'"scriptName": "([^"]+)", "scriptDescription": "((?:[^"\\]|\\.)*)"',
+                            json.dumps(m)):
+            variants.setdefault(c[0], set()).add(" ".join(c[1].split()))
+    return variants
+
+
+check(all(_strip_scripts(a) == _strip_scripts(b) for a, b in zip(out["modules"], SRC_NORMALIZED)),
+      "modules come through unchanged apart from NewComponent normalization")
+variants = _script_variants(out)
+check(variants and all(len(d) == 1 for d in variants.values()),
+      f"one description per new component across the lab ({len(variants)} components)")
+src_variants = _script_variants({"modules": SRC_NORMALIZED})
+check(any(len(d) > 1 for d in src_variants.values()) and rec["normalizations"],
+      f"source had divergent copies; {len(rec['normalizations'])} normalizations logged")
 run_dir = FAKE / "Runs" / "t1_auto"
 files = {p.name for p in run_dir.iterdir()}
 check({"run_config.json", "review_log.json", "00_plan.json", "00_plan_prompt.txt",
@@ -188,7 +218,7 @@ class ScriptedReviewer:
 fake = FakeLLM()
 rec = make(fake, "t2_review", reviewer=ScriptedReviewer()).run()
 check(rec["success"], "scripted-review run succeeds")
-check(fake.calls[:2] == [("LabOutline", 2), ("LabOutline", 4)],
+check(fake.calls[:2] == [("LabPlan", 2), ("LabPlan", 4)],
       "Revise re-calls the plan with previous output + feedback appended")
 ap1 = json.loads((FAKE / "Runs" / "t2_review" / "01_asset_plan.json").read_text(encoding="utf-8"))
 check(ap1["interactions"][0]["action"] == "EDITED BY HUMAN", "Replace output is the one saved")
@@ -219,7 +249,7 @@ with P.module_validation([]):
         P.PlannedDemoModule.model_validate(mod)
         check(False, "unplanned NewComponent rejected")
     except Exception as e:  # noqa: BLE001
-        check("was not planned" in str(e), "unplanned NewComponent rejected")
+        check("were not planned" in str(e), "unplanned NewComponent rejected")
 
 # 5. --no-new-components: an asset plan proposing a new component fails its step
 rec = make(FakeLLM(), "t5_nonew", cfg={"allow_new_components": False, "step_attempts": 1}).run()
@@ -245,7 +275,7 @@ class MockOpenAI(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         tool = body["tools"][0]["function"]["name"]
         state["requests"].append((tool, len(body["messages"])))
-        if tool == "LabOutline":
+        if tool == "LabPlan":
             args = (REPLAY / "00_plan.json").read_text(encoding="utf-8")
         elif tool == "ModuleAssetPlan":
             state["asset"] += 1
@@ -301,7 +331,7 @@ check(rec["totals"]["cost_usd"] > 0
       and abs(rec["totals"]["cost_usd"] - rec["tracking"]["cost"]["total_usd"]) < 1e-9,
       "per-step costs sum to the tracker cost")
 check((MOCK / "Runs" / "mock" / "errors.txt").exists(), "errors.txt written")
-check(state["requests"][0] == ("LabOutline", 2), "first request is the plan (system + user)")
+check(state["requests"][0] == ("LabPlan", 2), "first request is the plan (system + user)")
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("\nALL PASSED" if not FAILED else "\nSOME FAILED")

@@ -1,7 +1,7 @@
 """
 Hierarchical (module-at-a-time) JSON Lab generation pipeline.
 
-    Lab YAML ──► 1. plan (LabOutline, one scene per module)          ─► checkpoint
+    Lab YAML ──► 1. plan (LabPlan, one scene per module)              ─► checkpoint
              ──► for each scene i:
                    2. asset plan (ModuleAssetPlan: objects, components, why)  ─► checkpoint
                    3. module (DemoModule implementing the approved plan)      ─► checkpoint
@@ -9,13 +9,20 @@ Hierarchical (module-at-a-time) JSON Lab generation pipeline.
 
 Each step is its own instructor call with its own retry budget. If a step still
 fails after instructor's retries it is regenerated from scratch, up to
-``step_attempts`` times, without touching the steps before it. Every accepted step
-is written to the run directory, so ``resume()`` continues a failed or interrupted
-run from the first missing step without paying for the earlier ones again.
+``step_attempts`` times, without touching the steps before it; errors a retry
+can't fix (authentication, permission, unknown model, configuration) fail the
+step at once. Every accepted step is written to the run directory, and the
+metrics file is rewritten after every step, so ``resume()`` continues a failed or
+interrupted run from the first missing step without paying for, or losing the
+cost records of, the earlier ones.
 
 Checkpoints go through a ``Reviewer`` (review.py). The default auto-approves, so a
 run is fully unattended; a human or LLM reviewer can approve, request a revision
 with feedback, or replace the output with an edited one.
+
+After a step is accepted, new-component names are normalized to their catalog
+spelling (and reused components to their catalog description), so the final lab
+has one version of each script. Every rewrite is logged in ``normalizations``.
 
 LLM calls go through ``benchmark.create_instructor_client`` (Gemini parse-retry
 patch), ``benchmark.provider_create_kwargs`` (Anthropic tool_choice guard), and
@@ -35,7 +42,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, ContextManager, Iterable, Iterator, Optional, Type
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ValidationError, model_validator
 
 import _paths  # noqa: F401
 from _paths import PROJECT_ROOT
@@ -48,7 +55,7 @@ from benchmark import (
     provider_create_kwargs,
 )
 from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, SpecType
-from json_lab import DemoModule, Lab, NewComponent
+from json_lab import DemoModule, Lab, NewComponent, PointerReceiverComponent
 from lab_metrics import analyze_assets, analyze_json_lab
 from lab_outline import LabOutline
 from module_asset_plan import ModuleAssetPlan, asset_plan_validation, component_key
@@ -80,24 +87,52 @@ def output_dir_for(run_group: Optional[str]) -> Path:
 CallFn = Callable[[Type[BaseModel], list[dict], int], BaseModel]
 
 
-# ── Module-step validation ───────────────────────────────────────────
+# ── Step-specific validation scopes ──────────────────────────────────
+# ContextVars rather than instructor's ``context=``, which would also render every
+# message as a Jinja template (see module_asset_plan.py).
 
+_MAX_SCENES: ContextVar[Optional[int]] = ContextVar("lab_plan_max_scenes", default=None)
 _ALLOWED_NEW_COMPONENTS: ContextVar[Optional[frozenset[str]]] = ContextVar(
     "planned_module_allowed_new_components", default=None
 )
 
 
 @contextmanager
-def module_validation(allowed_new_components: Iterable[str]) -> Iterator[None]:
-    """Activate PlannedDemoModule's NewComponent check in this scope.
+def plan_validation(max_scenes: int) -> Iterator[None]:
+    """Activate LabPlan's scene cap in this scope."""
+    token = _MAX_SCENES.set(max_scenes)
+    try:
+        yield
+    finally:
+        _MAX_SCENES.reset(token)
 
-    A ContextVar rather than instructor's ``context=``, which would also render
-    every message as a Jinja template (see module_asset_plan.py)."""
-    token = _ALLOWED_NEW_COMPONENTS.set(frozenset(n.lower() for n in allowed_new_components))
+
+@contextmanager
+def module_validation(allowed_new_components: Iterable[str]) -> Iterator[None]:
+    """Activate PlannedDemoModule's NewComponent check in this scope."""
+    token = _ALLOWED_NEW_COMPONENTS.set(
+        frozenset(component_key(n) for n in allowed_new_components)
+    )
     try:
         yield
     finally:
         _ALLOWED_NEW_COMPONENTS.reset(token)
+
+
+class LabPlan(LabOutline):
+    """LabOutline for the plan step, where every scene becomes a module: adds a
+    scene cap so the number of calls per lab stays bounded. The shared L1 schema
+    (lab_outline.py) is unchanged."""
+
+    @model_validator(mode="after")
+    def _cap_scenes(self) -> "LabPlan":
+        cap = _MAX_SCENES.get()
+        if cap is not None and len(self.scenes) > cap:
+            raise ValueError(
+                f"Plan at most {cap} scenes (got {len(self.scenes)}); merge closely "
+                "related scenes so each one is a single clear teaching step."
+            )
+        return self
 
 
 class PlannedDemoModule(DemoModule):
@@ -110,16 +145,25 @@ class PlannedDemoModule(DemoModule):
         allowed = _ALLOWED_NEW_COMPONENTS.get()
         if allowed is None:
             return self
-        comps = [c for o in self.objects for c in (o.components or [])]
-        comps += [c for cl in self.clips for ch in (cl.changes or []) for c in (ch.components or [])]
-        for comp in comps:
-            if isinstance(comp, NewComponent) and comp.scriptName.lower() not in allowed:
-                raise ValueError(
-                    f"NewComponent '{comp.scriptName}' was not planned for this module. "
-                    f"Use a built-in component, or a NewComponent with one of these "
-                    f"scriptNames: {sorted(allowed) or 'none'}"
-                )
+        unplanned = sorted({
+            c.scriptName for c in _iter_module_components(self)
+            if isinstance(c, NewComponent) and component_key(c.scriptName) not in allowed
+        })
+        if unplanned:
+            raise ValueError(
+                f"NewComponent(s) {unplanned} were not planned for this module. Use a "
+                "built-in component, or a NewComponent with one of these scriptNames: "
+                f"{sorted(allowed) or 'none'}"
+            )
         return self
+
+
+def _iter_module_components(module: DemoModule):
+    for obj in module.objects:
+        yield from obj.components or []
+    for clip in module.clips:
+        for change in clip.changes or []:
+            yield from change.components or []
 
 
 # ── Config / records ─────────────────────────────────────────────────
@@ -131,10 +175,11 @@ class PipelineConfig:
     asset_plan_retries: int = 3
     module_retries: int = 3
     step_attempts: int = 2         # fresh regenerations of a step after a terminal failure
-    max_revisions: int = 3         # reviewer Revise rounds per step before accepting
+    max_revisions: int = 3         # reviewer revision rounds per step before accepting
     allow_new_components: bool = True
     min_objects: int = 4           # per-module minimums (lab-wide in the one-shot runs)
     min_clips: int = 5
+    max_scenes: int = 8            # scenes (= modules) the plan may contain
 
     def to_json(self) -> dict:
         d = asdict(self)
@@ -157,7 +202,7 @@ class StepRecord:
     failed_attempts: int = 0
     retries: int = 0               # tracker retry_count summed over calls (same as benchmark runs)
     parse_errors: int = 0          # failed parse/validation attempts (the actual reask count)
-    revisions: int = 0
+    revisions: int = 0             # reviewer revision rounds (Revise, or a rejected Replace)
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
@@ -165,6 +210,7 @@ class StepRecord:
     wall_time_s: float = 0.0
     success: bool = False
     resumed: bool = False          # loaded from the run dir, not generated this session
+    non_retryable: bool = False    # failed on an error regeneration can't fix
     decision: Optional[str] = None
     errors: list[str] = field(default_factory=list)
 
@@ -174,6 +220,32 @@ class StepFailed(RuntimeError):
         super().__init__(message)
         self.step = step
         self.index = index
+
+
+# Errors no regeneration can fix. A provider 400 is deliberately *not* here:
+# Gemini's parallel-functionCall reask 400 (#44) is often survived by a fresh
+# regeneration, which is exactly what step_attempts is for.
+_NON_RETRYABLE_STATUS = {401, 403, 404}
+_NON_RETRYABLE_EXC_NAMES = {
+    "AuthenticationError", "PermissionDeniedError", "NotFoundError", "ConfigurationError",
+}
+
+
+def is_non_retryable(exc: BaseException) -> bool:
+    """True if ``exc`` (or anything in its cause chain) is an error that
+    regenerating the step can't fix."""
+    seen: set[int] = set()
+    cur: Optional[BaseException] = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        if type(cur).__name__ in _NON_RETRYABLE_EXC_NAMES:
+            return True
+        for attr in ("status_code", "code"):
+            val = getattr(cur, attr, None)
+            if isinstance(val, int) and val in _NON_RETRYABLE_STATUS:
+                return True
+        cur = cur.__cause__ or cur.__context__
+    return False
 
 
 def _slug(text: str) -> str:
@@ -192,9 +264,69 @@ def _dump(model: BaseModel) -> dict:
     return model.model_dump(mode="json", exclude_none=True)
 
 
+def _same_text(a: str, b: str) -> bool:
+    return " ".join(a.split()) == " ".join(b.split())
+
+
+# ── Normalization (one spelling per component) ───────────────────────
+
+def normalize_asset_plan(asset_plan: ModuleAssetPlan, registry: AssetRegistry) -> list[dict]:
+    """Rewrite component references to their canonical spelling: the catalog's,
+    or the one this plan declared a new component with. Returns the changes."""
+    declared = {component_key(c.component_type): c.component_type
+                for c in asset_plan.components if c.is_new}
+    changes = []
+    for comp in asset_plan.components:
+        if comp.is_new:
+            continue
+        entry = registry.find_component(comp.component_type)
+        canonical = entry.name if entry else declared.get(component_key(comp.component_type))
+        if canonical and canonical != comp.component_type:
+            changes.append({"field": "component_type", "object": comp.object_name,
+                            "from": comp.component_type, "to": canonical})
+            comp.component_type = canonical
+    return changes
+
+
+def normalize_module(
+    module: DemoModule, asset_plan: ModuleAssetPlan, registry: AssetRegistry
+) -> list[dict]:
+    """Give every NewComponent one canonical name and description: a component
+    already in the catalog takes the catalog's; one introduced here takes the
+    asset plan's name and its first description in this module."""
+    planned = {component_key(c.component_type): c.component_type
+               for c in asset_plan.components if c.is_new}
+    first_description: dict[str, str] = {}
+    changes = []
+    for comp in _iter_module_components(module):
+        if not isinstance(comp, NewComponent):
+            continue
+        key = component_key(comp.scriptName)
+        entry = registry.find_component(comp.scriptName)
+        if entry is not None and not entry.builtin:
+            name, description = entry.name, entry.description
+        else:
+            name = planned.get(key, comp.scriptName)
+            description = first_description.setdefault(key, comp.scriptDescription)
+        if comp.scriptName != name:
+            changes.append({"field": "scriptName", "from": comp.scriptName, "to": name})
+            comp.scriptName = name
+        if not _same_text(comp.scriptDescription, description):
+            changes.append({"field": "scriptDescription", "component": name,
+                            "from": comp.scriptDescription[:80], "to": description[:80]})
+            comp.scriptDescription = description
+    return changes
+
+
 # ── Plan adherence (soft metric) ─────────────────────────────────────
 
-def plan_adherence(asset_plan: ModuleAssetPlan, module: DemoModule) -> dict:
+def plan_adherence(
+    asset_plan: ModuleAssetPlan,
+    module: DemoModule,
+    *,
+    min_objects: int,
+    min_clips: int,
+) -> dict:
     """How much of the approved asset plan the module actually implemented."""
     obj_names = {o.name for o in module.objects}
     attached: dict[str, set[str]] = {o.name: set() for o in module.objects}
@@ -212,6 +344,7 @@ def plan_adherence(asset_plan: ModuleAssetPlan, module: DemoModule) -> dict:
     present_objs = [n for n in planned_objs if n in obj_names]
     planned_comps = [(c.object_name, component_key(c.component_type)) for c in asset_plan.components]
     present_comps = [p for p in planned_comps if p[1] in attached.get(p[0], set())]
+    pointer = component_key(PointerReceiverComponent.__name__)
     return {
         "planned_objects": len(planned_objs),
         "planned_objects_present": len(present_objs),
@@ -221,6 +354,14 @@ def plan_adherence(asset_plan: ModuleAssetPlan, module: DemoModule) -> dict:
         "missing_components": [f"{o}:{c}" for o, c in planned_comps if (o, c) not in present_comps],
         "clip_beats": len(asset_plan.clip_beats),
         "clips": len(module.clips),
+        "objects": len(module.objects),
+        "below_min_objects": len(module.objects) < min_objects,
+        "below_min_clips": len(module.clips) < min_clips,
+        # Interactions whose object can't receive pointer input in the module.
+        "interaction_objects_without_pointer": sorted({
+            i.object_name for i in asset_plan.interactions
+            if pointer not in attached.get(i.object_name, set())
+        }),
     }
 
 
@@ -282,8 +423,11 @@ class HierarchicalPipeline:
         self.registry = AssetRegistry()
         self.steps: list[StepRecord] = []
         self.review_log: list[dict] = []
+        self.normalizations: list[dict] = []
+        self.adherence: list[dict] = []
         self.transient_retries = 0
         self._prior_steps: dict[tuple[str, Optional[int]], dict] = {}
+        self._t0 = time.time()
 
     # ── resume ───────────────────────────────────────────────────────
     @classmethod
@@ -311,6 +455,7 @@ class HierarchicalPipeline:
             prior = json.loads(metrics_path.read_text(encoding="utf-8"))
             pipe._prior_steps = {(s["step"], s["index"]): s for s in prior.get("steps", [])}
             pipe.review_log = prior.get("review_log", [])
+            pipe.normalizations = prior.get("normalizations", [])
         return pipe
 
     # ── LLM call ─────────────────────────────────────────────────────
@@ -324,7 +469,8 @@ class HierarchicalPipeline:
             self.transient_retries += retryer.statistics.get("attempt_number", 1) - 1
 
     def _generate(self, response_model, messages, max_retries, scope, rec: StepRecord) -> BaseModel:
-        """One step generation, regenerated from scratch up to step_attempts times."""
+        """One step generation, regenerated from scratch up to step_attempts times
+        (immediately failed for errors a regeneration can't fix)."""
         last_error = None
         for _ in range(self.config.step_attempts):
             rec.attempts += 1
@@ -336,6 +482,9 @@ class HierarchicalPipeline:
                 last_error = f"{type(e).__name__}: {e}"
                 rec.errors.append(last_error)
                 print(f"    attempt failed: {last_error[:200]}")
+                if is_non_retryable(e):
+                    rec.non_retryable = True
+                    raise StepFailed(rec.step, rec.index, f"{last_error} (not retryable)") from e
         raise StepFailed(rec.step, rec.index, last_error or "step failed")
 
     # ── one checkpointed step ────────────────────────────────────────
@@ -350,6 +499,7 @@ class HierarchicalPipeline:
         what: str,
         scope: Callable[[], ContextManager] = nullcontext,
         context: Optional[dict[str, Any]] = None,
+        normalize: Optional[Callable[[BaseModel], list[dict]]] = None,
     ) -> BaseModel:
         label = f"{step} {index}" if index else step
         out_path = self.run_dir / f"{file_stem}.json"
@@ -377,45 +527,75 @@ class HierarchicalPipeline:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ]
-        messages = base_messages
+        context = dict(context or {})
+        context.setdefault("run_dir", str(self.run_dir))
+        feedback_history: list[str] = []
+        last_error: Optional[str] = None
+        rejected: Optional[dict] = None
         try:
+            output = self._generate(response_model, base_messages, max_retries, scope, rec)
             while True:
-                output = self._generate(response_model, messages, max_retries, scope, rec)
                 decision = self.reviewer.review(Checkpoint(
-                    step=step, index=index, output=output,
-                    revision=rec.revisions, context=context or {},
+                    step=step, index=index, output=output, revision=rec.revisions,
+                    context=context, feedback_history=list(feedback_history),
+                    last_error=last_error, rejected_output=rejected,
                 ))
+                last_error = rejected = None
                 entry = {"step": step, "index": index, "revision": rec.revisions,
                          "reviewer": self.reviewer.name, "decision": type(decision).__name__}
+                out_of_rounds = rec.revisions >= self.config.max_revisions
+
+                if isinstance(decision, Approve):
+                    entry["note"] = decision.note
+                    self.review_log.append(entry)
+                    rec.decision = "Approve"
+                    break
 
                 if isinstance(decision, Revise):
                     entry["feedback"] = decision.feedback
-                    if rec.revisions >= self.config.max_revisions:
+                    if out_of_rounds:
                         entry["note"] = "max revisions reached; accepted as is"
                         self.review_log.append(entry)
                         rec.decision = "Approve (max revisions)"
                         break
                     self.review_log.append(entry)
                     rec.revisions += 1
+                    feedback_history.append(decision.feedback)
                     messages = base_messages + [
                         {"role": "assistant", "content": json.dumps(_dump(output), indent=2)},
-                        {"role": "user", "content": prompts.build_revision_message(what, decision.feedback)},
+                        {"role": "user",
+                         "content": prompts.build_revision_message(what, feedback_history)},
                     ]
+                    output = self._generate(response_model, messages, max_retries, scope, rec)
                     continue
 
                 if isinstance(decision, Replace):
                     edited = decision.output
                     data = _dump(edited) if isinstance(edited, BaseModel) else edited
-                    with scope():
-                        output = response_model.model_validate(data)
+                    try:
+                        with scope():
+                            candidate = response_model.model_validate(data)
+                    except ValidationError as e:
+                        # Back to the reviewer with every error at once, plus the
+                        # edit itself so it can be fixed rather than redone.
+                        entry["note"] = "edit rejected: failed validation"
+                        entry["error"] = str(e)
+                        if out_of_rounds:
+                            entry["note"] += "; max revisions reached, kept the last valid output"
+                            self.review_log.append(entry)
+                            rec.decision = "Approve (max revisions)"
+                            break
+                        self.review_log.append(entry)
+                        rec.revisions += 1
+                        last_error, rejected = str(e), data
+                        continue
+                    output = candidate
                     entry["note"] = decision.note
-                elif isinstance(decision, Approve):
-                    entry["note"] = decision.note
-                else:
-                    raise TypeError(f"Reviewer returned {decision!r}")
-                self.review_log.append(entry)
-                rec.decision = type(decision).__name__
-                break
+                    self.review_log.append(entry)
+                    rec.decision = "Replace"
+                    break
+
+                raise TypeError(f"Reviewer returned {decision!r}")
             rec.success = True
         finally:
             rec.wall_time_s = round(time.time() - t0, 2)
@@ -430,8 +610,13 @@ class HierarchicalPipeline:
                 rec.errors.extend(f"attempt {e.attempt_number} {e.exception_class}: {e.message}"
                                   for e in call.errors)
 
+        if normalize is not None:
+            for change in normalize(output):
+                self.normalizations.append({"step": step, "index": index, **change})
         if self.save:
             out_path.write_text(json.dumps(_dump(output), indent=2), encoding="utf-8")
+            # Keep the metrics current so an interrupted run keeps its cost records.
+            self._save(self._build_record(None, None, None, status="in_progress"), None)
         return output
 
     # ── full run ─────────────────────────────────────────────────────
@@ -449,22 +634,25 @@ class HierarchicalPipeline:
                 "config": cfg.to_json(),
             }, indent=2), encoding="utf-8")
 
-        t0 = time.time()
-        plan: Optional[LabOutline] = None
+        self._t0 = time.time()
         lab: Optional[Lab] = None
-        modules: list[DemoModule] = []
-        adherence: list[dict] = []
         failed_step = None
         error = None
         try:
             plan = self._run_step(
-                "plan", None, LabOutline,
+                "plan", None, LabPlan,
                 prompts.build_plan_prompt(self.lab_context, has_script=cfg.level == Level.L4),
                 cfg.plan_retries, "00_plan", "lab plan",
+                scope=lambda: plan_validation(cfg.max_scenes),
             )
-            n = len(plan.scenes)
-
-            for i in range(1, n + 1):
+            modules: list[DemoModule] = []
+            for i in range(1, len(plan.scenes) + 1):
+                scene = plan.scenes[i - 1]
+                shared_context = {
+                    "scene": scene,
+                    "plan": plan,
+                    "previous_modules": self.registry.render_previous_modules(),
+                }
                 catalog = self.registry.catalog_names()
                 asset_plan = self._run_step(
                     "asset_plan", i, ModuleAssetPlan,
@@ -478,7 +666,8 @@ class HierarchicalPipeline:
                         catalog, allow_new=cfg.allow_new_components,
                         min_objects=cfg.min_objects, min_clip_beats=cfg.min_clips,
                     ),
-                    context={"scene": plan.scenes[i - 1]},
+                    context=shared_context,
+                    normalize=lambda ap: normalize_asset_plan(ap, self.registry),
                 )
                 allowed = prompts.allowed_new_component_names(asset_plan, self.registry)
                 module = self._run_step(
@@ -489,13 +678,20 @@ class HierarchicalPipeline:
                     ),
                     cfg.module_retries, f"{i:02d}_module", "module",
                     scope=lambda: module_validation(allowed),
-                    context={"scene": plan.scenes[i - 1], "asset_plan": asset_plan},
+                    context={**shared_context, "asset_plan": asset_plan},
+                    normalize=lambda m: normalize_module(m, asset_plan, self.registry),
                 )
-                self.registry.register_module(
-                    i, module, asset_plan, scene_purpose=plan.scenes[i - 1].brief_purpose
+                adherence = plan_adherence(
+                    asset_plan, module, min_objects=cfg.min_objects, min_clips=cfg.min_clips
                 )
+                # Checked against the registry *before* this module registers.
+                adherence["is_new_asset_mismatches"] = [
+                    o.name for o in asset_plan.objects
+                    if o.is_new_asset != self._is_novel_asset(o.prefab, o.texture)
+                ]
+                self.adherence.append({"index": i, **adherence})
+                self.registry.register_module(i, module, asset_plan, scene_purpose=scene.brief_purpose)
                 modules.append(module)
-                adherence.append({"index": i, **plan_adherence(asset_plan, module)})
 
             try:
                 lab = Lab(
@@ -511,20 +707,29 @@ class HierarchicalPipeline:
             error = str(e)
             print(f"  FAILED at {failed_step}: {error[:200]}")
 
-        return self._finish(lab, plan, adherence, failed_step, error, time.time() - t0)
+        record = self._build_record(lab, failed_step, error,
+                                    status="complete" if lab is not None else "failed")
+        output_json = _dump(lab) if lab is not None else None
+        if self.save:
+            self._save(record, output_json)
+        self._print_summary(record)
+        return record
+
+    def _is_novel_asset(self, prefab: str, texture: Optional[str]) -> bool:
+        return (not self.registry.is_known_asset(prefab=prefab)) or bool(
+            texture and not self.registry.is_known_asset(texture=texture)
+        )
 
     # ── results ──────────────────────────────────────────────────────
-    def _finish(self, lab, plan, adherence, failed_step, error, wall_time_s) -> dict:
+    def _build_record(self, lab: Optional[Lab], failed_step, error, *, status: str) -> dict:
         output_json = _dump(lab) if lab is not None else None
-        lab_metrics = analyze_json_lab(output_json) if output_json else {}
-        asset_metrics = analyze_assets(output_json) if output_json else {}
         steps = [asdict(s) for s in self.steps]
         totals = {
             k: sum(s[k] for s in steps)
             for k in ("calls", "retries", "parse_errors", "prompt_tokens", "completion_tokens",
                       "total_tokens", "cost_usd", "wall_time_s")
         }
-        record = {
+        return {
             "timestamp": datetime.now().isoformat(),
             "model": self.model_config.model_id,
             "provider": self.model_config.provider.value,
@@ -541,37 +746,35 @@ class HierarchicalPipeline:
             "reviewer": self.reviewer.name,
             "config": self.config.to_json(),
             "run_dir": _rel(self.run_dir),
+            "status": status,      # "in_progress" while running, then "complete" / "failed"
             "success": lab is not None,
             "failed_step": failed_step,
             "error": error,
             "transient_retries": self.transient_retries,
-            "wall_time_seconds": round(wall_time_s, 2),
+            "wall_time_seconds": round(time.time() - self._t0, 2),
             "provenance": get_provenance(),
             # This session's tracker; `totals` also counts steps resumed from disk.
             "tracking": self.tracker.summary(),
             "totals": totals,
             "steps": steps,
             "review_log": self.review_log,
-            "plan_adherence": adherence,
+            "normalizations": self.normalizations,
+            "plan_adherence": self.adherence,
             "registry": {
                 "new_components": [asdict(c) for c in self.registry.components if not c.builtin],
                 "invented_prefabs": {k: asdict(v) for k, v in self.registry.invented_prefabs.items()},
                 "invented_textures": {k: asdict(v) for k, v in self.registry.invented_textures.items()},
             },
-            "lab_metrics": lab_metrics,
-            "asset_metrics": asset_metrics,
+            "lab_metrics": analyze_json_lab(output_json) if output_json else {},
+            "asset_metrics": analyze_assets(output_json) if output_json else {},
         }
-
-        if self.save:
-            self._save(record, output_json)
-        self._print_summary(record)
-        return record
 
     def _save(self, record: dict, output_json: Optional[dict]) -> None:
         outputs_dir = self.output_dir / "Outputs"
         metrics_dir = self.output_dir / "Metrics"
         outputs_dir.mkdir(parents=True, exist_ok=True)
         metrics_dir.mkdir(parents=True, exist_ok=True)
+        self.run_dir.mkdir(parents=True, exist_ok=True)
 
         errors = [
             f"========== {s['step']}{' ' + str(s['index']) if s['index'] else ''} ==========\n"
@@ -606,4 +809,6 @@ class HierarchicalPipeline:
         if lab:
             print(f"  Lab: modules: {lab.get('num_modules')} | objects: {lab.get('num_objects')} "
                   f"| clips: {lab.get('num_clips')} | components: {lab.get('num_components')}")
+        if record.get("normalizations"):
+            print(f"  Normalized names/descriptions: {len(record['normalizations'])}")
         print(f"  Run dir: {record['run_dir']}")
