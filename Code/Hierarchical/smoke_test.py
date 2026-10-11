@@ -31,7 +31,7 @@ sys.path.insert(0, str(HERE))
 
 import pipeline as P  # noqa: E402
 from _paths import PROJECT_ROOT  # noqa: E402
-from json_lab import Lab  # noqa: E402
+from json_lab import DemoModule, Lab  # noqa: E402
 from lab_outline import LabOutline  # noqa: E402
 from module_asset_plan import ModuleAssetPlan  # noqa: E402
 from review import Approve, Replace, Revise  # noqa: E402
@@ -135,9 +135,12 @@ lab = Lab.model_validate_json(Path(rec["output_path"]).read_text(encoding="utf-8
 check(len(lab.modules) == len(MODS), f"assembled Lab has {len(MODS)} modules")
 check(rec["lab_metrics"]["num_clips"] == sum(len(m["clips"]) for m in MODS), "clip count preserved")
 out = json.loads((FAKE / "Outputs" / "t1_auto_output.json").read_text(encoding="utf-8"))
+# Compare with the source as the current schema normalizes it (PascalCase
+# scriptNames), so the pipeline itself must not alter a module.
+SRC_NORMALIZED = [P._dump(DemoModule.model_validate(m)) for m in MODS]
 check(all({**a, "dateCreated": None} == {**b, "dateCreated": None}
-          for a, b in zip(out["modules"], MODS)),
-      "every module serializes identically to the source (besides dateCreated)")
+          for a, b in zip(out["modules"], SRC_NORMALIZED)),
+      "every module serializes identically to the validated source (besides dateCreated)")
 run_dir = FAKE / "Runs" / "t1_auto"
 files = {p.name for p in run_dir.iterdir()}
 check({"run_config.json", "review_log.json", "00_plan.json", "00_plan_prompt.txt",

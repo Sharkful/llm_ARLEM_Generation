@@ -15,9 +15,13 @@ Contents:
     strings / int<->float and silently clamps into a range. Use for *subjective*
     bounded fields (sizes, positions, rotations, volume); do NOT use where an
     out-of-range value is semantically critical and should force a retry instead.
+  * ``to_pascal_case`` - normalizes an identifier to PascalCase (the convention for
+    new component script names / C# class names).
 """
 
 from __future__ import annotations
+
+import re
 
 from pydantic import BaseModel
 
@@ -153,3 +157,25 @@ def clamp_number(lo: float, hi: float, *, as_int: bool = False):
         return int(round(v)) if as_int else v
 
     return _clamp
+
+
+# ── identifier casing ─────────────────────────────────────────────────
+
+# One word: an acronym not followed by a lowercase letter ("XML" in "XMLParser"),
+# an optionally capitalized lowercase run ("Parser", "vector"), or a digit run.
+_WORD_RE = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+")
+
+
+def to_pascal_case(name):
+    """Normalize an identifier to PascalCase, keeping its word boundaries.
+
+    Splits on any non-alphanumeric character and on camelCase boundaries, then
+    capitalizes each word: ``orbit_trail`` / ``orbitTrail`` -> ``OrbitTrail``,
+    ``XMLParser`` stays ``XMLParser``. An all-lowercase name has no recoverable
+    word boundaries, so ``pulseglow`` -> ``Pulseglow``. Non-strings pass through
+    so the field's own type validation reports them.
+    """
+    if not isinstance(name, str):
+        return name
+    words = _WORD_RE.findall(name)
+    return "".join(w[0].upper() + w[1:] for w in words)
