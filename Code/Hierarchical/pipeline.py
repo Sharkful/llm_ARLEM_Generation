@@ -51,7 +51,7 @@ from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, SpecType
 from json_lab import DemoModule, Lab, NewComponent
 from lab_metrics import analyze_assets, analyze_json_lab
 from lab_outline import LabOutline
-from module_asset_plan import ModuleAssetPlan, asset_plan_validation
+from module_asset_plan import ModuleAssetPlan, asset_plan_validation, component_key
 from prompt_builder import LabDescription, Level, _render_context, discover_labs
 from tracking import InstructorTracker
 
@@ -200,7 +200,7 @@ def plan_adherence(asset_plan: ModuleAssetPlan, module: DemoModule) -> dict:
     attached: dict[str, set[str]] = {o.name: set() for o in module.objects}
 
     def _comp_name(c) -> str:
-        return (c.scriptName if isinstance(c, NewComponent) else type(c).__name__).lower()
+        return component_key(c.scriptName if isinstance(c, NewComponent) else type(c).__name__)
 
     for o in module.objects:
         attached[o.name].update(_comp_name(c) for c in o.components or [])
@@ -210,7 +210,7 @@ def plan_adherence(asset_plan: ModuleAssetPlan, module: DemoModule) -> dict:
 
     planned_objs = [o.name for o in asset_plan.objects]
     present_objs = [n for n in planned_objs if n in obj_names]
-    planned_comps = [(c.object_name, c.component_type.lower()) for c in asset_plan.components]
+    planned_comps = [(c.object_name, component_key(c.component_type)) for c in asset_plan.components]
     present_comps = [p for p in planned_comps if p[1] in attached.get(p[0], set())]
     return {
         "planned_objects": len(planned_objs),

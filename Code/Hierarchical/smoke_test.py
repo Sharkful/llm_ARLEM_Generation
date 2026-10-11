@@ -110,7 +110,9 @@ class FakeLLM:
                              "purpose": f"Shows {o['name']} in this scene", "is_new_asset": False}
                             for o in m["objects"]],
                 "components": comps,
-                "interactions": ["advance with Next"],
+                "interactions": [{"object_name": m["objects"][0]["name"],
+                                  "action": "advances with Next",
+                                  "effect": "the next clip plays"}],
                 "clip_beats": beats if len(beats) >= 2 else beats + ["recap"],
             })
         if self.fail_module == self._index():
@@ -170,7 +172,8 @@ class ScriptedReviewer:
             return Revise("Add a recap scene.")
         if cp.step == "asset_plan" and cp.index == 1:
             edited = P._dump(cp.output)
-            edited["interactions"] = ["EDITED BY HUMAN"]
+            edited["interactions"] = [{"object_name": edited["objects"][0]["name"],
+                                       "action": "EDITED BY HUMAN", "effect": "edited"}]
             return Replace(edited, note="human edit")
         return Approve()
 
@@ -181,7 +184,7 @@ check(rec["success"], "scripted-review run succeeds")
 check(fake.calls[:2] == [("LabOutline", 2), ("LabOutline", 4)],
       "Revise re-calls the plan with previous output + feedback appended")
 ap1 = json.loads((FAKE / "Runs" / "t2_review" / "01_asset_plan.json").read_text(encoding="utf-8"))
-check(ap1["interactions"] == ["EDITED BY HUMAN"], "Replace output is the one saved")
+check(ap1["interactions"][0]["action"] == "EDITED BY HUMAN", "Replace output is the one saved")
 check([e["decision"] for e in rec["review_log"][:3]] == ["Revise", "Approve", "Replace"],
       "review log decisions")
 check(rec["steps"][0]["revisions"] == 1, "plan step records 1 revision")
