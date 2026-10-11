@@ -28,6 +28,7 @@ Usage:
 
 import argparse
 import importlib.metadata
+import importlib.util
 import json
 import os
 import platform
@@ -313,6 +314,89 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
         f"{prefix}/{model_config.model_id}",
         **kwargs,
     )
+
+
+# ── Environment preflight ────────────────────────────────────────────
+
+# Provider SDK module each provider's client needs (installed via the instructor
+# extras in requirements.txt).
+_PROVIDER_SDK = {
+    Provider.OPENAI: ("openai", "openai"),             # (import name, pip package)
+    Provider.ANTHROPIC: ("anthropic", "anthropic"),
+    Provider.GOOGLE: ("google.genai", "google-genai"),
+}
+
+
+def _pinned_version(package: str) -> Optional[str]:
+    """The ``package==X`` pin in requirements.txt (extras allowed), or None."""
+    req = PROJECT_ROOT / "requirements.txt"
+    if not req.exists():
+        return None
+    for line in req.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        name, sep, version = line.partition("==")
+        if sep and name.split("[", 1)[0].strip().lower() == package:
+            return version.strip()
+    return None
+
+
+def _installed_version(package: str) -> Optional[str]:
+    try:
+        return importlib.metadata.version(package)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
+def check_environment(model_configs) -> tuple[list[str], list[str]]:
+    """Check the Python environment before any run: every requested model's
+    provider SDK must be importable (error), and instructor should match the
+    requirements.txt pin the #44 retry fixes depend on (warning).
+
+    Returns (errors, warnings) as printable lines.
+    """
+    errors, warnings = [], []
+    for provider in sorted({mc.provider for mc in model_configs}, key=lambda p: p.value):
+        module, package = _PROVIDER_SDK.get(provider, (None, None))
+        if module is None:
+            continue
+        try:
+            found = importlib.util.find_spec(module) is not None
+        except ModuleNotFoundError:          # e.g. no top-level "google" package
+            found = False
+        if not found:
+            models = ", ".join(mc.model_id for mc in model_configs if mc.provider == provider)
+            errors.append(
+                f"Python package '{package}' is not installed, but {provider.value} "
+                f"model(s) need it: {models}"
+            )
+    pinned, installed = _pinned_version("instructor"), _installed_version("instructor")
+    if pinned and installed != pinned:
+        warnings.append(
+            f"instructor {installed or 'is not installed'} != {pinned} pinned in "
+            "requirements.txt; the Gemini/Anthropic retry fixes (#44) assume the pin, "
+            "and runs record the version actually used under provenance."
+        )
+    return errors, warnings
+
+
+def require_environment(model_configs) -> None:
+    """Print preflight warnings; exit with a fix-it message on errors."""
+    errors, warnings = check_environment(model_configs)
+    hint = (
+        f"  Python: {sys.executable}\n"
+        "  Fix: activate the project venv (.venv\\Scripts\\Activate.ps1 on Windows, "
+        "source .venv/bin/activate elsewhere) and run: pip install -r requirements.txt"
+    )
+    for w in warnings:
+        print(f"  WARNING: {w}", file=sys.stderr)
+    if errors:
+        print("Environment check failed:", file=sys.stderr)
+        for e in errors:
+            print(f"  - {e}", file=sys.stderr)
+        print(hint, file=sys.stderr)
+        sys.exit(2)
+    if warnings:
+        print(hint, file=sys.stderr)
 
 
 def provider_create_kwargs(model_config: ModelConfig, response_model) -> dict:
@@ -1104,6 +1188,8 @@ def main():
         )
     else:
         model_ids = resolved_models
+
+    require_environment([MODELS[m] for m in model_ids if m in MODELS])
 
     common = dict(
         spec_types=spec_types,

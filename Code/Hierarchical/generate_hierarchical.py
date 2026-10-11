@@ -22,12 +22,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 import _paths  # noqa: F401
 from _paths import PROJECT_ROOT
 
+from benchmark import require_environment
 from benchmark_config import MODELS
 from prompt_builder import Level, discover_labs
 
@@ -116,6 +118,9 @@ def main():
                 f"and settings; only these may change: {', '.join(RESUMABLE_SETTINGS)}."
             )
         run_dir = args.resume if args.resume.is_absolute() else PROJECT_ROOT / args.resume
+        meta = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8"))
+        if meta["model_key"] in MODELS:
+            require_environment([MODELS[meta["model_key"]]])
         pipe = HierarchicalPipeline.resume(
             run_dir, config_overrides=_given(args, RESUMABLE_SETTINGS)
         )
@@ -126,6 +131,8 @@ def main():
     labs = sorted(discover_labs()) if args.all_labs else args.lab
     if not labs:
         sys.exit("Error: pass --lab or --all-labs (see --list-labs).")
+
+    require_environment([MODELS[m] for m in args.model if m in MODELS])
 
     try:
         output_dir_for(args.run_group)  # validate before any run starts
