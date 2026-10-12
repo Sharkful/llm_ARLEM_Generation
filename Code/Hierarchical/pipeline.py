@@ -486,6 +486,18 @@ class HierarchicalPipeline:
         self._calls_absorbed = 0                # tracker calls already charged to a step
 
     # ── resume ───────────────────────────────────────────────────────
+    @staticmethod
+    def read_run_config(run_dir: Path) -> dict:
+        """The run_config.json of a run directory; ValueError if ``run_dir`` isn't one."""
+        run_dir = Path(run_dir).resolve()
+        config_path = run_dir / "run_config.json"
+        if run_dir.parent.name != "Runs" or not config_path.exists():
+            raise ValueError(
+                f"{run_dir} is not a hierarchical run directory "
+                "(expected <output root>/Runs/<run name>/run_config.json)"
+            )
+        return json.loads(config_path.read_text(encoding="utf-8"))
+
     @classmethod
     def resume(
         cls,
@@ -498,13 +510,7 @@ class HierarchicalPipeline:
         """Rebuild a pipeline for an existing run directory. Steps already on disk
         are loaded instead of regenerated; their earlier per-step metrics are kept."""
         run_dir = Path(run_dir).resolve()
-        config_path = run_dir / "run_config.json"
-        if run_dir.parent.name != "Runs" or not config_path.exists():
-            raise ValueError(
-                f"{run_dir} is not a hierarchical run directory "
-                "(expected <output root>/Runs/<run name>/run_config.json)"
-            )
-        meta = json.loads(config_path.read_text(encoding="utf-8"))
+        meta = cls.read_run_config(run_dir)
         cfg = meta["config"] | (config_overrides or {})
         # Continue where the run directory actually is: a copied or moved run
         # must not silently regenerate (and re-bill) everything at its old path.

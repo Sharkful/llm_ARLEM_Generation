@@ -556,11 +556,17 @@ fake.pipe = pipe
 rec = pipe.run()
 check(rec["success"] and fake.calls == [] and (MOVED / "Outputs" / "t1_auto_output.json").exists(),
       "a moved run resumes in place without regenerating")
-try:
-    P.HierarchicalPipeline.resume(MOVED / "Runs", call_fn=FakeLLM())
-    check(False, "a non-run directory is rejected on resume")
-except ValueError:
-    check(True, "a non-run directory is rejected on resume")
+_rejected = 0
+for _bad_dir in (MOVED / "Runs", MOVED):
+    for _read in (P.HierarchicalPipeline.read_run_config,
+                  lambda d: P.HierarchicalPipeline.resume(d, call_fn=FakeLLM())):
+        try:
+            _read(_bad_dir)
+        except ValueError:
+            _rejected += 1
+check(_rejected == 4 and P.HierarchicalPipeline.read_run_config(MOVED / "Runs" / "t1_auto")
+      ["model_key"] == "claude-haiku-4.5",
+      "one run-directory check for the CLI and resume(); non-run directories rejected")
 
 
 # 22. a final error the tracker never saw keeps its full text, even when earlier
