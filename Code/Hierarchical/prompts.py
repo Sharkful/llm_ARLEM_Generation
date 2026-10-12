@@ -51,7 +51,7 @@ module itself, so do NOT specify prefabs, positions, components, or clip-level
 changes here.
 
 Requirements:
-- Use 3-8 scenes, in teaching order. Each scene should contribute one clear
+- Use {min_scenes}-{max_scenes} scenes, in teaching order. Each scene should contribute one clear
   pedagogical step toward the lab's goals.
 - Together the scenes must cover every learning objective{script_clause}.
 - For each scene give its purpose, the key visuals the student sees, and what the
@@ -159,6 +159,11 @@ Return the complete revised {what}, addressing the feedback and keeping everythi
 the reviewer did not ask to change."""
 
 
+# LabOutline (lab_outline.py) accepts 3-12 scenes; the plan step caps it further.
+MIN_SCENES = 3
+MAX_SCENES_LIMIT = 12
+
+
 # ── Rendering helpers ────────────────────────────────────────────────
 
 def _render_scene(scene: OutlineScene) -> str:
@@ -184,9 +189,15 @@ def render_plan(plan: LabOutline) -> str:
 
 # ── Prompt builders ──────────────────────────────────────────────────
 
-def build_plan_prompt(lab_context: str, *, has_script: bool) -> str:
+def build_plan_prompt(lab_context: str, *, has_script: bool, max_scenes: int) -> str:
+    """The scene range comes from the run's max_scenes (validated against
+    LabOutline's own 3-12 bounds in PipelineConfig), so the prompt asks for
+    exactly what LabPlan will accept."""
     script_clause = " and every part of the detailed script" if has_script else ""
-    return PLAN_INSTRUCTION.format(lab_context=lab_context, script_clause=script_clause)
+    return PLAN_INSTRUCTION.format(
+        lab_context=lab_context, script_clause=script_clause,
+        min_scenes=MIN_SCENES, max_scenes=max_scenes,
+    )
 
 
 def build_asset_plan_prompt(

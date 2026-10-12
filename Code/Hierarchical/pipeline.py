@@ -173,6 +173,28 @@ class PipelineConfig:
     min_clips: int = 5
     max_scenes: int = 8            # scenes (= modules) the plan may contain
 
+    def __post_init__(self):
+        """Reject settings no plan or step could ever satisfy, before any call."""
+        problems = []
+        if not prompts.MIN_SCENES <= self.max_scenes <= prompts.MAX_SCENES_LIMIT:
+            problems.append(
+                f"max_scenes must be {prompts.MIN_SCENES}-{prompts.MAX_SCENES_LIMIT} "
+                f"(the plan schema accepts {prompts.MIN_SCENES}-{prompts.MAX_SCENES_LIMIT} "
+                f"scenes); got {self.max_scenes}"
+            )
+        if self.min_objects < 1:
+            problems.append(f"min_objects must be >= 1; got {self.min_objects}")
+        if self.min_clips < 2:
+            problems.append(f"min_clips must be >= 2 (an asset plan needs 2+ clip beats); "
+                            f"got {self.min_clips}")
+        if self.step_attempts < 1:
+            problems.append(f"step_attempts must be >= 1; got {self.step_attempts}")
+        for name in ("plan_retries", "asset_plan_retries", "module_retries", "max_revisions"):
+            if getattr(self, name) < 0:
+                problems.append(f"{name} must be >= 0; got {getattr(self, name)}")
+        if problems:
+            raise ValueError("Invalid pipeline settings: " + "; ".join(problems))
+
     def to_json(self) -> dict:
         d = asdict(self)
         d["level"] = self.level.value
@@ -673,7 +695,8 @@ class HierarchicalPipeline:
         try:
             plan = self._run_step(
                 "plan", None, LabPlan,
-                prompts.build_plan_prompt(self.lab_context, has_script=cfg.level == Level.L4),
+                prompts.build_plan_prompt(self.lab_context, has_script=cfg.level == Level.L4,
+                                          max_scenes=cfg.max_scenes),
                 cfg.plan_retries, "00_plan", "lab plan",
                 scope=lambda: plan_validation(cfg.max_scenes),
             )

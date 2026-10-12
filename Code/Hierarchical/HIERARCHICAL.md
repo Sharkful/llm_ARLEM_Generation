@@ -181,7 +181,7 @@ Other flags:
 
 | Flag | What it does |
 |---|---|
-| `--max-scenes` | the scene cap (default 8) |
+| `--max-scenes` | the scene cap, 3–12 (default 8); the plan prompt asks for 3–N scenes |
 | `--min-objects` / `--min-clips` | the per-module minimums (defaults 4 / 5) |
 | `--no-save` | write nothing; the run can't be resumed |
 

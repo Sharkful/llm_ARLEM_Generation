@@ -85,7 +85,7 @@ def parse_args():
     p.add_argument("--min-clips", type=int,
                    help=f"Minimum clips per module (default: {defaults.min_clips})")
     p.add_argument("--max-scenes", type=int,
-                   help=f"Maximum scenes (= modules) in the lab plan (default: {defaults.max_scenes})")
+                   help=f"Maximum scenes (= modules) in the lab plan, 3-12 (default: {defaults.max_scenes})")
     p.add_argument("--no-save", action="store_true",
                    help="Don't write any files (run dir, outputs, metrics); runs can't be resumed")
     p.add_argument("--resume", type=Path, help="Run directory to continue")
@@ -126,9 +126,12 @@ def main():
         meta = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8"))
         if meta["model_key"] in MODELS:
             require_environment([MODELS[meta["model_key"]]])
-        pipe = HierarchicalPipeline.resume(
-            run_dir, config_overrides=_given(args, RESUMABLE_SETTINGS)
-        )
+        try:
+            pipe = HierarchicalPipeline.resume(
+                run_dir, config_overrides=_given(args, RESUMABLE_SETTINGS)
+            )
+        except ValueError as e:
+            sys.exit(f"Error: {e}")
         sys.exit(0 if pipe.run()["success"] else 1)
 
     if not args.model:
@@ -147,7 +150,10 @@ def main():
     settings = _given(args, RESUMABLE_SETTINGS + FIXED_SETTINGS)
     if "level" in settings:
         settings["level"] = Level(settings["level"])
-    config = PipelineConfig(**settings)
+    try:
+        config = PipelineConfig(**settings)
+    except ValueError as e:
+        sys.exit(f"Error: {e}")
 
     results = []
     for lab_name in labs:

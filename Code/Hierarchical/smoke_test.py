@@ -456,6 +456,22 @@ check(all(_reg.is_known_asset(prefab=n) == (not _is_novel(n, KNOWN_PREFABS)) for
       "registry known-asset rule matches lab_metrics (incl. demoPrefab, casing, spaces)")
 
 
+# 18. --max-scenes reaches the plan prompt; impossible settings are rejected up front
+import prompts as _prompts  # noqa: E402
+check("Use 3-5 scenes" in _prompts.build_plan_prompt("ctx", has_script=False, max_scenes=5),
+      "plan prompt asks for the configured scene range")
+_rejected = []
+for _bad in ({"max_scenes": 2}, {"max_scenes": 13}, {"min_clips": 1}, {"step_attempts": 0},
+             {"module_retries": -1}):
+    try:
+        P.PipelineConfig(**_bad)
+    except ValueError:
+        _rejected.append(_bad)
+check(len(_rejected) == 5, "settings no plan could satisfy are rejected before any call")
+_plan5 = (FAKE / "Runs" / "t10_cap" / "00_plan_prompt.txt").read_text(encoding="utf-8")
+check("Use 3-8 scenes" in _plan5, "default run asks for 3-8 scenes, matching the 8-scene cap")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"
