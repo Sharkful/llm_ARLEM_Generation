@@ -480,6 +480,7 @@ class HierarchicalPipeline:
         self.transient_retries = 0
         self._prior_steps: dict[tuple[str, Optional[int]], dict] = {}
         self._t0 = time.time()
+        self._current_step: Optional[str] = None
 
     # ── resume ───────────────────────────────────────────────────────
     @classmethod
@@ -494,12 +495,29 @@ class HierarchicalPipeline:
         """Rebuild a pipeline for an existing run directory. Steps already on disk
         are loaded instead of regenerated; their earlier per-step metrics are kept."""
         run_dir = Path(run_dir).resolve()
-        meta = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8"))
+        config_path = run_dir / "run_config.json"
+        if run_dir.parent.name != "Runs" or not config_path.exists():
+            raise ValueError(
+                f"{run_dir} is not a hierarchical run directory "
+                "(expected <output root>/Runs/<run name>/run_config.json)"
+            )
+        meta = json.loads(config_path.read_text(encoding="utf-8"))
         cfg = meta["config"] | (config_overrides or {})
+        # Continue where the run directory actually is: a copied or moved run
+        # must not silently regenerate (and re-bill) everything at its old path.
+        output_root = run_dir.parent.parent
+        run_group = meta.get("run_group")
+        if output_root != (PROJECT_ROOT / meta["output_dir"]).resolve():
+            default_root = (PROJECT_ROOT / DEFAULT_OUTPUT_DIR).resolve()
+            if output_root == default_root:
+                run_group = None
+            elif output_root.parent == default_root:
+                run_group = output_root.name
+            print(f"  NOTE: run directory moved from {meta['output_dir']}; "
+                  f"continuing at {_rel(output_root)}")
         pipe = cls(
             meta["model_key"], meta["lab_name"], PipelineConfig.from_json(cfg),
-            reviewer=reviewer, run_group=meta.get("run_group"),
-            output_dir=Path(meta["output_dir"]),
+            reviewer=reviewer, run_group=run_group, output_dir=output_root,
             run_name=run_dir.name, call_fn=call_fn,
         )
         metrics_path = pipe.output_dir / "Metrics" / f"{pipe.base_name}_metrics.json"
@@ -520,24 +538,53 @@ class HierarchicalPipeline:
         finally:
             self.transient_retries += retryer.statistics.get("attempt_number", 1) - 1
 
+    def _absorb_calls(self, rec: StepRecord, since: int) -> bool:
+        """Add the tracker calls made since index ``since`` to the step record
+        (tokens, cost, retries, per-attempt errors). True if any carried errors."""
+        had_errors = False
+        for call in self.tracker.aggregate.calls[since:]:
+            rec.calls += 1
+            rec.retries += call.retry_count
+            rec.parse_errors += call.parse_errors
+            rec.prompt_tokens += call.total_usage.prompt_tokens
+            rec.cached_tokens += call.total_usage.cached_tokens
+            rec.completion_tokens += call.total_usage.completion_tokens
+            rec.total_tokens += call.total_usage.total_tokens
+            rec.cost_usd += self.tracker.pricing.calculate_cost(call.total_usage)
+            for err in call.errors:
+                had_errors = True
+                rec.errors.append(f"attempt {err.attempt_number} {err.exception_class}: {err.message}")
+        return had_errors
+
     def _generate(self, response_model, messages, max_retries, scope, rec: StepRecord) -> BaseModel:
         """One step generation, regenerated from scratch up to step_attempts times
-        (immediately failed for errors a regeneration can't fix)."""
+        (immediately failed for errors a regeneration can't fix).
+
+        Each instructor attempt's error is recorded once, from the tracker; a
+        failed step attempt then adds a one-line summary. The full exception text
+        is kept only when the tracker saw nothing (e.g. an error outside the
+        instructor call), so errors.txt doesn't repeat the same failure."""
         last_error = None
         for _ in range(self.config.step_attempts):
             rec.attempts += 1
+            since = len(self.tracker.aggregate.calls)
             try:
                 with scope():
                     return self._call_fn(response_model, messages, max_retries)
             except Exception as e:  # noqa: BLE001 — any failure regenerates the step
                 rec.failed_attempts += 1
+                tracked = self._absorb_calls(rec, since)
+                since = len(self.tracker.aggregate.calls)
                 last_error = f"{type(e).__name__}: {e}"
-                rec.errors.append(last_error)
+                rec.errors.append(f"step attempt {rec.attempts} failed: "
+                                  + (brief_error(e) if tracked else last_error))
                 where = " (details: errors.txt)" if self.save else ""
                 print(f"    attempt failed: {brief_error(e)}{where}")
                 if is_non_retryable(e):
                     rec.non_retryable = True
                     raise StepFailed(rec.step, rec.index, f"{last_error} (not retryable)") from e
+            finally:
+                self._absorb_calls(rec, since)
         raise StepFailed(rec.step, rec.index, last_error or "step failed")
 
     # ── one checkpointed step ────────────────────────────────────────
@@ -555,6 +602,7 @@ class HierarchicalPipeline:
         normalize: Optional[Callable[[BaseModel], list[dict]]] = None,
     ) -> BaseModel:
         label = f"{step} {index}" if index else step
+        self._current_step = label
         out_path = self.run_dir / f"{file_stem}.json"
 
         if out_path.exists():
@@ -572,9 +620,15 @@ class HierarchicalPipeline:
             (self.run_dir / f"{file_stem}_prompt.txt").write_text(prompt, encoding="utf-8")
 
         print(f"  [{label}] generating...")
-        rec = StepRecord(step=step, index=index)
+        prior = self._prior_steps.get((step, index))
+        if prior:
+            # Regenerating a step an earlier session already spent tokens on (it
+            # failed or was interrupted): keep its counts, cost and errors.
+            rec = StepRecord(**{**prior, "success": False, "resumed": False,
+                                "decision": None, "non_retryable": False})
+        else:
+            rec = StepRecord(step=step, index=index)
         self.steps.append(rec)
-        calls_before = len(self.tracker.aggregate.calls)
         t0 = time.time()
         base_messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -619,7 +673,20 @@ class HierarchicalPipeline:
                         {"role": "user",
                          "content": prompts.build_revision_message(what, feedback_history)},
                     ]
-                    output = self._generate(response_model, messages, max_retries, scope, rec)
+                    try:
+                        output = self._generate(response_model, messages, max_retries, scope, rec)
+                    except StepFailed as e:
+                        # The step already has a valid output; a revision that can't
+                        # be generated shouldn't fail the whole run.
+                        self.review_log.append({
+                            "step": step, "index": index, "revision": rec.revisions,
+                            "reviewer": self.reviewer.name, "decision": "Revise",
+                            "note": "revision failed; kept the last valid output",
+                            "error": str(e),
+                        })
+                        print(f"    revision failed; keeping the last valid {what}")
+                        rec.decision = "Approve (revision failed)"
+                        break
                     continue
 
                 if isinstance(decision, Replace):
@@ -651,18 +718,7 @@ class HierarchicalPipeline:
                 raise TypeError(f"Reviewer returned {decision!r}")
             rec.success = True
         finally:
-            rec.wall_time_s = round(time.time() - t0, 2)
-            for call in self.tracker.aggregate.calls[calls_before:]:
-                rec.calls += 1
-                rec.retries += call.retry_count
-                rec.parse_errors += call.parse_errors
-                rec.prompt_tokens += call.total_usage.prompt_tokens
-                rec.cached_tokens += call.total_usage.cached_tokens
-                rec.completion_tokens += call.total_usage.completion_tokens
-                rec.total_tokens += call.total_usage.total_tokens
-                rec.cost_usd += self.tracker.pricing.calculate_cost(call.total_usage)
-                rec.errors.extend(f"attempt {e.attempt_number} {e.exception_class}: {e.message}"
-                                  for e in call.errors)
+            rec.wall_time_s = round(rec.wall_time_s + time.time() - t0, 2)
 
         if normalize is not None:
             for change in normalize(output):
@@ -764,6 +820,16 @@ class HierarchicalPipeline:
             failed_step = f"{e.step}" + (f" {e.index}" if e.index else "")
             error = str(e)
             print(f"  FAILED at {failed_step}: {error[:200]}")
+        except KeyboardInterrupt:
+            # Leave an honest record (metrics say where it stopped), then stop.
+            if self.save:
+                self._save(self._build_record(None, self._current_step, "interrupted",
+                                              status="interrupted"), None)
+            raise
+        except Exception as e:  # noqa: BLE001 — record any failure instead of leaving in_progress
+            failed_step = self._current_step or "unknown"
+            error = f"{type(e).__name__}: {e}"
+            print(f"  FAILED at {failed_step}: {error[:200]}")
 
         record = self._build_record(lab, failed_step, error,
                                     status="complete" if lab is not None else "failed")
@@ -805,7 +871,8 @@ class HierarchicalPipeline:
             "reviewer": self.reviewer.name,
             "config": self.config.to_json(),
             "run_dir": _rel(self.run_dir),
-            "status": status,      # "in_progress" while running, then "complete" / "failed"
+            # "in_progress" while running, then "complete" / "failed" / "interrupted"
+            "status": status,
             "success": lab is not None,
             "failed_step": failed_step,
             "error": error,

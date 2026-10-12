@@ -124,6 +124,10 @@ reviewer with `Checkpoint.last_error` holding all of its validation errors and
 `rejected_output` holding the edit, so it can be fixed rather than redone. It counts
 as a revision round.
 
+If a `Revise` round can't be generated (every attempt fails), the step keeps its
+last valid output instead of failing the run; the step's `decision` is
+`Approve (revision failed)` and the review log notes the error.
+
 The checkpoint also carries:
 - `feedback_history`
 - a `context` with the scene, the approved plan, the earlier-module summaries, the
@@ -145,14 +149,22 @@ written to `review_log.json`.
   a fresh attempt.
 - Transient API errors (429/5xx/connection) get the benchmark's bounded retry,
   counted in `transient_retries`.
-- The metrics file is rewritten after every step, so an interrupted run (Ctrl-C, a
-  crash) keeps its cost records.
+- The metrics file is rewritten after every step, so an interrupted run keeps its
+  cost records. Ctrl-C saves a record with status `interrupted` naming the step it
+  stopped in; any other unexpected error (a broken reviewer, say) ends the run as
+  `failed` at its step.
 - The console shows one line per failed attempt (for an exhausted instructor retry
-  loop: the attempt count and the last error's first problem). The full errors are in
-  the run's `errors.txt`; instructor's own ERROR log is silenced by the CLI.
+  loop: the attempt count and the last error's first problem). `errors.txt` has one
+  line per instructor attempt plus one summary line per failed step attempt;
+  instructor's own ERROR log is silenced by the CLI.
 - `--resume <run dir>` continues from the first missing step without paying for the
   earlier ones again. Retry budgets may be changed on resume; level, minimums, scene
   cap and the new-component switch stay as the run started.
+  - A step that failed or was interrupted in an earlier session keeps that session's
+    attempts, tokens, cost and errors when it is regenerated.
+  - The run continues where its directory is now. A copied or moved run writes its
+    outputs and metrics next to its new location (the run group is re-derived when
+    it sits under `Artifacts/Data/Hierarchical/`).
 
 All LLM calls go through `benchmark.create_instructor_client`,
 `benchmark.provider_create_kwargs` and `benchmark._transient_retryer`, the same
@@ -212,7 +224,7 @@ The metrics record keeps the one-shot runner's top-level keys, so
 loads it as is. Fields added by the hierarchical pipeline:
 
 - `pipeline: "hierarchical"`, `granularity: "module"`, `run_group`, `reviewer`, `config`
-- `status`: `in_progress` while running, then `complete` or `failed`
+- `status`: `in_progress` while running, then `complete`, `failed` or `interrupted`
 - `steps[]`: per-step calls, attempts, `retries`, `parse_errors`, revisions,
   tokens (including `cached_tokens`, the part of the input served from the
   provider's prompt cache, reported by OpenAI and Gemini), cost, wall time,

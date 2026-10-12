@@ -123,6 +123,8 @@ def main():
                 f"and settings; only these may change: {', '.join(RESUMABLE_SETTINGS)}."
             )
         run_dir = args.resume if args.resume.is_absolute() else PROJECT_ROOT / args.resume
+        if not (run_dir / "run_config.json").exists():
+            sys.exit(f"Error: {run_dir} is not a run directory (no run_config.json).")
         meta = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8"))
         if meta["model_key"] in MODELS:
             require_environment([MODELS[meta["model_key"]]])

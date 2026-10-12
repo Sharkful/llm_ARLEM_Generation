@@ -253,6 +253,13 @@ rec = pipe.run()
 check(rec["success"], "resumed run succeeds")
 check(fake.calls[0] == ("PlannedDemoModule", 2), "resume starts at module 2")
 check(sum(s["resumed"] for s in rec["steps"]) == 4, "4 steps loaded from disk")
+m2 = next(s for s in rec["steps"] if s["step"] == "module" and s["index"] == 2)
+check(m2["attempts"] == 3 and m2["failed_attempts"] == 2 and not m2["resumed"]
+      and len(m2["errors"]) == 2,
+      "regenerated step keeps the earlier session's attempts and errors")
+check(m2["errors"] == [f"step attempt {n} failed: ValueError: forced failure on module 2"
+                       for n in (1, 2)],
+      "one error line per failed step attempt, no duplicates")
 t3 = json.loads((FAKE / "Outputs" / "t3_resume_output.json").read_text(encoding="utf-8"))
 check(t3["modules"] == out["modules"], "resumed lab identical to the uninterrupted lab")
 
@@ -379,15 +386,19 @@ try:
 except KeyboardInterrupt:
     pass
 partial = json.loads((FAKE / "Metrics" / "t13_interrupt_metrics.json").read_text(encoding="utf-8"))
-check(partial["status"] == "in_progress"
-      and [s["step"] for s in partial["steps"]] == ["plan", "asset_plan", "module", "asset_plan"],
-      "metrics written after every step survive an interruption")
+check(partial["status"] == "interrupted" and partial["failed_step"] == "module 2"
+      and [s["step"] for s in partial["steps"]]
+      == ["plan", "asset_plan", "module", "asset_plan", "module"]
+      and not partial["steps"][-1]["success"],
+      "an interruption leaves an 'interrupted' record naming the step")
 fake = FakeLLM()
 pipe = P.HierarchicalPipeline.resume(FAKE / "Runs" / "t13_interrupt", call_fn=fake)
 fake.pipe = pipe
 rec = pipe.run()
 check(rec["success"] and rec["status"] == "complete"
       and sum(s["resumed"] for s in rec["steps"]) == 4, "interrupted run resumes to completion")
+check(next(s for s in rec["steps"] if s["step"] == "module" and s["index"] == 2)["attempts"] == 2,
+      "the interrupted attempt stays counted after resume")
 
 # 14. soft metrics recorded per module
 adh = rec["plan_adherence"][0]
@@ -472,6 +483,60 @@ _plan5 = (FAKE / "Runs" / "t10_cap" / "00_plan_prompt.txt").read_text(encoding="
 check("Use 3-8 scenes" in _plan5, "default run asks for 3-8 scenes, matching the 8-scene cap")
 
 
+# 19. a revision that can't be generated keeps the last valid output
+class FailRevisionLLM(FakeLLM):
+    def __call__(self, model, messages, max_retries):
+        if model is P.PlannedDemoModule and len(messages) > 2:
+            raise ValueError("revision call failed")
+        return super().__call__(model, messages, max_retries)
+
+
+class ReviseModuleOnce:
+    name = "revise-module"
+
+    def review(self, cp):
+        return Revise("Add a recap clip.") if cp.step == "module" and cp.revision == 0 else Approve()
+
+
+rec = make(FailRevisionLLM(), "t19_revfail", cfg={"step_attempts": 1},
+           reviewer=ReviseModuleOnce()).run()
+m1 = next(s for s in rec["steps"] if s["step"] == "module" and s["index"] == 1)
+check(rec["success"] and m1["success"] and m1["decision"] == "Approve (revision failed)"
+      and any((e.get("note") or "").startswith("revision failed") for e in rec["review_log"]),
+      "failed revision keeps the last valid output instead of failing the run")
+
+
+# 20. a broken reviewer (or any unexpected error) leaves a 'failed' record, not 'in_progress'
+class NoneReviewer:
+    name = "none"
+
+    def review(self, cp):
+        return None
+
+
+rec = make(FakeLLM(), "t20_badreviewer", reviewer=NoneReviewer()).run()
+saved = json.loads((FAKE / "Metrics" / "t20_badreviewer_metrics.json").read_text(encoding="utf-8"))
+check(not rec["success"] and saved["status"] == "failed" and saved["failed_step"] == "plan"
+      and saved["error"].startswith("TypeError"),
+      "unexpected error recorded as a failed run at its step")
+
+
+# 21. --resume continues where the run directory is now, not where it was made
+MOVED = TMP / "moved"
+shutil.copytree(FAKE / "Runs" / "t1_auto", MOVED / "Runs" / "t1_auto")
+fake = FakeLLM()
+pipe = P.HierarchicalPipeline.resume(MOVED / "Runs" / "t1_auto", call_fn=fake)
+fake.pipe = pipe
+rec = pipe.run()
+check(rec["success"] and fake.calls == [] and (MOVED / "Outputs" / "t1_auto_output.json").exists(),
+      "a moved run resumes in place without regenerating")
+try:
+    P.HierarchicalPipeline.resume(MOVED / "Runs", call_fn=FakeLLM())
+    check(False, "a non-run directory is rejected on resume")
+except ValueError:
+    check(True, "a non-run directory is rejected on resume")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"
@@ -491,7 +556,7 @@ class MockOpenAI(BaseHTTPRequestHandler):
         elif tool == "ModuleAssetPlan":
             state["asset"] += 1
             args = (REPLAY / f"{state['asset']:02d}_asset_plan.json").read_text(encoding="utf-8")
-        elif state["asset"] == 2 and not state["bad_sent"]:
+        elif state.get("always_bad") or (state["asset"] == 2 and not state["bad_sent"]):
             state["bad_sent"] = True
             args = json.dumps({"moduleName": "broken"})  # missing required fields -> reask
         else:
@@ -526,6 +591,14 @@ try:
     MOCK = TMP / "mock"
     rec = P.HierarchicalPipeline("gpt-5.4-mini", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
                                  output_dir=MOCK, run_name="mock").run()
+    # every module response broken: instructor exhausts its retries on module 1
+    n_good_requests = len(state["requests"])
+    state.update(asset=0, always_bad=True)
+    bad = P.HierarchicalPipeline(
+        "gpt-5.4-mini", LAB_NAME,
+        P.PipelineConfig(**REPLAY_MINIMUMS, module_retries=1, step_attempts=1),
+        output_dir=TMP / "mock_bad", run_name="mock_bad",
+    ).run()
 finally:
     P.create_instructor_client = _real_factory
     srv.shutdown()
@@ -543,9 +616,15 @@ check(rec["totals"]["cost_usd"] > 0
       and abs(rec["totals"]["cost_usd"] - rec["tracking"]["cost"]["total_usd"]) < 1e-9,
       "per-step costs sum to the tracker cost")
 check((MOCK / "Runs" / "mock" / "errors.txt").exists(), "errors.txt written")
-check(rec["totals"]["cached_tokens"] == 600 * len(state["requests"]) and m2["cached_tokens"] == 1200,
+check(rec["totals"]["cached_tokens"] == 600 * n_good_requests and m2["cached_tokens"] == 1200,
       "cached prompt tokens recorded per step and in totals")
 check(state["requests"][0] == ("LabPlan", 2), "first request is the plan (system + user)")
+bad_m1 = bad["steps"][-1]
+check(not bad["success"] and bad_m1["step"] == "module" and len(bad_m1["errors"]) == 3
+      and [e.split(" ", 2)[:2] for e in bad_m1["errors"][:2]] == [["attempt", "1"], ["attempt", "2"]]
+      and bad_m1["errors"][2].startswith("step attempt 1 failed: InstructorRetryException after 2")
+      and "<failed_attempts>" not in "".join(bad_m1["errors"]),
+      "exhausted retries: one line per instructor attempt plus one summary, no duplicate dump")
 sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
 from benchmark_dataframe import load_runs  # noqa: E402
 df = load_runs(MOCK)
