@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -100,6 +101,10 @@ def _given(args, names) -> dict:
 
 def main():
     args = parse_args()
+    # instructor logs every exhausted retry loop at ERROR with the full error text;
+    # the pipeline already prints a one-line summary and keeps the details in the
+    # run's errors.txt, so keep the console readable.
+    logging.getLogger("instructor").setLevel(logging.CRITICAL)
 
     if args.list_models:
         for key, cfg in MODELS.items():

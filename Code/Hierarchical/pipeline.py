@@ -249,6 +249,43 @@ def is_non_retryable(exc: BaseException) -> bool:
     return False
 
 
+def _first_error_line(exc: BaseException) -> str:
+    """The informative part of one exception: for a pydantic ValidationError the
+    first error's location and message (its str() starts with a generic header),
+    otherwise the first non-empty line."""
+    errors = getattr(exc, "errors", None)
+    if callable(errors):
+        try:
+            errs = errors()
+            first = errs[0]
+            loc = ".".join(str(p) for p in first.get("loc", ()))
+            lines = [ln.strip() for ln in str(first.get("msg", "")).splitlines() if ln.strip()]
+            msg = lines[0].removeprefix("Value error, ") if lines else ""
+            if msg.endswith(":") and len(lines) > 1:   # aggregated list: show the first item
+                msg = f"{msg} {lines[1].lstrip('- ')}"
+            more = f" (+{len(errs) - 1} more)" if len(errs) > 1 else ""
+            return f"{loc + ': ' if loc else ''}{msg}{more}"
+        except Exception:  # noqa: BLE001 — fall back to the plain text
+            pass
+    return next((ln.strip() for ln in str(exc).splitlines() if ln.strip()), type(exc).__name__)
+
+
+def brief_error(exc: BaseException, limit: int = 220) -> str:
+    """One readable console line for a failed step attempt. The full text still
+    goes to the step record / errors.txt. Instructor's retry exception wraps the
+    individual attempts; report the count and the last attempt's error."""
+    attempts = getattr(exc, "failed_attempts", None)
+    if attempts:
+        last = attempts[-1]
+        inner = getattr(last, "exception", None) or last
+        n = getattr(exc, "n_attempts", None) or len(attempts)
+        text = (f"{type(exc).__name__} after {n} attempt(s); last: "
+                f"{type(inner).__name__} {_first_error_line(inner)}")
+    else:
+        text = f"{type(exc).__name__}: {_first_error_line(exc)}"
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
 def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_") or "lab"
 
@@ -482,7 +519,8 @@ class HierarchicalPipeline:
                 rec.failed_attempts += 1
                 last_error = f"{type(e).__name__}: {e}"
                 rec.errors.append(last_error)
-                print(f"    attempt failed: {last_error[:200]}")
+                where = " (details: errors.txt)" if self.save else ""
+                print(f"    attempt failed: {brief_error(e)}{where}")
                 if is_non_retryable(e):
                     rec.non_retryable = True
                     raise StepFailed(rec.step, rec.index, f"{last_error} (not retryable)") from e
@@ -691,8 +729,11 @@ class HierarchicalPipeline:
                     o.name for o in asset_plan.objects
                     if o.is_new_asset != self._is_novel_asset(o.prefab, o.texture)
                 ]
-                self.adherence.append({"index": i, **adherence})
+                adherence["new_components_planned"] = sum(c.is_new for c in asset_plan.components)
+                before = len(self.registry.new_component_names())
                 self.registry.register_module(i, module, asset_plan, scene_purpose=scene.brief_purpose)
+                adherence["new_components_added"] = len(self.registry.new_component_names()) - before
+                self.adherence.append({"index": i, **adherence})
                 modules.append(module)
 
             try:
@@ -763,6 +804,7 @@ class HierarchicalPipeline:
             "review_log": self.review_log,
             "normalizations": self.normalizations,
             "plan_adherence": self.adherence,
+            "new_components_total": len(self.registry.new_component_names()),
             "registry": {
                 "new_components": [asdict(c) for c in self.registry.components if not c.builtin],
                 "invented_prefabs": {k: asdict(v) for k, v in self.registry.invented_prefabs.items()},
@@ -813,6 +855,7 @@ class HierarchicalPipeline:
         if lab:
             print(f"  Lab: modules: {lab.get('num_modules')} | objects: {lab.get('num_objects')} "
                   f"| clips: {lab.get('num_clips')} | components: {lab.get('num_components')}")
+        print(f"  New components: {record['new_components_total']}")
         if record.get("normalizations"):
             print(f"  Normalized names/descriptions: {len(record['normalizations'])}")
         print(f"  Run dir: {record['run_dir']}")

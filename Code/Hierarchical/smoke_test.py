@@ -411,6 +411,36 @@ check(len(errors) == 1 and "'anthropic' is not installed" in errors[0],
 check(benchmark._pinned_version("instructor") == "1.15.4", "preflight reads the instructor pin")
 
 
+# 16. one-line console errors; new-component counts in the metrics
+try:
+    ModuleAssetPlan.model_validate({"module_name": "M"})
+except ValidationError as _ve:
+    _validation_error = _ve
+
+
+class _FakeAttempt:
+    def __init__(self, n, exc):
+        self.attempt_number, self.exception = n, exc
+
+
+class InstructorRetryException(Exception):
+    def __init__(self):
+        super().__init__("<failed_attempts>\n<generation number=\"1\">... long XML ...")
+        self.n_attempts = 4
+        self.failed_attempts = [_FakeAttempt(i, _validation_error) for i in range(1, 5)]
+
+
+line = P.brief_error(InstructorRetryException())
+check(line.startswith("InstructorRetryException after 4 attempt(s); last: ValidationError")
+      and "\n" not in line and "<failed_attempts>" not in line and len(line) <= 220,
+      f"brief_error summarizes a retry exception on one line: {line[:90]}...")
+t1 = json.loads((FAKE / "Metrics" / "t1_auto_metrics.json").read_text(encoding="utf-8"))
+check(t1["new_components_total"] == len(t1["registry"]["new_components"])
+      == sum(a["new_components_added"] for a in t1["plan_adherence"]) > 0
+      and all(a["new_components_planned"] >= a["new_components_added"] for a in t1["plan_adherence"]),
+      f"new-component counts recorded per module and in total ({t1['new_components_total']})")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"

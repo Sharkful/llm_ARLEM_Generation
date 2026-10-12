@@ -147,6 +147,9 @@ written to `review_log.json`.
   counted in `transient_retries`.
 - The metrics file is rewritten after every step, so an interrupted run (Ctrl-C, a
   crash) keeps its cost records.
+- The console shows one line per failed attempt (for an exhausted instructor retry
+  loop: the attempt count and the last error's first problem). The full errors are in
+  the run's `errors.txt`; instructor's own ERROR log is silenced by the CLI.
 - `--resume <run dir>` continues from the first missing step without paying for the
   earlier ones again. Retry budgets may be changed on resume; level, minimums, scene
   cap and the new-component switch stay as the run started.
@@ -222,6 +225,9 @@ loads it as is. Fields added by the hierarchical pipeline:
   - clip and object counts against the minimums
   - interaction objects with no `PointerReceiverComponent`
   - `is_new_asset` claims that disagree with the registry
+  - `new_components_planned` / `new_components_added` (new components the plan
+    declared, and those the module actually added to the catalog)
+- `new_components_total`: new components invented across the lab
 - `registry`: new components, invented prefabs and textures (with their purposes)
 
 Cost is computed at the full input rate, so with prompt caching it is an upper bound.
