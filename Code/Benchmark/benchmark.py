@@ -327,13 +327,15 @@ _PROVIDER_SDK = {
 }
 
 
-def _pinned_version(package: str) -> Optional[str]:
-    """The ``package==X`` pin in requirements.txt (extras allowed), or None."""
-    req = PROJECT_ROOT / "requirements.txt"
+def _pinned_version(package: str, requirements: Optional[Path] = None) -> Optional[str]:
+    """The ``package==X`` pin in requirements.txt (extras and environment markers
+    allowed, e.g. ``instructor[anthropic]==1.15.4; python_version >= "3.10"``),
+    or None."""
+    req = requirements or PROJECT_ROOT / "requirements.txt"
     if not req.exists():
         return None
     for line in req.read_text(encoding="utf-8").splitlines():
-        line = line.split("#", 1)[0].strip()
+        line = line.split("#", 1)[0].split(";", 1)[0].strip()   # drop comment, marker
         name, sep, version = line.partition("==")
         if sep and name.split("[", 1)[0].strip().lower() == package:
             return version.strip()

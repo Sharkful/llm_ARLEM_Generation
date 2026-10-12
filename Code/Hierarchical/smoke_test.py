@@ -409,6 +409,10 @@ finally:
 check(len(errors) == 1 and "'anthropic' is not installed" in errors[0],
       "preflight reports a missing provider SDK")
 check(benchmark._pinned_version("instructor") == "1.15.4", "preflight reads the instructor pin")
+_req = TMP / "requirements_marker.txt"
+_req.write_text('instructor[anthropic]==1.15.4 ; python_version >= "3.10"  # pinned\n', encoding="utf-8")
+check(benchmark._pinned_version("instructor", _req) == "1.15.4",
+      "preflight pin ignores environment markers and comments")
 
 
 # 16. one-line console errors; new-component counts in the metrics
