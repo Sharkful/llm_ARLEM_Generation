@@ -170,6 +170,22 @@ written to `review_log.json`.
     outputs and metrics next to its new location (the run group is re-derived when
     it sits under `Artifacts/Data/Hierarchical/`).
 
+> **Resume: known limits.** `--resume` is a convenience for long runs, not a core
+> workflow: a run that stops during testing can simply be rerun from the start.
+> Resume and the reviewer checkpoints don't fully fit together yet. That work waits
+> for the lab-making UI, where the checkpoints are what matter. Known gaps:
+> - A step regenerated on resume carries over its earlier `revisions` count while
+>   its feedback history starts empty, so its review starts partway through the
+>   `--max-revisions` budget.
+> - If only `Runs/<run>` is moved, the earlier metrics aren't found: resumed steps
+>   show no tokens or cost, and the run's `review_log.json` is rewritten with the new
+>   entries only.
+> - A run moved outside `Artifacts/Data/Hierarchical/` keeps the `run_group` it
+>   started with, and a group taken from a folder name isn't checked against the
+>   `--run-group` naming rule.
+> - A metrics file whose step records have keys this version doesn't know (e.g.
+>   written by a later version) fails to resume with a `TypeError`.
+
 All LLM calls go through `benchmark.create_instructor_client`,
 `benchmark.provider_create_kwargs` and `benchmark._transient_retryer`, the same
 Gemini and Anthropic guards as the one-shot runner.
