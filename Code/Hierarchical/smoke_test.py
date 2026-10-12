@@ -504,6 +504,22 @@ m1 = next(s for s in rec["steps"] if s["step"] == "module" and s["index"] == 1)
 check(rec["success"] and m1["success"] and m1["decision"] == "Approve (revision failed)"
       and any((e.get("note") or "").startswith("revision failed") for e in rec["review_log"]),
       "failed revision keeps the last valid output instead of failing the run")
+check(m1["revisions"] == 0, "a revision round that produced nothing isn't counted")
+
+
+class AuthFailRevisionLLM(FakeLLM):
+    def __call__(self, model, messages, max_retries):
+        if model is P.PlannedDemoModule and len(messages) > 2:
+            raise FakeAuthError("key revoked")
+        return super().__call__(model, messages, max_retries)
+
+
+rec = make(AuthFailRevisionLLM(), "t19_revauth", cfg={"step_attempts": 3},
+           reviewer=ReviseModuleOnce()).run()
+check(not rec["success"] and rec["failed_step"] == "module 1"
+      and rec["steps"][-1]["non_retryable"] and not rec["steps"][-1]["success"]
+      and "not retryable" in rec["error"],
+      "an auth error during a revision fails the run instead of being approved")
 
 
 # 20. a broken reviewer (or any unexpected error) leaves a 'failed' record, not 'in_progress'
@@ -519,6 +535,11 @@ saved = json.loads((FAKE / "Metrics" / "t20_badreviewer_metrics.json").read_text
 check(not rec["success"] and saved["status"] == "failed" and saved["failed_step"] == "plan"
       and saved["error"].startswith("TypeError"),
       "unexpected error recorded as a failed run at its step")
+_errors_txt = (FAKE / "Runs" / "t20_badreviewer" / "errors.txt").read_text(encoding="utf-8")
+check("Traceback (most recent call last)" in (saved["traceback"] or "")
+      and "TypeError" in saved["traceback"] and "========== traceback" in _errors_txt
+      and "Traceback (most recent call last)" in _errors_txt,
+      "unexpected error keeps its traceback in the metrics and errors.txt")
 
 
 # 21. --resume continues where the run directory is now, not where it was made

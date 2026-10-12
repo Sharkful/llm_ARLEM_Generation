@@ -126,7 +126,9 @@ as a revision round.
 
 If a `Revise` round can't be generated (every attempt fails), the step keeps its
 last valid output instead of failing the run; the step's `decision` is
-`Approve (revision failed)` and the review log notes the error.
+`Approve (revision failed)`, the round isn't counted in `revisions`, and the review
+log notes the error. An error no regeneration can fix (auth, configuration) still
+fails the run.
 
 The checkpoint also carries:
 - `feedback_history`
@@ -152,7 +154,8 @@ written to `review_log.json`.
 - The metrics file is rewritten after every step, so an interrupted run keeps its
   cost records. Ctrl-C saves a record with status `interrupted` naming the step it
   stopped in; any other unexpected error (a broken reviewer, say) ends the run as
-  `failed` at its step.
+  `failed` at its step, with its traceback printed, stored as `traceback` in the
+  metrics and appended to `errors.txt`.
 - The console shows one line per failed attempt (for an exhausted instructor retry
   loop: the attempt count and the last error's first problem). `errors.txt` has one
   line per instructor attempt plus one summary line per failed step attempt;

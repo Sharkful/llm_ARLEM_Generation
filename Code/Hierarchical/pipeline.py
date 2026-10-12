@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import traceback
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
@@ -481,6 +482,7 @@ class HierarchicalPipeline:
         self._prior_steps: dict[tuple[str, Optional[int]], dict] = {}
         self._t0 = time.time()
         self._current_step: Optional[str] = None
+        self._traceback: Optional[str] = None   # set when run() catches an unexpected error
 
     # ── resume ───────────────────────────────────────────────────────
     @classmethod
@@ -676,8 +678,13 @@ class HierarchicalPipeline:
                     try:
                         output = self._generate(response_model, messages, max_retries, scope, rec)
                     except StepFailed as e:
-                        # The step already has a valid output; a revision that can't
-                        # be generated shouldn't fail the whole run.
+                        # An auth or config error would fail every later call too.
+                        if rec.non_retryable:
+                            raise
+                        # Otherwise the step already has a valid output; a revision that
+                        # can't be generated shouldn't fail the whole run, and it doesn't
+                        # count as a revision round.
+                        rec.revisions -= 1
                         self.review_log.append({
                             "step": step, "index": index, "revision": rec.revisions,
                             "reviewer": self.reviewer.name, "decision": "Revise",
@@ -827,8 +834,12 @@ class HierarchicalPipeline:
                                               status="interrupted"), None)
             raise
         except Exception as e:  # noqa: BLE001 — record any failure instead of leaving in_progress
+            # Not an API failure but a bug (pipeline, reviewer, schema): keep the
+            # traceback on the console, in the metrics and in errors.txt.
             failed_step = self._current_step or "unknown"
             error = f"{type(e).__name__}: {e}"
+            self._traceback = traceback.format_exc()
+            print(self._traceback, end="")
             print(f"  FAILED at {failed_step}: {error[:200]}")
 
         record = self._build_record(lab, failed_step, error,
@@ -876,6 +887,7 @@ class HierarchicalPipeline:
             "success": lab is not None,
             "failed_step": failed_step,
             "error": error,
+            "traceback": self._traceback,   # only for unexpected (non-API) errors
             "transient_retries": self.transient_retries,
             "wall_time_seconds": round(time.time() - self._t0, 2),
             "provenance": get_provenance(),
@@ -908,6 +920,8 @@ class HierarchicalPipeline:
             + "\n\n".join(s["errors"])
             for s in record["steps"] if s["errors"]
         ]
+        if record.get("traceback"):
+            errors.append("========== traceback ==========\n" + record["traceback"].rstrip())
         if errors:
             path = self.run_dir / "errors.txt"
             path.write_text("\n\n".join(errors) + "\n", encoding="utf-8")
