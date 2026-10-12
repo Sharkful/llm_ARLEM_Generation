@@ -158,8 +158,9 @@ written to `review_log.json`.
   metrics and appended to `errors.txt`.
 - The console shows one line per failed attempt (for an exhausted instructor retry
   loop: the attempt count and the last error's first problem). `errors.txt` has one
-  line per instructor attempt plus one summary line per failed step attempt;
-  instructor's own ERROR log is silenced by the CLI.
+  entry per instructor attempt plus one per failed step attempt: a one-line summary
+  for an exhausted instructor retry loop (its attempts are already listed), the full
+  text for any other error. Instructor's own ERROR log is silenced by the CLI.
 - `--resume <run dir>` continues from the first missing step without paying for the
   earlier ones again. Retry budgets may be changed on resume; level, minimums, scene
   cap and the new-component switch stay as the run started.

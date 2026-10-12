@@ -483,6 +483,7 @@ class HierarchicalPipeline:
         self._t0 = time.time()
         self._current_step: Optional[str] = None
         self._traceback: Optional[str] = None   # set when run() catches an unexpected error
+        self._calls_absorbed = 0                # tracker calls already charged to a step
 
     # ── resume ───────────────────────────────────────────────────────
     @classmethod
@@ -540,11 +541,12 @@ class HierarchicalPipeline:
         finally:
             self.transient_retries += retryer.statistics.get("attempt_number", 1) - 1
 
-    def _absorb_calls(self, rec: StepRecord, since: int) -> bool:
-        """Add the tracker calls made since index ``since`` to the step record
-        (tokens, cost, retries, per-attempt errors). True if any carried errors."""
-        had_errors = False
-        for call in self.tracker.aggregate.calls[since:]:
+    def _absorb_calls(self, rec: StepRecord) -> None:
+        """Charge every tracker call not yet charged to a step to ``rec`` (tokens,
+        cost, retries, per-attempt errors)."""
+        calls = self.tracker.aggregate.calls
+        new, self._calls_absorbed = calls[self._calls_absorbed:], len(calls)
+        for call in new:
             rec.calls += 1
             rec.retries += call.retry_count
             rec.parse_errors += call.parse_errors
@@ -553,40 +555,38 @@ class HierarchicalPipeline:
             rec.completion_tokens += call.total_usage.completion_tokens
             rec.total_tokens += call.total_usage.total_tokens
             rec.cost_usd += self.tracker.pricing.calculate_cost(call.total_usage)
-            for err in call.errors:
-                had_errors = True
-                rec.errors.append(f"attempt {err.attempt_number} {err.exception_class}: {err.message}")
-        return had_errors
+            rec.errors.extend(f"attempt {err.attempt_number} {err.exception_class}: {err.message}"
+                              for err in call.errors)
 
     def _generate(self, response_model, messages, max_retries, scope, rec: StepRecord) -> BaseModel:
         """One step generation, regenerated from scratch up to step_attempts times
         (immediately failed for errors a regeneration can't fix).
 
         Each instructor attempt's error is recorded once, from the tracker; a
-        failed step attempt then adds a one-line summary. The full exception text
-        is kept only when the tracker saw nothing (e.g. an error outside the
-        instructor call), so errors.txt doesn't repeat the same failure."""
+        failed step attempt then adds a summary line. Instructor's retry exception
+        only repeats the attempts the tracker already holds, so it is shortened to
+        one line; any other exception (a 5xx after transient retries, a provider
+        400, an error outside the instructor call) keeps its full text."""
         last_error = None
         for _ in range(self.config.step_attempts):
             rec.attempts += 1
-            since = len(self.tracker.aggregate.calls)
             try:
                 with scope():
                     return self._call_fn(response_model, messages, max_retries)
             except Exception as e:  # noqa: BLE001 — any failure regenerates the step
                 rec.failed_attempts += 1
-                tracked = self._absorb_calls(rec, since)
-                since = len(self.tracker.aggregate.calls)
+                self._absorb_calls(rec)
                 last_error = f"{type(e).__name__}: {e}"
+                repeats_tracker = bool(getattr(e, "failed_attempts", None))
                 rec.errors.append(f"step attempt {rec.attempts} failed: "
-                                  + (brief_error(e) if tracked else last_error))
+                                  + (brief_error(e) if repeats_tracker else last_error))
                 where = " (details: errors.txt)" if self.save else ""
                 print(f"    attempt failed: {brief_error(e)}{where}")
                 if is_non_retryable(e):
                     rec.non_retryable = True
                     raise StepFailed(rec.step, rec.index, f"{last_error} (not retryable)") from e
             finally:
-                self._absorb_calls(rec, since)
+                self._absorb_calls(rec)
         raise StepFailed(rec.step, rec.index, last_error or "step failed")
 
     # ── one checkpointed step ────────────────────────────────────────
@@ -725,6 +725,9 @@ class HierarchicalPipeline:
                 raise TypeError(f"Reviewer returned {decision!r}")
             rec.success = True
         finally:
+            # Calls made during the step outside generation (e.g. an LLM reviewer
+            # using the tracked client) are charged to it too.
+            self._absorb_calls(rec)
             rec.wall_time_s = round(rec.wall_time_s + time.time() - t0, 2)
 
         if normalize is not None:

@@ -558,6 +558,35 @@ except ValueError:
     check(True, "a non-run directory is rejected on resume")
 
 
+# 22. a final error the tracker never saw keeps its full text, even when earlier
+#     attempts in the same call were tracked
+from datetime import datetime  # noqa: E402
+from tracking.metrics import AttemptMetrics, CallMetrics, ErrorRecord, ErrorType, TokenUsage  # noqa: E402
+
+LONG_TAIL = "provider said: " + "x" * 400 + " END-OF-ERROR"
+
+
+class TrackedThenFailLLM(FakeLLM):
+    def __call__(self, model, messages, max_retries):
+        if model is P.PlannedDemoModule and self._index() == 1:
+            now = datetime.now()
+            err = ErrorRecord(ErrorType.PARSE_ERROR, "ValidationError", "parse error", now, 1)
+            self.pipe.tracker.aggregate.calls.append(CallMetrics(
+                call_id="fake", model="fake", provider="fake", start_time=now,
+                total_usage=TokenUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+                attempts=[AttemptMetrics(1, now, TokenUsage(), False, err)], parse_errors=1,
+            ))
+            raise RuntimeError(LONG_TAIL)
+        return super().__call__(model, messages, max_retries)
+
+
+rec = make(TrackedThenFailLLM(), "t22_untracked", cfg={"step_attempts": 1}).run()
+m1 = rec["steps"][-1]
+check(m1["calls"] == 1 and m1["errors"][0] == "attempt 1 ValidationError: parse error"
+      and m1["errors"][1].endswith("END-OF-ERROR"),
+      "an error the tracker didn't record keeps its full text in errors.txt")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"
@@ -610,8 +639,21 @@ P.create_instructor_client = lambda mc, spec: instructor.from_provider(
     f"openai/{mc.model_id}", base_url=f"http://127.0.0.1:{srv.server_port}/v1", api_key="test")
 try:
     MOCK = TMP / "mock"
-    rec = P.HierarchicalPipeline("gpt-5.4-mini", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
-                                 output_dir=MOCK, run_name="mock").run()
+    class CallingReviewer:
+        """Stands in for an LLM reviewer (#69): one tracked call during the plan review."""
+        name = "calling"
+        pipe = None
+
+        def review(self, cp):
+            if cp.step == "plan":
+                self.pipe._llm_call(P.LabPlan, [{"role": "user", "content": "critique"}], 0)
+            return Approve()
+
+    calling = CallingReviewer()
+    mock_pipe = P.HierarchicalPipeline("gpt-5.4-mini", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
+                                       output_dir=MOCK, run_name="mock", reviewer=calling)
+    calling.pipe = mock_pipe
+    rec = mock_pipe.run()
     # every module response broken: instructor exhausts its retries on module 1
     n_good_requests = len(state["requests"])
     state.update(asset=0, always_bad=True)
@@ -625,7 +667,8 @@ finally:
     srv.shutdown()
 
 check(rec["success"], "mock-server run succeeds")
-check(rec["totals"]["calls"] == len(rec["steps"]), "one tracked call per step")
+check(rec["totals"]["calls"] == len(rec["steps"]) + 1 and rec["steps"][0]["calls"] == 2,
+      "one tracked call per step, plus the reviewer's call charged to the plan step")
 m2 = next(s for s in rec["steps"] if s["step"] == "module" and s["index"] == 2)
 check(m2["parse_errors"] == 1 and m2["errors"], "module 2 records its one parse error")
 check(m2["prompt_tokens"] == 2000 and m2["completion_tokens"] == 400,
