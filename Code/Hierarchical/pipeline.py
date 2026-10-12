@@ -185,9 +185,9 @@ class PipelineConfig:
             )
         if self.min_objects < 1:
             problems.append(f"min_objects must be >= 1; got {self.min_objects}")
-        if self.min_clips < 2:
-            problems.append(f"min_clips must be >= 2 (an asset plan needs 2+ clip beats); "
-                            f"got {self.min_clips}")
+        if self.min_clips < prompts.MIN_CLIP_BEATS:
+            problems.append(f"min_clips must be >= {prompts.MIN_CLIP_BEATS} (an asset plan "
+                            f"needs {prompts.MIN_CLIP_BEATS}+ clip beats); got {self.min_clips}")
         if self.step_attempts < 1:
             problems.append(f"step_attempts must be >= 1; got {self.step_attempts}")
         for name in ("plan_retries", "asset_plan_retries", "module_retries", "max_revisions"):

@@ -22,6 +22,9 @@ minimums apply per module here (they are lab-wide in the one-shot runs).
 from __future__ import annotations
 
 import json
+from typing import Optional
+
+from pydantic import BaseModel
 
 import _paths  # noqa: F401
 
@@ -159,9 +162,19 @@ Return the complete revised {what}, addressing the feedback and keeping everythi
 the reviewer did not ask to change."""
 
 
-# LabOutline (lab_outline.py) accepts 3-12 scenes; the plan step caps it further.
-MIN_SCENES = 3
-MAX_SCENES_LIMIT = 12
+def _length_bounds(model: type[BaseModel], field_name: str) -> tuple[Optional[int], Optional[int]]:
+    """The (min_length, max_length) a schema puts on a list field."""
+    lo = hi = None
+    for m in model.model_fields[field_name].metadata:
+        lo = getattr(m, "min_length", lo)
+        hi = getattr(m, "max_length", hi)
+    return lo, hi
+
+
+# Read from the schemas so they can't drift: LabOutline's scene range (the plan
+# step caps it further with --max-scenes) and ModuleAssetPlan's clip-beat minimum.
+MIN_SCENES, MAX_SCENES_LIMIT = _length_bounds(LabOutline, "scenes")
+MIN_CLIP_BEATS = _length_bounds(ModuleAssetPlan, "clip_beats")[0]
 
 
 # ── Rendering helpers ────────────────────────────────────────────────

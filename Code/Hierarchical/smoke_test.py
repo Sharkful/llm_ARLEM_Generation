@@ -479,6 +479,11 @@ for _bad in ({"max_scenes": 2}, {"max_scenes": 13}, {"min_clips": 1}, {"step_att
     except ValueError:
         _rejected.append(_bad)
 check(len(_rejected) == 5, "settings no plan could satisfy are rejected before any call")
+check((_prompts.MIN_SCENES, _prompts.MAX_SCENES_LIMIT) == (
+           LabOutline.model_fields["scenes"].metadata[0].min_length,
+           LabOutline.model_fields["scenes"].metadata[1].max_length)
+      and _prompts.MIN_CLIP_BEATS == 2,
+      "scene range and clip-beat minimum are read from the schemas")
 _plan5 = (FAKE / "Runs" / "t10_cap" / "00_plan_prompt.txt").read_text(encoding="utf-8")
 check("Use 3-8 scenes" in _plan5, "default run asks for 3-8 scenes, matching the 8-scene cap")
 
