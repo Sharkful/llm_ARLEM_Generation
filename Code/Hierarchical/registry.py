@@ -68,7 +68,9 @@ def _builtin_catalog() -> list[CatalogEntry]:
     return entries
 
 
-def _iter_module_components(module: DemoModule):
+def iter_module_components(module: DemoModule):
+    """Every component in a module: on its objects and in its clips' changes.
+    The single definition of where components can live (pipeline.py reuses it)."""
     for obj in module.objects:
         yield from obj.components or []
     for clip in module.clips:
@@ -109,6 +111,11 @@ class AssetRegistry:
     invented_prefabs: dict[str, InventedAsset] = field(default_factory=dict)
     invented_textures: dict[str, InventedAsset] = field(default_factory=dict)
     modules: list[ModuleSummary] = field(default_factory=list)
+    # Lowercase membership sets for "known" assets: lab_metrics' moon-lab library
+    # (the same sets analyze_assets uses, incl. the system demoPrefab) plus
+    # everything earlier modules invented. Kept in sync by register_module.
+    _known_prefabs: set[str] = field(default_factory=lambda: set(KNOWN_PREFABS), repr=False)
+    _known_textures: set[str] = field(default_factory=lambda: set(KNOWN_TEXTURES), repr=False)
 
     # ── queries ──────────────────────────────────────────────────────
     def catalog_names(self) -> list[str]:
@@ -132,7 +139,7 @@ class AssetRegistry:
         """Record an accepted module: its new components, novel assets (with the
         purpose its asset plan gave them), and a summary for later prompts."""
         purposes = {o.name: o.purpose for o in asset_plan.objects} if asset_plan else {}
-        for comp in _iter_module_components(module):
+        for comp in iter_module_components(module):
             if isinstance(comp, NewComponent) and self.find_component(comp.scriptName) is None:
                 self.components.append(CatalogEntry(
                     name=comp.scriptName,
@@ -140,16 +147,14 @@ class AssetRegistry:
                     builtin=False,
                     origin_module=index,
                 ))
-        known_prefabs = {p.lower() for p in BUILTIN_PREFABS} | {p.lower() for p in self.invented_prefabs}
-        known_textures = {t.lower() for t in BUILTIN_TEXTURES} | {t.lower() for t in self.invented_textures}
         for obj in module.objects:
             purpose = purposes.get(obj.name)
-            if obj.prefab and obj.prefab.lower() not in known_prefabs:
+            if obj.prefab and not self.is_known_asset(prefab=obj.prefab):
                 self.invented_prefabs[obj.prefab] = InventedAsset(index, purpose)
-                known_prefabs.add(obj.prefab.lower())
-            if obj.texture and obj.texture.lower() not in known_textures:
+                self._known_prefabs.add(obj.prefab.strip().lower())
+            if obj.texture and not self.is_known_asset(texture=obj.texture):
                 self.invented_textures[obj.texture] = InventedAsset(index, purpose)
-                known_textures.add(obj.texture.lower())
+                self._known_textures.add(obj.texture.strip().lower())
         covered = "; ".join(filter(None, [scene_purpose, *module.educationalObjectives]))
         self.modules.append(ModuleSummary(
             index=index,
@@ -177,11 +182,12 @@ class AssetRegistry:
         return "\n".join(lines)
 
     def is_known_asset(self, prefab: str | None = None, texture: str | None = None) -> bool:
-        """True if the prefab/texture is built in or was invented by an earlier module."""
+        """True if the prefab/texture is in the moon-lab library or was invented by
+        an earlier module (case-insensitive, same rule as lab_metrics)."""
         if prefab is not None:
-            return prefab.lower() in {p.lower() for p in (*BUILTIN_PREFABS, *self.invented_prefabs)}
+            return prefab.strip().lower() in self._known_prefabs
         if texture is not None:
-            return texture.lower() in {t.lower() for t in (*BUILTIN_TEXTURES, *self.invented_textures)}
+            return texture.strip().lower() in self._known_textures
         return True
 
     def render_assets(self) -> str:

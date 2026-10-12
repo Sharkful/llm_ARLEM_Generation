@@ -441,6 +441,17 @@ check(t1["new_components_total"] == len(t1["registry"]["new_components"])
       f"new-component counts recorded per module and in total ({t1['new_components_total']})")
 
 
+# 17. registry and lab_metrics agree on which assets are known (one rule)
+from lab_metrics import _is_novel, KNOWN_PREFABS, KNOWN_TEXTURES  # noqa: E402
+from registry import AssetRegistry  # noqa: E402
+_reg = AssetRegistry()
+_names = ["SunPrefab", " sunprefab ", "DemoPrefab", "marsPrefab", "textPrefab"]
+check(all(_reg.is_known_asset(prefab=n) == (not _is_novel(n, KNOWN_PREFABS)) for n in _names)
+      and all(_reg.is_known_asset(texture=t) == (not _is_novel(t, KNOWN_TEXTURES))
+              for t in ["2k_moon", "2K_MOON", "mars_texture"]),
+      "registry known-asset rule matches lab_metrics (incl. demoPrefab, casing, spaces)")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"

@@ -63,7 +63,7 @@ from prompt_builder import LabDescription, Level, _render_context, discover_labs
 from tracking import InstructorTracker
 
 import prompts
-from registry import AssetRegistry
+from registry import AssetRegistry, iter_module_components
 from review import Approve, AutoApproveReviewer, Checkpoint, Replace, Reviewer, Revise
 
 
@@ -146,7 +146,7 @@ class PlannedDemoModule(DemoModule):
         if allowed is None:
             return self
         unplanned = sorted({
-            c.scriptName for c in _iter_module_components(self)
+            c.scriptName for c in iter_module_components(self)
             if isinstance(c, NewComponent) and component_key(c.scriptName) not in allowed
         })
         if unplanned:
@@ -156,14 +156,6 @@ class PlannedDemoModule(DemoModule):
                 f"{sorted(allowed) or 'none'}"
             )
         return self
-
-
-def _iter_module_components(module: DemoModule):
-    for obj in module.objects:
-        yield from obj.components or []
-    for clip in module.clips:
-        for change in clip.changes or []:
-            yield from change.components or []
 
 
 # ── Config / records ─────────────────────────────────────────────────
@@ -336,7 +328,7 @@ def normalize_module(
                for c in asset_plan.components if c.is_new}
     first_description: dict[str, str] = {}
     changes = []
-    for comp in _iter_module_components(module):
+    for comp in iter_module_components(module):
         if not isinstance(comp, NewComponent):
             continue
         key = component_key(comp.scriptName)
