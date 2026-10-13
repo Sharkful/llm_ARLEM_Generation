@@ -152,7 +152,7 @@ def _patch_genai_parallel_call_retry():
 
 # ── bounded transient-error retry (issue #54 / review F5) ──────────────
 #
-# instructor 1.15.4 retries only parse errors (ValidationError / JSONDecodeError /
+# instructor 1.15.4 and 1.17.0 retry only parse errors (ValidationError / JSONDecodeError /
 # ResponseParsingError) and re-raises everything else on attempt 1, dropping the
 # blind transient-retry that 1.14.4's unfiltered tenacity loop provided. google-genai
 # has no transport-level retry of its own, so a self-healing 503 "high demand" burst
@@ -255,8 +255,8 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
 
     # Apply the Gemini parse-retry patch lazily, here, rather than at import time.
     # It reaches into instructor's private ``v2`` genai handler module, which only
-    # exists on the pinned ``instructor==1.15.4`` (see requirements.txt / issue
-    # #44). Guarding the import keeps a different instructor version — and cheap
+    # exists on the pinned instructor (1.15.4 for wave 2, 1.17.0 since #70; see
+    # requirements.txt / issue #44). Guarding the import keeps a different instructor version — and cheap
     # entry points like ``--list-models``, which never build a client — from
     # crashing with a raw ModuleNotFoundError, and keeps the ~1.6s instructor+genai
     # import chain out of every invocation. The patch is idempotent, so calling it
@@ -268,9 +268,9 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
         if not _GENAI_PATCH_WARNED:
             print(
                 "  WARNING: Gemini parallel-call retry patch not applied — it "
-                "targets instructor==1.15.4's private v2 genai handlers (issue "
-                "#44); Gemini single-functionCall parse failures will not be "
-                "retried on this instructor version.",
+                "targets the pinned instructor's private v2 genai handlers (issue "
+                "#44, re-checked for 1.17.0 in #70); Gemini single-functionCall "
+                "parse failures will not be retried on this instructor version.",
                 file=sys.stderr,
             )
             _GENAI_PATCH_WARNED = True

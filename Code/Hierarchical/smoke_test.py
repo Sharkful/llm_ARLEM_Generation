@@ -419,7 +419,15 @@ finally:
     importlib.util.find_spec = _real_find_spec
 check(len(errors) == 1 and "'anthropic' is not installed" in errors[0],
       "preflight reports a missing provider SDK")
-check(benchmark._pinned_version("instructor") == "1.15.4", "preflight reads the instructor pin")
+check(benchmark._pinned_version("instructor") == "1.17.0", "preflight reads the instructor pin")
+# The #44 Gemini patch must wrap the parse_genai_tools the GENAI_TOOLS handler calls
+# (a module-global lookup); re-check on every instructor upgrade (issue #70).
+import instructor.v2.providers.genai.handlers as _genai_handlers  # noqa: E402
+benchmark._patch_genai_parallel_call_retry()
+_genai_src = Path(_genai_handlers.__file__).read_text(encoding="utf-8")
+check(getattr(_genai_handlers.parse_genai_tools, "_arlem_retryable_patch", False)
+      and "model = parse_genai_tools(" in _genai_src,
+      "Gemini parallel-call retry patch wraps the parse the TOOLS handler calls")
 _req = TMP / "requirements_marker.txt"
 _req.write_text('instructor[anthropic]==1.15.4 ; python_version >= "3.10"  # pinned\n', encoding="utf-8")
 check(benchmark._pinned_version("instructor", _req) == "1.15.4",
