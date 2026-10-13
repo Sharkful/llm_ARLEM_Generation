@@ -71,6 +71,10 @@ MODELS = {
     "claude-opus-4.8":  ModelConfig("claude-opus-4-8",           Provider.ANTHROPIC, "Claude Opus 4.8", ModelSize.LARGE),
     "claude-sonnet-5":  ModelConfig("claude-sonnet-5",           Provider.ANTHROPIC, "Claude Sonnet 5", ModelSize.MEDIUM),
     "claude-haiku-4.5": ModelConfig("claude-haiku-4-5-20251001", Provider.ANTHROPIC, "Claude Haiku 4.5", ModelSize.SMALL),
+    # Added after wave 2 (issue #70) to check the tool_choice "auto" path on a
+    # current Claude model, which rejects a forced tool_choice. Not in any suite
+    # until the roster review (#72).
+    "claude-haiku-5.5": ModelConfig("claude-haiku-5-5",          Provider.ANTHROPIC, "Claude Haiku 5.5", ModelSize.SMALL),
 
     # ── Google Gemini ─────────────────────────────────────────────────────
     # Registry key (CLI alias) stays "gemini-3.1-pro"; model_id is the -preview id
@@ -226,5 +230,8 @@ DEFAULT_TOPICS = [
 # Quick test: cheapest current model per provider (all roster keys)
 QUICK_BENCHMARK_MODELS = ["gpt-5.4-nano", "claude-haiku-4.5", "gemini-2.5-flash-lite"]
 
-# Full benchmark: comprehensive model comparison
-FULL_BENCHMARK_MODELS = list(MODELS.keys())
+# Models registered after wave 2, kept out of the suites until the roster review (#72)
+POST_WAVE2_MODELS = {"claude-haiku-5.5"}
+
+# Full benchmark: comprehensive model comparison (the wave-2 roster)
+FULL_BENCHMARK_MODELS = [k for k in MODELS if k not in POST_WAVE2_MODELS]

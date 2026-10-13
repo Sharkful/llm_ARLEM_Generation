@@ -766,7 +766,7 @@ _saved_env = {k: os.environ.get(k) for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_AP
 os.environ["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{asrv.server_port}"
 os.environ["ANTHROPIC_API_KEY"] = "test"
 try:
-    rec = P.HierarchicalPipeline("claude-haiku-4.5", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
+    rec = P.HierarchicalPipeline("claude-haiku-5.5", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
                                  output_dir=TMP / "anthropic", run_name="anthropic").run()
 finally:
     asrv.shutdown()
@@ -802,8 +802,10 @@ check(_m1["success"] and _m1["parse_errors"] == 1 and rec["tool_choice"] == "aut
 check(all(r["max_tokens"] == 32000 for r in reqs), "every request sets max_tokens=32000")
 check([r["tools"][0]["name"] for r in reqs[:3]] == ["LabPlan", "ModuleAssetPlan", "PlannedDemoModule"],
       "tool names follow the step response models")
-check(all(r["model"] == P.MODELS["claude-haiku-4.5"].model_id for r in reqs), "model id sent")
+check(all(r["model"] == "claude-haiku-5-5" for r in reqs), "model id sent (Claude Haiku 5.5)")
 check(rec["totals"]["prompt_tokens"] == 1000 * len(reqs), "Anthropic usage tracked per step")
+check(abs(rec["totals"]["cost_usd"] - len(reqs) * (1000 * 0.10 + 200 * 0.50) / 1e6) < 1e-9,
+      "Claude Haiku 5.5 priced at $0.10 / $0.50 per MTok")
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("\nALL PASSED" if not FAILED else "\nSOME FAILED")
