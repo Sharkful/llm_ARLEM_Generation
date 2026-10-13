@@ -190,8 +190,9 @@ All LLM calls go through `benchmark.create_instructor_client`,
 `benchmark.provider_create_kwargs` and `benchmark._transient_retryer`, the same
 Gemini and Anthropic guards as the one-shot runner.
 
-> Current Claude 5.5 / Fable 5.1 models reject the forced `tool_choice` that
-> `provider_create_kwargs` sends; see #72.
+> Anthropic requests use `tool_choice: auto` with `disable_parallel_tool_use`, so
+> Claude Sonnet 5.5, Opus 5.5 and Fable 5.1 (which reject a forced choice) can run
+> too (#70).
 
 ## Running
 
@@ -280,6 +281,6 @@ the two.
 - #68 clip-level granularity (generate objects, then one clip per call)
 - #69 LLM self-critique reviewer and a human console reviewer
 - #70 instructor upgrade
-- #72 model roster / forced `tool_choice` on current Claude models
+- #72 model roster review
 - #73 Anthropic prompt caching
 - #74 structured inputs for new components

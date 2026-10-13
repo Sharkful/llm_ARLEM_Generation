@@ -44,7 +44,10 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     "claude-sonnet-5":          {"input":  2.00, "output": 10.00},   # current mid
     "claude-sonnet-4-6":        {"input":  3.00, "output": 15.00},   # verified 2026-07: now legacy (superseded by Sonnet 5); dropped from roster
     # Haiku 4.5 — keyed by its full versioned model ID used in API calls
-    "claude-haiku-4-5-20251001": {"input":  1.00, "output":  5.00},   # verified 2026-07 (current small)
+    "claude-haiku-4-5-20251001": {"input":  1.00, "output":  5.00},   # verified 2026-07 (previous small)
+    # Haiku 5.5: prompts up to 100K tokens. Longer prompts bill $0.50 / $2.50, which
+    # isn't modelled here (benchmark and hierarchical prompts stay well under 100K).
+    "claude-haiku-5-5":         {"input":  0.10, "output":  0.50},   # verified 2026-10 (current small; #70)
     "claude-fable-5":           {"input": 10.00, "output": 50.00},   # verified 2026-07 (most capable; GA 2026-06-09; not in roster)
     "claude-3-haiku-20240307":   {"input":  0.25, "output":  1.25},   # legacy/deprecated — not on current page
     # Legacy / alternate keys

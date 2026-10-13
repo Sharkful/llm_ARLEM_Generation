@@ -60,7 +60,8 @@ PROVIDERS = ["openai", "anthropic", "google"]
 def fail_mode(err: str | None) -> str:
     """Classify a terminal error string into a coarse failure mode.
 
-    Kept identical to ``build_summary_report.fail_mode`` so both reports agree.
+    The one classifier both reports use (``build_summary_report`` and
+    ``build_statistics_report`` read the ``fail_mode`` column).
     """
     if not err:
         return ""
@@ -82,6 +83,16 @@ def fail_mode(err: str | None) -> str:
     # (OpenAI: "not_found_error"; Anthropic: "error code: 404"; Gemini:
     # "404 NOT_FOUND." — all three anchor "not_found"/"404" so union_tag_not_found
     # can't leak through.)
+    # Anthropic with tool_choice "auto" (issue #70): a reply with no tool call
+    # parses to an empty tool list, which instructor reports as "validation error
+    # for list[any] ... at least 1 item ... not 0". Only when *every* validation
+    # error is that shape did the model never call the tool; a run that also hit
+    # real schema errors stays "schema validation". (#44's parallel-call shape is
+    # "at most 1 item ... not 2", which is a schema failure, not this.)
+    n_validation = e.count("validation error for ")
+    n_no_call = e.count("validation error for list[any]") if "at least 1 item" in e else 0
+    if n_validation and n_no_call == n_validation:
+        return "no tool call (auto)"
     if "validation error" in e:
         return "schema validation"
     if (

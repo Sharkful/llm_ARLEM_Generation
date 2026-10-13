@@ -45,6 +45,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Schemas"))
 
 from dotenv import load_dotenv
+from pydantic import BaseModel
 
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -152,7 +153,7 @@ def _patch_genai_parallel_call_retry():
 
 # ── bounded transient-error retry (issue #54 / review F5) ──────────────
 #
-# instructor 1.15.4 retries only parse errors (ValidationError / JSONDecodeError /
+# instructor 1.15.4 and 1.17.0 retry only parse errors (ValidationError / JSONDecodeError /
 # ResponseParsingError) and re-raises everything else on attempt 1, dropping the
 # blind transient-retry that 1.14.4's unfiltered tenacity loop provided. google-genai
 # has no transport-level retry of its own, so a self-healing 503 "high demand" burst
@@ -255,8 +256,8 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
 
     # Apply the Gemini parse-retry patch lazily, here, rather than at import time.
     # It reaches into instructor's private ``v2`` genai handler module, which only
-    # exists on the pinned ``instructor==1.15.4`` (see requirements.txt / issue
-    # #44). Guarding the import keeps a different instructor version — and cheap
+    # exists on the pinned instructor (1.15.4 for wave 2, 1.17.0 since #70; see
+    # requirements.txt / issue #44). Guarding the import keeps a different instructor version — and cheap
     # entry points like ``--list-models``, which never build a client — from
     # crashing with a raw ModuleNotFoundError, and keeps the ~1.6s instructor+genai
     # import chain out of every invocation. The patch is idempotent, so calling it
@@ -268,9 +269,9 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
         if not _GENAI_PATCH_WARNED:
             print(
                 "  WARNING: Gemini parallel-call retry patch not applied — it "
-                "targets instructor==1.15.4's private v2 genai handlers (issue "
-                "#44); Gemini single-functionCall parse failures will not be "
-                "retried on this instructor version.",
+                "targets the pinned instructor's private v2 genai handlers (issue "
+                "#44, re-checked for 1.17.0 in #70); Gemini single-functionCall "
+                "parse failures will not be retried on this instructor version.",
                 file=sys.stderr,
             )
             _GENAI_PATCH_WARNED = True
@@ -416,22 +417,48 @@ def provider_create_kwargs(model_config: ModelConfig, response_model) -> dict:
     # Anthropic client with an explicit timeout, which disables that guard.
     if model_config.provider == Provider.ANTHROPIC:
         kwargs["max_tokens"] = 32000
-        # Forbid parallel tool calls: under instructor a parallel call always
-        # fails parsing, and its reask replays the assistant turn with only one
-        # tool_result, which the API 400s (issue #44 — Haiku 4.5 retry-death;
-        # unfixed upstream as of 1.15.4). Requires instructor>=1.15: earlier
-        # versions overwrite a caller-supplied tool_choice. The name must equal
-        # the tool instructor registers, which is model_json_schema()["title"];
-        # that equals __name__ only while no response model sets a custom title
-        # (ConfigDict(title=...)). None of our response models do, so this
-        # holds today — but a future custom title would 400 every Anthropic run
-        # (latent; review F13).
-        kwargs["tool_choice"] = {
-            "type": "tool",
-            "name": response_model.__name__,
-            "disable_parallel_tool_use": True,
-        }
+        # tool_choice "auto", not forced (issue #70). Claude Sonnet 5.5, Opus 5.5
+        # and Fable 5.1 return 400 for a forced tool_choice ({"type": "tool"} /
+        # {"type": "any"}), and instructor's own default forces it, so we always
+        # pass ours (instructor only sets tool_choice when the caller hasn't).
+        # Every Claude model accepts "auto". On Claude Haiku 5.5, which does accept
+        # a forced choice, forcing would also skip its thinking; "auto" lets it
+        # reason before the call.
+        #
+        # disable_parallel_tool_use still caps the reply at one tool call. That is
+        # the #44 guard: a parallel call always fails parsing under instructor
+        # (Haiku 4.5 retry-death). "auto" doesn't guarantee a call, so the system
+        # line below asks for one; a plain-text reply is reasked by instructor
+        # ("no tool invocation") and costs one attempt.
+        #
+        # Wave 2 ran with the forced {"type": "tool"} choice on 1.15.4; Anthropic
+        # runs from here on are a different request shape and are never pooled
+        # with it (the metrics record carries ``tool_choice``).
+        # The tool instructor registers is named after the response model's schema
+        # title, which is the class name (none of our models sets a custom title).
+        # __name__ avoids building the whole JSON schema just to read it.
+        tool_name = response_model.__name__
+        kwargs["tool_choice"] = {"type": "auto", "disable_parallel_tool_use": True}
+        kwargs["system"] = (
+            f"Respond only by calling the `{tool_name}` tool, exactly once. "
+            "Do not answer in plain text."
+        )
     return kwargs
+
+
+class _ToolChoiceProbe(BaseModel):
+    """Stand-in response model, so ``tool_choice_for`` can ask
+    ``provider_create_kwargs`` what it sends."""
+
+
+def tool_choice_for(model_config: ModelConfig) -> str:
+    """The tool_choice a run sends, as recorded in metrics. Read from
+    ``provider_create_kwargs`` so the label can't drift from the request: its
+    ``tool_choice["type"]`` when it sets one (Anthropic: "auto"), otherwise
+    "forced", because instructor then forces the response model's function
+    (OpenAI; Gemini: mode ANY restricted to that one function)."""
+    sent = provider_create_kwargs(model_config, _ToolChoiceProbe).get("tool_choice")
+    return sent["type"] if sent else "forced"
 
 
 # ── Model Selection ──────────────────────────────────────────────────
@@ -645,6 +672,7 @@ def run_single_benchmark(
         "display_name": model_config.display_name,
         "spec_type": run_config.spec_type.value,
         "decode_mode": decode_mode.value,  # instructor enforcement path actually used
+        "tool_choice": tool_choice_for(model_config),
         "topic": run_config.topic,
         "lab_name": run_config.lab_name,
         "level": run_config.level.value if run_config.level else None,

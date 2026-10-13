@@ -54,6 +54,7 @@ from benchmark import (
     decode_mode_for,
     get_provenance,
     provider_create_kwargs,
+    tool_choice_for,
 )
 from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, SpecType
 from json_lab import DemoModule, Lab, NewComponent, PointerReceiverComponent
@@ -881,6 +882,7 @@ class HierarchicalPipeline:
             "display_name": self.model_config.display_name,
             "spec_type": SpecType.JSON_LAB.value,
             "decode_mode": decode_mode_for(self.model_config, SpecType.JSON_LAB).value,
+            "tool_choice": tool_choice_for(self.model_config),
             "topic": None,
             "lab_name": self.lab_name,
             "level": self.config.level.value,

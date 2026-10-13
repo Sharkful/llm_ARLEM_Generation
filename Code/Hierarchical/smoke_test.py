@@ -18,8 +18,9 @@ retryer, provider kwargs) against a local mock OpenAI server that replays part
 1's step files, with one invalid module response to force an instructor reask.
 
 Part 3 builds the real Anthropic client against a local mock Anthropic server and
-checks the request shape we send (forced tool_choice + disable_parallel_tool_use,
-max_tokens).
+checks the request shape we send (tool_choice auto + disable_parallel_tool_use,
+the system line asking for the tool, max_tokens), including instructor's reask
+after a plain-text reply.
 
 Outputs go to a temp dir that is removed afterwards. Exit code 1 on any failure.
 """
@@ -419,7 +420,30 @@ finally:
     importlib.util.find_spec = _real_find_spec
 check(len(errors) == 1 and "'anthropic' is not installed" in errors[0],
       "preflight reports a missing provider SDK")
-check(benchmark._pinned_version("instructor") == "1.15.4", "preflight reads the instructor pin")
+check(benchmark._pinned_version("instructor") == "1.17.0", "preflight reads the instructor pin")
+# The #44 Gemini patch must wrap the parse_genai_tools the GENAI_TOOLS handler calls
+# (a module-global lookup) and turn the text + one-functionCall assert into a
+# retryable ResponseParsingError; re-check on every instructor upgrade (issue #70).
+try:
+    import instructor.v2.providers.genai.handlers as _genai_handlers
+    from google.genai import types as _gt
+    from instructor.v2.core.errors import ResponseParsingError as _RPE
+    benchmark._patch_genai_parallel_call_retry()
+    _shape = _gt.GenerateContentResponse(candidates=[_gt.Candidate(content=_gt.Content(parts=[
+        _gt.Part(text="Here is the plan."),
+        _gt.Part(function_call=_gt.FunctionCall(name="LabPlan", args={})),
+    ]))])
+    try:
+        _genai_handlers.parse_genai_tools(P.LabPlan, _shape)
+        _patched = False
+    except _RPE:
+        _patched = True
+    _calls_module_global = "model = parse_genai_tools(" in Path(_genai_handlers.__file__).read_text(
+        encoding="utf-8")
+    check(_patched and _calls_module_global,
+          "Gemini text + functionCall parse error is retryable under the patch")
+except Exception as _e:  # noqa: BLE001 — report, don't crash the offline test
+    check(False, f"Gemini parallel-call retry patch check ({type(_e).__name__}: {_e})")
 _req = TMP / "requirements_marker.txt"
 _req.write_text('instructor[anthropic]==1.15.4 ; python_version >= "3.10"  # pinned\n', encoding="utf-8")
 check(benchmark._pinned_version("instructor", _req) == "1.15.4",
@@ -703,6 +727,18 @@ check(not bad["success"] and bad_m1["step"] == "module" and len(bad_m1["errors"]
 sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
 from benchmark_dataframe import load_runs  # noqa: E402
 df = load_runs(MOCK)
+from benchmark_dataframe import fail_mode  # noqa: E402
+_no_call = "1 validation error for list[any]\n  List should have at least 1 item after validation, not 0"
+_schema = "1 validation error for Lab\nmodules\n  Field required"
+check(fail_mode(_no_call) == "no tool call (auto)"
+      and fail_mode(_no_call + "\n" + _schema) == "schema validation"
+      and fail_mode("1 validation error for list[any]\n  List should have at most 1 item "
+                    "after validation, not 2") == "schema validation",
+      "a run that never called the tool gets its own fail mode")
+check(benchmark.tool_choice_for(P.MODELS["claude-haiku-5.5"]) == "auto"
+      and benchmark.tool_choice_for(P.MODELS["gpt-5.4-mini"]) == "forced"
+      and benchmark.tool_choice_for(P.MODELS["gemini-3.5-flash"]) == "forced",
+      "recorded tool_choice is read from what provider_create_kwargs sends")
 check(len(df) == 1 and bool(df.iloc[0]["success"]) and df.iloc[0]["structure"] == "multi-module",
       "Code/Analysis load_runs() reads hierarchical metrics")
 
@@ -710,11 +746,13 @@ check(len(df) == 1 and bool(df.iloc[0]["success"]) and df.iloc[0]["structure"] =
 # ── Part 3: the exact request we send Anthropic (mock Anthropic server) ──
 # Builds the client through the real create_instructor_client (pointed at the
 # mock via ANTHROPIC_BASE_URL), so this checks the shape of what we actually send:
-# the forced tool_choice with disable_parallel_tool_use (#44) and max_tokens.
-# Note: current Claude 5.5 / Fable 5.1 models reject a forced tool_choice (#72);
-# when that changes, update the expected request shape here.
+# tool_choice "auto" with disable_parallel_tool_use (#44, #70; Claude Sonnet 5.5,
+# Opus 5.5 and Fable 5.1 reject a forced choice), the system line asking for the
+# tool, and
+# max_tokens. The first module request is answered in plain text, as "auto"
+# allows, to check instructor's "no tool invocation" reask.
 print("\n-- part 3: mock Anthropic server --")
-anth = {"asset": 0, "requests": []}
+anth = {"asset": 0, "requests": [], "text_sent": False}
 
 
 class MockAnthropic(BaseHTTPRequestHandler):
@@ -732,11 +770,16 @@ class MockAnthropic(BaseHTTPRequestHandler):
             data = (REPLAY / f"{anth['asset']:02d}_asset_plan.json").read_text(encoding="utf-8")
         else:
             data = (REPLAY / f"{anth['asset']:02d}_module.json").read_text(encoding="utf-8")
+        if tool == "PlannedDemoModule" and not anth["text_sent"]:
+            anth["text_sent"] = True
+            content, stop = [{"type": "text", "text": "Here is the module you asked for."}], "end_turn"
+        else:
+            content = [{"type": "tool_use", "id": "toolu_mock", "name": tool,
+                        "input": json.loads(data)}]
+            stop = "tool_use"
         payload = json.dumps({
             "id": "msg_mock", "type": "message", "role": "assistant", "model": body["model"],
-            "content": [{"type": "tool_use", "id": "toolu_mock", "name": tool,
-                         "input": json.loads(data)}],
-            "stop_reason": "tool_use", "stop_sequence": None,
+            "content": content, "stop_reason": stop, "stop_sequence": None,
             "usage": {"input_tokens": 1000, "output_tokens": 200},
         }).encode()
         self.send_response(200)
@@ -752,7 +795,7 @@ _saved_env = {k: os.environ.get(k) for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_AP
 os.environ["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{asrv.server_port}"
 os.environ["ANTHROPIC_API_KEY"] = "test"
 try:
-    rec = P.HierarchicalPipeline("claude-haiku-4.5", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
+    rec = P.HierarchicalPipeline("claude-haiku-5.5", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
                                  output_dir=TMP / "anthropic", run_name="anthropic").run()
 finally:
     asrv.shutdown()
@@ -764,15 +807,35 @@ finally:
 
 check(rec["success"], "mock-Anthropic run succeeds")
 reqs = anth["requests"]
-check(len(reqs) == 1 + 2 * len(MODS), f"one Anthropic request per step ({len(reqs)})")
-check(all(r["tool_choice"] == {"type": "tool", "name": r["tools"][0]["name"],
-                               "disable_parallel_tool_use": True} for r in reqs),
-      "every request forces its step's tool with disable_parallel_tool_use")
+check(len(reqs) == 2 + 2 * len(MODS),
+      f"one Anthropic request per step, plus one reask ({len(reqs)})")
+check(all(r["tool_choice"] == {"type": "auto", "disable_parallel_tool_use": True} for r in reqs),
+      "every request sends tool_choice auto with disable_parallel_tool_use")
+
+
+def _system_text(r):
+    sys_ = r.get("system") or ""
+    return sys_ if isinstance(sys_, str) else " ".join(b.get("text", "") for b in sys_)
+
+
+check(all(f"calling the `{r['tools'][0]['name']}` tool" in _system_text(r)
+          and P.SYSTEM_PROMPT[:40] in _system_text(r) for r in reqs),
+      "every request asks for its step's tool and keeps the system prompt")
+_reask = next((r for r in reqs if len(r["messages"]) > 2), None)
+check(_reask is not None and _reask["tools"][0]["name"] == "PlannedDemoModule"
+      and "no tool invocation" in json.dumps(_reask["messages"][-1]),
+      "a plain-text reply is reasked ('no tool invocation')")
+_m1 = next((s for s in rec["steps"] if s["step"] == "module" and s["index"] == 1), None)
+check(_m1 is not None and _m1["success"] and _m1["parse_errors"] == 1
+      and rec.get("tool_choice") == "auto",
+      "the reask costs one attempt; the record says tool_choice auto")
 check(all(r["max_tokens"] == 32000 for r in reqs), "every request sets max_tokens=32000")
 check([r["tools"][0]["name"] for r in reqs[:3]] == ["LabPlan", "ModuleAssetPlan", "PlannedDemoModule"],
       "tool names follow the step response models")
-check(all(r["model"] == P.MODELS["claude-haiku-4.5"].model_id for r in reqs), "model id sent")
+check(all(r["model"] == "claude-haiku-5-5" for r in reqs), "model id sent (Claude Haiku 5.5)")
 check(rec["totals"]["prompt_tokens"] == 1000 * len(reqs), "Anthropic usage tracked per step")
+check(abs(rec["totals"]["cost_usd"] - len(reqs) * (1000 * 0.10 + 200 * 0.50) / 1e6) < 1e-9,
+      "Claude Haiku 5.5 priced at $0.10 / $0.50 per MTok")
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("\nALL PASSED" if not FAILED else "\nSOME FAILED")
