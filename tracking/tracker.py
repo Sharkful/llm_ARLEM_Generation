@@ -441,21 +441,30 @@ class InstructorTracker:
                 raw_exception=error if self.store_raw_responses else None,
             )
 
-            # Try to extract usage from error if available
-            usage = TokenUsage()
-            if hasattr(error, 'last_completion'):
-                usage = TokenUsage.from_completion(error.last_completion)
-
-            # Record failed attempt
-            attempt = AttemptMetrics(
-                attempt_number=attempt_num,
-                timestamp=datetime.now(),
-                usage=usage,
-                success=False,
-                error=error_record,
-            )
-            call.attempts.append(attempt)
-            call.total_usage = call.total_usage + usage
+            # A parse error follows the response it failed on: _on_response has
+            # already recorded this attempt (and its usage). Mark that attempt
+            # failed instead of appending a second one, so retry_count counts
+            # attempts, not attempts + parse errors (issue #71).
+            last = call.attempts[-1] if call.attempts else None
+            if (last is not None and last.attempt_number == attempt_num
+                    and last.success and last.error is None):
+                last.success = False
+                last.error = error_record
+            else:
+                # No response for this attempt (an API/completion error): record a
+                # failed attempt, with usage if the exception carries any.
+                usage = TokenUsage()
+                if hasattr(error, 'last_completion'):
+                    usage = TokenUsage.from_completion(error.last_completion)
+                attempt = AttemptMetrics(
+                    attempt_number=attempt_num,
+                    timestamp=datetime.now(),
+                    usage=usage,
+                    success=False,
+                    error=error_record,
+                )
+                call.attempts.append(attempt)
+                call.total_usage = call.total_usage + usage
 
             # Update error counters
             if error_type == ErrorType.PARSE_ERROR:

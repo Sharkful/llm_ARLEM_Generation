@@ -622,6 +622,32 @@ check(m1["calls"] == 1 and m1["errors"][0] == "attempt 1 ValidationError: parse 
       "an error the tracker didn't record keeps its full text in errors.txt")
 
 
+# 23. the tracker records one attempt per request (issue #71): a parse error marks
+#     the response it failed on, an API error with no response adds its own attempt
+from tracking import InstructorTracker as _Tracker  # noqa: E402
+
+
+class _NoHooks:
+    def on(self, *a):
+        pass
+
+    def off(self, *a):
+        pass
+
+
+_t = _Tracker(model="m", provider="openai")
+_t._start_call(_NoHooks(), "c")
+_t._on_kwargs("c", (), {}); _t._on_response("c", None)
+_t._on_parse_error("c", ValueError("1 validation error for Lab"))
+_t._on_kwargs("c", (), {}); _t._on_completion_error("c", RuntimeError("Error code: 503"))
+_t._on_kwargs("c", (), {}); _t._on_response("c", None)
+_t._end_call("c", True)
+_c = _t.aggregate.calls[-1]
+check(_c.total_attempts == 3 and _c.retry_count == 2 and _c.parse_errors == 1
+      and len(_c.errors) == 2 and _t.summary()["retries"]["total"] == 2,
+      "tracker: parse error + API error + success = 3 attempts, 2 retries")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"
@@ -706,6 +732,10 @@ check(rec["totals"]["calls"] == len(rec["steps"]) + 1 and rec["steps"][0]["calls
       "one tracked call per step, plus the reviewer's call charged to the plan step")
 m2 = next(s for s in rec["steps"] if s["step"] == "module" and s["index"] == 2)
 check(m2["parse_errors"] == 1 and m2["errors"], "module 2 records its one parse error")
+check(m2["retries"] == m2["parse_errors"] == 1
+      and rec["totals"]["retries"] == rec["totals"]["parse_errors"]
+      and rec["tracking"]["retries"]["total"] == rec["totals"]["parse_errors"],
+      "one reask counts as one retry (issue #71)")
 check(m2["prompt_tokens"] == 2000 and m2["completion_tokens"] == 400,
       "module 2 tokens include the reask")
 check(rec["totals"]["total_tokens"] == rec["tracking"]["tokens"]["total"]
@@ -826,6 +856,7 @@ check(_reask is not None and _reask["tools"][0]["name"] == "PlannedDemoModule"
       and "no tool invocation" in json.dumps(_reask["messages"][-1]),
       "a plain-text reply is reasked ('no tool invocation')")
 _m1 = next((s for s in rec["steps"] if s["step"] == "module" and s["index"] == 1), None)
+check(_m1 is not None and _m1["retries"] == 1, "a plain-text reply's reask counts as one retry")
 check(_m1 is not None and _m1["success"] and _m1["parse_errors"] == 1
       and rec.get("tool_choice") == "auto",
       "the reask costs one attempt; the record says tool_choice auto")

@@ -47,10 +47,11 @@ tokens only.
 
 Retry counting
 --------------
-The ``retries`` column double-counts -- it maps to ``parse_errors`` as
-0->0, 1->2, 2->4, 3->6, 4->7, i.e. 2x up to a cap. The clean/not-clean
-*partition* is identical either way, so these figures split on
-``parse_errors > 0`` and never quote a raw retry count.
+In the wave-2 data the ``retries`` column double-counts -- it maps to
+``parse_errors`` as 0->0, 1->2, 2->4, 3->6, 4->7, i.e. 2x up to a cap (the
+tracker bug fixed in issue #71; runs recorded after the fix count reasks
+correctly). The clean/not-clean *partition* is identical either way, so these
+figures split on ``parse_errors > 0`` and never quote a raw retry count.
 
 Colour
 ------

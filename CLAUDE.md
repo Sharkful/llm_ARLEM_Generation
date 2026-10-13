@@ -249,8 +249,9 @@ instead of in one `Lab` call; see `HIERARCHICAL.md`.
 Outputs go to `Artifacts/Data/Hierarchical/[<run group>/]` and are never pooled with
 `Benchmark/`. Metrics keep the benchmark record's keys (`load_runs()` reads them),
 plus `status`, `steps[]`, `totals`, `normalizations`, `plan_adherence` (incl. soft
-metrics), `review_log`, `registry`. The tracker counts a failed parse attempt twice
-in `retry_count` (#71); per-step `parse_errors` is the true reask count. Per-module
+metrics), `review_log`, `registry`. `retries` is the true reask count since the #71
+fix; files recorded before it (wave 2 included) count each failed parse twice, so
+use `parse_errors` for those. Per-module
 minimums make these labs deliberately bigger than one-shot runs (lab-wide minimums).
 
 **Script names are PascalCase.** `json_lab.NewComponent.scriptName` normalizes to
