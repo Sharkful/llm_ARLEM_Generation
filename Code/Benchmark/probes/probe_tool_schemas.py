@@ -105,8 +105,6 @@ def capture_all() -> dict:
                           messages=[{"role": "system", "content": "probe"},
                                     {"role": "user", "content": "probe"}])
             kwargs.update(provider_create_kwargs(mc, rm))
-            if mc.provider.value == "openai":
-                kwargs["model"] = mc.model_id
             try:
                 client.create(**kwargs)
             except Exception:  # noqa: BLE001 — the 400 is the point
