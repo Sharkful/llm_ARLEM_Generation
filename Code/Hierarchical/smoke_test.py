@@ -712,6 +712,18 @@ check(not bad["success"] and bad_m1["step"] == "module" and len(bad_m1["errors"]
 sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
 from benchmark_dataframe import load_runs  # noqa: E402
 df = load_runs(MOCK)
+from benchmark_dataframe import fail_mode  # noqa: E402
+_no_call = "1 validation error for list[any]\n  List should have at least 1 item after validation, not 0"
+_schema = "1 validation error for Lab\nmodules\n  Field required"
+check(fail_mode(_no_call) == "no tool call (auto)"
+      and fail_mode(_no_call + "\n" + _schema) == "schema validation"
+      and fail_mode("1 validation error for list[any]\n  List should have at most 1 item "
+                    "after validation, not 2") == "schema validation",
+      "a run that never called the tool gets its own fail mode")
+check(benchmark.tool_choice_for(P.MODELS["claude-haiku-5.5"]) == "auto"
+      and benchmark.tool_choice_for(P.MODELS["gpt-5.4-mini"]) == "forced"
+      and benchmark.tool_choice_for(P.MODELS["gemini-3.5-flash"]) == "forced",
+      "recorded tool_choice is read from what provider_create_kwargs sends")
 check(len(df) == 1 and bool(df.iloc[0]["success"]) and df.iloc[0]["structure"] == "multi-module",
       "Code/Analysis load_runs() reads hierarchical metrics")
 

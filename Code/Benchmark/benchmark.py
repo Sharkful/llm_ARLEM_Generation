@@ -45,6 +45,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Schemas"))
 
 from dotenv import load_dotenv
+from pydantic import BaseModel
 
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -442,12 +443,19 @@ def provider_create_kwargs(model_config: ModelConfig, response_model) -> dict:
     return kwargs
 
 
+class _ToolChoiceProbe(BaseModel):
+    """Stand-in response model, so ``tool_choice_for`` can ask
+    ``provider_create_kwargs`` what it sends."""
+
+
 def tool_choice_for(model_config: ModelConfig) -> str:
-    """The tool_choice a run sends, as recorded in metrics: "auto" for Anthropic
-    (see ``provider_create_kwargs``); "forced" for OpenAI and Gemini, where
-    instructor forces the response model's function (Gemini: mode ANY restricted
-    to that one function)."""
-    return "auto" if model_config.provider == Provider.ANTHROPIC else "forced"
+    """The tool_choice a run sends, as recorded in metrics. Read from
+    ``provider_create_kwargs`` so the label can't drift from the request: its
+    ``tool_choice["type"]`` when it sets one (Anthropic: "auto"), otherwise
+    "forced", because instructor then forces the response model's function
+    (OpenAI; Gemini: mode ANY restricted to that one function)."""
+    sent = provider_create_kwargs(model_config, _ToolChoiceProbe).get("tool_choice")
+    return sent["type"] if sent else "forced"
 
 
 # ── Model Selection ──────────────────────────────────────────────────
