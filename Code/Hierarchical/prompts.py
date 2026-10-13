@@ -1,0 +1,287 @@
+"""
+Prompt templates for hierarchical (module-at-a-time) JSON Lab generation.
+
+Three LLM steps, each with its own template:
+  1. PLAN_INSTRUCTION         lab description -> LabOutline (one scene per module)
+  2. ASSET_PLAN_INSTRUCTION   one scene -> ModuleAssetPlan (objects, components, why)
+  3. MODULE_INSTRUCTION       approved asset plan -> DemoModule
+
+Prompt order is cache-friendly: every prompt *starts* with the same block (the
+lab description), and the asset-plan and module prompts continue with the same
+approved plan, before anything step- or module-specific. Providers with automatic
+prefix caching (OpenAI, Gemini) then bill that repeated opening at the cached
+rate on every call after the first. Anthropic needs explicit cache markers (#73).
+
+The plan, earlier modules, and the asset registry are appended as compact
+summaries rather than full JSON, so prompt size grows slowly with module count.
+Structural rules mirror prompt_builder.FULL_SPEC_MULTI_MODULE_INSTRUCTION so
+outputs stay comparable with one-shot runs, except that the object and clip
+minimums apply per module here (they are lab-wide in the one-shot runs).
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Optional
+
+from pydantic import BaseModel
+
+import _paths  # noqa: F401
+
+from lab_outline import LabOutline, OutlineScene
+from module_asset_plan import ModuleAssetPlan
+from registry import AssetRegistry
+
+
+# Shared openings. Keep these byte-identical across calls: any change here moves
+# the point where the cached prefix ends.
+LAB_BLOCK = """\
+# Lab description
+{lab_context}
+"""
+
+PLAN_BLOCK = """\
+# Approved lab plan (one module per scene)
+{plan}
+"""
+
+PLAN_INSTRUCTION = LAB_BLOCK + """
+# Task: plan the lab
+You are designing an AR lab that will be generated one module at a time. This first
+step is the lab plan: a scene-by-scene outline in which EACH SCENE BECOMES ONE MODULE
+of the final lab. Later steps will plan each module's assets and then write the
+module itself, so do NOT specify prefabs, positions, components, or clip-level
+changes here.
+
+Requirements:
+- Use {min_scenes}-{max_scenes} scenes, in teaching order. Each scene should contribute one clear
+  pedagogical step toward the lab's goals.
+- Together the scenes must cover every learning objective{script_clause}.
+- For each scene give its purpose, the key visuals the student sees, and what the
+  student does, in short prose.
+- top_level_objectives are the learning objectives for the lab as a whole.
+"""
+
+ASSET_PLAN_INSTRUCTION = LAB_BLOCK + "\n" + PLAN_BLOCK + """
+# Asset library
+{assets}
+
+# Component catalog
+{catalog}
+
+# Modules already generated
+{previous}
+
+# Task: plan the assets for module {index} of {total}
+{scene}
+
+Before module {index} is written, plan the assets it needs: its scene objects, the
+components that give those objects behavior, the student interactions, and one beat
+per clip. Explain WHY each object and component is needed.
+
+Instructions:
+- Fill in design_notes FIRST: reason about what the student must see and do in this
+  module to achieve its purpose, and what that requires of the scene.
+- List every scene object the module needs: at least {min_objects}, each with a
+  purpose. Object names must be unique within the module. Prefer built-in prefabs
+  and textures, or ones invented by earlier modules, over new ones; set
+  is_new_asset=true when you do invent one.
+- Plan the components each object needs. object_name must exactly match one of your
+  planned objects, every component needs a rationale, and the same component should
+  not be planned twice on one object. Prefer catalog components, and combinations of
+  them, wherever they can produce the behavior.
+{new_component_rule}
+- interactions: each one names the planned object the student interacts with
+  (object_name), what the student does (action), and what happens (effect).
+- clip_beats: at least {min_beats} beats, one short line per clip in order, saying
+  what changes in the scene and what is narrated.
+- Keep in mind the lab is a tabletop AR experience (objects within a ~3m workspace,
+  scales typically 0.02-0.5 units), but do not give positions yet.
+"""
+
+NEW_COMPONENTS_ALLOWED = """\
+- A component is a small piece of C# behavior and can do almost anything. That makes
+  new components powerful but costly to build, so only plan a new one (is_new=true)
+  when no catalog component, or combination of them, can provide the behavior. Keep
+  each new component to ONE simple behavior with clear inputs and outputs; split
+  complex behavior into several small components that later modules can reuse. Give
+  it a PascalCase script name of at least 5 letters or digits (e.g. 'PulseGlow'), a
+  behavior_description, and why_existing_insufficient. Declare it once (is_new=true)
+  and reference it by name if other objects use it too. Never re-invent a component
+  that is already in the catalog: reference it by name with is_new=false."""
+
+NEW_COMPONENTS_DISABLED = """\
+- New components are disabled for this run: use only components from the catalog."""
+
+MODULE_INSTRUCTION = LAB_BLOCK + "\n" + PLAN_BLOCK + """
+# Component catalog
+{catalog}
+
+# Modules already generated
+{previous}
+
+# Task: write module {index} of {total}
+{scene}
+
+## Approved asset plan for this module
+{asset_plan}
+
+Write module {index} as a complete DemoModule, implementing its approved asset plan.
+
+Requirements:
+- moduleName: "{module_name}". Give the module a short description and educational
+  objectives drawn from the lab's objectives.
+- Create every planned object using exactly its planned name, prefab, and texture
+  (at least {min_objects} objects). You may add minor supporting objects (such as
+  text labels) if the clips need them.
+- Attach each planned component to its planned object, either in the object's
+  components or in a clip change if it should only take effect later.
+- Built-in components use their own type (e.g. SimpleOrbitComponent). A new
+  component, or one invented by an earlier module, is written as a NewComponent
+  whose scriptName is exactly its planned or catalog name; for a catalog component,
+  reuse its description. Allowed NewComponent scriptNames for this module:
+  {allowed_new}. Do not use NewComponent with any other scriptName.
+- Write the clips in the order of the clip beats, at least one clip per beat and at
+  least {min_clips} clips in total (you may split a beat into several clips). Each
+  clip uses sparse object changes, states its changeMeaning, and gives narration and
+  an audioClip name when narrated.
+- Make the planned interactions possible (e.g. give interactive objects a
+  PointerReceiverComponent).
+- Every change target must name an object defined in this module.
+- Objects should have realistic positions (within a ~3m workspace centered on the
+  user) and scales appropriate for a tabletop AR experience (typically 0.02-0.5 units).
+"""
+
+REVISION_INSTRUCTION = """\
+A reviewer asked for changes to your previous {what}. Address ALL of the feedback
+below; earlier items still apply unless a later item overrides them:
+
+{feedback}
+
+Return the complete revised {what}, addressing the feedback and keeping everything
+the reviewer did not ask to change."""
+
+
+def _length_bounds(model: type[BaseModel], field_name: str) -> tuple[Optional[int], Optional[int]]:
+    """The (min_length, max_length) a schema puts on a list field."""
+    lo = hi = None
+    for m in model.model_fields[field_name].metadata:
+        lo = getattr(m, "min_length", lo)
+        hi = getattr(m, "max_length", hi)
+    return lo, hi
+
+
+# Read from the schemas so they can't drift: LabOutline's scene range (the plan
+# step caps it further with --max-scenes) and ModuleAssetPlan's clip-beat minimum.
+MIN_SCENES, MAX_SCENES_LIMIT = _length_bounds(LabOutline, "scenes")
+MIN_CLIP_BEATS = _length_bounds(ModuleAssetPlan, "clip_beats")[0]
+
+
+# ── Rendering helpers ────────────────────────────────────────────────
+
+def _render_scene(scene: OutlineScene) -> str:
+    return "\n".join([
+        f"Scene: {scene.scene_name}",
+        f"Purpose: {scene.brief_purpose}",
+        "Key visuals: " + "; ".join(scene.key_visuals),
+        "Student actions: " + "; ".join(scene.student_actions),
+    ])
+
+
+def render_plan(plan: LabOutline) -> str:
+    """The approved plan as a numbered scene list. Identical for every module of a
+    run (the current module is named in the task section instead), so it stays
+    part of the cacheable prefix."""
+    lines = [f"Lab title: {plan.lab_title}", "Lab objectives:"]
+    lines += [f"- {o}" for o in plan.top_level_objectives]
+    lines.append("Modules (one per scene):")
+    for i, scene in enumerate(plan.scenes, start=1):
+        lines.append(f"{i}. {scene.scene_name}: {scene.brief_purpose}")
+    return "\n".join(lines)
+
+
+# ── Prompt builders ──────────────────────────────────────────────────
+
+def build_plan_prompt(lab_context: str, *, has_script: bool, max_scenes: int) -> str:
+    """The scene range comes from the run's max_scenes (validated against
+    LabOutline's own 3-12 bounds in PipelineConfig), so the prompt asks for
+    exactly what LabPlan will accept."""
+    script_clause = " and every part of the detailed script" if has_script else ""
+    return PLAN_INSTRUCTION.format(
+        lab_context=lab_context, script_clause=script_clause,
+        min_scenes=MIN_SCENES, max_scenes=max_scenes,
+    )
+
+
+def build_asset_plan_prompt(
+    lab_context: str,
+    plan: LabOutline,
+    index: int,
+    registry: AssetRegistry,
+    *,
+    allow_new_components: bool,
+    min_objects: int,
+    min_beats: int,
+) -> str:
+    return ASSET_PLAN_INSTRUCTION.format(
+        lab_context=lab_context,
+        plan=render_plan(plan),
+        index=index,
+        total=len(plan.scenes),
+        scene=_render_scene(plan.scenes[index - 1]),
+        previous=registry.render_previous_modules(),
+        assets=registry.render_assets(),
+        catalog=registry.render_component_catalog(),
+        new_component_rule=(
+            NEW_COMPONENTS_ALLOWED if allow_new_components else NEW_COMPONENTS_DISABLED
+        ),
+        min_objects=min_objects,
+        min_beats=min_beats,
+    )
+
+
+def allowed_new_component_names(
+    asset_plan: ModuleAssetPlan, registry: AssetRegistry
+) -> list[str]:
+    """NewComponent scriptNames a module may use: the ones its plan introduces
+    plus every new component already in the catalog."""
+    names = list(registry.new_component_names())
+    for comp in asset_plan.components:
+        if comp.is_new and registry.find_component(comp.component_type) is None:
+            if comp.component_type not in names:
+                names.append(comp.component_type)
+    return names
+
+
+def build_module_prompt(
+    lab_context: str,
+    plan: LabOutline,
+    index: int,
+    registry: AssetRegistry,
+    asset_plan: ModuleAssetPlan,
+    *,
+    min_objects: int,
+    min_clips: int,
+) -> str:
+    allowed = allowed_new_component_names(asset_plan, registry)
+    return MODULE_INSTRUCTION.format(
+        lab_context=lab_context,
+        plan=render_plan(plan),
+        index=index,
+        total=len(plan.scenes),
+        scene=_render_scene(plan.scenes[index - 1]),
+        previous=registry.render_previous_modules(),
+        asset_plan=json.dumps(asset_plan.model_dump(mode="json", exclude_none=True), indent=2),
+        catalog=registry.render_component_catalog(),
+        module_name=asset_plan.module_name,
+        allowed_new=", ".join(allowed) if allowed else "none",
+        min_objects=min_objects,
+        min_clips=min_clips,
+    )
+
+
+def build_revision_message(what: str, feedback_history: list[str]) -> str:
+    """Revision request carrying every round of feedback for the step, oldest
+    first, so a later round doesn't silently drop an earlier request."""
+    feedback = "\n".join(f"{i}. {f}" for i, f in enumerate(feedback_history, start=1))
+    return REVISION_INSTRUCTION.format(what=what, feedback=feedback)

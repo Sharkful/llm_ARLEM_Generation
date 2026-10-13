@@ -33,7 +33,7 @@ from pydantic import (
 )
 from pydantic.json_schema import SkipJsonSchema
 
-from _schema_helpers import ConstToEnumSchemaMixin, _coerce_number_list
+from _schema_helpers import ConstToEnumSchemaMixin, _coerce_number_list, to_pascal_case
 
 
 # ── Primitive Types ───────────────────────────────────────────────────
@@ -241,9 +241,21 @@ class NewComponent(ConstToEnumSchemaMixin):
     componentType: SkipJsonSchema[Literal["newscript"]] = "newscript"
     scriptName: str = Field(
         min_length=5,
-        pattern=r'^\w+$',
-        description="string name of the script file and the C# class it contains. should be all lowercase, alphanumeric, and without leading digits, minimum length 5"
+        pattern=r'^[A-Z][A-Za-z0-9]{4,}$',
+        description=(
+            "Name of the script file and the C# class it contains, in PascalCase "
+            "(e.g. 'OrbitTrail', 'PulseGlow'): letters and digits only, starting with "
+            "a capital letter, at least 5 characters"
+        ),
     )
+    @field_validator("scriptName", mode="before")
+    @classmethod
+    def _normalize_script_name(cls, v):
+        """Normalize to PascalCase (``orbit_trail`` / ``orbitTrail`` -> ``OrbitTrail``)
+        instead of forcing a retry over casing; the pattern above then only rejects
+        names that are too short or start with a digit."""
+        return to_pascal_case(v)
+
     scriptDescription: str = Field(
         min_length=20,
         description="""A description of what the component script does. It should note all required inputs, either references to other objects, or numeric values that can be set in the inspector.
