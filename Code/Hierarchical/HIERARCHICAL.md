@@ -191,7 +191,8 @@ All LLM calls go through `benchmark.create_instructor_client`,
 Gemini and Anthropic guards as the one-shot runner.
 
 > Anthropic requests use `tool_choice: auto` with `disable_parallel_tool_use`, so
-> current Claude models (which reject a forced choice) run too (#70).
+> Claude Sonnet 5.5, Opus 5.5 and Fable 5.1 (which reject a forced choice) can run
+> too (#70).
 
 ## Running
 

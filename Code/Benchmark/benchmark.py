@@ -416,11 +416,13 @@ def provider_create_kwargs(model_config: ModelConfig, response_model) -> dict:
     # Anthropic client with an explicit timeout, which disables that guard.
     if model_config.provider == Provider.ANTHROPIC:
         kwargs["max_tokens"] = 32000
-        # tool_choice "auto", not forced (issue #70). Current Claude models (Haiku,
-        # Sonnet and Opus 5.5, Fable 5.1) return 400 for a forced tool_choice
-        # ({"type": "tool"} / {"type": "any"}), and instructor's own default forces
-        # it, so we always pass ours (instructor only sets tool_choice when the
-        # caller hasn't). Every Claude model accepts "auto".
+        # tool_choice "auto", not forced (issue #70). Claude Sonnet 5.5, Opus 5.5
+        # and Fable 5.1 return 400 for a forced tool_choice ({"type": "tool"} /
+        # {"type": "any"}), and instructor's own default forces it, so we always
+        # pass ours (instructor only sets tool_choice when the caller hasn't).
+        # Every Claude model accepts "auto". On Claude Haiku 5.5, which does accept
+        # a forced choice, forcing would also skip its thinking; "auto" lets it
+        # reason before the call.
         #
         # disable_parallel_tool_use still caps the reply at one tool call. That is
         # the #44 guard: a parallel call always fails parsing under instructor

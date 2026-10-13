@@ -18,8 +18,9 @@ retryer, provider kwargs) against a local mock OpenAI server that replays part
 1's step files, with one invalid module response to force an instructor reask.
 
 Part 3 builds the real Anthropic client against a local mock Anthropic server and
-checks the request shape we send (forced tool_choice + disable_parallel_tool_use,
-max_tokens).
+checks the request shape we send (tool_choice auto + disable_parallel_tool_use,
+the system line asking for the tool, max_tokens), including instructor's reask
+after a plain-text reply.
 
 Outputs go to a temp dir that is removed afterwards. Exit code 1 on any failure.
 """
@@ -718,8 +719,9 @@ check(len(df) == 1 and bool(df.iloc[0]["success"]) and df.iloc[0]["structure"] =
 # ── Part 3: the exact request we send Anthropic (mock Anthropic server) ──
 # Builds the client through the real create_instructor_client (pointed at the
 # mock via ANTHROPIC_BASE_URL), so this checks the shape of what we actually send:
-# tool_choice "auto" with disable_parallel_tool_use (#44, #70; current Claude
-# models reject a forced choice), the system line asking for the tool, and
+# tool_choice "auto" with disable_parallel_tool_use (#44, #70; Claude Sonnet 5.5,
+# Opus 5.5 and Fable 5.1 reject a forced choice), the system line asking for the
+# tool, and
 # max_tokens. The first module request is answered in plain text, as "auto"
 # allows, to check instructor's "no tool invocation" reask.
 print("\n-- part 3: mock Anthropic server --")

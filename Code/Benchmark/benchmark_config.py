@@ -71,9 +71,10 @@ MODELS = {
     "claude-opus-4.8":  ModelConfig("claude-opus-4-8",           Provider.ANTHROPIC, "Claude Opus 4.8", ModelSize.LARGE),
     "claude-sonnet-5":  ModelConfig("claude-sonnet-5",           Provider.ANTHROPIC, "Claude Sonnet 5", ModelSize.MEDIUM),
     "claude-haiku-4.5": ModelConfig("claude-haiku-4-5-20251001", Provider.ANTHROPIC, "Claude Haiku 4.5", ModelSize.SMALL),
-    # Added after wave 2 (issue #70) to check the tool_choice "auto" path on a
-    # current Claude model, which rejects a forced tool_choice. Not in any suite
-    # until the roster review (#72).
+    # Added after wave 2 (issue #70): the current small Claude model, used to check
+    # the tool_choice "auto" path live. (It accepts a forced choice; Sonnet 5.5,
+    # Opus 5.5 and Fable 5.1 are the ones that reject it.) Not in any suite until
+    # the roster review (#72).
     "claude-haiku-5.5": ModelConfig("claude-haiku-5-5",          Provider.ANTHROPIC, "Claude Haiku 5.5", ModelSize.SMALL),
 
     # ── Google Gemini ─────────────────────────────────────────────────────

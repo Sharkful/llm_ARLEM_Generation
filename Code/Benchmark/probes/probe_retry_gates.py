@@ -8,9 +8,11 @@ so instructor has to send a reask. The model passes only if the provider accepts
 that reask and attempt 2 parses. This is the failure #44 was about: a malformed
 reask that the API rejects with a 400 before the model sees the correction.
 
-It also covers the Anthropic tool_choice "auto" path (issue #70): a current model
-like Claude Haiku 5.5 returns thinking blocks, which the reask must replay
-unchanged. A plain-text reply instead of a tool call shows up as an extra parse
+It also covers the Anthropic tool_choice "auto" path (issue #70): a thinking
+model like Claude Haiku 5.5 returns thinking blocks, which the reask must replay
+unchanged. Haiku 5.5 accepts a forced choice, so the forced-choice 400 itself is
+only exercised by probing Claude Sonnet 5.5, Opus 5.5 or Fable 5.1 (once one is
+registered, #72). A plain-text reply instead of a tool call shows up as an extra parse
 error, not a failure.
 
 Costs a few cents per model. Needs the provider API keys in .env.
