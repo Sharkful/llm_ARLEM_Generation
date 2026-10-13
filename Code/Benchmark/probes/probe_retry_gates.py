@@ -80,22 +80,45 @@ def probe(model_key: str, max_retries: int) -> dict:
     kwargs.update(provider_create_kwargs(mc, CityFact))
     _validations[0] = 0
     out = {"model": model_key, "tool_choice": tool_choice_for(mc), "ok": False, "error": None}
+    full_error = ""
     try:
         result = _transient_retryer()(client.create, **kwargs)
         out["result"] = f"{result.city}, {result.country}"
     except Exception as e:  # noqa: BLE001 — report every failure the same way
-        out["error"] = f"{type(e).__name__}: {str(e).splitlines()[0][:200]}"
+        full_error = f"{type(e).__name__}: {e}"
+        # instructor's retry exception opens with "<failed_attempts>"; show the
+        # last line that says something instead.
+        lines = [ln.strip() for ln in str(e).splitlines()
+                 if ln.strip() and not ln.strip().startswith(("<", "For further information"))]
+        out["error"] = f"{type(e).__name__}: {(lines[-1] if lines else str(e))[:200]}"
     calls = tracker.aggregate.calls
     out["parse_errors"] = sum(c.parse_errors for c in calls)
     out["api_errors"] = sum(c.api_errors for c in calls)
     # Requests actually sent. Not the tracker's attempt count, which counts each
     # failed parse twice (#71).
-    out["requests"] = out["parse_errors"] + out["api_errors"] + (out["error"] is None)
+    # An API error ends the call, so it was the last request sent.
+    api_failure = out["api_errors"] > 0 or any(
+        s in full_error for s in ("Error code: 400", "BadRequestError", "INVALID_ARGUMENT"))
+    out["requests"] = (out["parse_errors"] + (out["error"] is None)
+                       + max(out["api_errors"], int(api_failure)))
     out["tokens"] = sum(c.total_usage.total_tokens for c in calls)
     out["cost_usd"] = sum(tracker.pricing.calculate_cost(c.total_usage) for c in calls)
-    # Passed: attempt 1 was rejected by our validator, the reask reached the model
+    # Parse errors other than our one deliberate rejection: plain-text replies
+    # (tool_choice "auto") or the model failing validation on its own.
+    out["other_parse_errors"] = out["parse_errors"] - min(_validations[0], 1)
+    # PASS: our deliberate rejection was reasked, the provider accepted the reask
     # and a later attempt parsed.
-    out["ok"] = out["error"] is None and _validations[0] >= 2 and out["parse_errors"] >= 1
+    # FAIL: the provider rejected a request (the #44 shape: a malformed reask
+    # 400s before the model sees the correction).
+    # EXHAUSTED: no API error, but the retries ran out (e.g. plain-text replies),
+    # so the reask path worked; rerun or raise --max-retries.
+    if out["error"] is None and _validations[0] >= 2:
+        out["status"] = "PASS"
+    elif api_failure:
+        out["status"] = "FAIL"
+    else:
+        out["status"] = "EXHAUSTED"
+    out["ok"] = out["status"] == "PASS"
     return out
 
 
@@ -123,17 +146,22 @@ def main():
         print(f"  probing {m} ...", flush=True)
         results.append(probe(m, args.max_retries))
 
-    print(f"\n  {'model':<24} {'tool_choice':<11} {'result':<6} {'requests':>8} "
-          f"{'parse err':>9} {'api err':>7} {'tokens':>7} {'cost':>9}")
+    print(f"\n  {'model':<24} {'tool_choice':<11} {'result':<9} {'requests':>8} "
+          f"{'other parse err':>15} {'api err':>7} {'tokens':>7} {'cost':>9}")
     for r in results:
-        print(f"  {r['model']:<24} {r['tool_choice']:<11} {'PASS' if r['ok'] else 'FAIL':<6} "
-              f"{r['requests']:>8} {r['parse_errors']:>9} {r['api_errors']:>7} "
+        print(f"  {r['model']:<24} {r['tool_choice']:<11} {r['status']:<9} "
+              f"{r['requests']:>8} {r['other_parse_errors']:>15} {r['api_errors']:>7} "
               f"{r['tokens']:>7,} ${r['cost_usd']:.5f}")
         if r["error"]:
             print(f"      {r['error']}")
-    print("\n  PASS = attempt 1 rejected on purpose, the reask was accepted by the API, and a")
-    print("  later attempt parsed. More than one parse error means the model also answered")
-    print("  in plain text or failed validation on its own once.")
+    print("\n  PASS      attempt 1 was rejected on purpose, the provider accepted the reask,")
+    print("            and a later attempt parsed.")
+    print("  FAIL      the provider rejected a request (API error): the #44 reask failure.")
+    print("  EXHAUSTED no API error, but the retries ran out before a valid answer (e.g. the")
+    print("            model kept answering in plain text). The reask path itself worked;")
+    print("            rerun, or raise --max-retries.")
+    print("  other parse err = plain-text replies or the model's own validation failures,")
+    print("  beyond the one deliberate rejection.")
     sys.exit(0 if all(r["ok"] for r in results) else 1)
 
 

@@ -37,7 +37,29 @@ for sub in ("Code/Benchmark", "Code/Schemas", "Code/Hierarchical", ""):
 PROBE_MODELS = ("gpt-5.4-mini", "claude-haiku-4.5", "gemini-3.5-flash")
 
 # Request keys that carry the conversation, not the schema; left out of the record.
+# The system text is kept separately (``system_text``): the Anthropic request's
+# "call the tool" line lives there and is part of what the upgrade gate checks.
 CONVERSATION_KEYS = {"messages", "contents", "system", "systemInstruction"}
+
+
+def system_text(body: dict) -> str:
+    """Every system instruction in a request, in order, as one string (Anthropic
+    ``system``, Gemini ``systemInstruction``, OpenAI ``role: system`` messages)."""
+    def text(x):
+        if isinstance(x, str):
+            return [x]
+        if isinstance(x, list):
+            return [t for item in x for t in text(item)]
+        if isinstance(x, dict):
+            if "text" in x:
+                return [x["text"]]
+            return text(x.get("parts") or x.get("content") or [])
+        return []
+
+    parts = text(body.get("system")) + text(body.get("systemInstruction"))
+    parts += [t for m in body.get("messages", []) if m.get("role") == "system"
+              for t in text(m.get("content"))]
+    return "\n".join(parts)
 
 captured: list[dict] = []
 
@@ -115,7 +137,8 @@ def capture_all() -> dict:
                 continue
             body = reqs[0]["body"]
             result["requests"][f"{mc.provider.value}/{name}"] = {
-                k: v for k, v in body.items() if k not in CONVERSATION_KEYS
+                **{k: v for k, v in body.items() if k not in CONVERSATION_KEYS},
+                "system_text": system_text(body),
             }
             print(f"  {mc.provider.value:<9} {name:<34} captured "
                   f"({len(json.dumps(body.get('tools', '')))} chars of tools)")
