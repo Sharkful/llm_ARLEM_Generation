@@ -434,7 +434,10 @@ def provider_create_kwargs(model_config: ModelConfig, response_model) -> dict:
         # Wave 2 ran with the forced {"type": "tool"} choice on 1.15.4; Anthropic
         # runs from here on are a different request shape and are never pooled
         # with it (the metrics record carries ``tool_choice``).
-        tool_name = response_model.model_json_schema().get("title", response_model.__name__)
+        # The tool instructor registers is named after the response model's schema
+        # title, which is the class name (none of our models sets a custom title).
+        # __name__ avoids building the whole JSON schema just to read it.
+        tool_name = response_model.__name__
         kwargs["tool_choice"] = {"type": "auto", "disable_parallel_tool_use": True}
         kwargs["system"] = (
             f"Respond only by calling the `{tool_name}` tool, exactly once. "

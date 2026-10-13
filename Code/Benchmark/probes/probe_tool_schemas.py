@@ -173,6 +173,12 @@ def main():
     args = p.parse_args()
     logging.getLogger("instructor").setLevel(logging.CRITICAL)  # every probe call 400s
 
+    # A capture under the wrong instructor makes a misleading gate baseline: stop if
+    # a provider SDK is missing, warn if instructor isn't the requirements.txt pin.
+    from benchmark import require_environment
+    from benchmark_config import MODELS
+    require_environment([MODELS[m] for m in PROBE_MODELS])
+
     result = capture_all()
     args.out.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
     print(f"\ninstructor {result['instructor']}: {len(result['requests'])} requests -> {args.out}")

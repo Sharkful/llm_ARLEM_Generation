@@ -422,13 +422,28 @@ check(len(errors) == 1 and "'anthropic' is not installed" in errors[0],
       "preflight reports a missing provider SDK")
 check(benchmark._pinned_version("instructor") == "1.17.0", "preflight reads the instructor pin")
 # The #44 Gemini patch must wrap the parse_genai_tools the GENAI_TOOLS handler calls
-# (a module-global lookup); re-check on every instructor upgrade (issue #70).
-import instructor.v2.providers.genai.handlers as _genai_handlers  # noqa: E402
-benchmark._patch_genai_parallel_call_retry()
-_genai_src = Path(_genai_handlers.__file__).read_text(encoding="utf-8")
-check(getattr(_genai_handlers.parse_genai_tools, "_arlem_retryable_patch", False)
-      and "model = parse_genai_tools(" in _genai_src,
-      "Gemini parallel-call retry patch wraps the parse the TOOLS handler calls")
+# (a module-global lookup) and turn the text + one-functionCall assert into a
+# retryable ResponseParsingError; re-check on every instructor upgrade (issue #70).
+try:
+    import instructor.v2.providers.genai.handlers as _genai_handlers
+    from google.genai import types as _gt
+    from instructor.v2.core.errors import ResponseParsingError as _RPE
+    benchmark._patch_genai_parallel_call_retry()
+    _shape = _gt.GenerateContentResponse(candidates=[_gt.Candidate(content=_gt.Content(parts=[
+        _gt.Part(text="Here is the plan."),
+        _gt.Part(function_call=_gt.FunctionCall(name="LabPlan", args={})),
+    ]))])
+    try:
+        _genai_handlers.parse_genai_tools(P.LabPlan, _shape)
+        _patched = False
+    except _RPE:
+        _patched = True
+    _calls_module_global = "model = parse_genai_tools(" in Path(_genai_handlers.__file__).read_text(
+        encoding="utf-8")
+    check(_patched and _calls_module_global,
+          "Gemini text + functionCall parse error is retryable under the patch")
+except Exception as _e:  # noqa: BLE001 — report, don't crash the offline test
+    check(False, f"Gemini parallel-call retry patch check ({type(_e).__name__}: {_e})")
 _req = TMP / "requirements_marker.txt"
 _req.write_text('instructor[anthropic]==1.15.4 ; python_version >= "3.10"  # pinned\n', encoding="utf-8")
 check(benchmark._pinned_version("instructor", _req) == "1.15.4",
@@ -806,12 +821,13 @@ def _system_text(r):
 check(all(f"calling the `{r['tools'][0]['name']}` tool" in _system_text(r)
           and P.SYSTEM_PROMPT[:40] in _system_text(r) for r in reqs),
       "every request asks for its step's tool and keeps the system prompt")
-_reask = next(r for r in reqs if len(r["messages"]) > 2)
-check(_reask["tools"][0]["name"] == "PlannedDemoModule"
+_reask = next((r for r in reqs if len(r["messages"]) > 2), None)
+check(_reask is not None and _reask["tools"][0]["name"] == "PlannedDemoModule"
       and "no tool invocation" in json.dumps(_reask["messages"][-1]),
       "a plain-text reply is reasked ('no tool invocation')")
-_m1 = next(s for s in rec["steps"] if s["step"] == "module" and s["index"] == 1)
-check(_m1["success"] and _m1["parse_errors"] == 1 and rec["tool_choice"] == "auto",
+_m1 = next((s for s in rec["steps"] if s["step"] == "module" and s["index"] == 1), None)
+check(_m1 is not None and _m1["success"] and _m1["parse_errors"] == 1
+      and rec.get("tool_choice") == "auto",
       "the reask costs one attempt; the record says tool_choice auto")
 check(all(r["max_tokens"] == 32000 for r in reqs), "every request sets max_tokens=32000")
 check([r["tools"][0]["name"] for r in reqs[:3]] == ["LabPlan", "ModuleAssetPlan", "PlannedDemoModule"],
