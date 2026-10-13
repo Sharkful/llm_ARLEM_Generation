@@ -416,22 +416,36 @@ def provider_create_kwargs(model_config: ModelConfig, response_model) -> dict:
     # Anthropic client with an explicit timeout, which disables that guard.
     if model_config.provider == Provider.ANTHROPIC:
         kwargs["max_tokens"] = 32000
-        # Forbid parallel tool calls: under instructor a parallel call always
-        # fails parsing, and its reask replays the assistant turn with only one
-        # tool_result, which the API 400s (issue #44 — Haiku 4.5 retry-death;
-        # unfixed upstream as of 1.15.4). Requires instructor>=1.15: earlier
-        # versions overwrite a caller-supplied tool_choice. The name must equal
-        # the tool instructor registers, which is model_json_schema()["title"];
-        # that equals __name__ only while no response model sets a custom title
-        # (ConfigDict(title=...)). None of our response models do, so this
-        # holds today — but a future custom title would 400 every Anthropic run
-        # (latent; review F13).
-        kwargs["tool_choice"] = {
-            "type": "tool",
-            "name": response_model.__name__,
-            "disable_parallel_tool_use": True,
-        }
+        # tool_choice "auto", not forced (issue #70). Current Claude models (Haiku,
+        # Sonnet and Opus 5.5, Fable 5.1) return 400 for a forced tool_choice
+        # ({"type": "tool"} / {"type": "any"}), and instructor's own default forces
+        # it, so we always pass ours (instructor only sets tool_choice when the
+        # caller hasn't). Every Claude model accepts "auto".
+        #
+        # disable_parallel_tool_use still caps the reply at one tool call. That is
+        # the #44 guard: a parallel call always fails parsing under instructor
+        # (Haiku 4.5 retry-death). "auto" doesn't guarantee a call, so the system
+        # line below asks for one; a plain-text reply is reasked by instructor
+        # ("no tool invocation") and costs one attempt.
+        #
+        # Wave 2 ran with the forced {"type": "tool"} choice on 1.15.4; Anthropic
+        # runs from here on are a different request shape and are never pooled
+        # with it (the metrics record carries ``tool_choice``).
+        tool_name = response_model.model_json_schema().get("title", response_model.__name__)
+        kwargs["tool_choice"] = {"type": "auto", "disable_parallel_tool_use": True}
+        kwargs["system"] = (
+            f"Respond only by calling the `{tool_name}` tool, exactly once. "
+            "Do not answer in plain text."
+        )
     return kwargs
+
+
+def tool_choice_for(model_config: ModelConfig) -> str:
+    """The tool_choice a run sends, as recorded in metrics: "auto" for Anthropic
+    (see ``provider_create_kwargs``); "forced" for OpenAI and Gemini, where
+    instructor forces the response model's function (Gemini: mode ANY restricted
+    to that one function)."""
+    return "auto" if model_config.provider == Provider.ANTHROPIC else "forced"
 
 
 # ── Model Selection ──────────────────────────────────────────────────
@@ -645,6 +659,7 @@ def run_single_benchmark(
         "display_name": model_config.display_name,
         "spec_type": run_config.spec_type.value,
         "decode_mode": decode_mode.value,  # instructor enforcement path actually used
+        "tool_choice": tool_choice_for(model_config),
         "topic": run_config.topic,
         "lab_name": run_config.lab_name,
         "level": run_config.level.value if run_config.level else None,

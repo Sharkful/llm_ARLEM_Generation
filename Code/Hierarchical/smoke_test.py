@@ -718,11 +718,12 @@ check(len(df) == 1 and bool(df.iloc[0]["success"]) and df.iloc[0]["structure"] =
 # ── Part 3: the exact request we send Anthropic (mock Anthropic server) ──
 # Builds the client through the real create_instructor_client (pointed at the
 # mock via ANTHROPIC_BASE_URL), so this checks the shape of what we actually send:
-# the forced tool_choice with disable_parallel_tool_use (#44) and max_tokens.
-# Note: current Claude 5.5 / Fable 5.1 models reject a forced tool_choice (#72);
-# when that changes, update the expected request shape here.
+# tool_choice "auto" with disable_parallel_tool_use (#44, #70; current Claude
+# models reject a forced choice), the system line asking for the tool, and
+# max_tokens. The first module request is answered in plain text, as "auto"
+# allows, to check instructor's "no tool invocation" reask.
 print("\n-- part 3: mock Anthropic server --")
-anth = {"asset": 0, "requests": []}
+anth = {"asset": 0, "requests": [], "text_sent": False}
 
 
 class MockAnthropic(BaseHTTPRequestHandler):
@@ -740,11 +741,16 @@ class MockAnthropic(BaseHTTPRequestHandler):
             data = (REPLAY / f"{anth['asset']:02d}_asset_plan.json").read_text(encoding="utf-8")
         else:
             data = (REPLAY / f"{anth['asset']:02d}_module.json").read_text(encoding="utf-8")
+        if tool == "PlannedDemoModule" and not anth["text_sent"]:
+            anth["text_sent"] = True
+            content, stop = [{"type": "text", "text": "Here is the module you asked for."}], "end_turn"
+        else:
+            content = [{"type": "tool_use", "id": "toolu_mock", "name": tool,
+                        "input": json.loads(data)}]
+            stop = "tool_use"
         payload = json.dumps({
             "id": "msg_mock", "type": "message", "role": "assistant", "model": body["model"],
-            "content": [{"type": "tool_use", "id": "toolu_mock", "name": tool,
-                         "input": json.loads(data)}],
-            "stop_reason": "tool_use", "stop_sequence": None,
+            "content": content, "stop_reason": stop, "stop_sequence": None,
             "usage": {"input_tokens": 1000, "output_tokens": 200},
         }).encode()
         self.send_response(200)
@@ -772,10 +778,27 @@ finally:
 
 check(rec["success"], "mock-Anthropic run succeeds")
 reqs = anth["requests"]
-check(len(reqs) == 1 + 2 * len(MODS), f"one Anthropic request per step ({len(reqs)})")
-check(all(r["tool_choice"] == {"type": "tool", "name": r["tools"][0]["name"],
-                               "disable_parallel_tool_use": True} for r in reqs),
-      "every request forces its step's tool with disable_parallel_tool_use")
+check(len(reqs) == 2 + 2 * len(MODS),
+      f"one Anthropic request per step, plus one reask ({len(reqs)})")
+check(all(r["tool_choice"] == {"type": "auto", "disable_parallel_tool_use": True} for r in reqs),
+      "every request sends tool_choice auto with disable_parallel_tool_use")
+
+
+def _system_text(r):
+    sys_ = r.get("system") or ""
+    return sys_ if isinstance(sys_, str) else " ".join(b.get("text", "") for b in sys_)
+
+
+check(all(f"calling the `{r['tools'][0]['name']}` tool" in _system_text(r)
+          and P.SYSTEM_PROMPT[:40] in _system_text(r) for r in reqs),
+      "every request asks for its step's tool and keeps the system prompt")
+_reask = next(r for r in reqs if len(r["messages"]) > 2)
+check(_reask["tools"][0]["name"] == "PlannedDemoModule"
+      and "no tool invocation" in json.dumps(_reask["messages"][-1]),
+      "a plain-text reply is reasked ('no tool invocation')")
+_m1 = next(s for s in rec["steps"] if s["step"] == "module" and s["index"] == 1)
+check(_m1["success"] and _m1["parse_errors"] == 1 and rec["tool_choice"] == "auto",
+      "the reask costs one attempt; the record says tool_choice auto")
 check(all(r["max_tokens"] == 32000 for r in reqs), "every request sets max_tokens=32000")
 check([r["tools"][0]["name"] for r in reqs[:3]] == ["LabPlan", "ModuleAssetPlan", "PlannedDemoModule"],
       "tool names follow the step response models")
