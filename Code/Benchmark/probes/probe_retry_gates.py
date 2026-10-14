@@ -62,6 +62,7 @@ class CityFact(BaseModel):
 
 def probe(model_key: str, max_retries: int) -> dict:
     from benchmark import (
+        _is_transient_api_error,
         _transient_retryer,
         create_instructor_client,
         provider_create_kwargs,
@@ -91,11 +92,13 @@ def probe(model_key: str, max_retries: int) -> dict:
     _rejections[0] = 0
     out = {"model": model_key, "tool_choice": tool_choice_for(mc), "ok": False, "error": None}
     full_error = ""
+    error: Exception | None = None
     retryer = _transient_retryer()
     try:
         result = retryer(create)
         out["result"] = f"{result.city}, {result.country}"
     except Exception as e:  # noqa: BLE001 — report every failure the same way
+        error = e
         full_error = f"{type(e).__name__}: {e}"
         # instructor's retry exception opens with "<failed_attempts>"; show the
         # last line that says something instead.
@@ -106,7 +109,10 @@ def probe(model_key: str, max_retries: int) -> dict:
     calls = tracker.aggregate.calls
     out["parse_errors"] = sum(c.parse_errors for c in calls)
     out["api_errors"] = sum(c.api_errors for c in calls)
-    api_failure = out["api_errors"] > 0 or any(
+    # Only the final call can show the #44 shape: every earlier call ended in a
+    # transient error the retryer re-sent (a 503, not a rejected reask).
+    final_api_errors = calls[-1].api_errors if calls else 0
+    api_failure = final_api_errors > 0 or any(
         s in full_error for s in ("Error code: 400", "BadRequestError", "INVALID_ARGUMENT"))
     # Requests sent: one tracker attempt per request (issue #71 fixed).
     out["requests"] = sum(c.total_attempts for c in calls)
@@ -117,12 +123,16 @@ def probe(model_key: str, max_retries: int) -> dict:
     out["other_parse_errors"] = out["parse_errors"] - _rejections[0]
     # PASS: our deliberate rejection was reasked, the provider accepted the reask
     # and a later attempt parsed, all within the final call.
+    # TRANSIENT: the transient retryer ran out of re-sends (429/5xx/connection);
+    # the provider was unavailable, which says nothing about the reask path.
     # FAIL: the provider rejected a request (the #44 shape: a malformed reask
     # 400s before the model sees the correction).
     # EXHAUSTED: no API error, but the retries ran out (e.g. plain-text replies),
     # so the reask path worked; rerun or raise --max-retries.
     if out["error"] is None and _validations[0] >= 2:
         out["status"] = "PASS"
+    elif error is not None and _is_transient_api_error(error):
+        out["status"] = "TRANSIENT"
     elif api_failure:
         out["status"] = "FAIL"
     else:
@@ -168,6 +178,8 @@ def main():
                   "the counts above include the restarted call(s)")
     print("\n  PASS      attempt 1 was rejected on purpose, the provider accepted the reask,")
     print("            and a later attempt parsed.")
+    print("  TRANSIENT the provider stayed unavailable (429/5xx/connection) through every")
+    print("            transient re-send; says nothing about the reask path. Rerun later.")
     print("  FAIL      the provider rejected a request (API error): the #44 reask failure.")
     print("  EXHAUSTED no API error, but the retries ran out before a valid answer (e.g. the")
     print("            model kept answering in plain text). The reask path itself worked;")
