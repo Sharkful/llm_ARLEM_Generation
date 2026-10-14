@@ -849,6 +849,25 @@ check(abs(PricingCalculator(model="gpt-5.4-mini").calculate_cost(_oa)
       "a model without cache rates (wave 2) bills all input at the input rate, as before")
 
 
+# 26. the model that actually answered is recorded (issue #72): Google serves
+#     gemini-3.5-flash requests with gemini-3.6-flash since 2026-10-08
+import contextlib  # noqa: E402
+import io  # noqa: E402
+from tracking.metrics import served_model_of  # noqa: E402
+check(served_model_of(SimpleNamespace(model_version="models/gemini-3.6-flash", usage_metadata=None))
+      == "gemini-3.6-flash"
+      and served_model_of(SimpleNamespace(model="gpt-6-luna-2026-09-01")) == "gpt-6-luna-2026-09-01"
+      and served_model_of(SimpleNamespace(model=None)) is None,
+      "served model read from Gemini model_version and OpenAI/Anthropic model")
+_out = io.StringIO()
+with contextlib.redirect_stdout(_out):
+    benchmark.warn_served_model("gpt-6-luna", ["gpt-6-luna-2026-09-01"])
+    _quiet = _out.getvalue()
+    benchmark.warn_served_model("gemini-3.5-flash", ["gemini-3.6-flash"])
+check(_quiet == "" and "answered with gemini-3.6-flash" in _out.getvalue(),
+      "a dated snapshot of the requested model is fine; a redirect to another model warns")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"
@@ -971,6 +990,8 @@ finally:
     srv.shutdown()
 
 check(rec["success"], "mock-server run succeeds")
+check(rec["served_models"] == ["gpt-5.4-mini"] == rec["tracking"]["served_models"],
+      "the record lists the model that answered")
 check(rec["totals"]["calls"] == len(rec["steps"]) + 1 and rec["steps"][0]["calls"] == 2,
       "one tracked call per step, plus the reviewer's call charged to the plan step")
 m2 = next(s for s in rec["steps"] if s["step"] == "module" and s["index"] == 2)
@@ -1149,7 +1170,8 @@ check(_m1 is not None and _m1["success"] and _m1["parse_errors"] == 1
 check(all(r["max_tokens"] == 32000 for r in reqs), "every request sets max_tokens=32000")
 check([r["tools"][0]["name"] for r in reqs[:3]] == ["LabPlan", "ModuleAssetPlan", "PlannedDemoModule"],
       "tool names follow the step response models")
-check(all(r["model"] == "claude-haiku-5-5" for r in reqs), "model id sent (Claude Haiku 5.5)")
+check(all(r["model"] == "claude-haiku-5-5" for r in reqs) and rec["served_models"] == ["claude-haiku-5-5"],
+      "model id sent and served (Claude Haiku 5.5)")
 check(rec["totals"]["prompt_tokens"] == 1000 * len(reqs)
       and rec["totals"]["cached_tokens"] == 300 * len(reqs)
       and rec["totals"]["cache_write_tokens"] == 100 * len(reqs),

@@ -66,6 +66,7 @@ def probe(model_key: str, max_retries: int) -> dict:
         _transient_retryer,
         create_instructor_client,
         provider_create_kwargs,
+        served_model_mismatches,
         tool_choice_for,
     )
     from benchmark_config import MODELS, SpecType
@@ -106,6 +107,7 @@ def probe(model_key: str, max_retries: int) -> dict:
                  if ln.strip() and not ln.strip().startswith(("<", "For further information"))]
         out["error"] = f"{type(e).__name__}: {(lines[-1] if lines else str(e))[:200]}"
     out["transient_retries"] = retryer.statistics.get("attempt_number", 1) - 1
+    out["served_by_other"] = served_model_mismatches(mc.model_id, tracker.served_models())
     calls = tracker.aggregate.calls
     out["parse_errors"] = sum(c.parse_errors for c in calls)
     out["api_errors"] = sum(c.api_errors for c in calls)
@@ -173,6 +175,8 @@ def main():
               f"{r['tokens']:>7,} ${r['cost_usd']:.5f}")
         if r["error"]:
             print(f"      {r['error']}")
+        if r["served_by_other"]:
+            print(f"      answered by {', '.join(r['served_by_other'])}, not the requested id")
         if r["transient_retries"]:
             print(f"      {r['transient_retries']} transient re-send(s) (429/5xx/connection); "
                   "the counts above include the restarted call(s)")

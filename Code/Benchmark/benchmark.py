@@ -373,6 +373,21 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
     )
 
 
+def served_model_mismatches(model_id: str, served_models: list[str]) -> list[str]:
+    """Served model ids that aren't the requested one. A dated snapshot of it
+    (``gpt-6-luna-2026-09-01`` for ``gpt-6-luna``) counts as the same model; a
+    provider-side redirect (``gemini-3.6-flash`` for ``gemini-3.5-flash``) does not."""
+    return [m for m in served_models if not m.startswith(model_id)]
+
+
+def warn_served_model(model_id: str, served_models: list[str]) -> None:
+    """Print a warning when a run was answered by a model other than the one asked for."""
+    other = served_model_mismatches(model_id, served_models)
+    if other:
+        print(f"  WARNING: requested {model_id}, but the provider answered with "
+              f"{', '.join(other)} (recorded in served_models; priced as {model_id})")
+
+
 # ── Environment preflight ────────────────────────────────────────────
 
 # Provider SDK module each provider's client needs (installed via the instructor
@@ -714,6 +729,7 @@ def run_single_benchmark(
 
     # Collect tracking metrics
     tracker_summary = tracker.summary()
+    warn_served_model(model_config.model_id, tracker_summary["served_models"])
 
     # Save any retry / terminal errors next to the metrics file
     errors_file_rel: Optional[str] = None
@@ -729,6 +745,7 @@ def run_single_benchmark(
         "spec_type": run_config.spec_type.value,
         "decode_mode": decode_mode.value,  # instructor enforcement path actually used
         "tool_choice": tool_choice_for(model_config),
+        "served_models": tracker_summary["served_models"],   # what actually answered
         "topic": run_config.topic,
         "lab_name": run_config.lab_name,
         "level": run_config.level.value if run_config.level else None,

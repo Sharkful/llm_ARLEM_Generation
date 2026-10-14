@@ -206,6 +206,7 @@ Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `A
 - `InstructorTracker` / `TrackedClient` — wraps instructor clients, hooks into completion events
 - `PricingCalculator` / `DEFAULT_PRICING` — cost calculation; update `tracking/pricing.py` when adding new models. Entries can carry `cached_input` / `cache_write` rates (current roster only, issue #72), and cost bills uncached input, cache reads and cache writes each at its own rate. `TokenUsage.prompt_tokens` is all input on every provider (Anthropic's separately reported cache reads/writes are folded in); `cached_tokens` and `cache_write_tokens` are parts of it
 - `BenchmarkExporter` — export to JSON, CSV, or Markdown
+- **Served model**: each attempt records the model id the response reports (`served_model_of`: Gemini `model_version`, OpenAI/Anthropic `model`); `summary()` and both run records carry `served_models`, and both CLIs (and the gate probe) warn when it isn't the requested id or a dated snapshot of it. Google serves `gemini-3.5-flash` with `gemini-3.6-flash` since 2026-10-08; cost is still priced as the requested id
 
 Benchmark outputs go to `Artifacts/Data/Benchmark/`:
 - `{model}_{spec}[_{level}]_{timestamp}_output.json` — the generated Lab / DemoModule / LabOutline / ARLEM JSON (`{level}` is present on the YAML-driven L1/L3/L4 path)

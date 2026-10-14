@@ -57,6 +57,7 @@ from benchmark import (
     provider_create_kwargs,
     status_of,
     tool_choice_for,
+    warn_served_model,
 )
 from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, SpecType
 from json_lab import DemoModule, Lab, NewComponent, PointerReceiverComponent
@@ -897,6 +898,7 @@ class HierarchicalPipeline:
             "spec_type": SpecType.JSON_LAB.value,
             "decode_mode": decode_mode_for(self.model_config, SpecType.JSON_LAB).value,
             "tool_choice": tool_choice_for(self.model_config),
+            "served_models": self.tracker.served_models(),   # what answered (this session)
             "topic": None,
             "lab_name": self.lab_name,
             "level": self.config.level.value,
@@ -985,3 +987,4 @@ class HierarchicalPipeline:
         if record.get("normalizations"):
             print(f"  Normalized names/descriptions: {len(record['normalizations'])}")
         print(f"  Run dir: {record['run_dir']}")
+        warn_served_model(record["model"], record.get("served_models") or [])

@@ -136,6 +136,22 @@ class TokenUsage:
         )
 
 
+def served_model_of(completion: Any) -> Optional[str]:
+    """The model id a provider response says answered it: Gemini
+    ``model_version``, OpenAI / Anthropic ``model``. A provider can serve a
+    request with a different model than the one asked for (Google routes
+    gemini-3.5-flash to gemini-3.6-flash since 2026-10-08)."""
+    if completion is None:
+        return None
+    if hasattr(completion, '_raw_response'):
+        completion = completion._raw_response
+    for attr in ('model_version', 'model'):
+        val = getattr(completion, attr, None)
+        if isinstance(val, str) and val:
+            return val.removeprefix('models/')
+    return None
+
+
 @dataclass
 class ErrorRecord:
     """Detailed record of an error occurrence."""
@@ -157,6 +173,7 @@ class AttemptMetrics:
     error: Optional[ErrorRecord] = None
     duration_ms: Optional[float] = None
     responded: bool = False         # a response arrived for this request
+    served_model: Optional[str] = None  # model id the response reports
 
 
 @dataclass

@@ -248,6 +248,9 @@ loads it as is. Fields added by the hierarchical pipeline:
 
 - `pipeline: "hierarchical"`, `granularity: "module"`, `run_group`, `reviewer`, `config`
 - `status`: `in_progress` while running, then `complete`, `failed` or `interrupted`
+- `served_models`: the model ids the responses reported (this session). The run
+  summary warns when one isn't the requested model or a dated snapshot of it
+  (e.g. Google serving `gemini-3.5-flash` with `gemini-3.6-flash`)
 - `steps[]`: per-step calls, attempts, `retries`, `parse_errors`, revisions,
   `transient_retries`, `reask_restarts` (see below), tokens (including
   `cached_tokens`, the part of the input read from the provider's prompt cache,
