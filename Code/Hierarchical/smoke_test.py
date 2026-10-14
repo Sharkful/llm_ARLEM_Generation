@@ -821,6 +821,34 @@ check(m1["calls"] == 1 and m1["errors"][-1].endswith("END-OF-ERROR"),
       "an error the tracker didn't record keeps its full text in errors.txt")
 
 
+# 25. cached input is priced at its own rate (issue #72): usage parsing per provider
+#     shape, and the cost formula
+from tracking import PricingCalculator, TokenUsage  # noqa: E402
+_oa = TokenUsage.from_completion(SimpleNamespace(usage=SimpleNamespace(
+    prompt_tokens=1000, completion_tokens=100, total_tokens=1100,
+    prompt_tokens_details=SimpleNamespace(cached_tokens=600, cache_write_tokens=300),
+    completion_tokens_details=None)))
+_an = TokenUsage.from_completion(SimpleNamespace(usage=SimpleNamespace(
+    input_tokens=100, cache_read_input_tokens=600, cache_creation_input_tokens=300,
+    output_tokens=100)))
+_ge = TokenUsage.from_completion(SimpleNamespace(usage_metadata=SimpleNamespace(
+    prompt_token_count=1000, candidates_token_count=100, total_token_count=1100,
+    cached_content_token_count=600, thoughts_token_count=0)))
+check((_oa.prompt_tokens, _oa.cached_tokens, _oa.cache_write_tokens) == (1000, 600, 300)
+      and (_an.prompt_tokens, _an.cached_tokens, _an.cache_write_tokens, _an.total_tokens)
+      == (1000, 600, 300, 1100)
+      and (_ge.prompt_tokens, _ge.cached_tokens, _ge.cache_write_tokens) == (1000, 600, 0),
+      "cache reads and writes parsed from OpenAI, Anthropic and Gemini usage, all inside prompt_tokens")
+check(abs(PricingCalculator(model="gpt-6-luna").calculate_cost(_oa)
+          - (100 * 0.10 + 600 * 0.01 + 300 * 0.125 + 100 * 0.50) / 1e6) < 1e-12
+      and abs(PricingCalculator(model="gemini-3.5-flash-lite").calculate_cost(_ge)
+              - (400 * 0.30 + 600 * 0.03 + 100 * 2.50) / 1e6) < 1e-12,
+      "uncached input, cache reads and cache writes each billed at their own rate")
+check(abs(PricingCalculator(model="gpt-5.4-mini").calculate_cost(_oa)
+          - (1000 * 0.75 + 100 * 4.50) / 1e6) < 1e-12,
+      "a model without cache rates (wave 2) bills all input at the input rate, as before")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"
@@ -1066,7 +1094,9 @@ class MockAnthropic(BaseHTTPRequestHandler):
         payload = json.dumps({
             "id": "msg_mock", "type": "message", "role": "assistant", "model": body["model"],
             "content": content, "stop_reason": stop, "stop_sequence": None,
-            "usage": {"input_tokens": 1000, "output_tokens": 200},
+            # input_tokens excludes cache reads/writes; the tracker folds them in
+            "usage": {"input_tokens": 600, "cache_read_input_tokens": 300,
+                      "cache_creation_input_tokens": 100, "output_tokens": 200},
         }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -1120,9 +1150,13 @@ check(all(r["max_tokens"] == 32000 for r in reqs), "every request sets max_token
 check([r["tools"][0]["name"] for r in reqs[:3]] == ["LabPlan", "ModuleAssetPlan", "PlannedDemoModule"],
       "tool names follow the step response models")
 check(all(r["model"] == "claude-haiku-5-5" for r in reqs), "model id sent (Claude Haiku 5.5)")
-check(rec["totals"]["prompt_tokens"] == 1000 * len(reqs), "Anthropic usage tracked per step")
-check(abs(rec["totals"]["cost_usd"] - len(reqs) * (1000 * 0.10 + 200 * 0.50) / 1e6) < 1e-9,
-      "Claude Haiku 5.5 priced at $0.10 / $0.50 per MTok")
+check(rec["totals"]["prompt_tokens"] == 1000 * len(reqs)
+      and rec["totals"]["cached_tokens"] == 300 * len(reqs)
+      and rec["totals"]["cache_write_tokens"] == 100 * len(reqs),
+      "Anthropic usage tracked per step, cache reads and writes folded into the input")
+check(abs(rec["totals"]["cost_usd"]
+          - len(reqs) * (600 * 0.10 + 300 * 0.01 + 100 * 0.125 + 200 * 0.50) / 1e6) < 1e-9,
+      "Claude Haiku 5.5 priced at $0.10 / $0.50, cache reads $0.01, writes $0.125 per MTok")
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("\nALL PASSED" if not FAILED else "\nSOME FAILED")

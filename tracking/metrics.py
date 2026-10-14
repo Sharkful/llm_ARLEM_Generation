@@ -31,8 +31,10 @@ class TokenUsage:
     completion_tokens: int = 0
     total_tokens: int = 0
 
-    # Extended details (optional, provider-dependent)
-    cached_tokens: int = 0
+    # Extended details (optional, provider-dependent). Both cache counts are part
+    # of prompt_tokens on every provider (Anthropic's are folded in below).
+    cached_tokens: int = 0          # input read from the provider's prompt cache
+    cache_write_tokens: int = 0     # input written to the cache (OpenAI GPT-5.6+, Anthropic)
     reasoning_tokens: int = 0
 
     def __add__(self, other: 'TokenUsage') -> 'TokenUsage':
@@ -42,6 +44,7 @@ class TokenUsage:
             completion_tokens=self.completion_tokens + other.completion_tokens,
             total_tokens=self.total_tokens + other.total_tokens,
             cached_tokens=self.cached_tokens + other.cached_tokens,
+            cache_write_tokens=self.cache_write_tokens + other.cache_write_tokens,
             reasoning_tokens=self.reasoning_tokens + other.reasoning_tokens,
         )
 
@@ -91,10 +94,15 @@ class TokenUsage:
         usage = completion.usage
 
         # Extract base token counts
+        cached = 0
+        cache_write = 0
         prompt = getattr(usage, 'prompt_tokens', None)
         if prompt is None:
-            # Anthropic uses input_tokens
-            prompt = getattr(usage, 'input_tokens', 0)
+            # Anthropic uses input_tokens, which excludes cache reads and writes;
+            # fold them in so prompt_tokens means all input on every provider.
+            cached = getattr(usage, 'cache_read_input_tokens', 0) or 0
+            cache_write = getattr(usage, 'cache_creation_input_tokens', 0) or 0
+            prompt = (getattr(usage, 'input_tokens', 0) or 0) + cached + cache_write
 
         completion_tokens = getattr(usage, 'completion_tokens', None)
         if completion_tokens is None:
@@ -105,13 +113,14 @@ class TokenUsage:
         if total is None:
             total = (prompt or 0) + (completion_tokens or 0)
 
-        # Extract extended details if available
-        cached = 0
+        # Extract extended details if available (OpenAI)
         reasoning = 0
 
         prompt_details = getattr(usage, 'prompt_tokens_details', None)
         if prompt_details:
             cached = getattr(prompt_details, 'cached_tokens', 0) or 0
+            # GPT-5.6 and later bill cache writes at 1.25x input and report them here
+            cache_write = getattr(prompt_details, 'cache_write_tokens', 0) or 0
 
         completion_details = getattr(usage, 'completion_tokens_details', None)
         if completion_details:
@@ -122,6 +131,7 @@ class TokenUsage:
             completion_tokens=completion_tokens or 0,
             total_tokens=total or 0,
             cached_tokens=cached,
+            cache_write_tokens=cache_write,
             reasoning_tokens=reasoning,
         )
 

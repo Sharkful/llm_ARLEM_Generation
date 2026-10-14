@@ -200,6 +200,8 @@ class InstructorTracker:
                 "prompt": agg.total_usage.prompt_tokens,
                 "completion": agg.total_usage.completion_tokens,
                 "total": agg.total_usage.total_tokens,
+                "cached": agg.total_usage.cached_tokens,
+                "cache_write": agg.total_usage.cache_write_tokens,
             },
             "retries": {
                 "total": agg.total_retries,

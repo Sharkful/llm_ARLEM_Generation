@@ -10,7 +10,11 @@ from typing import Dict, Optional
 from .metrics import TokenUsage
 
 
-# Default pricing per 1M tokens (USD), base/standard tier (no caching/batch).
+# Default pricing per 1M tokens (USD), base/standard tier (no batch).
+# Optional "cached_input" (cache read) and "cache_write" rates price the part of
+# the input the provider reports as cached or written; an entry without them
+# bills all input at "input" (how every wave-2 run was costed). Only the current
+# roster (issue #72) carries cache rates.
 # Entries marked "verified 2026-07" (issue #32) or "verified 2026-10" (issue #72)
 # were re-checked against the official provider pricing pages
 # (platform.claude.com, developers.openai.com, ai.google.dev). Entries marked "legacy"/"retired" were superseded or removed
@@ -22,8 +26,9 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     "gpt-5.4":       {"input": 2.50,  "output": 15.00},   # verified 2026-07 (current mid)
     "gpt-5.4-mini":  {"input": 0.75,  "output":  4.50},   # verified 2026-07
     "gpt-5.4-nano":  {"input": 0.20,  "output":  1.25},   # verified 2026-07
-    "gpt-6.1-sol":   {"input": 2.00,  "output": 10.00},   # verified 2026-10 (current mid; >272k in = 2x/1.5x)
-    "gpt-6-luna":    {"input": 0.10,  "output":  0.50},   # verified 2026-10 (current small)
+    # GPT-5.6 and later: automatic caching; cache writes billed at 1.25x input.
+    "gpt-6.1-sol":   {"input": 2.00,  "output": 10.00, "cached_input": 0.10, "cache_write": 2.50},   # verified 2026-10 (current mid; >272k in = 2x/1.5x)
+    "gpt-6-luna":    {"input": 0.10,  "output":  0.50, "cached_input": 0.01, "cache_write": 0.125},  # verified 2026-10 (current small)
     "gpt-5-mini":    {"input": 0.25,  "output":  2.00},   # 2026-07: superseded by 5.4-mini (was mis-stored 0.15/0.60); not in roster
     "gpt-5-nano":    {"input": 0.05,  "output":  0.40},   # retired 2026-07 — removed from current page; not in roster
     "gpt-5":         {"input": 2.50,  "output": 10.00},
@@ -49,9 +54,11 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     "claude-haiku-4-5-20251001": {"input":  1.00, "output":  5.00},   # verified 2026-07 (previous small)
     # Haiku 5.5: prompts up to 100K tokens. Longer prompts bill $0.50 / $2.50, which
     # isn't modelled here (benchmark and hierarchical prompts stay well under 100K).
-    "claude-haiku-5-5":         {"input":  0.10, "output":  0.50},   # verified 2026-10 (current small; #70)
-    "claude-sonnet-5-5":        {"input":  2.00, "output": 10.00},   # verified 2026-10 (current mid)
-    "claude-opus-5-5":          {"input":  4.00, "output": 20.00},   # verified 2026-10 (current large)
+    # Cache reads 0.1x input (0.05x on Opus 5.5), writes 1.25x (5-minute TTL).
+    # Nothing is cached until the pipeline sends cache_control markers (#73).
+    "claude-haiku-5-5":         {"input":  0.10, "output":  0.50, "cached_input": 0.01, "cache_write": 0.125},  # verified 2026-10 (current small; #70)
+    "claude-sonnet-5-5":        {"input":  2.00, "output": 10.00, "cached_input": 0.20, "cache_write": 2.50},   # verified 2026-10 (current mid)
+    "claude-opus-5-5":          {"input":  4.00, "output": 20.00, "cached_input": 0.20, "cache_write": 5.00},   # verified 2026-10 (current large)
     "claude-fable-5":           {"input": 10.00, "output": 50.00},   # verified 2026-07 (most capable; GA 2026-06-09; not in roster)
     "claude-3-haiku-20240307":   {"input":  0.25, "output":  1.25},   # legacy/deprecated — not on current page
     # Legacy / alternate keys
@@ -69,11 +76,13 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     # discount ends, so costs reflect what a run will cost going forward. If a
     # provider makes the introductory rate permanent (as Anthropic did for Sonnet 5,
     # above), update the entry and re-tabulate with Code/Analysis/reprice_runs.py.
-    #   gemini-4-argon:   $2.00 / $10.00 until 2026-11-30
-    #   gemini-3.8-flash: $0.75 / $3.75  until 2026-12-31
-    "gemini-4-argon":         {"input": 4.00,  "output": 20.00},  # verified 2026-10 (current large; from 2026-12-01)
-    "gemini-3.8-flash":       {"input": 1.50,  "output":  7.50},  # verified 2026-10 (current mid; from 2027-01-01)
-    "gemini-3.5-flash-lite":  {"input": 0.30,  "output":  2.50},  # verified 2026-10 (current small)
+    #   gemini-4-argon:   $2.00 / $10.00, cached $0.10,  until 2026-11-30
+    #   gemini-3.8-flash: $0.75 / $3.75,  cached $0.075, until 2026-12-31
+    # Implicit caching (automatic; Argon from 4,096-token prompts): no write charge
+    # and no storage fee, so these carry a read rate only.
+    "gemini-4-argon":         {"input": 4.00,  "output": 20.00, "cached_input": 0.20},  # verified 2026-10 (current large; from 2026-12-01)
+    "gemini-3.8-flash":       {"input": 1.50,  "output":  7.50, "cached_input": 0.15},  # verified 2026-10 (current mid; from 2027-01-01)
+    "gemini-3.5-flash-lite":  {"input": 0.30,  "output":  2.50, "cached_input": 0.03},  # verified 2026-10 (current small)
     "gemini-3.1-pro-preview": {"input": 2.00,  "output": 12.00},  # verified 2026-07 (keyed by model_id; v1beta serves only -preview, not the GA-renamed plain id — issue #42; <=200k tier)
     "gemini-3.1-flash-lite":  {"input": 0.25,  "output":  1.50},  # verified 2026-07 (GA'd 2026-05-07, renamed from -preview)
     "gemini-3.5-flash":       {"input": 1.50,  "output":  9.00},  # verified 2026-07 (current text flash)
@@ -112,22 +121,18 @@ class PricingCalculator:
         Initialize pricing calculator.
 
         Args:
-            config: Dict with 'input' and 'output' prices per 1M tokens
+            config: Dict with 'input' and 'output' prices per 1M tokens, and
+                optional 'cached_input' / 'cache_write' rates (default: 'input')
             model: Model name to look up in default pricing
 
         If both are provided, config takes precedence.
         If neither provides valid pricing, costs will be 0.
         """
-        if config:
-            self.input_price = config.get("input", 0.0)
-            self.output_price = config.get("output", 0.0)
-        elif model and model in DEFAULT_PRICING:
-            pricing = DEFAULT_PRICING[model]
-            self.input_price = pricing["input"]
-            self.output_price = pricing["output"]
-        else:
-            self.input_price = 0.0
-            self.output_price = 0.0
+        pricing = config or (DEFAULT_PRICING.get(model) if model else None) or {}
+        self.input_price = pricing.get("input", 0.0)
+        self.output_price = pricing.get("output", 0.0)
+        self.cached_input_price = pricing.get("cached_input", self.input_price)
+        self.cache_write_price = pricing.get("cache_write", self.input_price)
 
     def calculate_cost(self, usage: TokenUsage) -> float:
         """
@@ -139,9 +144,7 @@ class PricingCalculator:
         Returns:
             Total cost in USD
         """
-        input_cost = (usage.prompt_tokens * self.input_price) / 1_000_000
-        output_cost = (usage.completion_tokens * self.output_price) / 1_000_000
-        return input_cost + output_cost
+        return self.cost_breakdown(usage)["total"]
 
     def format_cost(self, usage: TokenUsage) -> str:
         """
@@ -158,9 +161,13 @@ class PricingCalculator:
         """
         Get detailed cost breakdown.
 
-        Returns dict with input_cost, output_cost, and total.
+        Returns dict with input_cost (all input, cached and written parts at
+        their own rates), output_cost, and total.
         """
-        input_cost = (usage.prompt_tokens * self.input_price) / 1_000_000
+        uncached = max(usage.prompt_tokens - usage.cached_tokens - usage.cache_write_tokens, 0)
+        input_cost = (uncached * self.input_price
+                      + usage.cached_tokens * self.cached_input_price
+                      + usage.cache_write_tokens * self.cache_write_price) / 1_000_000
         output_cost = (usage.completion_tokens * self.output_price) / 1_000_000
         return {
             "input_cost": input_cost,

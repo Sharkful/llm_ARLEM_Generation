@@ -204,7 +204,7 @@ Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `A
 
 **`tracking/`** — Token/retry tracking module (copied from `feature/instructor-tracking`):
 - `InstructorTracker` / `TrackedClient` — wraps instructor clients, hooks into completion events
-- `PricingCalculator` / `DEFAULT_PRICING` — cost calculation; update `tracking/pricing.py` when adding new models
+- `PricingCalculator` / `DEFAULT_PRICING` — cost calculation; update `tracking/pricing.py` when adding new models. Entries can carry `cached_input` / `cache_write` rates (current roster only, issue #72), and cost bills uncached input, cache reads and cache writes each at its own rate. `TokenUsage.prompt_tokens` is all input on every provider (Anthropic's separately reported cache reads/writes are folded in); `cached_tokens` and `cache_write_tokens` are parts of it
 - `BenchmarkExporter` — export to JSON, CSV, or Markdown
 
 Benchmark outputs go to `Artifacts/Data/Benchmark/`:

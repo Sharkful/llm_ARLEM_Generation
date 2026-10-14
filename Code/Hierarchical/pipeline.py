@@ -227,6 +227,7 @@ class StepRecord:
                                    # started over with a fresh parse-retry budget
     prompt_tokens: int = 0
     cached_tokens: int = 0         # of prompt_tokens, served from the provider's prompt cache
+    cache_write_tokens: int = 0    # of prompt_tokens, written to it (billed above input rate)
     completion_tokens: int = 0
     total_tokens: int = 0
     cost_usd: float = 0.0
@@ -567,6 +568,7 @@ class HierarchicalPipeline:
             rec.parse_errors += call.parse_errors
             rec.prompt_tokens += call.total_usage.prompt_tokens
             rec.cached_tokens += call.total_usage.cached_tokens
+            rec.cache_write_tokens += call.total_usage.cache_write_tokens
             rec.completion_tokens += call.total_usage.completion_tokens
             rec.total_tokens += call.total_usage.total_tokens
             rec.cost_usd += self.tracker.pricing.calculate_cost(call.total_usage)
@@ -883,7 +885,8 @@ class HierarchicalPipeline:
         totals = {
             k: sum(s[k] for s in steps)
             for k in ("calls", "retries", "parse_errors", "transient_retries", "reask_restarts",
-                      "prompt_tokens", "cached_tokens", "completion_tokens",
+                      "prompt_tokens", "cached_tokens", "cache_write_tokens",
+                      "completion_tokens",
                       "total_tokens", "cost_usd", "wall_time_s")
         }
         return {
@@ -969,7 +972,9 @@ class HierarchicalPipeline:
                    if t.get("transient_retries") else "")
         print(f"  Steps: {len(record['steps'])} | calls: {t['calls']} | retries: {t['retries']}"
               f"{resends}")
-        print(f"  Tokens: {t['prompt_tokens']:,} in ({t['cached_tokens']:,} cached) / "
+        writes = (f", {t['cache_write_tokens']:,} cache writes"
+                  if t.get("cache_write_tokens") else "")
+        print(f"  Tokens: {t['prompt_tokens']:,} in ({t['cached_tokens']:,} cached{writes}) / "
               f"{t['completion_tokens']:,} out "
               f"| Cost: ${t['cost_usd']:.6f} | Wall time: {record['wall_time_seconds']}s")
         lab = record.get("lab_metrics") or {}

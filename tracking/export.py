@@ -29,6 +29,7 @@ class BenchmarkExporter:
                 "completion_tokens": obj.completion_tokens,
                 "total_tokens": obj.total_tokens,
                 "cached_tokens": obj.cached_tokens,
+                "cache_write_tokens": obj.cache_write_tokens,
                 "reasoning_tokens": obj.reasoning_tokens,
             }
         if hasattr(obj, '__dict__'):

@@ -249,9 +249,10 @@ loads it as is. Fields added by the hierarchical pipeline:
 - `pipeline: "hierarchical"`, `granularity: "module"`, `run_group`, `reviewer`, `config`
 - `status`: `in_progress` while running, then `complete`, `failed` or `interrupted`
 - `steps[]`: per-step calls, attempts, `retries`, `parse_errors`, revisions,
-  `transient_retries`, `reask_restarts` (see below), tokens (including `cached_tokens`, the part of the input served from the
-  provider's prompt cache, reported by OpenAI and Gemini), cost, wall time,
-  `resumed`, `non_retryable`
+  `transient_retries`, `reask_restarts` (see below), tokens (including
+  `cached_tokens`, the part of the input read from the provider's prompt cache,
+  and `cache_write_tokens`, the part written to it), cost, wall time, `resumed`,
+  `non_retryable`
 - `totals`: the sum over steps, including steps resumed from an earlier session
   (`tracking` covers only this session)
 - `normalizations`: every name or description rewrite (see above)
@@ -265,9 +266,15 @@ loads it as is. Fields added by the hierarchical pipeline:
 - `new_components_total`: new components invented across the lab
 - `registry`: new components, invented prefabs and textures (with their purposes)
 
-Cost is computed at the full input rate, so with prompt caching it is an upper bound.
-Pricing cached tokens is part of #73. Anthropic reports cache reads separately from
-`input_tokens`, and the tracker doesn't record them yet.
+Cost prices each part of the input at its own rate: uncached input at the input
+rate, cache reads at `cached_input` and cache writes at `cache_write`
+(`tracking/pricing.py`; current-roster models only, issue #72). OpenAI caches
+automatically, and GPT-5.6 and later bill cache writes at 1.25x input. Gemini's
+implicit caching has no write charge. Claude reads from cache only once the
+prompts carry `cache_control` markers (#73). Anthropic reports cache reads and
+writes outside `input_tokens`; the tracker folds them into `prompt_tokens`, so
+`prompt_tokens` is all input on every provider. Models without cache rates (the
+wave-2 roster) bill all input at the input rate, as they always did.
 
 `retries` is the tracker's `retry_count`: the number of reasks, i.e. requests
 minus one per instructor call. A failed parse is reasked, so `retries` equals
