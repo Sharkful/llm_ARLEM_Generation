@@ -32,14 +32,16 @@ PROJECT_ROOT = HERE.parents[2]
 for sub in ("Code/Benchmark", "Code/Schemas", "Code/Hierarchical", ""):
     sys.path.insert(0, str(PROJECT_ROOT / sub))
 
-# Representative model per provider: the schema path depends on the provider and
-# decode mode, not on the model id.
-PROBE_MODELS = ("gpt-5.4-mini", "claude-haiku-4.5", "gemini-3.5-flash")
+# Representative models: the schema path depends on the provider and decode mode,
+# not on the model id. One wave-2 model per provider, plus one current-roster model
+# per provider (#72: GPT-6 on the Responses API, pinned reasoning effort).
+PROBE_MODELS = ("gpt-5.4-mini", "claude-haiku-4.5", "gemini-3.5-flash",
+                "gpt-6-luna", "claude-haiku-5.5", "gemini-3.8-flash")
 
 # Request keys that carry the conversation, not the schema; left out of the record.
 # The system text is kept separately (``system_text``): the Anthropic request's
 # "call the tool" line lives there and is part of what the upgrade gate checks.
-CONVERSATION_KEYS = {"messages", "contents", "system", "systemInstruction"}
+CONVERSATION_KEYS = {"messages", "contents", "input", "system", "systemInstruction"}
 
 
 def system_text(body: dict) -> str:
@@ -133,14 +135,14 @@ def capture_all() -> dict:
                 pass
             reqs = captured[before:]
             if not reqs:
-                print(f"  {mc.provider.value:<9} {name:<34} NO REQUEST SENT")
+                print(f"  {model_key:<18} {name:<34} NO REQUEST SENT")
                 continue
             body = reqs[0]["body"]
-            result["requests"][f"{mc.provider.value}/{name}"] = {
+            result["requests"][f"{model_key}/{name}"] = {
                 **{k: v for k, v in body.items() if k not in CONVERSATION_KEYS},
                 "system_text": system_text(body),
             }
-            print(f"  {mc.provider.value:<9} {name:<34} captured "
+            print(f"  {model_key:<18} {name:<34} captured "
                   f"({len(json.dumps(body.get('tools', '')))} chars of tools)")
     srv.shutdown()
     return result
@@ -185,7 +187,7 @@ def main():
 
     for key, req in result["requests"].items():
         text = json.dumps(req.get("tools", req))
-        if key.startswith("google/") and ('"const"' in text or '"discriminator"' in text):
+        if key.startswith("gemini") and ('"const"' in text or '"discriminator"' in text):
             print(f"  WARNING {key}: Gemini tool schema contains const/discriminator")
 
     if args.diff:
