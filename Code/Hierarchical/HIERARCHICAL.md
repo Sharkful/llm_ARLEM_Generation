@@ -267,11 +267,15 @@ Cost is computed at the full input rate, so with prompt caching it is an upper b
 Pricing cached tokens is part of #73. Anthropic reports cache reads separately from
 `input_tokens`, and the tracker doesn't record them yet.
 
-`retries` is the tracker's `retry_count`: the number of reasks, which equals
-`parse_errors` plus any API errors that were retried. Runs recorded before the #71
-fix (wave 2, and earlier hierarchical runs, including the 2026-10-13 `testing`
-runs) counted each failed parse twice (`retries` = 2 × `parse_errors`, or one less
-when the call ran out of attempts); use `parse_errors` for those.
+`retries` is the tracker's `retry_count`: the number of reasks, i.e. requests
+minus one per instructor call. A failed parse is reasked, so `retries` equals
+`parse_errors`, except that a call which ran out of attempts has one more parse
+error than reasks (its last failure isn't reasked). An API error ends the call
+rather than being retried inside it; the transient retryer's re-sends (429, 5xx,
+connection) are separate calls, counted in `transient_retries`. Runs recorded before
+the #71 fix (wave 2, and earlier hierarchical runs, including the 2026-10-13
+`testing` runs) counted each failed parse twice (`retries` = 2 × `parse_errors`, or
+one less when the call ran out of attempts); use `parse_errors` for those.
 
 Per-module minimums make hierarchical labs deliberately bigger than one-shot runs,
 whose minimums are lab-wide. Keep that in mind when comparing the two. This folder

@@ -216,8 +216,9 @@ class StepRecord:
     calls: int = 0                 # tracked create() calls, incl. regenerations & revisions
     attempts: int = 0              # step-level generations (fresh or revision)
     failed_attempts: int = 0
-    retries: int = 0               # tracker retry_count summed over calls (same as benchmark runs)
-    parse_errors: int = 0          # failed parse/validation attempts (the actual reask count)
+    retries: int = 0               # reasks: tracker retry_count (requests - 1) summed over calls
+    parse_errors: int = 0          # failed parse/validation attempts (= retries, +1 per call
+                                   # that ran out of attempts: its last failure isn't reasked)
     revisions: int = 0             # reviewer revision rounds (Revise, or a rejected Replace)
     prompt_tokens: int = 0
     cached_tokens: int = 0         # of prompt_tokens, served from the provider's prompt cache
@@ -570,10 +571,12 @@ class HierarchicalPipeline:
         (immediately failed for errors a regeneration can't fix).
 
         Each instructor attempt's error is recorded once, from the tracker; a
-        failed step attempt then adds a summary line. Instructor's retry exception
-        only repeats the attempts the tracker already holds, so it is shortened to
-        one line; any other exception (a 5xx after transient retries, a provider
-        400, an error outside the instructor call) keeps its full text."""
+        failed step attempt then adds a summary line. When the tracker already
+        holds the failure (instructor's retry exception, which wraps the attempts,
+        or an error the tracker recorded at the end of the call, such as a
+        max_tokens truncation), the line is shortened to one; any other exception
+        (a 5xx after transient retries, a provider 400 the tracker didn't see, an
+        error outside the instructor call) keeps its full text."""
         last_error = None
         for _ in range(self.config.step_attempts):
             rec.attempts += 1
@@ -582,9 +585,12 @@ class HierarchicalPipeline:
                     return self._call_fn(response_model, messages, max_retries)
             except Exception as e:  # noqa: BLE001 — any failure regenerates the step
                 rec.failed_attempts += 1
+                n_before = len(rec.errors)
                 self._absorb_calls(rec)
                 last_error = f"{type(e).__name__}: {e}"
-                repeats_tracker = bool(getattr(e, "failed_attempts", None))
+                message = str(e)
+                repeats_tracker = bool(getattr(e, "failed_attempts", None)) or (
+                    bool(message) and any(message in line for line in rec.errors[n_before:]))
                 rec.errors.append(f"step attempt {rec.attempts} failed: "
                                   + (brief_error(e) if repeats_tracker else last_error))
                 where = " (details: errors.txt)" if self.save else ""

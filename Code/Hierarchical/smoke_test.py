@@ -622,32 +622,6 @@ check(m1["calls"] == 1 and m1["errors"][0] == "attempt 1 ValidationError: parse 
       "an error the tracker didn't record keeps its full text in errors.txt")
 
 
-# 23. the tracker records one attempt per request (issue #71): a parse error marks
-#     the response it failed on, an API error with no response adds its own attempt
-from tracking import InstructorTracker as _Tracker  # noqa: E402
-
-
-class _NoHooks:
-    def on(self, *a):
-        pass
-
-    def off(self, *a):
-        pass
-
-
-_t = _Tracker(model="m", provider="openai")
-_t._start_call(_NoHooks(), "c")
-_t._on_kwargs("c", (), {}); _t._on_response("c", None)
-_t._on_parse_error("c", ValueError("1 validation error for Lab"))
-_t._on_kwargs("c", (), {}); _t._on_completion_error("c", RuntimeError("Error code: 503"))
-_t._on_kwargs("c", (), {}); _t._on_response("c", None)
-_t._end_call("c", True)
-_c = _t.aggregate.calls[-1]
-check(_c.total_attempts == 3 and _c.retry_count == 2 and _c.parse_errors == 1
-      and len(_c.errors) == 2 and _t.summary()["retries"]["total"] == 2,
-      "tracker: parse error + API error + success = 3 attempts, 2 retries")
-
-
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"
@@ -667,21 +641,33 @@ class MockOpenAI(BaseHTTPRequestHandler):
         elif tool == "ModuleAssetPlan":
             state["asset"] += 1
             args = (REPLAY / f"{state['asset']:02d}_asset_plan.json").read_text(encoding="utf-8")
-        elif state.get("always_bad") or (state["asset"] == 2 and not state["bad_sent"]):
+        elif state.get("mode") == "reask400" and state["module_requests"] >= 1:
+            # the reask after an invalid module is rejected: an API error ends the call
+            state["module_requests"] += 1
+            return self._reply(400, {"error": {"message": "Invalid request: bad reask",
+                                               "type": "invalid_request_error"}})
+        elif (state.get("always_bad") or state.get("mode") == "reask400"
+              or (state["asset"] == 2 and not state["bad_sent"])):
             state["bad_sent"] = True
+            state["module_requests"] = state.get("module_requests", 0) + 1
             args = json.dumps({"moduleName": "broken"})  # missing required fields -> reask
         else:
             args = (REPLAY / f"{state['asset']:02d}_module.json").read_text(encoding="utf-8")
-        data = json.dumps({
+        finish = "length" if state.get("mode") == "truncate" and tool == "PlannedDemoModule" \
+            else "tool_calls"   # "length": max_tokens truncation, no error hook fires
+        self._reply(200, {
             "id": "mock", "object": "chat.completion", "created": 0, "model": body["model"],
-            "choices": [{"index": 0, "finish_reason": "tool_calls", "message": {
+            "choices": [{"index": 0, "finish_reason": finish, "message": {
                 "role": "assistant", "content": None,
                 "tool_calls": [{"id": "c1", "type": "function",
                                 "function": {"name": tool, "arguments": args}}]}}],
             "usage": {"prompt_tokens": 1000, "completion_tokens": 200, "total_tokens": 1200,
                       "prompt_tokens_details": {"cached_tokens": 600}},
-        }).encode()
-        self.send_response(200)
+        })
+
+    def _reply(self, status, payload):
+        data = json.dumps(payload).encode()
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
@@ -723,6 +709,16 @@ try:
         P.PipelineConfig(**REPLAY_MINIMUMS, module_retries=1, step_attempts=1),
         output_dir=TMP / "mock_bad", run_name="mock_bad",
     ).run()
+    # module 1's reask is rejected with a 400, and module 1 is truncated (max_tokens)
+    edge = {}
+    for _mode in ("reask400", "truncate"):
+        state.update(asset=0, always_bad=False, mode=_mode, module_requests=0)
+        edge[_mode] = P.HierarchicalPipeline(
+            "gpt-5.4-mini", LAB_NAME,
+            P.PipelineConfig(**REPLAY_MINIMUMS, module_retries=1, step_attempts=1),
+            output_dir=TMP / f"mock_{_mode}", run_name=f"mock_{_mode}",
+        ).run()
+    state["mode"] = None
 finally:
     P.create_instructor_client = _real_factory
     srv.shutdown()
@@ -754,6 +750,21 @@ check(not bad["success"] and bad_m1["step"] == "module" and len(bad_m1["errors"]
       and bad_m1["errors"][2].startswith("step attempt 1 failed: InstructorRetryException after 2")
       and "<failed_attempts>" not in "".join(bad_m1["errors"]),
       "exhausted retries: one line per instructor attempt plus one summary, no duplicate dump")
+# One tracker attempt per request (issue #71), on the paths instructor actually takes.
+check(bad_m1["retries"] == 1 and bad_m1["parse_errors"] == 2,
+      "ran out of attempts: 2 requests, 1 reask, 2 parse errors (was counted as 3 retries)")
+_r400 = edge["reask400"]["steps"][-1]
+check(not edge["reask400"]["success"] and _r400["step"] == "module" and _r400["calls"] == 1
+      and _r400["retries"] == 1 and _r400["parse_errors"] == 1
+      and any(e.startswith("attempt 2 ") and "400" in e for e in _r400["errors"]),
+      "a reask rejected with a 400: 2 requests, 1 retry, the API error on attempt 2")
+_trunc = edge["truncate"]["steps"][-1]
+check(not edge["truncate"]["success"] and _trunc["retries"] == 0 and _trunc["prompt_tokens"] == 1000
+      and any(e.startswith("attempt 1 IncompleteOutputException") for e in _trunc["errors"])
+      and sum("IncompleteOutputException" in e for e in _trunc["errors"]) == 2
+      and _trunc["errors"][-1].startswith("step attempt 1 failed: IncompleteOutputException")
+      and len(_trunc["errors"][-1]) <= len("step attempt 1 failed: ") + 220,
+      "a truncated response is recorded on its attempt (no error hook fires) and not repeated")
 sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
 from benchmark_dataframe import load_runs  # noqa: E402
 df = load_runs(MOCK)
