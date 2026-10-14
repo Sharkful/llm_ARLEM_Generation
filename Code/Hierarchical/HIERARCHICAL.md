@@ -149,8 +149,10 @@ written to `review_log.json`.
   not-found or configuration errors) fail the step at once. A provider 400 still
   regenerates, because Gemini's parallel-call reask 400 (#44) is often survived by
   a fresh attempt.
-- Transient API errors (429/5xx/connection) get the benchmark's bounded retry,
-  counted in `transient_retries`.
+- Transient API errors (429/5xx/529/connection) get the benchmark's bounded retry,
+  counted in `transient_retries`. It is the only transport retry: the OpenAI and
+  Anthropic SDK clients are built with `max_retries=0`, so their own re-sends don't
+  stack with it (or with `step_attempts`) uncounted.
 - The metrics file is rewritten after every step, so an interrupted run keeps its
   cost records. Ctrl-C saves a record with status `interrupted` naming the step it
   stopped in; any other unexpected error (a broken reviewer, say) ends the run as

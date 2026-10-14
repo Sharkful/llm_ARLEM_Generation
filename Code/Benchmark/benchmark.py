@@ -159,7 +159,10 @@ def _patch_genai_parallel_call_retry():
 # has no transport-level retry of its own, so a self-healing 503 "high demand" burst
 # (seen live on gemini-2.5-flash-lite in the July sweep) would otherwise kill a cell
 # that a re-send would have completed. We wrap create() in a bounded, transient-ONLY
-# retry, kept distinct from instructor's parse-retry loop.
+# retry, kept distinct from instructor's parse-retry loop. It is the only transport
+# retry on every provider: create_instructor_client turns the OpenAI and Anthropic
+# SDKs' own retries off (max_retries=0), so they don't stack with it and every
+# re-send is counted in transient_retries (the SDK's were invisible in the metrics).
 _TRANSIENT_ATTEMPTS = 3          # 1 initial try + 2 retries
 _TRANSIENT_WAIT = None           # tenacity wait override (tests); None = exponential 2-20 s
 _TRANSIENT_STATUS = {429, 500, 502, 503, 504, 529}   # 529: Anthropic "overloaded"
@@ -330,6 +333,7 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
 
         client = anthropic.Anthropic(  # reads ANTHROPIC_API_KEY from env (load_dotenv'd)
             timeout=httpx.Timeout(900.0, connect=5.0),
+            max_retries=0,  # _transient_retryer is the one transport retry (counted)
         )
         return instructor.from_anthropic(
             client,
@@ -339,6 +343,8 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
         )
 
     kwargs = {}
+    if model_config.provider == Provider.OPENAI:
+        kwargs["max_retries"] = 0  # SDK retries off: _transient_retryer is the one (counted)
     # from_provider expects GOOGLE_API_KEY but our .env uses GEMINI_API_KEY.
     # All specs use free-decode GENAI_TOOLS on the unified schema (see decode_mode_for).
     if model_config.provider == Provider.GOOGLE:

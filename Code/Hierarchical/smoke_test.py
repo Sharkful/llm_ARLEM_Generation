@@ -448,6 +448,22 @@ _req = TMP / "requirements_marker.txt"
 _req.write_text('instructor[anthropic]==1.15.4 ; python_version >= "3.10"  # pinned\n', encoding="utf-8")
 check(benchmark._pinned_version("instructor", _req) == "1.15.4",
       "preflight pin ignores environment markers and comments")
+# The transient retryer is the only transport retry (issue #54): the SDK clients
+# the factory builds don't re-send on their own (dummy keys; nothing is sent).
+_env = {k: os.environ.get(k) for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY")}
+os.environ.update(OPENAI_API_KEY=_env["OPENAI_API_KEY"] or "test",
+                  ANTHROPIC_API_KEY=_env["ANTHROPIC_API_KEY"] or "test")
+try:
+    _sdk_retries = {m: benchmark.create_instructor_client(P.MODELS[m], P.SpecType.JSON_LAB)
+                    .client.max_retries for m in ("gpt-5.4-mini", "claude-haiku-5.5")}
+except Exception as _e:  # noqa: BLE001 — report, don't crash the offline test
+    _sdk_retries = {"error": f"{type(_e).__name__}: {_e}"}
+finally:
+    for _k, _v in _env.items():
+        if _v is None:
+            os.environ.pop(_k, None)
+check(_sdk_retries == {"gpt-5.4-mini": 0, "claude-haiku-5.5": 0},
+      f"OpenAI and Anthropic SDK retries are off; the transient retryer re-sends ({_sdk_retries})")
 
 
 # 16. one-line console errors; new-component counts in the metrics
@@ -873,7 +889,7 @@ benchmark._TRANSIENT_WAIT = tenacity.wait_none()   # real retry policy, no sleep
 _real_factory = P.create_instructor_client
 P.create_instructor_client = lambda mc, spec: instructor.from_provider(
     f"openai/{mc.model_id}", base_url=f"http://127.0.0.1:{srv.server_port}/v1", api_key="test",
-    max_retries=0)   # no SDK-level re-sends against the mock (the 503 case)
+    max_retries=0)   # SDK retries off, as in the real factory (the 503 cases)
 try:
     MOCK = TMP / "mock"
     class CallingReviewer:
