@@ -199,6 +199,8 @@ file names use the provider model id with dots turned into dashes.
 
 **Current roster** (issue #72, 2026-10; `CURRENT_MODELS`, used by the suites and
 tier flags). GPT-6.1 Sol is priced like Sonnet 5.5, so OpenAI has no large entry.
+Every current model runs at reasoning effort `medium` (wave-2 models keep their
+provider defaults), and both GPT-6 models use the OpenAI Responses API.
 
 | CLI id | Provider model id | Tier | Provider |
 | --- | --- | --- | --- |

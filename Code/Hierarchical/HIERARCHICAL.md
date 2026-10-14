@@ -149,6 +149,10 @@ written to `review_log.json`.
   not-found or configuration errors) fail the step at once. A provider 400 still
   regenerates, because Gemini's parallel-call reask 400 (#44) is often survived by
   a fresh attempt.
+- Current-roster models run at reasoning effort `medium` (recorded as
+  `reasoning_effort`); GPT-6 runs on the OpenAI Responses API, and its reasks send
+  the model's encrypted reasoning back, as Claude's and Gemini's do (see `CLAUDE.md`,
+  LLM Integration).
 - Transient API errors (429/5xx/529/connection) get the benchmark's bounded retry,
   counted in `transient_retries`. It is the only transport retry: the OpenAI and
   Anthropic SDK clients are built with `max_retries=0`, so their own re-sends don't
