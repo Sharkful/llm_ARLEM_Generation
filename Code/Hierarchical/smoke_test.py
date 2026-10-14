@@ -462,6 +462,8 @@ finally:
     for _k, _v in _env.items():
         if _v is None:
             os.environ.pop(_k, None)
+        else:
+            os.environ[_k] = _v
 check(_sdk_retries == {"gpt-5.4-mini": 0, "claude-haiku-5.5": 0},
       f"OpenAI and Anthropic SDK retries are off; the transient retryer re-sends ({_sdk_retries})")
 
@@ -609,7 +611,7 @@ check(_rejected == 4 and P.HierarchicalPipeline.read_run_config(MOVED / "Runs" /
       "one run-directory check for the CLI and resume(); non-run directories rejected")
 
 
-# 23. tracker edge cases, through the public TrackedClient / track_call: a stub
+# 22. tracker edge cases, through the public TrackedClient / track_call: a stub
 #     client fires the hook sequence a script describes (issue #71, PR #80 review)
 from types import SimpleNamespace  # noqa: E402
 from tracking import InstructorTracker, TrackedClient  # noqa: E402
@@ -735,10 +737,11 @@ check(_c.total_usage.total_tokens == 9
       "a wrapped truncation still keeps its request's usage")
 
 
-# 24. which errors the transient retryer re-sends (benchmark._is_transient_api_error)
+# 23. which errors the transient retryer re-sends (benchmark._is_transient_api_error)
 #     and which fail a step at once (pipeline.is_non_retryable), on stub exceptions
 class OverloadedError(Exception):
-    status_code = 529   # anthropic: an APIStatusError, not an InternalServerError
+    """Name-alike of anthropic's 529 error (an APIStatusError, not an
+    InternalServerError); no status attribute, so only the name can match."""
 
 
 class _Status(Exception):
@@ -770,7 +773,7 @@ def _raised_while_handling(inner):
 
 check(benchmark._is_transient_api_error(_wrapped(OverloadedError("overloaded")))
       and benchmark._is_transient_api_error(_wrapped(_Status(529))),
-      "an Anthropic 529 (OverloadedError) is transient")
+      "an Anthropic 529 is transient, by class name or by status")
 check(not benchmark._is_transient_api_error(_wrapped(_trunc_under_503)),
       "a truncation anywhere in the cause chain is never re-sent")
 _ctx503, _ctx401 = _raised_while_handling(_Status(503)), _raised_while_handling(_Status(401))
@@ -782,7 +785,7 @@ check(P.is_non_retryable(_wrapped(_Status(401)))
       "a wrapped 401 still fails the step at once; a wrapped 503 does not")
 
 
-# 22. step error lines, through the real tracker (TrackedClient around a stub):
+# 24. step error lines, through the real tracker (TrackedClient around a stub):
 #     an error the tracker recorded is listed once, in full, and the step summary
 #     is shortened; an error the tracker never saw keeps its full text
 LONG_TAIL = "provider said: " + "x" * 400 + " END-OF-ERROR"
@@ -805,14 +808,14 @@ class TrackedThenFailLLM(FakeLLM):
         return super().__call__(model, messages, max_retries)
 
 
-rec = make(TrackedThenFailLLM(inside_call=True), "t22_tracked", cfg={"step_attempts": 1}).run()
+rec = make(TrackedThenFailLLM(inside_call=True), "t24_tracked", cfg={"step_attempts": 1}).run()
 m1 = rec["steps"][-1]
 check(m1["calls"] == 1 and m1["parse_errors"] == 1 and m1["retries"] == 0
       and m1["errors"][0] == "attempt 1 ValueError: validation error"
       and m1["errors"][1] == f"attempt 1 RuntimeError: {LONG_TAIL}"
       and sum("END-OF-ERROR" in e for e in m1["errors"]) == 1,
       "an error raised after a hooked error is recorded as the call's terminal error, once")
-rec = make(TrackedThenFailLLM(inside_call=False), "t22_untracked", cfg={"step_attempts": 1}).run()
+rec = make(TrackedThenFailLLM(inside_call=False), "t24_untracked", cfg={"step_attempts": 1}).run()
 m1 = rec["steps"][-1]
 check(m1["calls"] == 1 and m1["errors"][-1].endswith("END-OF-ERROR"),
       "an error the tracker didn't record keeps its full text in errors.txt")

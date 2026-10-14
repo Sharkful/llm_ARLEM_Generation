@@ -55,6 +55,7 @@ from benchmark import (
     exception_chain,
     get_provenance,
     provider_create_kwargs,
+    status_of,
     tool_choice_for,
 )
 from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, SpecType
@@ -256,14 +257,9 @@ _NON_RETRYABLE_EXC_NAMES = {
 def is_non_retryable(exc: BaseException) -> bool:
     """True if ``exc`` (or anything in its cause chain) is an error that
     regenerating the step can't fix."""
-    for e in exception_chain(exc):
-        if type(e).__name__ in _NON_RETRYABLE_EXC_NAMES:
-            return True
-        for attr in ("status_code", "code"):
-            val = getattr(e, attr, None)
-            if isinstance(val, int) and val in _NON_RETRYABLE_STATUS:
-                return True
-    return False
+    return any(type(e).__name__ in _NON_RETRYABLE_EXC_NAMES
+               or status_of(e) in _NON_RETRYABLE_STATUS
+               for e in exception_chain(exc))
 
 
 def _first_error_line(exc: BaseException) -> str:

@@ -182,6 +182,17 @@ _TRANSIENT_EXC_NAMES = {
 }
 
 
+def status_of(exc: BaseException) -> Optional[int]:
+    """The HTTP status an SDK error carries, if any: anthropic / openai expose
+    ``status_code``, google-genai errors ``code``. Shared with
+    ``pipeline.is_non_retryable``."""
+    for attr in ("status_code", "code"):
+        val = getattr(exc, attr, None)
+        if isinstance(val, int):
+            return val
+    return None
+
+
 def exception_chain(exc: BaseException):
     """Yield ``exc``, then each explicit cause (``raise ... from cause``) in turn.
 
@@ -217,15 +228,8 @@ def _is_transient_api_error(exc: BaseException) -> bool:
     chain = list(exception_chain(exc))
     if any(type(e).__name__ == "IncompleteOutputException" for e in chain):
         return False
-    for e in chain:
-        # anthropic / openai expose `status_code`; google-genai errors expose `code`.
-        for attr in ("status_code", "code"):
-            val = getattr(e, attr, None)
-            if isinstance(val, int) and val in _TRANSIENT_STATUS:
-                return True
-        if type(e).__name__ in _TRANSIENT_EXC_NAMES:
-            return True
-    return False
+    return any(status_of(e) in _TRANSIENT_STATUS or type(e).__name__ in _TRANSIENT_EXC_NAMES
+               for e in chain)
 
 
 def _transient_retryer():
