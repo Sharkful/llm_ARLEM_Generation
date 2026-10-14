@@ -149,8 +149,10 @@ written to `review_log.json`.
   not-found or configuration errors) fail the step at once. A provider 400 still
   regenerates, because Gemini's parallel-call reask 400 (#44) is often survived by
   a fresh attempt.
-- Transient API errors (429/5xx/connection) get the benchmark's bounded retry,
-  counted in `transient_retries`.
+- Transient API errors (429/5xx/529/connection) get the benchmark's bounded retry,
+  counted in `transient_retries`. It is the only transport retry: the OpenAI and
+  Anthropic SDK clients are built with `max_retries=0`, so their own re-sends don't
+  stack with it (or with `step_attempts`) uncounted.
 - The metrics file is rewritten after every step, so an interrupted run keeps its
   cost records. Ctrl-C saves a record with status `interrupted` naming the step it
   stopped in; any other unexpected error (a broken reviewer, say) ends the run as
@@ -247,7 +249,7 @@ loads it as is. Fields added by the hierarchical pipeline:
 - `pipeline: "hierarchical"`, `granularity: "module"`, `run_group`, `reviewer`, `config`
 - `status`: `in_progress` while running, then `complete`, `failed` or `interrupted`
 - `steps[]`: per-step calls, attempts, `retries`, `parse_errors`, revisions,
-  tokens (including `cached_tokens`, the part of the input served from the
+  `transient_retries`, `reask_restarts` (see below), tokens (including `cached_tokens`, the part of the input served from the
   provider's prompt cache, reported by OpenAI and Gemini), cost, wall time,
   `resumed`, `non_retryable`
 - `totals`: the sum over steps, including steps resumed from an earlier session
@@ -272,9 +274,13 @@ minus one per instructor call. A failed parse is reasked, so `retries` equals
 `parse_errors`, except that a call which ran out of attempts has one more parse
 error than reasks (its last failure isn't reasked). An API error ends the call
 rather than being retried inside it; the transient retryer's re-sends (429, 5xx,
-connection) are separate calls, counted in `transient_retries`. (On instructor 1.17
-the retryer doesn't yet recognize these errors, because instructor wraps them; see
-#54. Until that's fixed `transient_retries` stays 0 and a 5xx fails the step attempt.)
+connection) are separate calls, counted per step and in `totals` as
+`transient_retries` (each failed call's error is listed in the step's errors). A
+re-send restarts the instructor call with a fresh parse-retry budget, so a step
+whose reask hit a 5xx can get more reasks than its retry budget allows one call.
+`reask_restarts` counts exactly those re-sends (a 5xx on a call's first request
+gives no extra reasks and isn't counted); filter on `reask_restarts > 0` when
+comparing self-correction across providers.
 Runs recorded before the #71 fix (wave 2, and earlier hierarchical runs, including
 the 2026-10-13 `testing` runs) counted each failed parse twice (`retries` = 2 ×
 `parse_errors`, or one less when the call ran out of attempts); use `parse_errors`

@@ -159,9 +159,13 @@ def _patch_genai_parallel_call_retry():
 # has no transport-level retry of its own, so a self-healing 503 "high demand" burst
 # (seen live on gemini-2.5-flash-lite in the July sweep) would otherwise kill a cell
 # that a re-send would have completed. We wrap create() in a bounded, transient-ONLY
-# retry, kept distinct from instructor's parse-retry loop.
+# retry, kept distinct from instructor's parse-retry loop. It is the only transport
+# retry on every provider: create_instructor_client turns the OpenAI and Anthropic
+# SDKs' own retries off (max_retries=0), so they don't stack with it and every
+# re-send is counted in transient_retries (the SDK's were invisible in the metrics).
 _TRANSIENT_ATTEMPTS = 3          # 1 initial try + 2 retries
-_TRANSIENT_STATUS = {429, 500, 502, 503, 504}
+_TRANSIENT_WAIT = None           # tenacity wait override (tests); None = exponential 2-20 s
+_TRANSIENT_STATUS = {429, 500, 502, 503, 504, 529}   # 529: Anthropic "overloaded"
 # Provider-SDK exception class names that denote a transient transport condition
 # with no HTTP status to inspect, plus 5xx/429 name backups. Matched by name so we
 # don't hard-import anthropic/openai/google-genai/httpx just to build a tuple.
@@ -174,41 +178,85 @@ _TRANSIENT_EXC_NAMES = {
     "RemoteProtocolError", "TransportError", "TimeoutException",
     "InternalServerError", "ServiceUnavailableError", "ServerError",
     "RateLimitError",
+    "OverloadedError",   # anthropic 529; an APIStatusError, not an InternalServerError
 }
+
+
+def status_of(exc: BaseException) -> Optional[int]:
+    """The HTTP status an SDK error carries, if any: anthropic / openai expose
+    ``status_code``, google-genai errors ``code``. Shared with
+    ``pipeline.is_non_retryable``."""
+    for attr in ("status_code", "code"):
+        val = getattr(exc, attr, None)
+        if isinstance(val, int):
+            return val
+    return None
+
+
+def exception_chain(exc: BaseException):
+    """Yield ``exc``, then each explicit cause (``raise ... from cause``) in turn.
+
+    Implicit context (an error raised while another was being handled) is not
+    followed: it says nothing about what caused this failure. instructor
+    (``InstructorRetryException ... from <API error>``) and the provider SDKs
+    (``APIConnectionError ... from <httpx error>``) chain explicitly. Shared by
+    ``_is_transient_api_error`` and ``pipeline.is_non_retryable``.
+    """
+    seen: set[int] = set()
+    cur: Optional[BaseException] = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        yield cur
+        cur = cur.__cause__
 
 
 def _is_transient_api_error(exc: BaseException) -> bool:
     """True for retryable transport / 5xx / 429 errors from any provider SDK.
 
-    Deliberately does NOT match instructor's ``IncompleteOutputException``
-    (``max_tokens`` truncation, review F9): re-sending the same request just
-    re-truncates against the same cap, so that stays a hard fail documented in
-    ``threats_to_validity.md`` §7. Parse errors are handled by instructor's own
-    retry loop and never reach here.
+    Looks through the exception's cause chain (``exception_chain``): instructor
+    1.17 raises an API error out of its retry loop wrapped in
+    ``InstructorRetryException`` (``raise ... from <the API error>``), so the
+    provider error is the cause, not the exception that reaches the retryer
+    (issue #54).
+
+    Deliberately does NOT match when instructor's ``IncompleteOutputException``
+    (``max_tokens`` truncation, review F9) is anywhere in the chain: re-sending the
+    same request just re-truncates against the same cap, so that stays a hard fail
+    documented in ``threats_to_validity.md`` §7. Parse errors are handled by
+    instructor's own retry loop and are not transient.
     """
-    # anthropic / openai expose `status_code`; google-genai errors expose `code`.
-    for attr in ("status_code", "code"):
-        val = getattr(exc, attr, None)
-        if isinstance(val, int) and val in _TRANSIENT_STATUS:
-            return True
-    return type(exc).__name__ in _TRANSIENT_EXC_NAMES
+    chain = list(exception_chain(exc))
+    if any(type(e).__name__ == "IncompleteOutputException" for e in chain):
+        return False
+    return any(status_of(e) in _TRANSIENT_STATUS or type(e).__name__ in _TRANSIENT_EXC_NAMES
+               for e in chain)
 
 
 def _transient_retryer():
     """A bounded ``tenacity.Retrying`` that retries transient API errors only.
 
     Read ``.statistics['attempt_number']`` after the call to recover how many
-    transient re-sends happened (attempts - 1). ``reraise=True`` surfaces the
-    underlying provider error (not tenacity's ``RetryError``) once attempts are
-    exhausted, so the caller's error handling and fail-mode classification are
-    unchanged.
+    transient re-sends happened (attempts - 1). Each re-send is a fresh
+    ``create()`` call (the tracker records it as a separate call) with a fresh
+    parse-retry budget: a 5xx that hits a reask restarts the instructor call, so
+    such a run can make up to ``_TRANSIENT_ATTEMPTS * (max_retries + 1)`` requests
+    and get more self-correction attempts than one that never saw a 5xx. Only a
+    re-send of a call that had already reasked does this (a 5xx on a call's first
+    request gives no extra reasks); the hierarchical pipeline counts those per
+    step as ``reask_restarts``, the field to filter on when comparing
+    self-correction across providers. ``reraise=True``
+    surfaces the last error as raised (on instructor 1.17 the wrapping
+    ``InstructorRetryException``), not tenacity's ``RetryError``, once attempts
+    are exhausted, so the caller's error handling and fail-mode classification
+    are unchanged.
     """
     import tenacity
 
     return tenacity.Retrying(
         retry=tenacity.retry_if_exception(_is_transient_api_error),
         stop=tenacity.stop_after_attempt(_TRANSIENT_ATTEMPTS),
-        wait=tenacity.wait_exponential(multiplier=2, min=2, max=20),
+        wait=(_TRANSIENT_WAIT if _TRANSIENT_WAIT is not None
+              else tenacity.wait_exponential(multiplier=2, min=2, max=20)),
         reraise=True,
     )
 
@@ -296,6 +344,7 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
 
         client = anthropic.Anthropic(  # reads ANTHROPIC_API_KEY from env (load_dotenv'd)
             timeout=httpx.Timeout(900.0, connect=5.0),
+            max_retries=0,  # _transient_retryer is the one transport retry (counted)
         )
         return instructor.from_anthropic(
             client,
@@ -305,6 +354,8 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
         )
 
     kwargs = {}
+    if model_config.provider == Provider.OPENAI:
+        kwargs["max_retries"] = 0  # SDK retries off: _transient_retryer is the one (counted)
     # from_provider expects GOOGLE_API_KEY but our .env uses GEMINI_API_KEY.
     # All specs use free-decode GENAI_TOOLS on the unified schema (see decode_mode_for).
     if model_config.provider == Provider.GOOGLE:

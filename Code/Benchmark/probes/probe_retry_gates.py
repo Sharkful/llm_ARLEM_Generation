@@ -36,7 +36,8 @@ PROJECT_ROOT = HERE.parents[2]
 for sub in ("Code/Benchmark", "Code/Schemas", ""):
     sys.path.insert(0, str(PROJECT_ROOT / sub))
 
-_validations = [0]
+_validations = [0]   # validations in the current call (reset per call)
+_rejections = [0]    # deliberate rejections across the probe's calls
 
 
 class CityFact(BaseModel):
@@ -51,6 +52,7 @@ class CityFact(BaseModel):
     def _reject_first_attempt(self):
         _validations[0] += 1
         if _validations[0] == 1:
+            _rejections[0] += 1
             raise ValueError(
                 "Deliberate probe check: the first answer is always rejected. "
                 "Call the tool again with the same city and a different fact."
@@ -60,6 +62,7 @@ class CityFact(BaseModel):
 
 def probe(model_key: str, max_retries: int) -> dict:
     from benchmark import (
+        _is_transient_api_error,
         _transient_retryer,
         create_instructor_client,
         provider_create_kwargs,
@@ -78,39 +81,58 @@ def probe(model_key: str, max_retries: int) -> dict:
                   {"role": "user", "content": "Pick a large city and describe it."}],
     )
     kwargs.update(provider_create_kwargs(mc, CityFact))
-    _validations[0] = 0
+
+    def create():
+        # Reset per call: when the transient retryer restarts a call (e.g. its reask
+        # hit a 503), the new call must get its own deliberate rejection and reask,
+        # so a PASS always means the final call's reask was accepted.
+        _validations[0] = 0
+        return client.create(**kwargs)
+
+    _rejections[0] = 0
     out = {"model": model_key, "tool_choice": tool_choice_for(mc), "ok": False, "error": None}
     full_error = ""
+    error: Exception | None = None
+    retryer = _transient_retryer()
     try:
-        result = _transient_retryer()(client.create, **kwargs)
+        result = retryer(create)
         out["result"] = f"{result.city}, {result.country}"
     except Exception as e:  # noqa: BLE001 — report every failure the same way
+        error = e
         full_error = f"{type(e).__name__}: {e}"
         # instructor's retry exception opens with "<failed_attempts>"; show the
         # last line that says something instead.
         lines = [ln.strip() for ln in str(e).splitlines()
                  if ln.strip() and not ln.strip().startswith(("<", "For further information"))]
         out["error"] = f"{type(e).__name__}: {(lines[-1] if lines else str(e))[:200]}"
+    out["transient_retries"] = retryer.statistics.get("attempt_number", 1) - 1
     calls = tracker.aggregate.calls
     out["parse_errors"] = sum(c.parse_errors for c in calls)
     out["api_errors"] = sum(c.api_errors for c in calls)
-    api_failure = out["api_errors"] > 0 or any(
+    # Only the final call can show the #44 shape: every earlier call ended in a
+    # transient error the retryer re-sent (a 503, not a rejected reask).
+    final_api_errors = calls[-1].api_errors if calls else 0
+    api_failure = final_api_errors > 0 or any(
         s in full_error for s in ("Error code: 400", "BadRequestError", "INVALID_ARGUMENT"))
     # Requests sent: one tracker attempt per request (issue #71 fixed).
     out["requests"] = sum(c.total_attempts for c in calls)
     out["tokens"] = sum(c.total_usage.total_tokens for c in calls)
     out["cost_usd"] = sum(tracker.pricing.calculate_cost(c.total_usage) for c in calls)
-    # Parse errors other than our one deliberate rejection: plain-text replies
-    # (tool_choice "auto") or the model failing validation on its own.
-    out["other_parse_errors"] = out["parse_errors"] - min(_validations[0], 1)
+    # Parse errors other than our deliberate rejections (one per call): plain-text
+    # replies (tool_choice "auto") or the model failing validation on its own.
+    out["other_parse_errors"] = out["parse_errors"] - _rejections[0]
     # PASS: our deliberate rejection was reasked, the provider accepted the reask
-    # and a later attempt parsed.
+    # and a later attempt parsed, all within the final call.
+    # TRANSIENT: the transient retryer ran out of re-sends (429/5xx/connection);
+    # the provider was unavailable, which says nothing about the reask path.
     # FAIL: the provider rejected a request (the #44 shape: a malformed reask
     # 400s before the model sees the correction).
     # EXHAUSTED: no API error, but the retries ran out (e.g. plain-text replies),
     # so the reask path worked; rerun or raise --max-retries.
     if out["error"] is None and _validations[0] >= 2:
         out["status"] = "PASS"
+    elif error is not None and _is_transient_api_error(error):
+        out["status"] = "TRANSIENT"
     elif api_failure:
         out["status"] = "FAIL"
     else:
@@ -151,14 +173,19 @@ def main():
               f"{r['tokens']:>7,} ${r['cost_usd']:.5f}")
         if r["error"]:
             print(f"      {r['error']}")
+        if r["transient_retries"]:
+            print(f"      {r['transient_retries']} transient re-send(s) (429/5xx/connection); "
+                  "the counts above include the restarted call(s)")
     print("\n  PASS      attempt 1 was rejected on purpose, the provider accepted the reask,")
     print("            and a later attempt parsed.")
+    print("  TRANSIENT the provider stayed unavailable (429/5xx/connection) through every")
+    print("            transient re-send; says nothing about the reask path. Rerun later.")
     print("  FAIL      the provider rejected a request (API error): the #44 reask failure.")
     print("  EXHAUSTED no API error, but the retries ran out before a valid answer (e.g. the")
     print("            model kept answering in plain text). The reask path itself worked;")
     print("            rerun, or raise --max-retries.")
     print("  other parse err = plain-text replies or the model's own validation failures,")
-    print("  beyond the one deliberate rejection.")
+    print("  beyond the deliberate rejection (one per call).")
     sys.exit(0 if all(r["ok"] for r in results) else 1)
 
 

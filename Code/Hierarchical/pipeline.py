@@ -52,8 +52,10 @@ from benchmark import (
     _transient_retryer,
     create_instructor_client,
     decode_mode_for,
+    exception_chain,
     get_provenance,
     provider_create_kwargs,
+    status_of,
     tool_choice_for,
 )
 from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, SpecType
@@ -220,6 +222,9 @@ class StepRecord:
     parse_errors: int = 0          # failed parse/validation attempts (= retries, +1 per call
                                    # that ran out of attempts: its last failure isn't reasked)
     revisions: int = 0             # reviewer revision rounds (Revise, or a rejected Replace)
+    transient_retries: int = 0     # calls re-sent after a 429/5xx/connection error
+    reask_restarts: int = 0        # of those, calls that had already reasked: the re-send
+                                   # started over with a fresh parse-retry budget
     prompt_tokens: int = 0
     cached_tokens: int = 0         # of prompt_tokens, served from the provider's prompt cache
     completion_tokens: int = 0
@@ -252,18 +257,9 @@ _NON_RETRYABLE_EXC_NAMES = {
 def is_non_retryable(exc: BaseException) -> bool:
     """True if ``exc`` (or anything in its cause chain) is an error that
     regenerating the step can't fix."""
-    seen: set[int] = set()
-    cur: Optional[BaseException] = exc
-    while cur is not None and id(cur) not in seen:
-        seen.add(id(cur))
-        if type(cur).__name__ in _NON_RETRYABLE_EXC_NAMES:
-            return True
-        for attr in ("status_code", "code"):
-            val = getattr(cur, attr, None)
-            if isinstance(val, int) and val in _NON_RETRYABLE_STATUS:
-                return True
-        cur = cur.__cause__ or cur.__context__
-    return False
+    return any(type(e).__name__ in _NON_RETRYABLE_EXC_NAMES
+               or status_of(e) in _NON_RETRYABLE_STATUS
+               for e in exception_chain(exc))
 
 
 def _first_error_line(exc: BaseException) -> str:
@@ -481,6 +477,7 @@ class HierarchicalPipeline:
         self.normalizations: list[dict] = []
         self.adherence: list[dict] = []
         self.transient_retries = 0
+        self._pending_resends = [0, 0]          # (transient_retries, reask_restarts) for the step
         self._prior_steps: dict[tuple[str, Optional[int]], dict] = {}
         self._t0 = time.time()
         self._current_step: Optional[str] = None
@@ -544,16 +541,26 @@ class HierarchicalPipeline:
         kwargs = dict(response_model=response_model, messages=messages, max_retries=max_retries)
         kwargs.update(provider_create_kwargs(self.model_config, response_model))
         retryer = _transient_retryer()
+        first = len(self.tracker.aggregate.calls)
         try:
             return retryer(self._tracked_client.create, **kwargs)
         finally:
-            self.transient_retries += retryer.statistics.get("attempt_number", 1) - 1
+            resent = retryer.statistics.get("attempt_number", 1) - 1
+            self.transient_retries += resent
+            self._pending_resends[0] += resent
+            # Every call but the last was re-sent. One that had already reasked
+            # restarts with a fresh parse-retry budget (see _transient_retryer).
+            self._pending_resends[1] += sum(
+                1 for c in self.tracker.aggregate.calls[first:-1] if c.parse_errors)
 
     def _absorb_calls(self, rec: StepRecord) -> list:
         """Charge every tracker call not yet charged to a step to ``rec`` (tokens,
         cost, retries, per-attempt errors). Returns the calls it charged."""
         calls = self.tracker.aggregate.calls
         new, self._calls_absorbed = calls[self._calls_absorbed:], len(calls)
+        rec.transient_retries += self._pending_resends[0]
+        rec.reask_restarts += self._pending_resends[1]
+        self._pending_resends = [0, 0]
         for call in new:
             rec.calls += 1
             rec.retries += call.retry_count
@@ -875,8 +882,8 @@ class HierarchicalPipeline:
         steps = [asdict(s) for s in self.steps]
         totals = {
             k: sum(s[k] for s in steps)
-            for k in ("calls", "retries", "parse_errors", "prompt_tokens", "cached_tokens",
-                      "completion_tokens",
+            for k in ("calls", "retries", "parse_errors", "transient_retries", "reask_restarts",
+                      "prompt_tokens", "cached_tokens", "completion_tokens",
                       "total_tokens", "cost_usd", "wall_time_s")
         }
         return {
@@ -958,7 +965,10 @@ class HierarchicalPipeline:
         t = record["totals"]
         status = "OK" if record["success"] else f"FAILED at {record['failed_step']}"
         print(f"\n  [{status}] {record['display_name']} — hierarchical json_lab {record['level']}")
-        print(f"  Steps: {len(record['steps'])} | calls: {t['calls']} | retries: {t['retries']}")
+        resends = (f" | transient re-sends: {t['transient_retries']}"
+                   if t.get("transient_retries") else "")
+        print(f"  Steps: {len(record['steps'])} | calls: {t['calls']} | retries: {t['retries']}"
+              f"{resends}")
         print(f"  Tokens: {t['prompt_tokens']:,} in ({t['cached_tokens']:,} cached) / "
               f"{t['completion_tokens']:,} out "
               f"| Cost: ${t['cost_usd']:.6f} | Wall time: {record['wall_time_seconds']}s")
