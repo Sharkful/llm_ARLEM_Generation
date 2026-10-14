@@ -286,6 +286,10 @@ check("New components are disabled" in prompt, "prompt states the switch")
 # 6. --run-group resolves to one folder under Artifacts/Data/Hierarchical/
 check(P.output_dir_for("pilot_oct") == P.DEFAULT_OUTPUT_DIR / "pilot_oct"
       and P.output_dir_for(None) == P.DEFAULT_OUTPUT_DIR, "run group folder")
+import benchmark_config as _bc  # noqa: E402
+check(_bc.BenchmarkRunConfig().output_dir == "Artifacts/Data/OneShot"
+      and P.run_group_dir(_bc.ONESHOT_OUTPUT_DIR, "trial") == Path("Artifacts/Data/OneShot/trial"),
+      "one-shot runs go to Artifacts/Data/OneShot/[<run group>/], never the frozen Benchmark/")
 for bad in ("../x", "a/b", "", "has space"):
     try:
         P.output_dir_for(bad)

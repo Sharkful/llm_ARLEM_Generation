@@ -55,6 +55,7 @@ from benchmark import (
     exception_chain,
     get_provenance,
     provider_create_kwargs,
+    run_group_dir,
     status_of,
     tool_choice_for,
     warn_served_model,
@@ -73,20 +74,12 @@ from review import Approve, AutoApproveReviewer, Checkpoint, Replace, Reviewer, 
 
 
 DEFAULT_OUTPUT_DIR = Path("Artifacts") / "Data" / "Hierarchical"
-_RUN_GROUP_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def output_dir_for(run_group: Optional[str]) -> Path:
-    """``Artifacts/Data/Hierarchical/[<run_group>/]``. A run group is a single folder
-    name, so test runs and data-collection runs can be kept apart."""
-    if run_group is None:
-        return DEFAULT_OUTPUT_DIR
-    if not _RUN_GROUP_RE.match(run_group):
-        raise ValueError(
-            f"Invalid run group {run_group!r}: use a single folder name made of "
-            "letters, digits, '_' or '-'"
-        )
-    return DEFAULT_OUTPUT_DIR / run_group
+    """``Artifacts/Data/Hierarchical/[<run_group>/]`` (the shared rule:
+    ``benchmark.run_group_dir``)."""
+    return run_group_dir(DEFAULT_OUTPUT_DIR, run_group)
 
 # A step function: (response_model, messages, max_retries) -> validated model.
 CallFn = Callable[[Type[BaseModel], list[dict], int], BaseModel]

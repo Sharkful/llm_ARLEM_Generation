@@ -217,6 +217,10 @@ where AR augmentations guide the learner through a physical task.
 
 # ── Benchmark Run Configuration ──────────────────────────────────────
 
+# Where one-shot runs are written (see BenchmarkRunConfig.output_dir).
+ONESHOT_OUTPUT_DIR = "Artifacts/Data/OneShot"
+
+
 @dataclass
 class BenchmarkRunConfig:
     """Configuration for a single benchmark run."""
@@ -240,9 +244,12 @@ class BenchmarkRunConfig:
     # Instructor settings
     max_retries: int = 3
 
-    # Output
+    # Output. New one-shot runs go to Artifacts/Data/OneShot/[<run group>/];
+    # Artifacts/Data/Benchmark/ is the frozen wave-2 paper dataset and is never
+    # written again (a wave-2-roster rerun today is a different request stack).
     save_output: bool = True
-    output_dir: str = "Artifacts/Data/Benchmark"
+    output_dir: str = ONESHOT_OUTPUT_DIR
+    run_group: Optional[str] = None
 
     def get_prompt(self) -> str:
         """Build the user prompt from the template and config values.

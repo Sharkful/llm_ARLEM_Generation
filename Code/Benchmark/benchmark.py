@@ -35,6 +35,7 @@ import importlib.util
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 import time
@@ -60,6 +61,7 @@ from benchmark_config import (
     DEFAULT_TOPICS,
     FULL_BENCHMARK_MODELS,
     MODELS,
+    ONESHOT_OUTPUT_DIR,
     ModelConfig,
     ModelSize,
     Provider,
@@ -437,6 +439,23 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
         f"{prefix}/{model_config.model_id}",
         **kwargs,
     )
+
+
+_RUN_GROUP_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def run_group_dir(root, run_group: Optional[str]) -> Path:
+    """``root/[<run_group>/]``. A run group is a single folder name, so test runs
+    and data-collection runs can be kept apart (one-shot and hierarchical alike)."""
+    root = Path(root)
+    if run_group is None:
+        return root
+    if not _RUN_GROUP_RE.match(run_group):
+        raise ValueError(
+            f"Invalid run group {run_group!r}: use a single folder name made of "
+            "letters, digits, '_' or '-'"
+        )
+    return root / run_group
 
 
 def served_model_mismatches(model_id: str, served_models: list[str]) -> list[str]:
@@ -849,6 +868,7 @@ def run_single_benchmark(
         # tracking.retries (instructor parse-error self-correction) so infra noise
         # does not inflate the self-correction signal (issue #54).
         "transient_retries": transient_retries,
+        "run_group": run_config.run_group,
         "wall_time_seconds": round(wall_time_s, 2),
         "provenance": get_provenance(),
         "tracking": tracker_summary,
@@ -1009,6 +1029,7 @@ def run_benchmark_suite(
     structure: Structure = Structure.MULTI_MODULE,
     save_prompts: bool = True,
     overwrite_prompts: bool = False,
+    run_group: Optional[str] = None,
 ) -> list[dict]:
     """
     Run benchmarks across multiple models and work items.
@@ -1022,6 +1043,7 @@ def run_benchmark_suite(
     Returns list of all result records.
     """
     spec_types = spec_types or [SpecType.JSON_LAB]
+    output_dir = run_group_dir(ONESHOT_OUTPUT_DIR, run_group)
 
     # Build the ordered work-item list: (lab_name, level, topic, spec_type)
     work_items: list[tuple[Optional[str], Optional[Level], Optional[str], SpecType]] = []
@@ -1074,6 +1096,8 @@ def run_benchmark_suite(
                 structure=structure,
                 max_retries=max_retries,
                 save_output=save_output,
+                output_dir=str(output_dir),
+                run_group=run_group,
             )
             # Only override the dataclass default topic on the legacy path,
             # so YAML runs keep BenchmarkRunConfig's default topic string.
@@ -1106,10 +1130,10 @@ def run_benchmark_suite(
 
     # Save combined results
     if save_output:
-        output_dir = PROJECT_ROOT / "Artifacts" / "Data" / "Benchmark"
-        output_dir.mkdir(parents=True, exist_ok=True)
+        suite_dir = PROJECT_ROOT / output_dir
+        suite_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        summary_path = output_dir / f"suite_results_{ts}.json"
+        summary_path = suite_dir / f"suite_results_{ts}.json"
         summary_path.write_text(
             json.dumps(results, indent=2, default=str), encoding="utf-8"
         )
@@ -1259,6 +1283,13 @@ def parse_args():
         help="Skip writing the prompt artifact alongside benchmark outputs",
     )
     parser.add_argument(
+        "--run-group",
+        type=str,
+        default=None,
+        help="Write runs to Artifacts/Data/OneShot/<NAME>/ (default: Artifacts/Data/OneShot/). "
+             "Artifacts/Data/Benchmark/ is the frozen wave-2 dataset and is never written.",
+    )
+    parser.add_argument(
         "--overwrite-prompts",
         action="store_true",
         help="Rewrite the prompt artifact file even if it already exists",
@@ -1382,9 +1413,14 @@ def main():
     else:
         model_ids = resolved_models
 
+    try:
+        run_group_dir(ONESHOT_OUTPUT_DIR, args.run_group)  # validate before any run
+    except ValueError as e:
+        sys.exit(f"Error: {e}")
     require_environment([MODELS[m] for m in model_ids if m in MODELS])
 
     common = dict(
+        run_group=args.run_group,
         spec_types=spec_types,
         max_retries=args.max_retries,
         save_output=save_output,

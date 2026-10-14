@@ -122,9 +122,8 @@ Benchmark runs:
   → instructor + tracking/ (token/retry tracking)
   → Lab / DemoModule / LabOutline generation
   → lab_metrics.py (structural analysis)
-  → Artifacts/Data/Benchmark/ (output + metrics JSON)
-  → Artifacts/Data/Benchmark/prompts/ (deduped prompt artifacts, one per
-                                       lab × level × spec × structure tuple)
+  → Artifacts/Data/OneShot/[<run group>/] (output + metrics JSON, prompts/)
+    (Artifacts/Data/Benchmark/ is the frozen wave-2 sweep and is never written)
   → Artifacts/Data/Errors/   ← instructor error logs (gitignored)
 
 Hierarchical runs (Code/Hierarchical/, json_lab only):
@@ -143,7 +142,10 @@ Analysis (everything below reads run artifacts; nothing here calls an LLM):
 (2026-07-10, 385 runs, one provenance-stamped stack), which is the paper's dataset.
 `Artifacts/Data/Benchmark_formative_202606-07/` is the frozen earlier archive;
 never pool the two. `suite_results_*.json` is gitignored, so in a clone failed
-runs survive only in the `Reports/` CSVs. `README.md` is the data guide.
+runs survive only in the `Reports/` CSVs. `README.md` is the data guide. New
+one-shot runs (any roster, `--suite wave2` included) go to
+`Artifacts/Data/OneShot/[<run group>/]` (`benchmark.py --run-group NAME`), so they
+are never pooled with the paper's data; `load_runs()` still reads `Benchmark/` (#79).
 
 **Reports/ vs Paper/**: `Artifacts/Data/Benchmark/Reports/` is the exploration
 layer (notebooks, HTML, CSV). `Artifacts/Paper/` is the publication layer —
@@ -195,7 +197,7 @@ lives in `Code/Analysis/` (below) and never imports the other way around.
 
 `--structure` (json_lab L3–L4 only) selects the output shape: `multi-module` (default, one DemoModule per scene), `single-module` (one DemoModule, many clips), or `module-only` (bare `DemoModule`, no `Lab` wrapper). For **ARLEM** (`arlem` / `arlem_simple`) at L3–L4, `build_prompt` returns an `ARLEMScenario` and ignores `--structure` (ARLEM has a single output shape). L1 returns the spec-agnostic `LabOutline` for every spec.
 
-Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `Artifacts/Data/Benchmark/prompts/`. Every metrics record carries `lab_name`, `level`, `structure`, and `prompt_file` for traceability. Pass `--no-save-prompts` for large sweeps or `--overwrite-prompts` after a wrapper-template tweak.
+Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under the output folder's `prompts/` (`Artifacts/Data/Benchmark/prompts/` for wave 2). Every metrics record carries `lab_name`, `level`, `structure`, and `prompt_file` for traceability. Pass `--no-save-prompts` for large sweeps or `--overwrite-prompts` after a wrapper-template tweak.
 
 **`lab_metrics.py`** — Post-generation structural analysis:
 - `analyze_json_lab()` — counts objects, clips, components, text labels, object changes, prefab diversity. Shaped for the full `Lab` schema; reports zeros for `LabOutline` outputs (L1 runs)
@@ -208,7 +210,7 @@ Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `A
 - `BenchmarkExporter` — export to JSON, CSV, or Markdown
 - **Served model**: each attempt records the model id the response reports (`served_model_of`: Gemini `model_version`, OpenAI/Anthropic `model`); `summary()` and both run records carry `served_models`, and both CLIs (and the gate probe) warn when it isn't the requested id or a dated snapshot of it. Google serves `gemini-3.5-flash` with `gemini-3.6-flash` since 2026-10-08; cost is still priced as the requested id
 
-Benchmark outputs go to `Artifacts/Data/Benchmark/`:
+New benchmark outputs go to `Artifacts/Data/OneShot/[<run group>/]` (the wave-2 runs in `Artifacts/Data/Benchmark/` use the same layout):
 - `{model}_{spec}[_{level}]_{timestamp}_output.json` — the generated Lab / DemoModule / LabOutline / ARLEM JSON (`{level}` is present on the YAML-driven L1/L3/L4 path)
 - `{model}_{spec}[_{level}]_{timestamp}_metrics.json` — full tracking record (includes `prompt_file` reference for YAML-driven runs)
 - `suite_results_{timestamp}.json` — combined results across all suite runs
