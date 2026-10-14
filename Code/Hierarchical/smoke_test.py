@@ -622,6 +622,107 @@ check(m1["calls"] == 1 and m1["errors"][0] == "attempt 1 ValidationError: parse 
       "an error the tracker didn't record keeps its full text in errors.txt")
 
 
+# 23. tracker edge cases, through the public TrackedClient / track_call: a stub
+#     client fires the hook sequence a script describes (issue #71, PR #80 review)
+from types import SimpleNamespace  # noqa: E402
+from tracking import InstructorTracker, TrackedClient  # noqa: E402
+
+
+class _StubInstructor:
+    """Fires instructor-style hooks from a script, then returns or raises."""
+
+    def __init__(self):
+        self.handlers = {}
+
+    def on(self, event, handler):
+        self.handlers.setdefault(event, []).append(handler)
+
+    def off(self, event, handler):
+        self.handlers[event].remove(handler)
+
+    def _emit(self, event, *args):
+        for h in list(self.handlers.get(event, [])):
+            h(*args)
+
+    def create(self, script):
+        for step, *arg in script:
+            if step == "kwargs":
+                self._emit("completion:kwargs")
+            elif step == "response":
+                self._emit("completion:response", arg[0])
+            elif step == "parse_error":
+                self._emit("parse:error", arg[0])
+            elif step == "raise":
+                raise arg[0]
+        return "ok"
+
+
+def _resp(tokens):
+    return SimpleNamespace(usage=SimpleNamespace(prompt_tokens=tokens, completion_tokens=0,
+                                                 total_tokens=tokens))
+
+
+class InstructorRetryException(Exception):  # name-alike of instructor's wrapper
+    def __init__(self, msg, last_completion=None):
+        super().__init__(msg)
+        self.last_completion = last_completion
+
+
+class IncompleteOutputException(Exception):  # name-alike of instructor's truncation error
+    def __init__(self, last_completion=None):
+        super().__init__("The output is incomplete due to a max_tokens length limit.")
+        self.last_completion = last_completion
+
+
+def _tracked(script, tracker=None):
+    tracker = tracker or InstructorTracker(model="m", provider="openai")
+    try:
+        TrackedClient(_StubInstructor(), tracker).create(script=script)
+    except Exception:  # noqa: BLE001
+        pass
+    return tracker.aggregate.calls[-1]
+
+
+_c = _tracked([("raise", TypeError("bad kwargs, nothing sent"))])
+check(_c.total_attempts == 0 and _c.completion_errors == 0 and _c.final_error is None,
+      "an error before any request adds no attempt and no error count")
+
+_t = InstructorTracker(model="m", provider="openai")
+_stub = _StubInstructor()
+try:
+    with _t.track_call(_stub):
+        _stub.create(script=[("kwargs",), ("response", _resp(10))])
+        raise KeyError("caller's own post-processing")
+except KeyError:
+    pass
+_c = _t.aggregate.calls[-1]
+check(_c.total_attempts == 1 and _c.attempts[0].success and not _c.errors
+      and _c.completion_errors == 0,
+      "an error in the caller's own code isn't pinned on the request")
+
+_wrapper = InstructorRetryException("<failed_attempts>\n<generation number=\"1\">...",
+                                    last_completion=_resp(10))
+_wrapper.__cause__ = AssertionError("Instructor does not support multiple function calls")
+_c = _tracked([("kwargs",), ("response", _resp(10)), ("parse_error", ValueError("validation error")),
+               ("kwargs",), ("response", _resp(0)), ("raise", _wrapper)])
+_a2 = _c.attempts[-1].error
+check(_c.total_attempts == 2 and _c.retry_count == 1 and _a2 is not None
+      and _a2.exception_class == "AssertionError" and "<failed_attempts>" not in _a2.message
+      and _c.final_error is _a2 and _c.total_usage.total_tokens == 10,
+      "a wrapped non-retryable failure is recorded as its cause, with no usage counted twice")
+
+_c = _tracked([("kwargs",), ("raise", IncompleteOutputException(last_completion=_resp(7)))])
+check(_c.total_attempts == 1 and _c.total_usage.total_tokens == 7
+      and _c.final_error.exception_class == "IncompleteOutputException",
+      "a truncation with no response hook keeps its own request's usage")
+
+_c = _tracked([("kwargs",), ("response", _resp(5)), ("parse_error", ValueError("validation error")),
+               ("response", _resp(5))])
+check(_c.total_attempts == 2 and _c.retry_count == 1 and _c.attempts[-1].success
+      and _c.attempts[0].error is not None,
+      "a request whose kwargs hook didn't fire still gets its own attempt")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"
@@ -641,6 +742,9 @@ class MockOpenAI(BaseHTTPRequestHandler):
         elif tool == "ModuleAssetPlan":
             state["asset"] += 1
             args = (REPLAY / f"{state['asset']:02d}_asset_plan.json").read_text(encoding="utf-8")
+        elif state.get("mode") == "fail503" and tool == "PlannedDemoModule":
+            return self._reply(503, {"error": {"message": "The server is overloaded",
+                                               "type": "server_error"}})
         elif state.get("mode") == "reask400" and state["module_requests"] >= 1:
             # the reask after an invalid module is rejected: an API error ends the call
             state["module_requests"] += 1
@@ -683,7 +787,8 @@ import instructor  # noqa: E402
 
 _real_factory = P.create_instructor_client
 P.create_instructor_client = lambda mc, spec: instructor.from_provider(
-    f"openai/{mc.model_id}", base_url=f"http://127.0.0.1:{srv.server_port}/v1", api_key="test")
+    f"openai/{mc.model_id}", base_url=f"http://127.0.0.1:{srv.server_port}/v1", api_key="test",
+    max_retries=0)   # no SDK-level re-sends against the mock (the 503 case)
 try:
     MOCK = TMP / "mock"
     class CallingReviewer:
@@ -711,7 +816,7 @@ try:
     ).run()
     # module 1's reask is rejected with a 400, and module 1 is truncated (max_tokens)
     edge = {}
-    for _mode in ("reask400", "truncate"):
+    for _mode in ("reask400", "truncate", "fail503"):
         state.update(asset=0, always_bad=False, mode=_mode, module_requests=0)
         edge[_mode] = P.HierarchicalPipeline(
             "gpt-5.4-mini", LAB_NAME,
@@ -765,6 +870,12 @@ check(not edge["truncate"]["success"] and _trunc["retries"] == 0 and _trunc["pro
       and _trunc["errors"][-1].startswith("step attempt 1 failed: IncompleteOutputException")
       and len(_trunc["errors"][-1]) <= len("step attempt 1 failed: ") + 220,
       "a truncated response is recorded on its attempt (no error hook fires) and not repeated")
+_f503 = edge["fail503"]["steps"][-1]
+check(not edge["fail503"]["success"] and _f503["retries"] == 0 and len(_f503["errors"]) == 2
+      and _f503["errors"][0].startswith("attempt 1 InternalServerError")
+      and _f503["errors"][1].startswith("step attempt 1 failed: InstructorRetryException")
+      and len(_f503["errors"][1]) <= len("step attempt 1 failed: ") + 220,
+      "a 5xx that ends the call: recorded once by the tracker, step summary shortened")
 sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
 from benchmark_dataframe import load_runs  # noqa: E402
 df = load_runs(MOCK)

@@ -132,8 +132,8 @@ class InstructorTracker:
             self._start_call(client, call_id)
             yield call_id
             self._end_call(call_id, success=True)
-        except Exception as e:
-            self._end_call(call_id, success=False, error=e)
+        except Exception:
+            self._end_call(call_id, success=False)
             raise
         finally:
             self._cleanup_hooks(client, call_id)
@@ -278,26 +278,15 @@ class InstructorTracker:
         # Register hooks
         self._register_hooks(client, call_id)
 
-    def _end_call(self, call_id: str, success: bool, error: Optional[Exception] = None):
-        """Finalize tracking for a completed call.
-
-        ``error`` is the exception the call ended with. If the last request's
-        attempt has no error yet, it is recorded there: instructor fires no error
-        hook for max_tokens truncation (IncompleteOutputException) or for a
-        non-retryable parse failure (raised as InstructorRetryException, whose
-        cause is classified). Attempts an error hook already marked are left
-        alone, so nothing is counted twice."""
+    def _end_call(self, call_id: str, success: bool):
+        """Finalize tracking for a completed call."""
         with self._lock:
             if call_id not in self._active_calls:
                 return
 
             call_metrics = self._active_calls[call_id]
-            last = call_metrics.attempts[-1] if call_metrics.attempts else None
-            if error is not None and (last is None or last.error is None):
-                self._mark_attempt_failed(
-                    call_id, call_metrics, error, ErrorType.COMPLETION_ERROR,
-                    classify_on=error.__cause__ or error,
-                )
+            if not success and call_metrics.attempts:
+                call_metrics.final_error = call_metrics.attempts[-1].error
             call_metrics.end_time = datetime.now()
             call_metrics.success = success
             call_metrics.final_attempt_number = self._current_attempt.get(call_id, 0)
@@ -389,15 +378,21 @@ class InstructorTracker:
         call.attempts.append(attempt)
         return attempt
 
-    def _current_attempt_record(self, call_id: str, call: CallMetrics) -> AttemptMetrics:
-        """The attempt the current request belongs to. Opens one only if the
-        kwargs hook didn't fire for it (defensive; instructor 1.17 always does)."""
-        attempt_num = self._current_attempt.get(call_id, 0)
-        if call.attempts and call.attempts[-1].attempt_number == attempt_num:
-            return call.attempts[-1]
-        if attempt_num == 0:
-            self._current_attempt[call_id] = attempt_num = 1
-        return self._open_attempt(call, attempt_num)
+    def _current_attempt_record(
+        self, call_id: str, call: CallMetrics, for_response: bool = False
+    ) -> AttemptMetrics:
+        """The attempt the current request belongs to.
+
+        instructor 1.17 sends at most one response and one error hook per request.
+        So if the last attempt already has what is arriving now (a response, or an
+        error), this belongs to a request whose kwargs hook didn't fire: open a new
+        attempt for it rather than merging two requests into one."""
+        last = call.attempts[-1] if call.attempts else None
+        taken = last is None or last.error is not None or (for_response and last.responded)
+        if not taken:
+            return last
+        self._current_attempt[call_id] = self._current_attempt.get(call_id, 0) + 1
+        return self._open_attempt(call, self._current_attempt[call_id])
 
     def _on_kwargs(self, call_id: str, args, kwargs):
         """Called when completion kwargs are prepared (before each attempt)."""
@@ -422,10 +417,11 @@ class InstructorTracker:
                 return
 
             call = self._active_calls[call_id]
-            attempt = self._current_attempt_record(call_id, call)
+            attempt = self._current_attempt_record(call_id, call, for_response=True)
 
             usage = TokenUsage.from_completion(response)
             attempt.usage = attempt.usage + usage
+            attempt.responded = True
             attempt.success = True      # provisional: a parse error clears it
             call.total_usage = call.total_usage + usage
 
@@ -448,31 +444,56 @@ class InstructorTracker:
         error: Exception,
         default_type: ErrorType
     ):
-        """Record an error with proper categorization."""
+        """Record an error with proper categorization (from an error hook)."""
         with self._lock:
             if call_id not in self._active_calls:
                 return
             call = self._active_calls[call_id]
-            self._mark_attempt_failed(call_id, call, error, default_type)
+            self._mark_attempt_failed(
+                call, self._current_attempt_record(call_id, call), error, default_type)
+
+    def _record_terminal_error(self, call_id: str, error: Exception):
+        """Record the exception an instructor call ended with, if no error hook did.
+
+        instructor fires no error hook for max_tokens truncation
+        (IncompleteOutputException) or for a non-retryable parse failure (raised as
+        InstructorRetryException). Called by TrackedClient for exceptions raised by
+        the instructor call itself, so errors in a caller's own code are never
+        pinned on a request. Nothing is recorded when no request was sent (no
+        attempt to pin it on), or when a hook already marked the last attempt."""
+        with self._lock:
+            call = self._active_calls.get(call_id)
+            if call is None or not call.attempts or call.attempts[-1].error is not None:
+                return
+            attempt = call.attempts[-1]
+            # instructor's retry exception wraps the error that ended the call and
+            # its str() is a dump of every attempt: record the cause instead.
+            cause = error.__cause__ if error.__cause__ is not None else error
+            # A truncation raised by the request itself (no response hook) carries
+            # this request's completion; any other last_completion (e.g. on the
+            # retry exception) belongs to an earlier attempt and is not added.
+            if type(error).__name__ == "IncompleteOutputException" and not attempt.responded:
+                completion = getattr(error, "last_completion", None)
+                if completion is not None:
+                    usage = TokenUsage.from_completion(completion)
+                    attempt.usage = attempt.usage + usage
+                    call.total_usage = call.total_usage + usage
+            self._mark_attempt_failed(call, attempt, cause, ErrorType.COMPLETION_ERROR)
 
     def _mark_attempt_failed(
         self,
-        call_id: str,
         call: CallMetrics,
+        attempt: AttemptMetrics,
         error: Exception,
         default_type: ErrorType,
-        classify_on: Optional[Exception] = None,
     ):
-        """Mark the current request's attempt failed and count the error
-        (caller holds the lock). ``classify_on`` is the exception to classify
-        when it differs from the one recorded (a wrapper's cause)."""
-        attempt = self._current_attempt_record(call_id, call)
-
-        error_type = classify_error(classify_on or error)
+        """Mark ``attempt`` failed with ``error`` and count it (caller holds the lock)."""
+        error_type = classify_error(error)
         if error_type == ErrorType.UNKNOWN:
             error_type = default_type
 
-        error_record = ErrorRecord(
+        attempt.success = False
+        attempt.error = ErrorRecord(
             error_type=error_type,
             exception_class=type(error).__name__,
             message=str(error),
@@ -480,20 +501,6 @@ class InstructorTracker:
             attempt_number=attempt.attempt_number,
             raw_exception=error if self.store_raw_responses else None,
         )
-        attempt.success = False
-        if attempt.error is None:
-            # A second error for the same request (not produced by instructor
-            # 1.17) is still counted below, but the attempt keeps the first.
-            attempt.error = error_record
-
-        # An error that carries the completion (and a request whose response hook
-        # didn't fire) contributes that usage; a response already counted doesn't
-        # get counted twice.
-        last_completion = getattr(error, 'last_completion', None)
-        if last_completion is not None and attempt.usage.total_tokens == 0:
-            usage = TokenUsage.from_completion(last_completion)
-            attempt.usage = attempt.usage + usage
-            call.total_usage = call.total_usage + usage
 
         if error_type == ErrorType.PARSE_ERROR:
             call.parse_errors += 1
@@ -516,13 +523,19 @@ class TrackedClient:
 
     def create(self, *args, **kwargs):
         """Tracked version of client.create()."""
-        with self._tracker.track_call(self._client):
-            return self._client.create(*args, **kwargs)
+        return self._tracked(self._client.create, *args, **kwargs)
 
     def create_with_completion(self, *args, **kwargs):
         """Tracked version of client.create_with_completion()."""
-        with self._tracker.track_call(self._client):
-            return self._client.create_with_completion(*args, **kwargs)
+        return self._tracked(self._client.create_with_completion, *args, **kwargs)
+
+    def _tracked(self, method, *args, **kwargs):
+        with self._tracker.track_call(self._client) as call_id:
+            try:
+                return method(*args, **kwargs)
+            except Exception as e:
+                self._tracker._record_terminal_error(call_id, e)
+                raise
 
     def __getattr__(self, name):
         """Pass through other attributes to underlying client."""

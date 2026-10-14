@@ -146,6 +146,7 @@ class AttemptMetrics:
     success: bool
     error: Optional[ErrorRecord] = None
     duration_ms: Optional[float] = None
+    responded: bool = False         # a response arrived for this request
 
 
 @dataclass
@@ -176,6 +177,9 @@ class CallMetrics:
     # Final status
     success: bool = False
     final_attempt_number: int = 0
+    # For a failed call: the error that ended it, as recorded on its last attempt
+    # (by an error hook, or by TrackedClient for an error no hook reported).
+    final_error: Optional[ErrorRecord] = None
 
     # Request context (optional)
     response_model: Optional[str] = None
