@@ -903,6 +903,43 @@ except Exception as _e:  # noqa: BLE001 — report, don't crash the offline test
     check(False, f"Responses reask fallback ({type(_e).__name__}: {_e})")
 
 
+# 28. PR #83 review fixes: served-model match, empty-arguments reask, OpenAI
+#     timeout, price override keeps cache rates, probe reads Responses system text
+check(benchmark.served_model_mismatches("gemini-3.5-flash", ["gemini-3.5-flash-lite"])
+      == ["gemini-3.5-flash-lite"]
+      and benchmark.served_model_mismatches("claude-x", ["claude-x-20261001", "claude-x"]) == []
+      and benchmark.served_model_mismatches("gpt-6-luna", ["gpt-6-luna-2026-09-01"]) == [],
+      "only the requested id or a dated snapshot counts as the same served model")
+try:
+    import instructor.v2.providers.openai.handlers as _oh
+    benchmark._patch_openai_responses()
+    _empty = SimpleNamespace(output=[SimpleNamespace(type="function_call", call_id="c1",
+                                                     arguments="{}")])
+    _out = _oh.reask_responses_tools({"messages": []}, _empty, ValueError("bad"))["messages"][-1]
+    check(_out["type"] == "function_call_output" and "empty arguments" in _out["output"],
+          "an empty-arguments call gets instructor's empty-arguments feedback")
+except Exception as _e:  # noqa: BLE001 — report, don't crash the offline test
+    check(False, f"empty-arguments reask ({type(_e).__name__}: {_e})")
+_env = {k: os.environ.get(k) for k in ("OPENAI_API_KEY",)}
+os.environ["OPENAI_API_KEY"] = _env["OPENAI_API_KEY"] or "test"
+try:
+    _timeouts = {m: benchmark.create_instructor_client(P.MODELS[m], P.SpecType.JSON_LAB)
+                 .client.timeout.read for m in ("gpt-6-luna", "gpt-5.4-mini")}
+finally:
+    if _env["OPENAI_API_KEY"] is None:
+        os.environ.pop("OPENAI_API_KEY", None)
+check(_timeouts == {"gpt-6-luna": 900.0, "gpt-5.4-mini": 900.0},
+      f"OpenAI clients get the same 900 s timeout as Anthropic ({_timeouts})")
+check(PricingCalculator(config={"input": 1.0, "output": 2.0}, model="gpt-6-luna").cached_input_price
+      == 0.01,
+      "a price override keeps the model's cache rates")
+sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Benchmark" / "probes"))
+from probe_tool_schemas import system_text  # noqa: E402
+check(system_text({"input": [{"role": "system", "content": "be brief"},
+                             {"role": "user", "content": "hi"}]}) == "be brief",
+      "the schema probe reads the system line from a Responses request's input")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"

@@ -75,7 +75,8 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     # Introductory discounts: these two are stored at the rate that applies once the
     # discount ends, so costs reflect what a run will cost going forward. If a
     # provider makes the introductory rate permanent (as Anthropic did for Sonnet 5,
-    # above), update the entry and re-tabulate with Code/Analysis/reprice_runs.py.
+    # above), update the entry and re-tabulate. Code/Analysis/reprice_runs.py doesn't
+    # apply cache rates yet, so re-price current-roster runs only after #84.
     #   gemini-4-argon:   $2.00 / $10.00, cached $0.10,  until 2026-11-30
     #   gemini-3.8-flash: $0.75 / $3.75,  cached $0.075, until 2026-12-31
     # Implicit caching (automatic; Argon from 4,096-token prompts): no write charge
@@ -128,7 +129,9 @@ class PricingCalculator:
         If both are provided, config takes precedence.
         If neither provides valid pricing, costs will be 0.
         """
-        pricing = config or (DEFAULT_PRICING.get(model) if model else None) or {}
+        # An override (ModelConfig.pricing_config: input/output only) is merged onto
+        # the model's entry, so its cache rates survive.
+        pricing = {**(DEFAULT_PRICING.get(model, {}) if model else {}), **(config or {})}
         self.input_price = pricing.get("input", 0.0)
         self.output_price = pricing.get("output", 0.0)
         self.cached_input_price = pricing.get("cached_input", self.input_price)

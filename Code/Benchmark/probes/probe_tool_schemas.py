@@ -10,6 +10,9 @@ the new one, then diff. A change in what a provider receives for the same respon
 model (e.g. instructor starting to emit ``const`` or a discriminator again, which
 Gemini rejects) shows up here before it costs a sweep.
 
+Captures are keyed ``<registry model>/<response model>``, so diff two captures taken
+with the same version of this script (the gate captures both pins with it).
+
 Usage:
     python "Code/Benchmark/probes/probe_tool_schemas.py" before.json
     pip install -r requirements.txt            # the new pin
@@ -59,7 +62,9 @@ def system_text(body: dict) -> str:
         return []
 
     parts = text(body.get("system")) + text(body.get("systemInstruction"))
-    parts += [t for m in body.get("messages", []) if m.get("role") == "system"
+    # OpenAI Chat Completions `messages`, and the Responses API `input` items
+    turns = [*body.get("messages", []), *body.get("input", [])]
+    parts += [t for m in turns if isinstance(m, dict) and m.get("role") in ("system", "developer")
               for t in text(m.get("content"))]
     return "\n".join(parts)
 

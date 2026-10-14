@@ -193,12 +193,21 @@ def _patch_openai_responses():
         calls = [item for item in output if getattr(item, "type", None) == "function_call"]
         if not calls:
             return original_reask(kwargs, response, exception)
-        error = f"Validation Error found:\n{exception}\nRecall the function correctly, fix the errors"
+        def feedback(call):
+            # instructor's own wording, including its empty-arguments case
+            args = getattr(call, "arguments", "")
+            if not args or (isinstance(args, str) and args.strip() in {"", "{}"}):
+                return (f"Validation Error found:\n{exception}\nThe function was called "
+                        "with empty arguments '{}'. You MUST populate ALL required fields "
+                        "in the function call according to the schema. Do not return "
+                        "empty arguments.")
+            return f"Validation Error found:\n{exception}\nRecall the function correctly, fix the errors"
+
         kwargs = kwargs.copy()
         kwargs["messages"] = [
             *kwargs.get("messages", []),
             *output,
-            *({"type": "function_call_output", "call_id": c.call_id, "output": error}
+            *({"type": "function_call_output", "call_id": c.call_id, "output": feedback(c)}
               for c in calls),
         ]
         return kwargs
@@ -415,6 +424,10 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
     kwargs = {}
     if model_config.provider == Provider.OPENAI:
         kwargs["max_retries"] = 0  # SDK retries off: _transient_retryer is the one (counted)
+        # Same 900 s timeout as Anthropic: a long lab (GPT-6 reasons by default)
+        # must not hit the SDK's 600 s default and be re-sent as "transient".
+        import httpx
+        kwargs["timeout"] = httpx.Timeout(900.0, connect=5.0)
         if model_config.responses_api:
             kwargs["mode"] = decode_mode_for(model_config, spec_type)
             try:
@@ -460,9 +473,12 @@ def run_group_dir(root, run_group: Optional[str]) -> Path:
 
 def served_model_mismatches(model_id: str, served_models: list[str]) -> list[str]:
     """Served model ids that aren't the requested one. A dated snapshot of it
-    (``gpt-6-luna-2026-09-01`` for ``gpt-6-luna``) counts as the same model; a
-    provider-side redirect (``gemini-3.6-flash`` for ``gemini-3.5-flash``) does not."""
-    return [m for m in served_models if not m.startswith(model_id)]
+    (``gpt-6-luna-2026-09-01`` / ``-20260901`` for ``gpt-6-luna``) counts as the same
+    model; anything else does, whether a redirect (``gemini-3.6-flash`` for
+    ``gemini-3.5-flash``) or a sibling that merely extends the id
+    (``gemini-3.5-flash-lite``)."""
+    same = re.compile(re.escape(model_id) + r"(-\d{4}-\d{2}-\d{2}|-\d{8})?")
+    return [m for m in served_models if not same.fullmatch(m)]
 
 
 def warn_served_model(model_id: str, served_models: list[str]) -> None:
