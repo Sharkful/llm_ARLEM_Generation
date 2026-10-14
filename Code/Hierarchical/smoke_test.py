@@ -774,7 +774,10 @@ class MockOpenAI(BaseHTTPRequestHandler):
         elif tool == "ModuleAssetPlan":
             state["asset"] += 1
             args = (REPLAY / f"{state['asset']:02d}_asset_plan.json").read_text(encoding="utf-8")
-        elif state.get("mode") == "fail503" and tool == "PlannedDemoModule":
+        elif (state.get("mode") == "fail503" and tool == "PlannedDemoModule") or (
+                state.get("mode") == "503once" and tool == "PlannedDemoModule"
+                and not state.get("sent_503")):
+            state["sent_503"] = True
             return self._reply(503, {"error": {"message": "The server is overloaded",
                                                "type": "server_error"}})
         elif state.get("mode") == "reask400" and state["module_requests"] >= 1:
@@ -816,6 +819,9 @@ srv = HTTPServer(("127.0.0.1", 0), MockOpenAI)
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 
 import instructor  # noqa: E402
+import tenacity  # noqa: E402
+
+benchmark._TRANSIENT_WAIT = tenacity.wait_none()   # real retry policy, no sleeping
 
 _real_factory = P.create_instructor_client
 P.create_instructor_client = lambda mc, spec: instructor.from_provider(
@@ -848,8 +854,8 @@ try:
     ).run()
     # module 1's reask is rejected with a 400, and module 1 is truncated (max_tokens)
     edge = {}
-    for _mode in ("reask400", "truncate", "fail503"):
-        state.update(asset=0, always_bad=False, mode=_mode, module_requests=0)
+    for _mode in ("reask400", "truncate", "fail503", "503once"):
+        state.update(asset=0, always_bad=False, mode=_mode, module_requests=0, sent_503=False)
         edge[_mode] = P.HierarchicalPipeline(
             "gpt-5.4-mini", LAB_NAME,
             P.PipelineConfig(**REPLAY_MINIMUMS, module_retries=1, step_attempts=1),
@@ -903,11 +909,19 @@ check(not edge["truncate"]["success"] and _trunc["retries"] == 0 and _trunc["pro
       and len(_trunc["errors"][-1]) <= len("step attempt 1 failed: ") + 220,
       "a truncated response is recorded on its attempt (no error hook fires) and not repeated")
 _f503 = edge["fail503"]["steps"][-1]
-check(not edge["fail503"]["success"] and _f503["retries"] == 0 and len(_f503["errors"]) == 2
-      and _f503["errors"][0].startswith("attempt 1 InternalServerError")
-      and _f503["errors"][1].startswith("step attempt 1 failed: InstructorRetryException")
-      and len(_f503["errors"][1]) <= len("step attempt 1 failed: ") + 220,
-      "a 5xx that ends the call: recorded once by the tracker, step summary shortened")
+_n = benchmark._TRANSIENT_ATTEMPTS
+check(not edge["fail503"]["success"] and _f503["calls"] == _n and _f503["retries"] == 0
+      and edge["fail503"]["transient_retries"] == _n - 1 and len(_f503["errors"]) == _n + 1
+      and all(e.startswith("attempt 1 InternalServerError") for e in _f503["errors"][:_n])
+      and _f503["errors"][-1].startswith("step attempt 1 failed: InstructorRetryException")
+      and len(_f503["errors"][-1]) <= len("step attempt 1 failed: ") + 220,
+      f"a persistent 5xx is re-sent {_n - 1}x by the transient retryer (issue #54), "
+      "each call's error recorded once, step summary shortened")
+_ok503 = edge["503once"]
+_m503 = next(s for s in _ok503["steps"] if s["step"] == "module" and s["index"] == 1)
+check(_ok503["success"] and _ok503["transient_retries"] == 1 and _m503["calls"] == 2
+      and _m503["success"] and _m503["attempts"] == 1 and _m503["retries"] == 0,
+      "a one-off 5xx is re-sent once and the step succeeds (wrapped by instructor 1.17, #54)")
 sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
 from benchmark_dataframe import load_runs  # noqa: E402
 df = load_runs(MOCK)

@@ -272,9 +272,8 @@ minus one per instructor call. A failed parse is reasked, so `retries` equals
 `parse_errors`, except that a call which ran out of attempts has one more parse
 error than reasks (its last failure isn't reasked). An API error ends the call
 rather than being retried inside it; the transient retryer's re-sends (429, 5xx,
-connection) are separate calls, counted in `transient_retries`. (On instructor 1.17
-the retryer doesn't yet recognize these errors, because instructor wraps them; see
-#54. Until that's fixed `transient_retries` stays 0 and a 5xx fails the step attempt.)
+connection) are separate calls, counted in `transient_retries` (each failed call's
+error is listed in the step's errors).
 Runs recorded before the #71 fix (wave 2, and earlier hierarchical runs, including
 the 2026-10-13 `testing` runs) counted each failed parse twice (`retries` = 2 ×
 `parse_errors`, or one less when the call ran out of attempts); use `parse_errors`

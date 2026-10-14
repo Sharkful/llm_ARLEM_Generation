@@ -161,6 +161,7 @@ def _patch_genai_parallel_call_retry():
 # that a re-send would have completed. We wrap create() in a bounded, transient-ONLY
 # retry, kept distinct from instructor's parse-retry loop.
 _TRANSIENT_ATTEMPTS = 3          # 1 initial try + 2 retries
+_TRANSIENT_WAIT = None           # tenacity wait override (tests); None = exponential 2-20 s
 _TRANSIENT_STATUS = {429, 500, 502, 503, 504}
 # Provider-SDK exception class names that denote a transient transport condition
 # with no HTTP status to inspect, plus 5xx/429 name backups. Matched by name so we
@@ -180,35 +181,52 @@ _TRANSIENT_EXC_NAMES = {
 def _is_transient_api_error(exc: BaseException) -> bool:
     """True for retryable transport / 5xx / 429 errors from any provider SDK.
 
+    Looks through the exception's cause chain: instructor 1.17 raises an API
+    error out of its retry loop wrapped in ``InstructorRetryException``
+    (``raise ... from <the API error>``), so the provider error is the cause, not
+    the exception that reaches the retryer (issue #54; ``pipeline.is_non_retryable``
+    walks the chain the same way).
+
     Deliberately does NOT match instructor's ``IncompleteOutputException``
-    (``max_tokens`` truncation, review F9): re-sending the same request just
-    re-truncates against the same cap, so that stays a hard fail documented in
-    ``threats_to_validity.md`` §7. Parse errors are handled by instructor's own
-    retry loop and never reach here.
+    (``max_tokens`` truncation, review F9) anywhere in the chain: re-sending the
+    same request just re-truncates against the same cap, so that stays a hard fail
+    documented in ``threats_to_validity.md`` §7. Parse errors are handled by
+    instructor's own retry loop and are not transient.
     """
-    # anthropic / openai expose `status_code`; google-genai errors expose `code`.
-    for attr in ("status_code", "code"):
-        val = getattr(exc, attr, None)
-        if isinstance(val, int) and val in _TRANSIENT_STATUS:
+    seen: set[int] = set()
+    cur: Optional[BaseException] = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        if type(cur).__name__ == "IncompleteOutputException":
+            return False
+        # anthropic / openai expose `status_code`; google-genai errors expose `code`.
+        for attr in ("status_code", "code"):
+            val = getattr(cur, attr, None)
+            if isinstance(val, int) and val in _TRANSIENT_STATUS:
+                return True
+        if type(cur).__name__ in _TRANSIENT_EXC_NAMES:
             return True
-    return type(exc).__name__ in _TRANSIENT_EXC_NAMES
+        cur = cur.__cause__ or cur.__context__
+    return False
 
 
 def _transient_retryer():
     """A bounded ``tenacity.Retrying`` that retries transient API errors only.
 
     Read ``.statistics['attempt_number']`` after the call to recover how many
-    transient re-sends happened (attempts - 1). ``reraise=True`` surfaces the
-    underlying provider error (not tenacity's ``RetryError``) once attempts are
-    exhausted, so the caller's error handling and fail-mode classification are
-    unchanged.
+    transient re-sends happened (attempts - 1). Each re-send is a fresh
+    ``create()`` call (the tracker records it as a separate call). ``reraise=True``
+    surfaces the last error as raised (on instructor 1.17 the wrapping
+    ``InstructorRetryException``), not tenacity's ``RetryError``, once attempts
+    are exhausted, so the caller's error handling and fail-mode classification
+    are unchanged.
     """
     import tenacity
 
     return tenacity.Retrying(
         retry=tenacity.retry_if_exception(_is_transient_api_error),
         stop=tenacity.stop_after_attempt(_TRANSIENT_ATTEMPTS),
-        wait=tenacity.wait_exponential(multiplier=2, min=2, max=20),
+        wait=_TRANSIENT_WAIT or tenacity.wait_exponential(multiplier=2, min=2, max=20),
         reraise=True,
     )
 
