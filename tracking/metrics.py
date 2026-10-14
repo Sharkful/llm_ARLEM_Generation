@@ -93,6 +93,22 @@ class TokenUsage:
 
         usage = completion.usage
 
+        # --- OpenAI Responses API (GPT-6): input_tokens already includes cached
+        # tokens; both cache counts and reasoning sit in the *_details objects.
+        input_details = getattr(usage, 'input_tokens_details', None)
+        if input_details is not None:
+            output_details = getattr(usage, 'output_tokens_details', None)
+            prompt = getattr(usage, 'input_tokens', 0) or 0
+            output = getattr(usage, 'output_tokens', 0) or 0
+            return cls(
+                prompt_tokens=prompt,
+                completion_tokens=output,   # includes reasoning tokens
+                total_tokens=getattr(usage, 'total_tokens', None) or prompt + output,
+                cached_tokens=getattr(input_details, 'cached_tokens', 0) or 0,
+                cache_write_tokens=getattr(input_details, 'cache_write_tokens', 0) or 0,
+                reasoning_tokens=getattr(output_details, 'reasoning_tokens', 0) or 0,
+            )
+
         # Extract base token counts
         cached = 0
         cache_write = 0

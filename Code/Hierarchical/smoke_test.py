@@ -868,6 +868,37 @@ check(_quiet == "" and "answered with gemini-3.6-flash" in _out.getvalue(),
       "a dated snapshot of the requested model is fine; a redirect to another model warns")
 
 
+# 27. reasoning effort pinned per provider (current roster), provider default for
+#     wave 2 (#72); Responses usage parsed; the Responses reask falls back to
+#     instructor's own when the reply has no function call
+_pk = lambda m: benchmark.provider_create_kwargs(P.MODELS[m], P.LabPlan)
+check(_pk("gemini-3.8-flash").get("thinking_config") == {"thinking_level": "medium"}
+      and "thinking_config" not in _pk("gemini-3.5-flash")
+      and _pk("claude-sonnet-5.5").get("output_config") == {"effort": "medium"}
+      and "output_config" not in _pk("claude-sonnet-5")
+      and _pk("gpt-6-luna").get("reasoning") == {"effort": "medium"}
+      and not {"reasoning", "store", "include"} & set(_pk("gpt-5.4-mini")),
+      "effort medium on the current roster, nothing extra on wave-2 models")
+_ru = TokenUsage.from_completion(SimpleNamespace(usage=SimpleNamespace(
+    input_tokens=1000, output_tokens=200, total_tokens=1200,
+    input_tokens_details=SimpleNamespace(cached_tokens=600, cache_write_tokens=100),
+    output_tokens_details=SimpleNamespace(reasoning_tokens=50))))
+check((_ru.prompt_tokens, _ru.cached_tokens, _ru.cache_write_tokens, _ru.completion_tokens,
+       _ru.reasoning_tokens) == (1000, 600, 100, 200, 50),
+      "Responses usage: cached and cache writes inside input_tokens, reasoning inside output")
+try:
+    import instructor.v2.providers.openai.handlers as _oh
+    benchmark._patch_openai_responses()
+    _text_only = SimpleNamespace(output=[SimpleNamespace(type="message")])
+    _fallback = _oh.reask_responses_tools({"messages": [{"role": "user", "content": "q"}]},
+                                          _text_only, ValueError("bad"))
+    check(_fallback["messages"][-1]["role"] == "user"
+          and "Validation Error found" in str(_fallback["messages"][-1]["content"]),
+          "a Responses reply with no function call gets instructor's own reask")
+except Exception as _e:  # noqa: BLE001 — report, don't crash the offline test
+    check(False, f"Responses reask fallback ({type(_e).__name__}: {_e})")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"
@@ -882,6 +913,7 @@ class MockOpenAI(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         tool = body["tools"][0]["function"]["name"]
         state["requests"].append((tool, len(body["messages"])))
+        state.setdefault("body_keys", set()).update(body)
         if tool == "LabPlan":
             args = (REPLAY / "00_plan.json").read_text(encoding="utf-8")
         elif tool == "ModuleAssetPlan":
@@ -1012,6 +1044,9 @@ check((MOCK / "Runs" / "mock" / "errors.txt").exists(), "errors.txt written")
 check(rec["totals"]["cached_tokens"] == 600 * n_good_requests and m2["cached_tokens"] == 1200,
       "cached prompt tokens recorded per step and in totals")
 check(state["requests"][0] == ("LabPlan", 2), "first request is the plan (system + user)")
+check(not {"reasoning", "reasoning_effort", "store", "include", "output_config"} & state["body_keys"]
+      and rec["reasoning_effort"] is None,
+      "a wave-2 model sends no reasoning settings (provider default, as in wave 2)")
 bad_m1 = bad["steps"][-1]
 check(not bad["success"] and bad_m1["step"] == "module" and len(bad_m1["errors"]) == 3
       and [e.split(" ", 2)[:2] for e in bad_m1["errors"][:2]] == [["attempt", "1"], ["attempt", "2"]]
@@ -1168,6 +1203,9 @@ check(_m1 is not None and _m1["success"] and _m1["parse_errors"] == 1
       and rec.get("tool_choice") == "auto",
       "the reask costs one attempt; the record says tool_choice auto")
 check(all(r["max_tokens"] == 32000 for r in reqs), "every request sets max_tokens=32000")
+check(all(r.get("output_config") == {"effort": "medium"} for r in reqs)
+      and rec["reasoning_effort"] == "medium",
+      "every request pins reasoning effort medium (output_config.effort)")
 check([r["tools"][0]["name"] for r in reqs[:3]] == ["LabPlan", "ModuleAssetPlan", "PlannedDemoModule"],
       "tool names follow the step response models")
 check(all(r["model"] == "claude-haiku-5-5" for r in reqs) and rec["served_models"] == ["claude-haiku-5-5"],
@@ -1179,6 +1217,101 @@ check(rec["totals"]["prompt_tokens"] == 1000 * len(reqs)
 check(abs(rec["totals"]["cost_usd"]
           - len(reqs) * (600 * 0.10 + 300 * 0.01 + 100 * 0.125 + 200 * 0.50) / 1e6) < 1e-9,
       "Claude Haiku 5.5 priced at $0.10 / $0.50, cache reads $0.01, writes $0.125 per MTok")
+
+# ── Part 4: GPT-6 on the OpenAI Responses API (mock /v1/responses server) ──
+# Real create_instructor_client (pointed at the mock via OPENAI_BASE_URL). Checks the
+# request we send (reasoning effort, stateless encrypted reasoning, forced tool, no
+# strict text.format) and that a reask sends the model's reasoning back with the
+# error as the function call's output (_patch_openai_responses, #72).
+print("\n-- part 4: mock OpenAI Responses server --")
+resp = {"asset": 0, "requests": [], "bad_sent": False}
+
+
+class MockResponses(BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        resp["requests"].append((self.path, body))
+        tool = body["tools"][0]["name"]
+        if tool == "LabPlan":
+            data = (REPLAY / "00_plan.json").read_text(encoding="utf-8")
+        elif tool == "ModuleAssetPlan":
+            resp["asset"] += 1
+            data = (REPLAY / f"{resp['asset']:02d}_asset_plan.json").read_text(encoding="utf-8")
+        elif not resp["bad_sent"]:
+            resp["bad_sent"] = True
+            data = json.dumps({"moduleName": "broken"})   # invalid -> reask
+        else:
+            data = (REPLAY / f"{resp['asset']:02d}_module.json").read_text(encoding="utf-8")
+        n = len(resp["requests"])
+        payload = json.dumps({
+            "id": f"resp_{n}", "object": "response", "created_at": 0, "status": "completed",
+            "model": body["model"],
+            "output": [
+                {"type": "reasoning", "id": f"rs_{n}", "summary": [],
+                 "encrypted_content": f"enc-{n}"},
+                {"type": "function_call", "id": f"fc_{n}", "call_id": f"call_{n}",
+                 "name": tool, "arguments": data, "status": "completed"},
+            ],
+            "usage": {"input_tokens": 1000, "output_tokens": 200, "total_tokens": 1200,
+                      "input_tokens_details": {"cached_tokens": 600, "cache_write_tokens": 100},
+                      "output_tokens_details": {"reasoning_tokens": 50}},
+        }).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+
+rsrv = HTTPServer(("127.0.0.1", 0), MockResponses)
+threading.Thread(target=rsrv.serve_forever, daemon=True).start()
+_saved_env = {k: os.environ.get(k) for k in ("OPENAI_BASE_URL", "OPENAI_API_KEY")}
+os.environ["OPENAI_BASE_URL"] = f"http://127.0.0.1:{rsrv.server_port}/v1"
+os.environ["OPENAI_API_KEY"] = "test"
+try:
+    rec = P.HierarchicalPipeline("gpt-6-luna", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
+                                 output_dir=TMP / "responses", run_name="responses").run()
+finally:
+    rsrv.shutdown()
+    for k, v in _saved_env.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
+rreqs = resp["requests"]
+check(rec["success"] and rec["decode_mode"] == "responses_tools"
+      and all(path == "/v1/responses" for path, _ in rreqs),
+      "GPT-6 runs on the Responses API (every request to /v1/responses)")
+check(all(b.get("store") is False and b.get("include") == ["reasoning.encrypted_content"]
+          and b.get("reasoning") == {"effort": "medium"} for _, b in rreqs)
+      and rec["reasoning_effort"] == "medium",
+      "every request: effort medium, store false, encrypted reasoning requested")
+check(all(b.get("tool_choice") == {"type": "function", "name": b["tools"][0]["name"]}
+          and "text" not in b for _, b in rreqs),
+      "the step's tool is forced and no strict text.format is sent")
+_rr = next((b for _, b in rreqs if any(isinstance(i, dict) and i.get("type") == "function_call_output"
+                                       for i in b["input"])), None)
+_tail = _rr["input"][-3:] if _rr else []
+check(_rr is not None and [i.get("type") for i in _tail] == ["reasoning", "function_call",
+                                                            "function_call_output"]
+      and _tail[0].get("encrypted_content", "").startswith("enc-")
+      and _tail[2]["call_id"] == _tail[1]["call_id"]
+      and "Validation Error found" in _tail[2]["output"],
+      "a reask sends the reasoning and the call back, with the error as the call's output")
+_m1 = next((s for s in rec["steps"] if s["step"] == "module" and s["index"] == 1), None)
+check(_m1 is not None and _m1["success"] and _m1["parse_errors"] == 1 and _m1["retries"] == 1,
+      "the reask costs one attempt and the step succeeds")
+check(rec["served_models"] == ["gpt-6-luna"]
+      and rec["totals"]["prompt_tokens"] == 1000 * len(rreqs)
+      and rec["totals"]["cached_tokens"] == 600 * len(rreqs)
+      and rec["totals"]["cache_write_tokens"] == 100 * len(rreqs)
+      and abs(rec["totals"]["cost_usd"]
+              - len(rreqs) * (300 * 0.10 + 600 * 0.01 + 100 * 0.125 + 200 * 0.50) / 1e6) < 1e-9,
+      "Responses usage (cached, cache writes) tracked and priced at GPT-6 Luna rates")
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("\nALL PASSED" if not FAILED else "\nSOME FAILED")

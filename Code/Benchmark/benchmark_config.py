@@ -44,6 +44,13 @@ class ModelConfig:
     display_name: str
     size: ModelSize = ModelSize.MEDIUM
     max_retries: int = 3
+    # Reasoning effort sent on every request (Anthropic output_config.effort,
+    # Gemini thinking_level, OpenAI reasoning.effort). None = the provider's
+    # default, which is how every wave-2 run was made. The current roster pins
+    # "medium" so reasoning is held constant across providers (#72).
+    reasoning_effort: Optional[str] = None
+    # OpenAI only: call the Responses API instead of Chat Completions (#72).
+    responses_api: bool = False
     # Per-1M-token pricing (overrides DEFAULT_PRICING if set)
     input_price: Optional[float] = None
     output_price: Optional[float] = None
@@ -70,8 +77,14 @@ MODELS = {
     # ── OpenAI: current (#72). GPT-6.1 Sol is priced like Sonnet 5.5, so it is
     # the medium tier and OpenAI has no large entry (GPT-6 Astra, $10/$50, isn't
     # registered).
-    "gpt-6.1-sol":  ModelConfig("gpt-6.1-sol",  Provider.OPENAI, "GPT-6.1 Sol",  ModelSize.MEDIUM),
-    "gpt-6-luna":   ModelConfig("gpt-6-luna",   Provider.OPENAI, "GPT-6 Luna",   ModelSize.SMALL),
+    # Both run on the Responses API: since GPT-5.4, Chat Completions 400s on
+    # function tools whenever reasoning is on ("Function tools with reasoning_effort
+    # are not supported for gpt-6-luna in /v1/chat/completions"), and GPT-6 reasons
+    # by default (GPT-6.1 Sol has no "none" level at all).
+    "gpt-6.1-sol":  ModelConfig("gpt-6.1-sol",  Provider.OPENAI, "GPT-6.1 Sol",  ModelSize.MEDIUM,
+                                reasoning_effort="medium", responses_api=True),
+    "gpt-6-luna":   ModelConfig("gpt-6-luna",   Provider.OPENAI, "GPT-6 Luna",   ModelSize.SMALL,
+                                reasoning_effort="medium", responses_api=True),
 
     # ── Anthropic: wave 2 ─────────────────────────────────────────────────
     "claude-opus-4.8":  ModelConfig("claude-opus-4-8",           Provider.ANTHROPIC, "Claude Opus 4.8", ModelSize.LARGE),
@@ -80,9 +93,12 @@ MODELS = {
     # ── Anthropic: current (#72). Sonnet 5.5 and Opus 5.5 reject a forced
     # tool_choice (Haiku 5.5 accepts it); every Claude model gets "auto" (#70).
     # Thinking is on by default on all three, so output tokens include it.
-    "claude-opus-5.5":   ModelConfig("claude-opus-5-5",   Provider.ANTHROPIC, "Claude Opus 5.5",   ModelSize.LARGE),
-    "claude-sonnet-5.5": ModelConfig("claude-sonnet-5-5", Provider.ANTHROPIC, "Claude Sonnet 5.5", ModelSize.MEDIUM),
-    "claude-haiku-5.5":  ModelConfig("claude-haiku-5-5",  Provider.ANTHROPIC, "Claude Haiku 5.5",  ModelSize.SMALL),
+    "claude-opus-5.5":   ModelConfig("claude-opus-5-5",   Provider.ANTHROPIC, "Claude Opus 5.5",   ModelSize.LARGE,
+                                     reasoning_effort="medium"),
+    "claude-sonnet-5.5": ModelConfig("claude-sonnet-5-5", Provider.ANTHROPIC, "Claude Sonnet 5.5", ModelSize.MEDIUM,
+                                     reasoning_effort="medium"),   # default would be high
+    "claude-haiku-5.5":  ModelConfig("claude-haiku-5-5",  Provider.ANTHROPIC, "Claude Haiku 5.5",  ModelSize.SMALL,
+                                     reasoning_effort="medium"),
 
     # ── Google Gemini: wave 2 ─────────────────────────────────────────────
     # Registry key (CLI alias) stays "gemini-3.1-pro"; model_id is the -preview id
@@ -96,9 +112,12 @@ MODELS = {
     "gemini-3.1-flash-lite": ModelConfig("gemini-3.1-flash-lite",  Provider.GOOGLE, "Gemini 3.1 Flash Lite", ModelSize.SMALL),
     "gemini-2.5-flash-lite": ModelConfig("gemini-2.5-flash-lite",  Provider.GOOGLE, "Gemini 2.5 Flash Lite", ModelSize.SMALL),
     # ── Google Gemini: current (#72) ──────────────────────────────────────
-    "gemini-4-argon":        ModelConfig("gemini-4-argon",         Provider.GOOGLE, "Gemini 4 Argon",        ModelSize.LARGE),
-    "gemini-3.8-flash":      ModelConfig("gemini-3.8-flash",       Provider.GOOGLE, "Gemini 3.8 Flash",      ModelSize.MEDIUM),
-    "gemini-3.5-flash-lite": ModelConfig("gemini-3.5-flash-lite",  Provider.GOOGLE, "Gemini 3.5 Flash Lite", ModelSize.SMALL),
+    "gemini-4-argon":        ModelConfig("gemini-4-argon",         Provider.GOOGLE, "Gemini 4 Argon",        ModelSize.LARGE,
+                                         reasoning_effort="medium"),
+    "gemini-3.8-flash":      ModelConfig("gemini-3.8-flash",       Provider.GOOGLE, "Gemini 3.8 Flash",      ModelSize.MEDIUM,
+                                         reasoning_effort="medium"),
+    "gemini-3.5-flash-lite": ModelConfig("gemini-3.5-flash-lite",  Provider.GOOGLE, "Gemini 3.5 Flash Lite", ModelSize.SMALL,
+                                         reasoning_effort="medium"),   # default would be minimal
 }
 
 # The paper's roster (wave 2, 2026-07-10), frozen; `--suite wave2` reruns it.

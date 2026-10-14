@@ -156,6 +156,56 @@ def _patch_genai_parallel_call_retry():
     genai_handlers.parse_genai_tools = parse_genai_tools_retryable
 
 
+_RESPONSES_PATCH_WARNED = False
+
+
+def _patch_openai_responses():
+    """Two changes to instructor's OpenAI Responses handler (GPT-6, issue #72).
+
+    1. **The reask keeps the model's reasoning.** instructor's
+       ``reask_responses_tools`` answers a failed parse with a plain user message,
+       so the model reasons from scratch on every reask. Claude's and Gemini's
+       reasks send their reasoning back (thinking blocks / thought signatures), so
+       this one does too: the previous output items unchanged (the encrypted
+       reasoning item, requested by ``provider_create_kwargs`` with
+       ``store=False`` + ``include``, and the function call), then a
+       ``function_call_output`` carrying the validation error, the same way
+       Claude gets a ``tool_result``. A reply with no function call falls back to
+       instructor's own reask.
+    2. **No strict ``text.format``.** The handler also sends the tool schema as a
+       strict JSON ``text.format``. The forced function call already defines the
+       output, and strict mode is the part most likely to reject our schemas
+       (``default`` keys, nesting), so it is dropped.
+
+    Both targets are module globals the handler calls by name (instructor 1.17).
+    Idempotent: a marker attribute on the installed reask makes repeat calls no-ops.
+    """
+    import instructor.v2.providers.openai.handlers as openai_handlers
+
+    original_reask = openai_handlers.reask_responses_tools
+    if getattr(original_reask, "_arlem_responses_patch", False):
+        return
+
+    def reask_with_reasoning(kwargs, response, exception):
+        output = list(getattr(response, "output", None) or [])
+        calls = [item for item in output if getattr(item, "type", None) == "function_call"]
+        if not calls:
+            return original_reask(kwargs, response, exception)
+        error = f"Validation Error found:\n{exception}\nRecall the function correctly, fix the errors"
+        kwargs = kwargs.copy()
+        kwargs["messages"] = [
+            *kwargs.get("messages", []),
+            *output,
+            *({"type": "function_call_output", "call_id": c.call_id, "output": error}
+              for c in calls),
+        ]
+        return kwargs
+
+    reask_with_reasoning._arlem_responses_patch = True
+    openai_handlers.reask_responses_tools = reask_with_reasoning
+    openai_handlers._ensure_text_format_config = lambda *args, **kwargs: None
+
+
 # ── bounded transient-error retry (issue #54 / review F5) ──────────────
 #
 # instructor 1.15.4 and 1.17.0 retry only parse errors (ValidationError / JSONDecodeError /
@@ -293,6 +343,8 @@ def decode_mode_for(model_config: ModelConfig, spec_type: SpecType):
         return instructor.Mode.ANTHROPIC_TOOLS
     if model_config.provider == Provider.GOOGLE:
         return instructor.Mode.GENAI_TOOLS
+    if model_config.responses_api:
+        return instructor.Mode.RESPONSES_TOOLS  # GPT-6: tools + reasoning (#72)
     return instructor.Mode.TOOLS  # OpenAI (from_provider default)
 
 
@@ -361,6 +413,20 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
     kwargs = {}
     if model_config.provider == Provider.OPENAI:
         kwargs["max_retries"] = 0  # SDK retries off: _transient_retryer is the one (counted)
+        if model_config.responses_api:
+            kwargs["mode"] = decode_mode_for(model_config, spec_type)
+            try:
+                _patch_openai_responses()
+            except (ImportError, AttributeError):
+                global _RESPONSES_PATCH_WARNED
+                if not _RESPONSES_PATCH_WARNED:
+                    print(
+                        "  WARNING: OpenAI Responses patch not applied (it targets the "
+                        "pinned instructor's v2 openai handlers, #72): reasks won't "
+                        "carry the model's reasoning, and a strict text.format is sent.",
+                        file=sys.stderr,
+                    )
+                    _RESPONSES_PATCH_WARNED = True
     # from_provider expects GOOGLE_API_KEY but our .env uses GEMINI_API_KEY.
     # All specs use free-decode GENAI_TOOLS on the unified schema (see decode_mode_for).
     if model_config.provider == Provider.GOOGLE:
@@ -514,6 +580,23 @@ def provider_create_kwargs(model_config: ModelConfig, response_model) -> dict:
             f"Respond only by calling the `{tool_name}` tool, exactly once. "
             "Do not answer in plain text."
         )
+
+    # Reasoning effort, pinned per model (ModelConfig.reasoning_effort; None keeps
+    # the provider default, as in wave 2). Each provider names it differently.
+    effort = model_config.reasoning_effort
+    if effort and model_config.provider == Provider.ANTHROPIC:
+        kwargs["output_config"] = {"effort": effort}
+    elif effort and model_config.provider == Provider.GOOGLE:
+        # instructor's update_genai_kwargs moves this into GenerateContentConfig
+        kwargs["thinking_config"] = {"thinking_level": effort}
+    if model_config.provider == Provider.OPENAI and model_config.responses_api:
+        if effort:
+            kwargs["reasoning"] = {"effort": effort}
+        # Stateless reasoning: nothing stored by OpenAI, and the reasoning comes
+        # back encrypted so a reask can send it back (_patch_openai_responses),
+        # the way Claude's thinking blocks and Gemini's thought signatures go back.
+        kwargs["store"] = False
+        kwargs["include"] = ["reasoning.encrypted_content"]
     return kwargs
 
 
@@ -745,6 +828,7 @@ def run_single_benchmark(
         "spec_type": run_config.spec_type.value,
         "decode_mode": decode_mode.value,  # instructor enforcement path actually used
         "tool_choice": tool_choice_for(model_config),
+        "reasoning_effort": model_config.reasoning_effort,   # None = provider default
         "served_models": tracker_summary["served_models"],   # what actually answered
         "topic": run_config.topic,
         "lab_name": run_config.lab_name,

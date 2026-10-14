@@ -898,6 +898,7 @@ class HierarchicalPipeline:
             "spec_type": SpecType.JSON_LAB.value,
             "decode_mode": decode_mode_for(self.model_config, SpecType.JSON_LAB).value,
             "tool_choice": tool_choice_for(self.model_config),
+            "reasoning_effort": self.model_config.reasoning_effort,   # None = provider default
             "served_models": self.tracker.served_models(),   # what answered (this session)
             "topic": None,
             "lab_name": self.lab_name,
