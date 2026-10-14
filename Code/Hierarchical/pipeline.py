@@ -221,6 +221,9 @@ class StepRecord:
     parse_errors: int = 0          # failed parse/validation attempts (= retries, +1 per call
                                    # that ran out of attempts: its last failure isn't reasked)
     revisions: int = 0             # reviewer revision rounds (Revise, or a rejected Replace)
+    transient_retries: int = 0     # calls re-sent after a 429/5xx/connection error
+    reask_restarts: int = 0        # of those, calls that had already reasked: the re-send
+                                   # started over with a fresh parse-retry budget
     prompt_tokens: int = 0
     cached_tokens: int = 0         # of prompt_tokens, served from the provider's prompt cache
     completion_tokens: int = 0
@@ -478,6 +481,7 @@ class HierarchicalPipeline:
         self.normalizations: list[dict] = []
         self.adherence: list[dict] = []
         self.transient_retries = 0
+        self._pending_resends = [0, 0]          # (transient_retries, reask_restarts) for the step
         self._prior_steps: dict[tuple[str, Optional[int]], dict] = {}
         self._t0 = time.time()
         self._current_step: Optional[str] = None
@@ -541,16 +545,26 @@ class HierarchicalPipeline:
         kwargs = dict(response_model=response_model, messages=messages, max_retries=max_retries)
         kwargs.update(provider_create_kwargs(self.model_config, response_model))
         retryer = _transient_retryer()
+        first = len(self.tracker.aggregate.calls)
         try:
             return retryer(self._tracked_client.create, **kwargs)
         finally:
-            self.transient_retries += retryer.statistics.get("attempt_number", 1) - 1
+            resent = retryer.statistics.get("attempt_number", 1) - 1
+            self.transient_retries += resent
+            self._pending_resends[0] += resent
+            # Every call but the last was re-sent. One that had already reasked
+            # restarts with a fresh parse-retry budget (see _transient_retryer).
+            self._pending_resends[1] += sum(
+                1 for c in self.tracker.aggregate.calls[first:-1] if c.parse_errors)
 
     def _absorb_calls(self, rec: StepRecord) -> list:
         """Charge every tracker call not yet charged to a step to ``rec`` (tokens,
         cost, retries, per-attempt errors). Returns the calls it charged."""
         calls = self.tracker.aggregate.calls
         new, self._calls_absorbed = calls[self._calls_absorbed:], len(calls)
+        rec.transient_retries += self._pending_resends[0]
+        rec.reask_restarts += self._pending_resends[1]
+        self._pending_resends = [0, 0]
         for call in new:
             rec.calls += 1
             rec.retries += call.retry_count
@@ -872,8 +886,8 @@ class HierarchicalPipeline:
         steps = [asdict(s) for s in self.steps]
         totals = {
             k: sum(s[k] for s in steps)
-            for k in ("calls", "retries", "parse_errors", "prompt_tokens", "cached_tokens",
-                      "completion_tokens",
+            for k in ("calls", "retries", "parse_errors", "transient_retries", "reask_restarts",
+                      "prompt_tokens", "cached_tokens", "completion_tokens",
                       "total_tokens", "cost_usd", "wall_time_s")
         }
         return {
@@ -955,7 +969,10 @@ class HierarchicalPipeline:
         t = record["totals"]
         status = "OK" if record["success"] else f"FAILED at {record['failed_step']}"
         print(f"\n  [{status}] {record['display_name']} — hierarchical json_lab {record['level']}")
-        print(f"  Steps: {len(record['steps'])} | calls: {t['calls']} | retries: {t['retries']}")
+        resends = (f" | transient re-sends: {t['transient_retries']}"
+                   if t.get("transient_retries") else "")
+        print(f"  Steps: {len(record['steps'])} | calls: {t['calls']} | retries: {t['retries']}"
+              f"{resends}")
         print(f"  Tokens: {t['prompt_tokens']:,} in ({t['cached_tokens']:,} cached) / "
               f"{t['completion_tokens']:,} out "
               f"| Cost: ${t['cost_usd']:.6f} | Wall time: {record['wall_time_seconds']}s")

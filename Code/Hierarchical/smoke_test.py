@@ -984,7 +984,8 @@ check(not edge["truncate"]["success"] and _trunc["retries"] == 0 and _trunc["pro
 _f503 = edge["fail503"]["steps"][-1]
 _n = benchmark._TRANSIENT_ATTEMPTS
 check(not edge["fail503"]["success"] and _f503["calls"] == _n and _f503["retries"] == 0
-      and edge["fail503"]["transient_retries"] == _n - 1 and len(_f503["errors"]) == _n + 1
+      and edge["fail503"]["transient_retries"] == _f503["transient_retries"] == _n - 1
+      and _f503["reask_restarts"] == 0 and len(_f503["errors"]) == _n + 1
       and all(e.startswith("attempt 1 InternalServerError") for e in _f503["errors"][:_n])
       and _f503["errors"][-1].startswith("step attempt 1 failed: InstructorRetryException")
       and len(_f503["errors"][-1]) <= len("step attempt 1 failed: ") + 220,
@@ -993,15 +994,19 @@ check(not edge["fail503"]["success"] and _f503["calls"] == _n and _f503["retries
 _ok503 = edge["503once"]
 _m503 = next(s for s in _ok503["steps"] if s["step"] == "module" and s["index"] == 1)
 check(_ok503["success"] and _ok503["transient_retries"] == 1 and _m503["calls"] == 2
-      and _m503["success"] and _m503["attempts"] == 1 and _m503["retries"] == 0,
+      and _m503["success"] and _m503["attempts"] == 1 and _m503["retries"] == 0
+      and _m503["transient_retries"] == 1 and _m503["reask_restarts"] == 0
+      and _ok503["totals"]["transient_retries"] == 1,
       "a one-off 5xx is re-sent once and the step succeeds (wrapped by instructor 1.17, #54)")
 _rr = edge["503reask"]
 _mrr = next(s for s in _rr["steps"] if s["step"] == "module" and s["index"] == 1)
 check(_rr["success"] and _rr["transient_retries"] == 1 and _mrr["calls"] == 2
       and _mrr["success"] and _mrr["parse_errors"] == 1 and _mrr["retries"] == 1
+      and _mrr["transient_retries"] == 1 and _mrr["reask_restarts"] == 1
+      and _rr["totals"]["reask_restarts"] == 1
       and any("InternalServerError" in e for e in _mrr["errors"]),
-      "a 5xx on a reask restarts the call with a fresh parse-retry budget, counted in "
-      "transient_retries (documented caveat, #54)")
+      "a 5xx on a reask restarts the call with a fresh parse-retry budget, counted per "
+      "step in reask_restarts (documented caveat, #54)")
 sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
 from benchmark_dataframe import load_runs  # noqa: E402
 df = load_runs(MOCK)
