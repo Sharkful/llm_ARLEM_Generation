@@ -233,7 +233,12 @@ def _transient_retryer():
 
     Read ``.statistics['attempt_number']`` after the call to recover how many
     transient re-sends happened (attempts - 1). Each re-send is a fresh
-    ``create()`` call (the tracker records it as a separate call). ``reraise=True``
+    ``create()`` call (the tracker records it as a separate call) with a fresh
+    parse-retry budget: a 5xx that hits a reask restarts the instructor call, so
+    such a run can make up to ``_TRANSIENT_ATTEMPTS * (max_retries + 1)`` requests
+    and get more self-correction attempts than one that never saw a 5xx. Runs
+    with ``transient_retries > 0`` are the ones to filter when comparing
+    self-correction across providers. ``reraise=True``
     surfaces the last error as raised (on instructor 1.17 the wrapping
     ``InstructorRetryException``), not tenacity's ``RetryError``, once attempts
     are exhausted, so the caller's error handling and fail-mode classification

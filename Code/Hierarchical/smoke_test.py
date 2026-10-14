@@ -837,10 +837,7 @@ class MockOpenAI(BaseHTTPRequestHandler):
         elif tool == "ModuleAssetPlan":
             state["asset"] += 1
             args = (REPLAY / f"{state['asset']:02d}_asset_plan.json").read_text(encoding="utf-8")
-        elif (state.get("mode") == "fail503" and tool == "PlannedDemoModule") or (
-                state.get("mode") == "503once" and tool == "PlannedDemoModule"
-                and not state.get("sent_503")):
-            state["sent_503"] = True
+        elif tool == "PlannedDemoModule" and self._should_503(state.get("mode")):
             return self._reply(503, {"error": {"message": "The server is overloaded",
                                                "type": "server_error"}})
         elif state.get("mode") == "reask400" and state["module_requests"] >= 1:
@@ -849,6 +846,7 @@ class MockOpenAI(BaseHTTPRequestHandler):
             return self._reply(400, {"error": {"message": "Invalid request: bad reask",
                                                "type": "invalid_request_error"}})
         elif (state.get("always_bad") or state.get("mode") == "reask400"
+              or (state.get("mode") == "503reask" and state["module_requests"] == 0)
               or (state["asset"] == 2 and not state["bad_sent"])):
             state["bad_sent"] = True
             state["module_requests"] = state.get("module_requests", 0) + 1
@@ -866,6 +864,18 @@ class MockOpenAI(BaseHTTPRequestHandler):
             "usage": {"prompt_tokens": 1000, "completion_tokens": 200, "total_tokens": 1200,
                       "prompt_tokens_details": {"cached_tokens": 600}},
         })
+
+    @staticmethod
+    def _should_503(mode):
+        """fail503: every module request. 503once: the first one. 503reask: module
+        1's reask (its first response is invalid, below), once."""
+        if mode == "fail503":
+            return True
+        if (mode == "503once" or (mode == "503reask" and state["module_requests"] == 1)) \
+                and not state["sent_503"]:
+            state["sent_503"] = True
+            return True
+        return False
 
     def _reply(self, status, payload):
         data = json.dumps(payload).encode()
@@ -917,7 +927,7 @@ try:
     ).run()
     # module 1's reask is rejected with a 400, and module 1 is truncated (max_tokens)
     edge = {}
-    for _mode in ("reask400", "truncate", "fail503", "503once"):
+    for _mode in ("reask400", "truncate", "fail503", "503once", "503reask"):
         state.update(asset=0, always_bad=False, mode=_mode, module_requests=0, sent_503=False)
         edge[_mode] = P.HierarchicalPipeline(
             "gpt-5.4-mini", LAB_NAME,
@@ -985,6 +995,13 @@ _m503 = next(s for s in _ok503["steps"] if s["step"] == "module" and s["index"] 
 check(_ok503["success"] and _ok503["transient_retries"] == 1 and _m503["calls"] == 2
       and _m503["success"] and _m503["attempts"] == 1 and _m503["retries"] == 0,
       "a one-off 5xx is re-sent once and the step succeeds (wrapped by instructor 1.17, #54)")
+_rr = edge["503reask"]
+_mrr = next(s for s in _rr["steps"] if s["step"] == "module" and s["index"] == 1)
+check(_rr["success"] and _rr["transient_retries"] == 1 and _mrr["calls"] == 2
+      and _mrr["success"] and _mrr["parse_errors"] == 1 and _mrr["retries"] == 1
+      and any("InternalServerError" in e for e in _mrr["errors"]),
+      "a 5xx on a reask restarts the call with a fresh parse-retry budget, counted in "
+      "transient_retries (documented caveat, #54)")
 sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
 from benchmark_dataframe import load_runs  # noqa: E402
 df = load_runs(MOCK)
