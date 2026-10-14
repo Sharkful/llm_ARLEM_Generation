@@ -146,6 +146,7 @@ class AttemptMetrics:
     success: bool
     error: Optional[ErrorRecord] = None
     duration_ms: Optional[float] = None
+    responded: bool = False         # a response arrived for this request
 
 
 @dataclass
@@ -176,6 +177,10 @@ class CallMetrics:
     # Final status
     success: bool = False
     final_attempt_number: int = 0
+    # An error that ended the call after its last attempt was already marked
+    # failed by a hook (e.g. raised while instructor built the reask). None
+    # otherwise: an ending error with no hook is recorded on the attempt itself.
+    terminal_error: Optional[ErrorRecord] = None
 
     # Request context (optional)
     response_model: Optional[str] = None
@@ -199,8 +204,20 @@ class CallMetrics:
 
     @property
     def errors(self) -> List[ErrorRecord]:
-        """All errors from all attempts."""
-        return [a.error for a in self.attempts if a.error is not None]
+        """All errors from all attempts, then the call's terminal error if any."""
+        errs = [a.error for a in self.attempts if a.error is not None]
+        if self.terminal_error is not None:
+            errs.append(self.terminal_error)
+        return errs
+
+    @property
+    def final_error(self) -> Optional[ErrorRecord]:
+        """For a failed call, the recorded error that ended it; None for a call
+        that succeeded, or whose ending error was never recorded (one raised
+        before any request was sent)."""
+        if self.success or not self.attempts:
+            return None
+        return self.terminal_error or self.attempts[-1].error
 
 
 @dataclass

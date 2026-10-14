@@ -216,8 +216,9 @@ class StepRecord:
     calls: int = 0                 # tracked create() calls, incl. regenerations & revisions
     attempts: int = 0              # step-level generations (fresh or revision)
     failed_attempts: int = 0
-    retries: int = 0               # tracker retry_count summed over calls (same as benchmark runs)
-    parse_errors: int = 0          # failed parse/validation attempts (the actual reask count)
+    retries: int = 0               # reasks: tracker retry_count (requests - 1) summed over calls
+    parse_errors: int = 0          # failed parse/validation attempts (= retries, +1 per call
+                                   # that ran out of attempts: its last failure isn't reasked)
     revisions: int = 0             # reviewer revision rounds (Revise, or a rejected Replace)
     prompt_tokens: int = 0
     cached_tokens: int = 0         # of prompt_tokens, served from the provider's prompt cache
@@ -548,9 +549,9 @@ class HierarchicalPipeline:
         finally:
             self.transient_retries += retryer.statistics.get("attempt_number", 1) - 1
 
-    def _absorb_calls(self, rec: StepRecord) -> None:
+    def _absorb_calls(self, rec: StepRecord) -> list:
         """Charge every tracker call not yet charged to a step to ``rec`` (tokens,
-        cost, retries, per-attempt errors)."""
+        cost, retries, per-attempt errors). Returns the calls it charged."""
         calls = self.tracker.aggregate.calls
         new, self._calls_absorbed = calls[self._calls_absorbed:], len(calls)
         for call in new:
@@ -564,16 +565,19 @@ class HierarchicalPipeline:
             rec.cost_usd += self.tracker.pricing.calculate_cost(call.total_usage)
             rec.errors.extend(f"attempt {err.attempt_number} {err.exception_class}: {err.message}"
                               for err in call.errors)
+        return new
 
     def _generate(self, response_model, messages, max_retries, scope, rec: StepRecord) -> BaseModel:
         """One step generation, regenerated from scratch up to step_attempts times
         (immediately failed for errors a regeneration can't fix).
 
         Each instructor attempt's error is recorded once, from the tracker; a
-        failed step attempt then adds a summary line. Instructor's retry exception
-        only repeats the attempts the tracker already holds, so it is shortened to
-        one line; any other exception (a 5xx after transient retries, a provider
-        400, an error outside the instructor call) keeps its full text."""
+        failed step attempt then adds a summary line. When the call that failed
+        has a ``final_error`` in the tracker (the error that ended it: a parse
+        error that ran out of attempts, an API error such as a 5xx or 400, a
+        max_tokens truncation), that text is already in the step's errors, so the
+        line is shortened to one. Any other exception (one raised before a
+        request was sent, or outside the instructor call) keeps its full text."""
         last_error = None
         for _ in range(self.config.step_attempts):
             rec.attempts += 1
@@ -582,9 +586,9 @@ class HierarchicalPipeline:
                     return self._call_fn(response_model, messages, max_retries)
             except Exception as e:  # noqa: BLE001 — any failure regenerates the step
                 rec.failed_attempts += 1
-                self._absorb_calls(rec)
+                absorbed = self._absorb_calls(rec)
                 last_error = f"{type(e).__name__}: {e}"
-                repeats_tracker = bool(getattr(e, "failed_attempts", None))
+                repeats_tracker = bool(absorbed) and absorbed[-1].final_error is not None
                 rec.errors.append(f"step attempt {rec.attempts} failed: "
                                   + (brief_error(e) if repeats_tracker else last_error))
                 where = " (details: errors.txt)" if self.save else ""

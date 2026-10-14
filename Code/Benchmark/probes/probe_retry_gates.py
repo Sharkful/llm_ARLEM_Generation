@@ -94,13 +94,10 @@ def probe(model_key: str, max_retries: int) -> dict:
     calls = tracker.aggregate.calls
     out["parse_errors"] = sum(c.parse_errors for c in calls)
     out["api_errors"] = sum(c.api_errors for c in calls)
-    # Requests actually sent. Not the tracker's attempt count, which counts each
-    # failed parse twice (#71).
-    # An API error ends the call, so it was the last request sent.
     api_failure = out["api_errors"] > 0 or any(
         s in full_error for s in ("Error code: 400", "BadRequestError", "INVALID_ARGUMENT"))
-    out["requests"] = (out["parse_errors"] + (out["error"] is None)
-                       + max(out["api_errors"], int(api_failure)))
+    # Requests sent: one tracker attempt per request (issue #71 fixed).
+    out["requests"] = sum(c.total_attempts for c in calls)
     out["tokens"] = sum(c.total_usage.total_tokens for c in calls)
     out["cost_usd"] = sum(tracker.pricing.calculate_cost(c.total_usage) for c in calls)
     # Parse errors other than our one deliberate rejection: plain-text replies

@@ -593,32 +593,165 @@ check(_rejected == 4 and P.HierarchicalPipeline.read_run_config(MOVED / "Runs" /
       "one run-directory check for the CLI and resume(); non-run directories rejected")
 
 
-# 22. a final error the tracker never saw keeps its full text, even when earlier
-#     attempts in the same call were tracked
-from datetime import datetime  # noqa: E402
-from tracking.metrics import AttemptMetrics, CallMetrics, ErrorRecord, ErrorType, TokenUsage  # noqa: E402
+# 23. tracker edge cases, through the public TrackedClient / track_call: a stub
+#     client fires the hook sequence a script describes (issue #71, PR #80 review)
+from types import SimpleNamespace  # noqa: E402
+from tracking import InstructorTracker, TrackedClient  # noqa: E402
 
+
+class _StubInstructor:
+    """Fires instructor-style hooks from a script, then returns or raises."""
+
+    def __init__(self):
+        self.handlers = {}
+
+    def on(self, event, handler):
+        self.handlers.setdefault(event, []).append(handler)
+
+    def off(self, event, handler):
+        self.handlers[event].remove(handler)
+
+    def _emit(self, event, *args):
+        for h in list(self.handlers.get(event, [])):
+            h(*args)
+
+    def create(self, script):
+        for step, *arg in script:
+            if step == "kwargs":
+                self._emit("completion:kwargs")
+            elif step == "response":
+                self._emit("completion:response", arg[0])
+            elif step == "parse_error":
+                self._emit("parse:error", arg[0])
+            elif step == "raise":
+                raise arg[0]
+        return "ok"
+
+
+def _resp(tokens):
+    return SimpleNamespace(usage=SimpleNamespace(prompt_tokens=tokens, completion_tokens=0,
+                                                 total_tokens=tokens))
+
+
+class _RetryWrapper(Exception):
+    """Shape-alike of instructor's InstructorRetryException: it has failed_attempts
+    and last_completion (the previous attempt's), and is raised from the cause."""
+
+    def __init__(self, msg, last_completion=None):
+        super().__init__(msg)
+        self.last_completion = last_completion
+        self.failed_attempts = None
+
+
+class IncompleteOutputException(Exception):  # name-alike of instructor's truncation error
+    def __init__(self, last_completion=None):
+        super().__init__("The output is incomplete due to a max_tokens length limit.")
+        self.last_completion = last_completion
+
+
+def _tracked(script, tracker=None):
+    tracker = tracker or InstructorTracker(model="m", provider="openai")
+    try:
+        TrackedClient(_StubInstructor(), tracker).create(script=script)
+    except Exception:  # noqa: BLE001
+        pass
+    return tracker.aggregate.calls[-1]
+
+
+_c = _tracked([("raise", TypeError("bad kwargs, nothing sent"))])
+check(_c.total_attempts == 0 and _c.completion_errors == 0 and _c.final_error is None,
+      "an error before any request adds no attempt and no error count")
+
+_t = InstructorTracker(model="m", provider="openai")
+_stub = _StubInstructor()
+try:
+    with _t.track_call(_stub):
+        _stub.create(script=[("kwargs",), ("response", _resp(10))])
+        raise KeyError("caller's own post-processing")
+except KeyError:
+    pass
+_c = _t.aggregate.calls[-1]
+check(_c.total_attempts == 1 and _c.attempts[0].success and not _c.errors
+      and _c.completion_errors == 0,
+      "an error in the caller's own code isn't pinned on the request")
+
+_wrapper = _RetryWrapper("<failed_attempts>\n<generation number=\"1\">...",
+                         last_completion=_resp(10))
+_wrapper.__cause__ = AssertionError("Instructor does not support multiple function calls")
+_c = _tracked([("kwargs",), ("response", _resp(10)), ("parse_error", ValueError("validation error")),
+               ("kwargs",), ("response", _resp(0)), ("raise", _wrapper)])
+_a2 = _c.attempts[-1].error
+check(_c.total_attempts == 2 and _c.retry_count == 1 and _a2 is not None
+      and _a2.exception_class == "AssertionError" and "<failed_attempts>" not in _a2.message
+      and _c.final_error is _a2 and _c.total_usage.total_tokens == 10,
+      "a wrapped non-retryable failure is recorded as its cause, with no usage counted twice")
+
+_c = _tracked([("kwargs",), ("raise", IncompleteOutputException(last_completion=_resp(7)))])
+check(_c.total_attempts == 1 and _c.total_usage.total_tokens == 7
+      and _c.final_error.exception_class == "IncompleteOutputException",
+      "a truncation with no response hook keeps its own request's usage")
+
+_c = _tracked([("kwargs",), ("response", _resp(5)), ("parse_error", ValueError("validation error")),
+               ("response", _resp(5))])
+check(_c.total_attempts == 2 and _c.retry_count == 1 and _c.attempts[-1].success
+      and _c.attempts[0].error is not None,
+      "a request whose kwargs hook didn't fire still gets its own attempt")
+
+_c = _tracked([("kwargs",), ("parse_error", ValueError("validation error")),
+               ("parse_error", ValueError("validation error again")), ("raise", KeyError("end"))])
+check(_c.total_attempts == 1 and _c.retry_count == 0 and _c.parse_errors == 2
+      and _c.attempts[0].error.message == "validation error",
+      "two error hooks for one request stay on one attempt (no phantom retry)")
+
+_chained = RuntimeError("config error")
+_chained.__cause__ = KeyError("x")
+_c = _tracked([("kwargs",), ("response", _resp(3)), ("raise", _chained)])
+check(_c.attempts[0].error.exception_class == "RuntimeError"
+      and _c.attempts[0].error.message == "config error",
+      "only instructor's retry wrapper is unwrapped; other chained errors are recorded as is")
+
+_trunc_cause = IncompleteOutputException(last_completion=_resp(9))
+_wrapped_trunc = _RetryWrapper("<failed_attempts>...")
+_wrapped_trunc.__cause__ = _trunc_cause
+_c = _tracked([("kwargs",), ("raise", _wrapped_trunc)])
+check(_c.total_usage.total_tokens == 9
+      and _c.final_error.exception_class == "IncompleteOutputException",
+      "a wrapped truncation still keeps its request's usage")
+
+
+# 22. step error lines, through the real tracker (TrackedClient around a stub):
+#     an error the tracker recorded is listed once, in full, and the step summary
+#     is shortened; an error the tracker never saw keeps its full text
 LONG_TAIL = "provider said: " + "x" * 400 + " END-OF-ERROR"
 
 
 class TrackedThenFailLLM(FakeLLM):
+    def __init__(self, inside_call):
+        super().__init__()
+        self.inside_call = inside_call   # raise inside the instructor call, or after it
+
     def __call__(self, model, messages, max_retries):
         if model is P.PlannedDemoModule and self._index() == 1:
-            now = datetime.now()
-            err = ErrorRecord(ErrorType.PARSE_ERROR, "ValidationError", "parse error", now, 1)
-            self.pipe.tracker.aggregate.calls.append(CallMetrics(
-                call_id="fake", model="fake", provider="fake", start_time=now,
-                total_usage=TokenUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
-                attempts=[AttemptMetrics(1, now, TokenUsage(), False, err)], parse_errors=1,
-            ))
-            raise RuntimeError(LONG_TAIL)
+            client = TrackedClient(_StubInstructor(), self.pipe.tracker)
+            if self.inside_call:   # a hooked parse error, then instructor raises again
+                client.create(script=[("kwargs",), ("response", _resp(10)),
+                                      ("parse_error", ValueError("validation error")),
+                                      ("raise", RuntimeError(LONG_TAIL))])
+            client.create(script=[("kwargs",), ("response", _resp(10))])
+            raise RuntimeError(LONG_TAIL)    # outside any tracked call
         return super().__call__(model, messages, max_retries)
 
 
-rec = make(TrackedThenFailLLM(), "t22_untracked", cfg={"step_attempts": 1}).run()
+rec = make(TrackedThenFailLLM(inside_call=True), "t22_tracked", cfg={"step_attempts": 1}).run()
 m1 = rec["steps"][-1]
-check(m1["calls"] == 1 and m1["errors"][0] == "attempt 1 ValidationError: parse error"
-      and m1["errors"][1].endswith("END-OF-ERROR"),
+check(m1["calls"] == 1 and m1["parse_errors"] == 1 and m1["retries"] == 0
+      and m1["errors"][0] == "attempt 1 ValueError: validation error"
+      and m1["errors"][1] == f"attempt 1 RuntimeError: {LONG_TAIL}"
+      and sum("END-OF-ERROR" in e for e in m1["errors"]) == 1,
+      "an error raised after a hooked error is recorded as the call's terminal error, once")
+rec = make(TrackedThenFailLLM(inside_call=False), "t22_untracked", cfg={"step_attempts": 1}).run()
+m1 = rec["steps"][-1]
+check(m1["calls"] == 1 and m1["errors"][-1].endswith("END-OF-ERROR"),
       "an error the tracker didn't record keeps its full text in errors.txt")
 
 
@@ -641,21 +774,36 @@ class MockOpenAI(BaseHTTPRequestHandler):
         elif tool == "ModuleAssetPlan":
             state["asset"] += 1
             args = (REPLAY / f"{state['asset']:02d}_asset_plan.json").read_text(encoding="utf-8")
-        elif state.get("always_bad") or (state["asset"] == 2 and not state["bad_sent"]):
+        elif state.get("mode") == "fail503" and tool == "PlannedDemoModule":
+            return self._reply(503, {"error": {"message": "The server is overloaded",
+                                               "type": "server_error"}})
+        elif state.get("mode") == "reask400" and state["module_requests"] >= 1:
+            # the reask after an invalid module is rejected: an API error ends the call
+            state["module_requests"] += 1
+            return self._reply(400, {"error": {"message": "Invalid request: bad reask",
+                                               "type": "invalid_request_error"}})
+        elif (state.get("always_bad") or state.get("mode") == "reask400"
+              or (state["asset"] == 2 and not state["bad_sent"])):
             state["bad_sent"] = True
+            state["module_requests"] = state.get("module_requests", 0) + 1
             args = json.dumps({"moduleName": "broken"})  # missing required fields -> reask
         else:
             args = (REPLAY / f"{state['asset']:02d}_module.json").read_text(encoding="utf-8")
-        data = json.dumps({
+        finish = "length" if state.get("mode") == "truncate" and tool == "PlannedDemoModule" \
+            else "tool_calls"   # "length": max_tokens truncation, no error hook fires
+        self._reply(200, {
             "id": "mock", "object": "chat.completion", "created": 0, "model": body["model"],
-            "choices": [{"index": 0, "finish_reason": "tool_calls", "message": {
+            "choices": [{"index": 0, "finish_reason": finish, "message": {
                 "role": "assistant", "content": None,
                 "tool_calls": [{"id": "c1", "type": "function",
                                 "function": {"name": tool, "arguments": args}}]}}],
             "usage": {"prompt_tokens": 1000, "completion_tokens": 200, "total_tokens": 1200,
                       "prompt_tokens_details": {"cached_tokens": 600}},
-        }).encode()
-        self.send_response(200)
+        })
+
+    def _reply(self, status, payload):
+        data = json.dumps(payload).encode()
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
@@ -671,7 +819,8 @@ import instructor  # noqa: E402
 
 _real_factory = P.create_instructor_client
 P.create_instructor_client = lambda mc, spec: instructor.from_provider(
-    f"openai/{mc.model_id}", base_url=f"http://127.0.0.1:{srv.server_port}/v1", api_key="test")
+    f"openai/{mc.model_id}", base_url=f"http://127.0.0.1:{srv.server_port}/v1", api_key="test",
+    max_retries=0)   # no SDK-level re-sends against the mock (the 503 case)
 try:
     MOCK = TMP / "mock"
     class CallingReviewer:
@@ -697,6 +846,16 @@ try:
         P.PipelineConfig(**REPLAY_MINIMUMS, module_retries=1, step_attempts=1),
         output_dir=TMP / "mock_bad", run_name="mock_bad",
     ).run()
+    # module 1's reask is rejected with a 400, and module 1 is truncated (max_tokens)
+    edge = {}
+    for _mode in ("reask400", "truncate", "fail503"):
+        state.update(asset=0, always_bad=False, mode=_mode, module_requests=0)
+        edge[_mode] = P.HierarchicalPipeline(
+            "gpt-5.4-mini", LAB_NAME,
+            P.PipelineConfig(**REPLAY_MINIMUMS, module_retries=1, step_attempts=1),
+            output_dir=TMP / f"mock_{_mode}", run_name=f"mock_{_mode}",
+        ).run()
+    state["mode"] = None
 finally:
     P.create_instructor_client = _real_factory
     srv.shutdown()
@@ -706,6 +865,10 @@ check(rec["totals"]["calls"] == len(rec["steps"]) + 1 and rec["steps"][0]["calls
       "one tracked call per step, plus the reviewer's call charged to the plan step")
 m2 = next(s for s in rec["steps"] if s["step"] == "module" and s["index"] == 2)
 check(m2["parse_errors"] == 1 and m2["errors"], "module 2 records its one parse error")
+check(m2["retries"] == m2["parse_errors"] == 1
+      and rec["totals"]["retries"] == rec["totals"]["parse_errors"]
+      and rec["tracking"]["retries"]["total"] == rec["totals"]["parse_errors"],
+      "one reask counts as one retry (issue #71)")
 check(m2["prompt_tokens"] == 2000 and m2["completion_tokens"] == 400,
       "module 2 tokens include the reask")
 check(rec["totals"]["total_tokens"] == rec["tracking"]["tokens"]["total"]
@@ -724,6 +887,27 @@ check(not bad["success"] and bad_m1["step"] == "module" and len(bad_m1["errors"]
       and bad_m1["errors"][2].startswith("step attempt 1 failed: InstructorRetryException after 2")
       and "<failed_attempts>" not in "".join(bad_m1["errors"]),
       "exhausted retries: one line per instructor attempt plus one summary, no duplicate dump")
+# One tracker attempt per request (issue #71), on the paths instructor actually takes.
+check(bad_m1["retries"] == 1 and bad_m1["parse_errors"] == 2,
+      "ran out of attempts: 2 requests, 1 reask, 2 parse errors (was counted as 3 retries)")
+_r400 = edge["reask400"]["steps"][-1]
+check(not edge["reask400"]["success"] and _r400["step"] == "module" and _r400["calls"] == 1
+      and _r400["retries"] == 1 and _r400["parse_errors"] == 1
+      and any(e.startswith("attempt 2 ") and "400" in e for e in _r400["errors"]),
+      "a reask rejected with a 400: 2 requests, 1 retry, the API error on attempt 2")
+_trunc = edge["truncate"]["steps"][-1]
+check(not edge["truncate"]["success"] and _trunc["retries"] == 0 and _trunc["prompt_tokens"] == 1000
+      and any(e.startswith("attempt 1 IncompleteOutputException") for e in _trunc["errors"])
+      and sum("IncompleteOutputException" in e for e in _trunc["errors"]) == 2
+      and _trunc["errors"][-1].startswith("step attempt 1 failed: IncompleteOutputException")
+      and len(_trunc["errors"][-1]) <= len("step attempt 1 failed: ") + 220,
+      "a truncated response is recorded on its attempt (no error hook fires) and not repeated")
+_f503 = edge["fail503"]["steps"][-1]
+check(not edge["fail503"]["success"] and _f503["retries"] == 0 and len(_f503["errors"]) == 2
+      and _f503["errors"][0].startswith("attempt 1 InternalServerError")
+      and _f503["errors"][1].startswith("step attempt 1 failed: InstructorRetryException")
+      and len(_f503["errors"][1]) <= len("step attempt 1 failed: ") + 220,
+      "a 5xx that ends the call: recorded once by the tracker, step summary shortened")
 sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
 from benchmark_dataframe import load_runs  # noqa: E402
 df = load_runs(MOCK)
@@ -826,6 +1010,7 @@ check(_reask is not None and _reask["tools"][0]["name"] == "PlannedDemoModule"
       and "no tool invocation" in json.dumps(_reask["messages"][-1]),
       "a plain-text reply is reasked ('no tool invocation')")
 _m1 = next((s for s in rec["steps"] if s["step"] == "module" and s["index"] == 1), None)
+check(_m1 is not None and _m1["retries"] == 1, "a plain-text reply's reask counts as one retry")
 check(_m1 is not None and _m1["success"] and _m1["parse_errors"] == 1
       and rec.get("tool_choice") == "auto",
       "the reask costs one attempt; the record says tool_choice auto")
