@@ -63,9 +63,11 @@ python "Code/Benchmark/benchmark.py" --model claude-haiku-4.5 --lab apparent_ret
 python "Code/Benchmark/benchmark.py" --model gpt-5.4-mini --lab apparent_retrograde_motion --level L3 \
     --spec json_lab arlem arlem_simple
 
-# Run a pre-defined suite (quick = cheap models, full = all models)
+# Run a pre-defined suite (quick = current small tier, full = current roster,
+# wave2 = the paper's frozen roster)
 python "Code/Benchmark/benchmark.py" --suite quick
 python "Code/Benchmark/benchmark.py" --suite full
+python "Code/Benchmark/benchmark.py" --suite wave2
 
 # List registered models / available lab YAMLs
 python "Code/Benchmark/benchmark.py" --list-models
@@ -182,7 +184,7 @@ lives in `Code/Analysis/` (below) and never imports the other way around.
 - Legacy: `--topic "..."` uses the templates in `benchmark_config.py`
 - YAML-driven: `--lab <topic_name> --level {L1,L3,L4}` delegates to `prompt_builder.build_prompt()` and also picks the response model
 
-**`benchmark_config.py`** — Model registry (`MODELS` dict), legacy prompt templates, `BenchmarkRunConfig` dataclass. Add new models here. `BenchmarkRunConfig` carries optional `lab_name`, `level`, and `structure` fields for the YAML-driven path; when both `lab_name` and `level` are set, the benchmark runner bypasses `get_prompt()` and calls `build_prompt()` instead. Defaults: `min_objects=4`, `min_clips=5`.
+**`benchmark_config.py`** — Model registry (`MODELS` dict), legacy prompt templates, `BenchmarkRunConfig` dataclass. Add new models here. The registry holds two rosters: `CURRENT_MODELS` (issue #72, 2026-10: GPT-6.1 Sol / GPT-6 Luna, Claude Opus / Sonnet / Haiku 5.5, Gemini 4 Argon / 3.8 Flash / 3.5 Flash-Lite), which the suites and tier flags use, and the frozen `WAVE2_MODELS` (the paper's 11 models, `--suite wave2`). Wave-2 entries stay registered with unchanged display names, which the figures key on. `BenchmarkRunConfig` carries optional `lab_name`, `level`, and `structure` fields for the YAML-driven path; when both `lab_name` and `level` are set, the benchmark runner bypasses `get_prompt()` and calls `build_prompt()` instead. Defaults: `min_objects=4`, `min_clips=5`.
 
 **`prompt_builder.py`** — Loads a `<topic>_lab.yaml` from `Artifacts/Lab Descriptions/` into a `LabDescription` dataclass (plain dataclass, not Pydantic — input layer doesn't cross a system boundary). Strips `*` authoring flags and `[REVIEW: ...]` markers silently at load time. `build_prompt(lab, level, spec_type, structure=..., min_objects=..., min_clips=..., min_things=..., min_places=..., min_actions=...)` returns `(prompt_string, response_model_class)`. Levels:
 - **L1** — field/course/description → `LabOutline` (rough outline; not a full spec)

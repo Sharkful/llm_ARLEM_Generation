@@ -11,9 +11,9 @@ from .metrics import TokenUsage
 
 
 # Default pricing per 1M tokens (USD), base/standard tier (no caching/batch).
-# Entries marked "verified 2026-07" were re-checked against the official provider
-# pricing pages (platform.claude.com, developers.openai.com, ai.google.dev) as
-# part of issue #32. Entries marked "legacy"/"retired" were superseded or removed
+# Entries marked "verified 2026-07" (issue #32) or "verified 2026-10" (issue #72)
+# were re-checked against the official provider pricing pages
+# (platform.claude.com, developers.openai.com, ai.google.dev). Entries marked "legacy"/"retired" were superseded or removed
 # from the current page and are NOT in the benchmark roster; the stored value is
 # retained for historical-artifact cost comparison — treat with caution.
 DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
@@ -22,6 +22,8 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     "gpt-5.4":       {"input": 2.50,  "output": 15.00},   # verified 2026-07 (current mid)
     "gpt-5.4-mini":  {"input": 0.75,  "output":  4.50},   # verified 2026-07
     "gpt-5.4-nano":  {"input": 0.20,  "output":  1.25},   # verified 2026-07
+    "gpt-6.1-sol":   {"input": 2.00,  "output": 10.00},   # verified 2026-10 (current mid; >272k in = 2x/1.5x)
+    "gpt-6-luna":    {"input": 0.10,  "output":  0.50},   # verified 2026-10 (current small)
     "gpt-5-mini":    {"input": 0.25,  "output":  2.00},   # 2026-07: superseded by 5.4-mini (was mis-stored 0.15/0.60); not in roster
     "gpt-5-nano":    {"input": 0.05,  "output":  0.40},   # retired 2026-07 — removed from current page; not in roster
     "gpt-5":         {"input": 2.50,  "output": 10.00},
@@ -48,6 +50,8 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     # Haiku 5.5: prompts up to 100K tokens. Longer prompts bill $0.50 / $2.50, which
     # isn't modelled here (benchmark and hierarchical prompts stay well under 100K).
     "claude-haiku-5-5":         {"input":  0.10, "output":  0.50},   # verified 2026-10 (current small; #70)
+    "claude-sonnet-5-5":        {"input":  2.00, "output": 10.00},   # verified 2026-10 (current mid)
+    "claude-opus-5-5":          {"input":  4.00, "output": 20.00},   # verified 2026-10 (current large)
     "claude-fable-5":           {"input": 10.00, "output": 50.00},   # verified 2026-07 (most capable; GA 2026-06-09; not in roster)
     "claude-3-haiku-20240307":   {"input":  0.25, "output":  1.25},   # legacy/deprecated — not on current page
     # Legacy / alternate keys
@@ -61,6 +65,15 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
 
     # ── Google Gemini ─────────────────────────────────────────────────────
     # Pro models are context-tiered; our runs are well under 200k so the <=200k tier applies.
+    # Introductory discounts: these two are stored at the rate that applies once the
+    # discount ends, so costs reflect what a run will cost going forward. If a
+    # provider makes the introductory rate permanent (as Anthropic did for Sonnet 5,
+    # above), update the entry and re-tabulate with Code/Analysis/reprice_runs.py.
+    #   gemini-4-argon:   $2.00 / $10.00 until 2026-11-30
+    #   gemini-3.8-flash: $0.75 / $3.75  until 2026-12-31
+    "gemini-4-argon":         {"input": 4.00,  "output": 20.00},  # verified 2026-10 (current large; from 2026-12-01)
+    "gemini-3.8-flash":       {"input": 1.50,  "output":  7.50},  # verified 2026-10 (current mid; from 2027-01-01)
+    "gemini-3.5-flash-lite":  {"input": 0.30,  "output":  2.50},  # verified 2026-10 (current small)
     "gemini-3.1-pro-preview": {"input": 2.00,  "output": 12.00},  # verified 2026-07 (keyed by model_id; v1beta serves only -preview, not the GA-renamed plain id — issue #42; <=200k tier)
     "gemini-3.1-flash-lite":  {"input": 0.25,  "output":  1.50},  # verified 2026-07 (GA'd 2026-05-07, renamed from -preview)
     "gemini-3.5-flash":       {"input": 1.50,  "output":  9.00},  # verified 2026-07 (current text flash)

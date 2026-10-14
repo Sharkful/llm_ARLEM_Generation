@@ -19,11 +19,14 @@ Usage:
     python benchmark.py --model gpt-4o-mini --lab phases_of_the_moon --level L3 \
         --spec json_lab arlem arlem_simple
 
-    # Quick benchmark suite (all default topics × cheap models)
+    # Quick benchmark suite (all default topics × the current small tier)
     python benchmark.py --suite quick
 
-    # Full benchmark suite (all default topics × all models)
+    # Full benchmark suite (all default topics × the current roster)
     python benchmark.py --suite full
+
+    # The paper's wave-2 roster (frozen)
+    python benchmark.py --suite wave2
 """
 
 import argparse
@@ -53,6 +56,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 from benchmark_config import (
     ARLEM_PROMPT_TEMPLATE,
     BenchmarkRunConfig,
+    CURRENT_MODELS,
     DEFAULT_TOPICS,
     FULL_BENCHMARK_MODELS,
     MODELS,
@@ -62,6 +66,7 @@ from benchmark_config import (
     QUICK_BENCHMARK_MODELS,
     SYSTEM_PROMPT,
     SpecType,
+    WAVE2_MODELS,
     models_by_size,
 )
 from prompt_builder import (
@@ -1056,22 +1061,24 @@ def parse_args():
     parser.add_argument(
         "--small-models",
         action="store_true",
-        help="Include all SMALL-tier models (combinable with other tiers / --model)",
+        help="Include the current roster's SMALL-tier models (combinable with other "
+             "tiers / --model)",
     )
     parser.add_argument(
         "--medium-models",
         action="store_true",
-        help="Include all MEDIUM-tier models",
+        help="Include the current roster's MEDIUM-tier models",
     )
     parser.add_argument(
         "--large-models",
         action="store_true",
-        help="Include all LARGE-tier models",
+        help="Include the current roster's LARGE-tier models",
     )
     parser.add_argument(
         "--all-models",
         action="store_true",
-        help="Include every registered model (all three tiers)",
+        help="Include the whole current roster (all three tiers); wave-2 models "
+             "run by name or with --suite wave2",
     )
     parser.add_argument(
         "--topic", "-t",
@@ -1089,9 +1096,10 @@ def parse_args():
     )
     parser.add_argument(
         "--suite",
-        choices=["quick", "full"],
+        choices=["quick", "full", "wave2"],
         default=None,
-        help="Run a pre-defined benchmark suite",
+        help="Run a pre-defined benchmark suite: quick (current small tier), full "
+             "(current roster) or wave2 (the paper's frozen roster)",
     )
     parser.add_argument(
         "--max-retries",
@@ -1163,10 +1171,12 @@ def main():
 
     if args.list_models:
         print("\nAvailable models:")
-        print(f"  {'model':<25} {'tier':<8} {'provider':<12} name")
+        print(f"  {'model':<25} {'roster':<8} {'tier':<8} {'provider':<12} name")
         for model_id, config in MODELS.items():
+            roster = ("current" if model_id in CURRENT_MODELS
+                      else "wave 2" if model_id in WAVE2_MODELS else "-")
             print(
-                f"  {model_id:<25} {config.size.value:<8} "
+                f"  {model_id:<25} {roster:<8} {config.size.value:<8} "
                 f"{config.provider.value:<12} {config.display_name}"
             )
         return
@@ -1263,10 +1273,11 @@ def main():
 
     # ── Dispatch ─────────────────────────────────────────────────────────
     if args.suite:
-        model_ids = (
-            QUICK_BENCHMARK_MODELS if args.suite == "quick"
-            else FULL_BENCHMARK_MODELS
-        )
+        model_ids = {
+            "quick": QUICK_BENCHMARK_MODELS,
+            "full": FULL_BENCHMARK_MODELS,
+            "wave2": WAVE2_MODELS,
+        }[args.suite]
     else:
         model_ids = resolved_models
 

@@ -55,43 +55,72 @@ class ModelConfig:
         return None
 
 
-# Final generation-test roster (locked in issue #32, re-verified 2026-07).
 # Every model_id here must have a matching DEFAULT_PRICING key or cost computes
-# as $0 silently. Dropped this round: gpt-5-mini/gpt-5-nano (superseded/retired),
-# gpt-4o-mini (legacy), claude-sonnet-4.6 (→ Sonnet 5), gemini-2.5-pro/2.5-flash
-# (kept 2.5-flash-lite as the cheapest data point).
+# as $0 silently. Two rosters share the registry (see CURRENT_MODELS /
+# WAVE2_MODELS below): the wave-2 roster (locked in issue #32, re-verified
+# 2026-07; the paper's dataset, frozen) and the current roster (issue #72,
+# 2026-10), which the suites and tier flags use. Wave-2 entries stay registered
+# so their runs keep loading with these display names, which the figures key on.
 MODELS = {
-    # ── OpenAI ────────────────────────────────────────────────────────────
+    # ── OpenAI: wave 2 ────────────────────────────────────────────────────
     "gpt-5.5":      ModelConfig("gpt-5.5",      Provider.OPENAI, "GPT-5.5",      ModelSize.LARGE),
     "gpt-5.4":      ModelConfig("gpt-5.4",      Provider.OPENAI, "GPT-5.4",      ModelSize.MEDIUM),
     "gpt-5.4-mini": ModelConfig("gpt-5.4-mini", Provider.OPENAI, "GPT-5.4 Mini", ModelSize.SMALL),
     "gpt-5.4-nano": ModelConfig("gpt-5.4-nano", Provider.OPENAI, "GPT-5.4 Nano", ModelSize.SMALL),
+    # ── OpenAI: current (#72). GPT-6.1 Sol is priced like Sonnet 5.5, so it is
+    # the medium tier and OpenAI has no large entry (GPT-6 Astra, $10/$50, isn't
+    # registered).
+    "gpt-6.1-sol":  ModelConfig("gpt-6.1-sol",  Provider.OPENAI, "GPT-6.1 Sol",  ModelSize.MEDIUM),
+    "gpt-6-luna":   ModelConfig("gpt-6-luna",   Provider.OPENAI, "GPT-6 Luna",   ModelSize.SMALL),
 
-    # ── Anthropic ─────────────────────────────────────────────────────────
+    # ── Anthropic: wave 2 ─────────────────────────────────────────────────
     "claude-opus-4.8":  ModelConfig("claude-opus-4-8",           Provider.ANTHROPIC, "Claude Opus 4.8", ModelSize.LARGE),
     "claude-sonnet-5":  ModelConfig("claude-sonnet-5",           Provider.ANTHROPIC, "Claude Sonnet 5", ModelSize.MEDIUM),
     "claude-haiku-4.5": ModelConfig("claude-haiku-4-5-20251001", Provider.ANTHROPIC, "Claude Haiku 4.5", ModelSize.SMALL),
-    # Added after wave 2 (issue #70): the current small Claude model, used to check
-    # the tool_choice "auto" path live. (It accepts a forced choice; Sonnet 5.5,
-    # Opus 5.5 and Fable 5.1 are the ones that reject it.) Not in any suite until
-    # the roster review (#72).
-    "claude-haiku-5.5": ModelConfig("claude-haiku-5-5",          Provider.ANTHROPIC, "Claude Haiku 5.5", ModelSize.SMALL),
+    # ── Anthropic: current (#72). Sonnet 5.5 and Opus 5.5 reject a forced
+    # tool_choice (Haiku 5.5 accepts it); every Claude model gets "auto" (#70).
+    # Thinking is on by default on all three, so output tokens include it.
+    "claude-opus-5.5":   ModelConfig("claude-opus-5-5",   Provider.ANTHROPIC, "Claude Opus 5.5",   ModelSize.LARGE),
+    "claude-sonnet-5.5": ModelConfig("claude-sonnet-5-5", Provider.ANTHROPIC, "Claude Sonnet 5.5", ModelSize.MEDIUM),
+    "claude-haiku-5.5":  ModelConfig("claude-haiku-5-5",  Provider.ANTHROPIC, "Claude Haiku 5.5",  ModelSize.SMALL),
 
-    # ── Google Gemini ─────────────────────────────────────────────────────
+    # ── Google Gemini: wave 2 ─────────────────────────────────────────────
     # Registry key (CLI alias) stays "gemini-3.1-pro"; model_id is the -preview id
     # because generativelanguage v1beta only serves gemini-3.1-pro-preview, not the
     # GA-renamed plain id (issue #42). Precedent: claude-opus-4.8 → claude-opus-4-8.
     "gemini-3.1-pro":        ModelConfig("gemini-3.1-pro-preview", Provider.GOOGLE, "Gemini 3.1 Pro",        ModelSize.LARGE),
+    # Since 2026-10-08 Google routes gemini-3.5-flash requests to gemini-3.6-flash
+    # (Gemini API deprecations page); wave 2 (2026-07) predates that. Runs record
+    # the model that actually answered in `served_models`.
     "gemini-3.5-flash":      ModelConfig("gemini-3.5-flash",       Provider.GOOGLE, "Gemini 3.5 Flash",      ModelSize.MEDIUM),
     "gemini-3.1-flash-lite": ModelConfig("gemini-3.1-flash-lite",  Provider.GOOGLE, "Gemini 3.1 Flash Lite", ModelSize.SMALL),
     "gemini-2.5-flash-lite": ModelConfig("gemini-2.5-flash-lite",  Provider.GOOGLE, "Gemini 2.5 Flash Lite", ModelSize.SMALL),
+    # ── Google Gemini: current (#72) ──────────────────────────────────────
+    "gemini-4-argon":        ModelConfig("gemini-4-argon",         Provider.GOOGLE, "Gemini 4 Argon",        ModelSize.LARGE),
+    "gemini-3.8-flash":      ModelConfig("gemini-3.8-flash",       Provider.GOOGLE, "Gemini 3.8 Flash",      ModelSize.MEDIUM),
+    "gemini-3.5-flash-lite": ModelConfig("gemini-3.5-flash-lite",  Provider.GOOGLE, "Gemini 3.5 Flash Lite", ModelSize.SMALL),
 }
+
+# The paper's roster (wave 2, 2026-07-10), frozen; `--suite wave2` reruns it.
+WAVE2_MODELS = [
+    "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano",
+    "claude-opus-4.8", "claude-sonnet-5", "claude-haiku-4.5",
+    "gemini-3.1-pro", "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite",
+]
+
+# The current roster (issue #72, 2026-10): small / medium / large per provider.
+# The suites and the --small/medium/large/all-models flags draw from it.
+CURRENT_MODELS = [
+    "gpt-6.1-sol", "gpt-6-luna",
+    "claude-opus-5.5", "claude-sonnet-5.5", "claude-haiku-5.5",
+    "gemini-4-argon", "gemini-3.8-flash", "gemini-3.5-flash-lite",
+]
 
 
 def models_by_size(*sizes: ModelSize) -> list[str]:
-    """Return model_ids whose tier is in `sizes`, preserving MODELS order."""
+    """Return current-roster model keys whose tier is in `sizes`, in roster order."""
     wanted = set(sizes)
-    return [mid for mid, cfg in MODELS.items() if cfg.size in wanted]
+    return [mid for mid in CURRENT_MODELS if MODELS[mid].size in wanted]
 
 
 # ── Prompt Templates ─────────────────────────────────────────────────
@@ -228,11 +257,8 @@ DEFAULT_TOPICS = [
     "Basic Circuit Components - Resistors, capacitors, and LEDs",
 ]
 
-# Quick test: cheapest current model per provider (all roster keys)
-QUICK_BENCHMARK_MODELS = ["gpt-5.4-nano", "claude-haiku-4.5", "gemini-2.5-flash-lite"]
+# Quick test: the small tier of the current roster (one per provider)
+QUICK_BENCHMARK_MODELS = models_by_size(ModelSize.SMALL)
 
-# Models registered after wave 2, kept out of the suites until the roster review (#72)
-POST_WAVE2_MODELS = {"claude-haiku-5.5"}
-
-# Full benchmark: comprehensive model comparison (the wave-2 roster)
-FULL_BENCHMARK_MODELS = [k for k in MODELS if k not in POST_WAVE2_MODELS]
+# Full benchmark: the whole current roster
+FULL_BENCHMARK_MODELS = list(CURRENT_MODELS)
