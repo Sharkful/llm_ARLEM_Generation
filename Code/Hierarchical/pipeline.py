@@ -588,8 +588,7 @@ class HierarchicalPipeline:
                 rec.failed_attempts += 1
                 absorbed = self._absorb_calls(rec)
                 last_error = f"{type(e).__name__}: {e}"
-                repeats_tracker = bool(absorbed) and not absorbed[-1].success \
-                    and absorbed[-1].final_error is not None
+                repeats_tracker = bool(absorbed) and absorbed[-1].final_error is not None
                 rec.errors.append(f"step attempt {rec.attempts} failed: "
                                   + (brief_error(e) if repeats_tracker else last_error))
                 where = " (details: errors.txt)" if self.save else ""

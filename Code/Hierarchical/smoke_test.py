@@ -593,35 +593,6 @@ check(_rejected == 4 and P.HierarchicalPipeline.read_run_config(MOVED / "Runs" /
       "one run-directory check for the CLI and resume(); non-run directories rejected")
 
 
-# 22. a final error the tracker never saw keeps its full text, even when earlier
-#     attempts in the same call were tracked
-from datetime import datetime  # noqa: E402
-from tracking.metrics import AttemptMetrics, CallMetrics, ErrorRecord, ErrorType, TokenUsage  # noqa: E402
-
-LONG_TAIL = "provider said: " + "x" * 400 + " END-OF-ERROR"
-
-
-class TrackedThenFailLLM(FakeLLM):
-    def __call__(self, model, messages, max_retries):
-        if model is P.PlannedDemoModule and self._index() == 1:
-            now = datetime.now()
-            err = ErrorRecord(ErrorType.PARSE_ERROR, "ValidationError", "parse error", now, 1)
-            self.pipe.tracker.aggregate.calls.append(CallMetrics(
-                call_id="fake", model="fake", provider="fake", start_time=now,
-                total_usage=TokenUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
-                attempts=[AttemptMetrics(1, now, TokenUsage(), False, err)], parse_errors=1,
-            ))
-            raise RuntimeError(LONG_TAIL)
-        return super().__call__(model, messages, max_retries)
-
-
-rec = make(TrackedThenFailLLM(), "t22_untracked", cfg={"step_attempts": 1}).run()
-m1 = rec["steps"][-1]
-check(m1["calls"] == 1 and m1["errors"][0] == "attempt 1 ValidationError: parse error"
-      and m1["errors"][1].endswith("END-OF-ERROR"),
-      "an error the tracker didn't record keeps its full text in errors.txt")
-
-
 # 23. tracker edge cases, through the public TrackedClient / track_call: a stub
 #     client fires the hook sequence a script describes (issue #71, PR #80 review)
 from types import SimpleNamespace  # noqa: E402
@@ -662,10 +633,14 @@ def _resp(tokens):
                                                  total_tokens=tokens))
 
 
-class InstructorRetryException(Exception):  # name-alike of instructor's wrapper
+class _RetryWrapper(Exception):
+    """Shape-alike of instructor's InstructorRetryException: it has failed_attempts
+    and last_completion (the previous attempt's), and is raised from the cause."""
+
     def __init__(self, msg, last_completion=None):
         super().__init__(msg)
         self.last_completion = last_completion
+        self.failed_attempts = None
 
 
 class IncompleteOutputException(Exception):  # name-alike of instructor's truncation error
@@ -700,8 +675,8 @@ check(_c.total_attempts == 1 and _c.attempts[0].success and not _c.errors
       and _c.completion_errors == 0,
       "an error in the caller's own code isn't pinned on the request")
 
-_wrapper = InstructorRetryException("<failed_attempts>\n<generation number=\"1\">...",
-                                    last_completion=_resp(10))
+_wrapper = _RetryWrapper("<failed_attempts>\n<generation number=\"1\">...",
+                         last_completion=_resp(10))
 _wrapper.__cause__ = AssertionError("Instructor does not support multiple function calls")
 _c = _tracked([("kwargs",), ("response", _resp(10)), ("parse_error", ValueError("validation error")),
                ("kwargs",), ("response", _resp(0)), ("raise", _wrapper)])
@@ -721,6 +696,63 @@ _c = _tracked([("kwargs",), ("response", _resp(5)), ("parse_error", ValueError("
 check(_c.total_attempts == 2 and _c.retry_count == 1 and _c.attempts[-1].success
       and _c.attempts[0].error is not None,
       "a request whose kwargs hook didn't fire still gets its own attempt")
+
+_c = _tracked([("kwargs",), ("parse_error", ValueError("validation error")),
+               ("parse_error", ValueError("validation error again")), ("raise", KeyError("end"))])
+check(_c.total_attempts == 1 and _c.retry_count == 0 and _c.parse_errors == 2
+      and _c.attempts[0].error.message == "validation error",
+      "two error hooks for one request stay on one attempt (no phantom retry)")
+
+_chained = RuntimeError("config error")
+_chained.__cause__ = KeyError("x")
+_c = _tracked([("kwargs",), ("response", _resp(3)), ("raise", _chained)])
+check(_c.attempts[0].error.exception_class == "RuntimeError"
+      and _c.attempts[0].error.message == "config error",
+      "only instructor's retry wrapper is unwrapped; other chained errors are recorded as is")
+
+_trunc_cause = IncompleteOutputException(last_completion=_resp(9))
+_wrapped_trunc = _RetryWrapper("<failed_attempts>...")
+_wrapped_trunc.__cause__ = _trunc_cause
+_c = _tracked([("kwargs",), ("raise", _wrapped_trunc)])
+check(_c.total_usage.total_tokens == 9
+      and _c.final_error.exception_class == "IncompleteOutputException",
+      "a wrapped truncation still keeps its request's usage")
+
+
+# 22. step error lines, through the real tracker (TrackedClient around a stub):
+#     an error the tracker recorded is listed once, in full, and the step summary
+#     is shortened; an error the tracker never saw keeps its full text
+LONG_TAIL = "provider said: " + "x" * 400 + " END-OF-ERROR"
+
+
+class TrackedThenFailLLM(FakeLLM):
+    def __init__(self, inside_call):
+        super().__init__()
+        self.inside_call = inside_call   # raise inside the instructor call, or after it
+
+    def __call__(self, model, messages, max_retries):
+        if model is P.PlannedDemoModule and self._index() == 1:
+            client = TrackedClient(_StubInstructor(), self.pipe.tracker)
+            if self.inside_call:   # a hooked parse error, then instructor raises again
+                client.create(script=[("kwargs",), ("response", _resp(10)),
+                                      ("parse_error", ValueError("validation error")),
+                                      ("raise", RuntimeError(LONG_TAIL))])
+            client.create(script=[("kwargs",), ("response", _resp(10))])
+            raise RuntimeError(LONG_TAIL)    # outside any tracked call
+        return super().__call__(model, messages, max_retries)
+
+
+rec = make(TrackedThenFailLLM(inside_call=True), "t22_tracked", cfg={"step_attempts": 1}).run()
+m1 = rec["steps"][-1]
+check(m1["calls"] == 1 and m1["parse_errors"] == 1 and m1["retries"] == 0
+      and m1["errors"][0] == "attempt 1 ValueError: validation error"
+      and m1["errors"][1] == f"attempt 1 RuntimeError: {LONG_TAIL}"
+      and sum("END-OF-ERROR" in e for e in m1["errors"]) == 1,
+      "an error raised after a hooked error is recorded as the call's terminal error, once")
+rec = make(TrackedThenFailLLM(inside_call=False), "t22_untracked", cfg={"step_attempts": 1}).run()
+m1 = rec["steps"][-1]
+check(m1["calls"] == 1 and m1["errors"][-1].endswith("END-OF-ERROR"),
+      "an error the tracker didn't record keeps its full text in errors.txt")
 
 
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
