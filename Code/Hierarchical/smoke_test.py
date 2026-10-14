@@ -719,6 +719,53 @@ check(_c.total_usage.total_tokens == 9
       "a wrapped truncation still keeps its request's usage")
 
 
+# 24. which errors the transient retryer re-sends (benchmark._is_transient_api_error)
+#     and which fail a step at once (pipeline.is_non_retryable), on stub exceptions
+class OverloadedError(Exception):
+    status_code = 529   # anthropic: an APIStatusError, not an InternalServerError
+
+
+class _Status(Exception):
+    def __init__(self, status):
+        super().__init__(f"Error code: {status}")
+        self.status_code = status
+
+
+def _wrapped(cause):
+    w = _RetryWrapper("<failed_attempts>...")
+    w.__cause__ = cause
+    return w
+
+
+_trunc_under_503 = _Status(503)
+_trunc_under_503.__cause__ = IncompleteOutputException(last_completion=None)
+
+
+def _raised_while_handling(inner):
+    """A ValueError whose only link to ``inner`` is implicit context."""
+    try:
+        try:
+            raise inner
+        except Exception:
+            raise ValueError("validation error")
+    except ValueError as e:
+        return e
+
+
+check(benchmark._is_transient_api_error(_wrapped(OverloadedError("overloaded")))
+      and benchmark._is_transient_api_error(_wrapped(_Status(529))),
+      "an Anthropic 529 (OverloadedError) is transient")
+check(not benchmark._is_transient_api_error(_wrapped(_trunc_under_503)),
+      "a truncation anywhere in the cause chain is never re-sent")
+_ctx503, _ctx401 = _raised_while_handling(_Status(503)), _raised_while_handling(_Status(401))
+check(isinstance(_ctx503.__context__, _Status)
+      and not benchmark._is_transient_api_error(_ctx503) and not P.is_non_retryable(_ctx401),
+      "an error raised while handling a 503 or 401 is classified as itself (only causes are followed)")
+check(P.is_non_retryable(_wrapped(_Status(401)))
+      and not P.is_non_retryable(_wrapped(_Status(503))),
+      "a wrapped 401 still fails the step at once; a wrapped 503 does not")
+
+
 # 22. step error lines, through the real tracker (TrackedClient around a stub):
 #     an error the tracker recorded is listed once, in full, and the step summary
 #     is shortened; an error the tracker never saw keeps its full text

@@ -52,6 +52,7 @@ from benchmark import (
     _transient_retryer,
     create_instructor_client,
     decode_mode_for,
+    exception_chain,
     get_provenance,
     provider_create_kwargs,
     tool_choice_for,
@@ -252,17 +253,13 @@ _NON_RETRYABLE_EXC_NAMES = {
 def is_non_retryable(exc: BaseException) -> bool:
     """True if ``exc`` (or anything in its cause chain) is an error that
     regenerating the step can't fix."""
-    seen: set[int] = set()
-    cur: Optional[BaseException] = exc
-    while cur is not None and id(cur) not in seen:
-        seen.add(id(cur))
-        if type(cur).__name__ in _NON_RETRYABLE_EXC_NAMES:
+    for e in exception_chain(exc):
+        if type(e).__name__ in _NON_RETRYABLE_EXC_NAMES:
             return True
         for attr in ("status_code", "code"):
-            val = getattr(cur, attr, None)
+            val = getattr(e, attr, None)
             if isinstance(val, int) and val in _NON_RETRYABLE_STATUS:
                 return True
-        cur = cur.__cause__ or cur.__context__
     return False
 
 
