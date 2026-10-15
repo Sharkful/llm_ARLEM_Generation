@@ -60,7 +60,7 @@ from benchmark import (
     tool_choice_for,
     warn_served_model,
 )
-from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, SpecType
+from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, Provider, SpecType
 from json_lab import DemoModule, Lab, NewComponent, PointerReceiverComponent
 from lab_metrics import analyze_assets, analyze_json_lab
 from lab_outline import LabOutline
@@ -604,6 +604,22 @@ class HierarchicalPipeline:
         raise StepFailed(rec.step, rec.index, last_error or "step failed")
 
     # ── one checkpointed step ────────────────────────────────────────
+    def _user_content(self, prompt: str, cache_prefix: Optional[str]):
+        """The step's user message content. For Anthropic, when the prompt starts
+        with ``cache_prefix`` (the shared lab + plan opening), split it into two text
+        blocks and mark the first as a cache breakpoint (#73): the tools + system +
+        opening prefix is then written once per step type and read by the later
+        steps of that type (Anthropic orders the prefix tools -> system ->
+        messages, and each step type has its own tool). Reasks and revisions append
+        after it, so they read it too. Everything else stays a plain string."""
+        if (cache_prefix and self.model_config.provider == Provider.ANTHROPIC
+                and prompt.startswith(cache_prefix) and len(prompt) > len(cache_prefix)):
+            return [
+                {"type": "text", "text": cache_prefix, "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": prompt[len(cache_prefix):]},
+            ]
+        return prompt
+
     def _run_step(
         self,
         step: str,
@@ -616,6 +632,7 @@ class HierarchicalPipeline:
         scope: Callable[[], ContextManager] = nullcontext,
         context: Optional[dict[str, Any]] = None,
         normalize: Optional[Callable[[BaseModel], list[dict]]] = None,
+        cache_prefix: Optional[str] = None,
     ) -> BaseModel:
         label = f"{step} {index}" if index else step
         self._current_step = label
@@ -648,7 +665,7 @@ class HierarchicalPipeline:
         t0 = time.time()
         base_messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
+            {"role": "user", "content": self._user_content(prompt, cache_prefix)},
         ]
         context = dict(context or {})
         context.setdefault("run_dir", str(self.run_dir))
@@ -803,6 +820,7 @@ class HierarchicalPipeline:
                     ),
                     context=shared_context,
                     normalize=lambda ap: normalize_asset_plan(ap, self.registry),
+                    cache_prefix=prompts.shared_opening(self.lab_context, plan),
                 )
                 allowed = prompts.allowed_new_component_names(asset_plan, self.registry)
                 module = self._run_step(
@@ -815,6 +833,7 @@ class HierarchicalPipeline:
                     scope=lambda: module_validation(allowed),
                     context={**shared_context, "asset_plan": asset_plan},
                     normalize=lambda m: normalize_module(m, asset_plan, self.registry),
+                    cache_prefix=prompts.shared_opening(self.lab_context, plan),
                 )
                 adherence = plan_adherence(
                     asset_plan, module, min_objects=cfg.min_objects, min_clips=cfg.min_clips

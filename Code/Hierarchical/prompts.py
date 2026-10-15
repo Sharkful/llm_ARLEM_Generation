@@ -202,6 +202,14 @@ def render_plan(plan: LabOutline) -> str:
 
 # ── Prompt builders ──────────────────────────────────────────────────
 
+def shared_opening(lab_context: str, plan: LabOutline) -> str:
+    """The opening every asset-plan and module prompt starts with, byte for byte
+    (both templates begin LAB_BLOCK + "\n" + PLAN_BLOCK). The pipeline marks its
+    end as Anthropic's cache breakpoint (#73)."""
+    return (LAB_BLOCK.format(lab_context=lab_context) + "\n"
+            + PLAN_BLOCK.format(plan=render_plan(plan)))
+
+
 def build_plan_prompt(lab_context: str, *, has_script: bool, max_scenes: int) -> str:
     """The scene range comes from the run's max_scenes (validated against
     LabOutline's own 3-12 bounds in PipelineConfig), so the prompt asks for

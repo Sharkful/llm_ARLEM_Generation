@@ -277,8 +277,16 @@ Cost prices each part of the input at its own rate: uncached input at the input
 rate, cache reads at `cached_input` and cache writes at `cache_write`
 (`tracking/pricing.py`; current-roster models only, issue #72). OpenAI caches
 automatically, and GPT-5.6 and later bill cache writes at 1.25x input. Gemini's
-implicit caching has no write charge. Claude reads from cache only once the
-prompts carry `cache_control` markers (#73). Anthropic reports cache reads and
+implicit caching has no write charge. Claude caches only what is marked (#73): the
+asset-plan and module requests mark the end of the shared lab + plan opening
+(`prompts.shared_opening`) with a 5-minute `cache_control` breakpoint; the one-off
+plan request carries none. Anthropic orders the cached prefix tools -> system ->
+messages and each step type sends its own tool, so the cache is shared between steps
+of the same type: the first asset plan and the first module write it (1.25x input),
+later ones and every reask or revision read it (0.1x; 0.05x on Opus 5.5). Prefixes
+below the model's minimum (Haiku 4.5: 4096 tokens; the 5.5 family: 512) silently
+don't cache. A slow model whose same-type steps start more than 5 minutes apart
+would keep re-writing it; the run's cache writes vs reads show that. Anthropic reports cache reads and
 writes outside `input_tokens`; the tracker folds them into `prompt_tokens`, so
 `prompt_tokens` is all input on every provider. Models without cache rates (the
 wave-2 roster) bill all input at the input rate, as they always did.

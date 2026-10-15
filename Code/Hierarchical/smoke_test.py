@@ -156,6 +156,14 @@ FAKE = TMP / "fake"
 
 # 1. full auto-approved run
 rec = make(FakeLLM(), "t1_auto").run()
+_t1 = FAKE / "Runs" / "t1_auto"
+_plan = P.LabPlan.model_validate_json((_t1 / "00_plan.json").read_text(encoding="utf-8"))
+_open = P.prompts.shared_opening("CTX {x}", _plan)
+_ctx = make(FakeLLM(), "t1_ctx").lab_context
+check(all((_t1 / f).read_text(encoding="utf-8").startswith(P.prompts.shared_opening(_ctx, _plan))
+          for f in ("01_asset_plan_prompt.txt", "01_module_prompt.txt", "02_module_prompt.txt"))
+      and _open.startswith("# Lab description\nCTX {x}"),
+      "asset-plan and module prompts start with the shared opening, byte for byte")
 check(rec["success"], "auto run succeeds")
 lab = Lab.model_validate_json(Path(rec["output_path"]).read_text(encoding="utf-8"))
 check(len(lab.modules) == len(MODS), f"assembled Lab has {len(MODS)} modules")
@@ -1244,6 +1252,22 @@ check(_m1 is not None and _m1["success"] and _m1["parse_errors"] == 1
       and rec.get("tool_choice") == "auto",
       "the reask costs one attempt; the record says tool_choice auto")
 check(all(r["max_tokens"] == 32000 for r in reqs), "every request sets max_tokens=32000")
+# Prompt caching (#73): one breakpoint at the end of the shared lab + plan opening on
+# asset-plan and module requests (reasks included), none on the one-off plan request.
+_marks = [json.dumps(r).count('"cache_control"') for r in reqs]
+_tools = [r["tools"][0]["name"] for r in reqs]
+_first = [r["messages"][0]["content"] for r in reqs]
+check(_marks[0] == 0 and _tools[0] == "LabPlan"
+      and all(m == 1 for m, t in zip(_marks, _tools) if t != "LabPlan")
+      and all(isinstance(c, list) and c[0].get("cache_control") == {"type": "ephemeral"}
+              and c[0]["text"].startswith("# Lab description")
+              and "# Approved lab plan" in c[0]["text"]
+              for c, t in zip(_first, _tools) if t != "LabPlan"),
+      "asset-plan and module requests mark the shared opening as a cache breakpoint; "
+      "the plan request doesn't")
+_rc = _reask["messages"][0]["content"] if _reask else None
+check(isinstance(_rc, list) and _rc[0].get("cache_control") == {"type": "ephemeral"},
+      "a reask keeps the cache breakpoint (it reads the cached prefix)")
 check(all(r.get("output_config") == {"effort": "medium"} for r in reqs)
       and rec["reasoning_effort"] == "medium",
       "every request pins reasoning effort medium (output_config.effort)")
