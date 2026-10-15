@@ -61,7 +61,7 @@ from benchmark import (
     tool_choice_for,
     warn_served_model,
 )
-from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, SpecType
+from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, Provider, SpecType
 from json_lab import (
     DemoModule, Lab, NewComponent, NewComponentInput, PointerReceiverComponent,
     component_entry_checks,
@@ -559,6 +559,7 @@ class HierarchicalPipeline:
         self._current_step: Optional[str] = None
         self._traceback: Optional[str] = None   # set when run() catches an unexpected error
         self._calls_absorbed = 0                # tracker calls already charged to a step
+        self._cache_warned: set[str] = set()   # step types warned about a failed cache split
 
     # ── resume ───────────────────────────────────────────────────────
     @staticmethod
@@ -685,6 +686,34 @@ class HierarchicalPipeline:
         raise StepFailed(rec.step, rec.index, last_error or "step failed")
 
     # ── one checkpointed step ────────────────────────────────────────
+    def _user_content(self, prompt: str, cache_prefix: Optional[str], step: str):
+        """The step's user message content. For Anthropic, when the prompt starts
+        with ``cache_prefix`` (the shared lab + plan opening), split it into two text
+        blocks and mark the first as a cache breakpoint (#73): the tools + system +
+        opening prefix is then written once per step type and read by the later
+        steps of that type (Anthropic orders the prefix tools -> system ->
+        messages, and each step type has its own tool and its own system tool
+        line). Reasks and revisions append after it, so they read it too.
+        Everything else stays a plain string. The prompt builders start every
+        asset-plan and module prompt with the opening, so the split always holds
+        for them; a step that passes a prefix its prompt can't be split on prints
+        a warning once per step type, because caching is then off for it."""
+        if not cache_prefix or self.model_config.provider != Provider.ANTHROPIC:
+            return prompt
+        if prompt.startswith(cache_prefix) and len(prompt) > len(cache_prefix):
+            return [
+                {"type": "text", "text": cache_prefix, "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": prompt[len(cache_prefix):]},
+            ]
+        if step not in self._cache_warned:
+            self._cache_warned.add(step)
+            why = ("has nothing after the cache prefix" if prompt == cache_prefix
+                   else "doesn't start with the cache prefix")
+            print(f"  WARNING: the {self._current_step or step} prompt {why}, so Anthropic "
+                  f"prompt caching is off for {step} steps (#73). Build it with "
+                  "prompts.shared_opening() + its task template.")
+        return prompt
+
     def _run_step(
         self,
         step: str,
@@ -697,6 +726,7 @@ class HierarchicalPipeline:
         scope: Callable[[], ContextManager] = nullcontext,
         context: Optional[dict[str, Any]] = None,
         normalize: Optional[Callable[[BaseModel], list[dict]]] = None,
+        cache_prefix: Optional[str] = None,
     ) -> BaseModel:
         label = f"{step} {index}" if index else step
         self._current_step = label
@@ -729,7 +759,7 @@ class HierarchicalPipeline:
         t0 = time.time()
         base_messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
+            {"role": "user", "content": self._user_content(prompt, cache_prefix, step)},
         ]
         context = dict(context or {})
         context.setdefault("run_dir", str(self.run_dir))
@@ -862,6 +892,8 @@ class HierarchicalPipeline:
                 scope=lambda: plan_validation(cfg.max_scenes),
             )
             modules: list[DemoModule] = []
+            # Asset-plan and module prompts all start with this; Anthropic caches it (#73).
+            opening = prompts.shared_opening(self.lab_context, plan)
             for i in range(1, len(plan.scenes) + 1):
                 scene = plan.scenes[i - 1]
                 shared_context = {
@@ -873,7 +905,7 @@ class HierarchicalPipeline:
                 asset_plan = self._run_step(
                     "asset_plan", i, ModuleAssetPlan,
                     prompts.build_asset_plan_prompt(
-                        self.lab_context, plan, i, self.registry,
+                        opening, plan, i, self.registry,
                         allow_new_components=cfg.allow_new_components,
                         min_objects=cfg.min_objects, min_beats=cfg.min_clips,
                     ),
@@ -884,18 +916,20 @@ class HierarchicalPipeline:
                     ),
                     context=shared_context,
                     normalize=lambda ap: normalize_asset_plan(ap, self.registry),
+                    cache_prefix=opening,
                 )
                 usable = prompts.usable_new_components(asset_plan, self.registry)
                 module = self._run_step(
                     "module", i, PlannedDemoModule,
                     prompts.build_module_prompt(
-                        self.lab_context, plan, i, self.registry, asset_plan, usable=usable,
+                        opening, plan, i, self.registry, asset_plan, usable=usable,
                         min_objects=cfg.min_objects, min_clips=cfg.min_clips,
                     ),
                     cfg.module_retries, f"{i:02d}_module", "module",
                     scope=lambda: module_validation(usable),
                     context={**shared_context, "asset_plan": asset_plan},
                     normalize=lambda m: normalize_module(m, usable),
+                    cache_prefix=opening,
                 )
                 adherence = plan_adherence(
                     asset_plan, module, min_objects=cfg.min_objects, min_clips=cfg.min_clips

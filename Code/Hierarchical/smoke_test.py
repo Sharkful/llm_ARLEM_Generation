@@ -27,6 +27,8 @@ Outputs go to a temp dir that is removed afterwards. Exit code 1 on any failure.
 """
 
 import atexit
+import contextlib
+import io
 import json
 import os
 import re
@@ -161,7 +163,37 @@ def make(fake, run_name, cfg=None, **kw):
 FAKE = TMP / "fake"
 
 # 1. full auto-approved run
-rec = make(FakeLLM(), "t1_auto").run()
+_p1 = make(FakeLLM(), "t1_auto")
+rec = _p1.run()
+_t1 = FAKE / "Runs" / "t1_auto"
+_plan = P.LabPlan.model_validate_json((_t1 / "00_plan.json").read_text(encoding="utf-8"))
+# The Anthropic cache breakpoint (#73) needs every asset-plan and module prompt,
+# including the later ones that read the cache, to start with the shared opening.
+_opening = P.prompts.shared_opening(_p1.lab_context, _plan)
+_step_prompts = sorted(_t1.glob("*_asset_plan_prompt.txt")) + sorted(_t1.glob("*_module_prompt.txt"))
+check(len(_step_prompts) == 2 * len(_plan.scenes)
+      and all(f.read_text(encoding="utf-8").startswith(_opening) for f in _step_prompts),
+      f"all {len(_step_prompts)} asset-plan and module prompts start with the shared "
+      "opening, byte for byte")
+check(not _p1._cache_warned, "a normal run (Anthropic model) prints no cache-split warning")
+# A prompt that should carry the Anthropic cache breakpoint but can't be split
+# warns once per step type, naming the step and the reason (#73).
+_wp = make(FakeLLM(), "t1_warn")             # claude-haiku-4.5: Anthropic
+_out = io.StringIO()
+with contextlib.redirect_stdout(_out):
+    _wp._current_step = "module 3"
+    _r1 = _wp._user_content("other text", "# Lab description\n", "module")
+    _r2 = _wp._user_content("more text", "# Lab description\n", "module")
+    _r3 = _wp._user_content("other text", None, "module")
+    _wp._current_step = "asset_plan 2"
+    _r4 = _wp._user_content("# Lab description\n", "# Lab description\n", "asset_plan")
+_warn = _out.getvalue()
+check(_r1 == "other text" and _r2 == "more text" and _r3 == "other text"
+      and _r4 == "# Lab description\n" and _warn.count("WARNING") == 2
+      and "module 3 prompt doesn't start with the cache prefix" in _warn
+      and "asset_plan 2 prompt has nothing after the cache prefix" in _warn,
+      "an Anthropic prompt that can't be split for caching stays a string and warns "
+      "once per step type, naming the step and the reason")
 check(rec["success"], "auto run succeeds")
 lab = Lab.model_validate_json(Path(rec["output_path"]).read_text(encoding="utf-8"))
 check(len(lab.modules) == len(MODS), f"assembled Lab has {len(MODS)} modules")
@@ -1080,8 +1112,6 @@ check(abs(PricingCalculator(model="gpt-5.4-mini").calculate_cost(_oa)
 
 # 26. the model that actually answered is recorded (issue #72): Google serves
 #     gemini-3.5-flash requests with gemini-3.6-flash since 2026-10-08
-import contextlib  # noqa: E402
-import io  # noqa: E402
 from tracking.metrics import served_model_of  # noqa: E402
 check(served_model_of(SimpleNamespace(model_version="models/gemini-3.6-flash", usage_metadata=None))
       == "gemini-3.6-flash"
@@ -1388,7 +1418,7 @@ check(len(df) == 1 and bool(df.iloc[0]["success"]) and df.iloc[0]["structure"] =
 # max_tokens. The first module request is answered in plain text, as "auto"
 # allows, to check instructor's "no tool invocation" reask.
 print("\n-- part 3: mock Anthropic server --")
-anth = {"asset": 0, "requests": [], "text_sent": False}
+anth = {"asset": 0, "requests": [], "text_sent": False, "written": set()}
 
 
 class MockAnthropic(BaseHTTPRequestHandler):
@@ -1413,12 +1443,23 @@ class MockAnthropic(BaseHTTPRequestHandler):
             content = [{"type": "tool_use", "id": "toolu_mock", "name": tool,
                         "input": json.loads(data)}]
             stop = "tool_use"
+        # Usage as the real API reports it: no cache fields without a breakpoint, a
+        # cache write the first time a cached prefix (tools + system + the marked
+        # block) is seen, reads after that. input_tokens excludes cache reads/writes;
+        # the tracker folds them in, so every request is 1000 input tokens.
+        usage = {"input_tokens": 1000, "output_tokens": 200}
+        if '"cache_control"' in json.dumps(body["messages"]):
+            usage["input_tokens"] = 600
+            first = body["messages"][0]["content"][0]
+            prefix = json.dumps([body["tools"], body.get("system"), first], sort_keys=True)
+            if prefix in anth["written"]:
+                usage["cache_read_input_tokens"] = 400
+            else:
+                anth["written"].add(prefix)
+                usage["cache_creation_input_tokens"] = 400
         payload = json.dumps({
             "id": "msg_mock", "type": "message", "role": "assistant", "model": body["model"],
-            "content": content, "stop_reason": stop, "stop_sequence": None,
-            # input_tokens excludes cache reads/writes; the tracker folds them in
-            "usage": {"input_tokens": 600, "cache_read_input_tokens": 300,
-                      "cache_creation_input_tokens": 100, "output_tokens": 200},
+            "content": content, "stop_reason": stop, "stop_sequence": None, "usage": usage,
         }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -1433,8 +1474,9 @@ _saved_env = {k: os.environ.get(k) for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_AP
 os.environ["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{asrv.server_port}"
 os.environ["ANTHROPIC_API_KEY"] = "test"
 try:
-    rec = P.HierarchicalPipeline("claude-haiku-5.5", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
-                                 output_dir=TMP / "anthropic", run_name="anthropic").run()
+    _ap = P.HierarchicalPipeline("claude-haiku-5.5", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
+                                 output_dir=TMP / "anthropic", run_name="anthropic")
+    rec = _ap.run()
 finally:
     asrv.shutdown()
     for k, v in _saved_env.items():
@@ -1469,6 +1511,22 @@ check(_m1 is not None and _m1["success"] and _m1["parse_errors"] == 1
       and rec.get("tool_choice") == "auto",
       "the reask costs one attempt; the record says tool_choice auto")
 check(all(r["max_tokens"] == 32000 for r in reqs), "every request sets max_tokens=32000")
+# Prompt caching (#73): one breakpoint at the end of the shared lab + plan opening on
+# asset-plan and module requests (reasks included), none on the one-off plan request.
+_marks = [json.dumps(r).count('"cache_control"') for r in reqs]
+_tools = [r["tools"][0]["name"] for r in reqs]
+_first = [r["messages"][0]["content"] for r in reqs]
+check(_marks[0] == 0 and _tools[0] == "LabPlan"
+      and all(m == 1 for m, t in zip(_marks, _tools) if t != "LabPlan")
+      and all(isinstance(c, list) and c[0].get("cache_control") == {"type": "ephemeral"}
+              and c[0]["text"].startswith("# Lab description")
+              and "# Approved lab plan" in c[0]["text"]
+              for c, t in zip(_first, _tools) if t != "LabPlan"),
+      "asset-plan and module requests mark the shared opening as a cache breakpoint; "
+      "the plan request doesn't")
+_rc = _reask["messages"][0]["content"] if _reask else None
+check(isinstance(_rc, list) and _rc[0].get("cache_control") == {"type": "ephemeral"},
+      "a reask keeps the cache breakpoint (it reads the cached prefix)")
 check(all(r.get("output_config") == {"effort": "medium"} for r in reqs)
       and rec["reasoning_effort"] == "medium",
       "every request pins reasoning effort medium (output_config.effort)")
@@ -1476,13 +1534,36 @@ check([r["tools"][0]["name"] for r in reqs[:3]] == ["LabPlan", "ModuleAssetPlan"
       "tool names follow the step response models")
 check(all(r["model"] == "claude-haiku-5-5" for r in reqs) and rec["served_models"] == ["claude-haiku-5-5"],
       "model id sent and served (Claude Haiku 5.5)")
+# One unmarked plan request, one cache write per step type, reads on the rest.
+_reads = len(reqs) - 3
 check(rec["totals"]["prompt_tokens"] == 1000 * len(reqs)
-      and rec["totals"]["cached_tokens"] == 300 * len(reqs)
-      and rec["totals"]["cache_write_tokens"] == 100 * len(reqs),
-      "Anthropic usage tracked per step, cache reads and writes folded into the input")
+      and rec["totals"]["cached_tokens"] == 400 * _reads
+      and rec["totals"]["cache_write_tokens"] == 400 * 2,
+      "Anthropic usage tracked, cache reads and writes folded into the input")
 check(abs(rec["totals"]["cost_usd"]
-          - len(reqs) * (600 * 0.10 + 300 * 0.01 + 100 * 0.125 + 200 * 0.50) / 1e6) < 1e-9,
+          - (1000 * 0.10 + 2 * (600 * 0.10 + 400 * 0.125) + _reads * (600 * 0.10 + 400 * 0.01)
+             + len(reqs) * 200 * 0.50) / 1e6) < 1e-9,
       "Claude Haiku 5.5 priced at $0.10 / $0.50, cache reads $0.01, writes $0.125 per MTok")
+_steps = {(s["step"], s["index"]): s for s in rec["steps"]}
+_cache = {k: (s["cache_write_tokens"], s["cached_tokens"]) for k, s in _steps.items()}
+check(_cache[("plan", None)] == (0, 0)
+      and _cache[("asset_plan", 1)] == (400, 0)
+      and _cache[("module", 1)] == (400, 400)
+      and all(w == 0 and r > 0 for (st, i), (w, r) in _cache.items()
+              if st in ("asset_plan", "module") and i > 1),
+      "per step: the plan caches nothing, the first asset plan and module write the "
+      "cache (module 1's reask reads it), later steps only read it")
+# The cached prefix itself: within a step type, every marked request sends the same
+# tools, system text and marked opening, so later steps can read the first one's cache.
+_prefixes = {}
+for r in reqs:
+    if r["tools"][0]["name"] != "LabPlan":
+        _prefixes.setdefault(r["tools"][0]["name"], set()).add(
+            json.dumps([r["tools"], r.get("system"), r["messages"][0]["content"][0]], sort_keys=True))
+check(sorted(_prefixes) == ["ModuleAssetPlan", "PlannedDemoModule"]
+      and all(len(v) == 1 for v in _prefixes.values()),
+      "each step type sends one cached prefix: same tools, system text and opening")
+check(not _ap._cache_warned, "the mock-Anthropic run prints no cache-split warning")
 
 # ── Part 4: GPT-6 on the OpenAI Responses API (mock /v1/responses server) ──
 # Real create_instructor_client (pointed at the mock via OPENAI_BASE_URL). Checks the
