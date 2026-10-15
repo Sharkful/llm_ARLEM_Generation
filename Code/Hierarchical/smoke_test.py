@@ -157,14 +157,16 @@ def make(fake, run_name, cfg=None, **kw):
 FAKE = TMP / "fake"
 
 # 1. full auto-approved run
-rec = make(FakeLLM(), "t1_auto").run()
+_p1 = make(FakeLLM(), "t1_auto")
+rec = _p1.run()
 _t1 = FAKE / "Runs" / "t1_auto"
 _plan = P.LabPlan.model_validate_json((_t1 / "00_plan.json").read_text(encoding="utf-8"))
-_open = P.prompts.shared_opening("CTX {x}", _plan)
-_ctx = make(FakeLLM(), "t1_ctx").lab_context
-check(all((_t1 / f).read_text(encoding="utf-8").startswith(P.prompts.shared_opening(_ctx, _plan))
-          for f in ("01_asset_plan_prompt.txt", "01_module_prompt.txt", "02_module_prompt.txt"))
-      and _open.startswith("# Lab description\nCTX {x}"),
+# The Anthropic cache breakpoint (#73) needs every asset-plan and module prompt,
+# including the later ones that read the cache, to start with the shared opening.
+_opening = P.prompts.shared_opening(_p1.lab_context, _plan)
+check(all((_t1 / f).read_text(encoding="utf-8").startswith(_opening)
+          for f in ("01_asset_plan_prompt.txt", "01_module_prompt.txt",
+                    "02_asset_plan_prompt.txt", "02_module_prompt.txt")),
       "asset-plan and module prompts start with the shared opening, byte for byte")
 # A prompt that should carry the Anthropic cache breakpoint but can't be split
 # warns once per run instead of silently losing caching (#73).
