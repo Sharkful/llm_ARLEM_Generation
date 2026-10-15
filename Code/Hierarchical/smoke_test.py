@@ -227,6 +227,11 @@ check(all(c.get("inputs") == [{k: v for k, v in first["inputs"][0].items()}]
       "every NewComponent instance carries its canonical input definitions")
 check(rec["new_component_input_types"] == {"GameObject": len(newc)},
       "input types tallied across the lab (new_component_input_types)")
+# the module prompt shows each usable new component as a ready-to-copy entry (#77)
+_mp = (run_dir / f"{first['origin_module']:02d}_module_prompt.txt").read_text(encoding="utf-8")
+check(f'{{"type": "NewComponent", "scriptName": "{first["name"]}", "scriptDescription": ' in _mp
+      and '"value": "<value for this instance>"' in _mp,
+      "module prompt lists each allowed new component as a NewComponent entry to copy")
 check(rec["pipeline"] == "hierarchical" and rec["structure"] == "multi-module", "metrics keys")
 
 # 2. scripted reviewer: revise the plan once, replace asset plan 1

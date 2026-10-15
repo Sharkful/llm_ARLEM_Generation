@@ -29,7 +29,7 @@ from pydantic import BaseModel
 import _paths  # noqa: F401
 
 from lab_outline import LabOutline, OutlineScene
-from module_asset_plan import ModuleAssetPlan
+from module_asset_plan import ModuleAssetPlan, component_key
 from registry import AssetRegistry
 
 
@@ -139,10 +139,11 @@ Requirements:
 - Attach each planned component to its planned object, either in the object's
   components or in a clip change if it should only take effect later.
 - Built-in components use their own type (e.g. SimpleOrbitComponent). A new
-  component, or one invented by an earlier module, is written as a NewComponent
-  whose scriptName is exactly its planned or catalog name; for a catalog component,
-  reuse its description. Allowed NewComponent scriptNames for this module:
-  {allowed_new}. Do not use NewComponent with any other scriptName.
+  component, or one invented by an earlier module, is never its own type: write it
+  as a NewComponent entry exactly as shown below, setting each input's value for
+  that instance (or leaving it out to keep the default). Do not use NewComponent
+  with any other scriptName.
+{new_component_entries}
 - Write the clips in the order of the clip beats, at least one clip per beat and at
   least {min_clips} clips in total (you may split a beat into several clips). Each
   clip uses sparse object changes, states its changeMeaning, and gives narration and
@@ -254,6 +255,31 @@ def allowed_new_component_names(
     return names
 
 
+def render_new_component_entries(
+    asset_plan: ModuleAssetPlan, registry: AssetRegistry
+) -> str:
+    """One ready-to-copy NewComponent entry per component the module may use, so
+    the plan's bare names don't prime ``{"type": "<name>"}`` (#77)."""
+    planned = {component_key(c.name): c for c in asset_plan.new_components}
+    lines = []
+    for name in allowed_new_component_names(asset_plan, registry):
+        entry = registry.find_component(name)
+        if entry is not None:
+            description, inputs = entry.description, entry.inputs
+        else:
+            spec = planned[component_key(name)]
+            description = spec.behavior_description
+            inputs = [i.model_dump() for i in spec.inputs]
+        literal = {"type": "NewComponent", "scriptName": name, "scriptDescription": description}
+        if inputs:
+            literal["inputs"] = [{**i, "value": "<value for this instance>"} for i in inputs]
+        lines.append("  " + json.dumps(literal, ensure_ascii=False))
+    return "\n".join(lines) if lines else (
+        "  (none: no new components are available to this module; use built-in "
+        "components only)"
+    )
+
+
 def build_module_prompt(
     lab_context: str,
     plan: LabOutline,
@@ -264,7 +290,6 @@ def build_module_prompt(
     min_objects: int,
     min_clips: int,
 ) -> str:
-    allowed = allowed_new_component_names(asset_plan, registry)
     return MODULE_INSTRUCTION.format(
         lab_context=lab_context,
         plan=render_plan(plan),
@@ -275,7 +300,7 @@ def build_module_prompt(
         asset_plan=json.dumps(asset_plan.model_dump(mode="json", exclude_none=True), indent=2),
         catalog=registry.render_component_catalog(),
         module_name=asset_plan.module_name,
-        allowed_new=", ".join(allowed) if allowed else "none",
+        new_component_entries=render_new_component_entries(asset_plan, registry),
         min_objects=min_objects,
         min_clips=min_clips,
     )
