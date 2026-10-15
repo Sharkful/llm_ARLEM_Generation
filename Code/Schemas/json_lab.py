@@ -370,7 +370,7 @@ def _check_component_entries(entries):
     checked, problems = [], []
     for j, entry in enumerate(entries):
         tag = entry.get("type") if isinstance(entry, dict) else None
-        if tag is None:
+        if not isinstance(tag, str):  # no tag (or a malformed one): the union reports it
             checked.append(entry)
             continue
         cls = _COMPONENT_BY_TAG.get(tag)

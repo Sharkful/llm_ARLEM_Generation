@@ -317,6 +317,10 @@ check(len(_lines) == 2 and "'ToggleOnClick' is not a built-in component type" in
       and "components[0]" in _lines[0] and "type: NewComponent, scriptName: 'ToggleOnClick'" in _lines[0]
       and _lines[1].startswith("components[1] (NewComponent) scriptDescription"),
       "module step: one error line per bad component entry, naming the fix")
+_bad_mod["objects"][1]["components"] = [{"type": ["NewComponent"], "scriptName": "Toggle"}]
+_lines = _module_errors(P.module_validation([]))  # must be a ValidationError (a reask), not a crash
+check(bool(_lines), "a malformed (non-string) type is reported by the union, not a crash")
+_bad_mod["objects"][1]["components"] = [{"type": "ToggleOnClick", "target": "x"}]
 check(len(_module_errors(P.plan_validation(12))) > 10,
       "outside the module step (one-shot runs) the union's full error list is unchanged")
 
