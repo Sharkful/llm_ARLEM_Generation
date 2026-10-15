@@ -248,7 +248,8 @@ instead of in one `Lab` call; see `HIERARCHICAL.md`.
   `Replace(output)`, `Reviewer` protocol, `AutoApproveReviewer` (default).
   Human-in-the-loop and LLM self-critique reviewers (#69) plug in here.
 - **`prompts.py`** — templates for the plan, asset-plan and module steps. Every
-  prompt opens with the same lab-description + approved-plan block so providers
+  prompt opens with the same lab-description + approved-plan block (the asset-plan
+  and module builders take `shared_opening` and append their task) so providers
   with prefix caching bill it at the cached rate. For Anthropic the pipeline marks the
   end of that opening (`prompts.shared_opening`) as a `cache_control` breakpoint on
   asset-plan and module requests (#73); the cache is shared per step type, because

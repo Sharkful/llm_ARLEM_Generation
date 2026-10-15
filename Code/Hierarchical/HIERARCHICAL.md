@@ -347,7 +347,8 @@ rate, cache reads at `cached_input` and cache writes at `cache_write`
 automatically, and GPT-5.6 and later bill cache writes at 1.25x input. Gemini's
 implicit caching has no write charge. Claude caches only what is marked (#73): the
 asset-plan and module requests mark the end of the shared lab + plan opening
-(`prompts.shared_opening`) with a 5-minute `cache_control` breakpoint; the one-off
+(`prompts.shared_opening`, built once per run; each of these prompts is that opening
+plus its task template) with a 5-minute `cache_control` breakpoint; the one-off
 plan request carries none. Anthropic orders the cached prefix tools -> system ->
 messages, and each step type sends its own tool and its own system line ("Respond
 only by calling the `<Tool>` tool..."), so the cache is shared between steps of the
@@ -359,9 +360,9 @@ would keep re-writing it; the run's cache writes vs reads show that. Anthropic r
 writes outside `input_tokens`; the tracker folds them into `prompt_tokens`, so
 `prompt_tokens` is all input on every provider. Models without cache rates (the
 wave-2 roster) are priced with all input at the input rate; for wave-2 Claude models,
-which now also send the breakpoint, that is an approximation. A step whose prompt
-doesn't start with the shared opening can't carry the breakpoint; the pipeline then
-prints a one-time warning rather than silently losing caching.
+which now also send the breakpoint, that is an approximation. Should a future step
+pass a cache prefix its prompt doesn't start with, the pipeline prints a warning
+(once per step type, naming the step) rather than silently losing caching.
 
 `retries` is the tracker's `retry_count`: the number of reasks, i.e. requests
 minus one per instructor call. A failed parse is reasked, so `retries` equals
