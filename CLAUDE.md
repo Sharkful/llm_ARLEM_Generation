@@ -158,6 +158,8 @@ tables alike, hand-authored and generated together.
 - `Lab` → `DemoModule` → `Clip` → `SceneObject` → components
 - Components are a plain (smart) `Union` resolved on the LLM-facing `type` Literal (no `discriminator=`, which Gemini rejects); the headset-facing `componentType` is hidden from the schema and auto-filled
 - `ObjectChange` uses sparse delta format (only changed fields per clip)
+- `NewComponent.inputs` (optional, #74): structured inspector fields `{name, type, description, value}` (`ComponentInput` / `NewComponentInput`; `name` normalized to camelCase, `type` free text). It defaults to `None`, so outputs without it (wave 2 included) dump unchanged, but it **changes the one-shot tool schema**: future one-shot runs aren't comparable with wave 2 on this field
+- `component_entry_checks()` (opt-in ContextVar scope): each component entry is validated against the one class its `type` tag names, so a bad entry gives one error line instead of every union member's failure. Only the hierarchical module step enters it; one-shot reask text is unchanged
 - `DemoModule` is also a valid top-level response model (used by the
   `--structure module-only` mode of the prompt builder)
 
@@ -167,8 +169,8 @@ tables alike, hand-authored and generated together.
 - Intentionally permissive; will be refined as L1 failure modes surface
 
 **`Code/Schemas/module_asset_plan.py`** — `ModuleAssetPlan`, the hierarchical pipeline's per-module plan:
-- `design_notes` first, objects (with `purpose`), components (free-form `component_type` + `rationale`, `is_new` for new single-purpose components, PascalCase names), interactions (`{object_name, action, effect}`), `clip_beats`
-- One validator reports **all** problems in a single error (one reask): components/interactions must name a planned object, no duplicate object names or object/component pairs, no conflicting `is_new` declarations; under an `asset_plan_validation(catalog, allow_new=..., min_objects=..., min_clip_beats=...)` ContextVar scope, `component_type` must be in the catalog or justified as new and per-module minimums apply (instructor's `context=` is avoided because it Jinja-renders messages)
+- `design_notes` first, objects (with `purpose`), `new_components` (each new single-purpose component declared **once**: PascalCase `name`, `behavior_description`, `why_existing_insufficient`, required `inputs`; #77), components (attachments only: `object_name`, free-form `component_type`, `rationale`), interactions (`{object_name, action, effect}`), `clip_beats`
+- One validator reports **all** problems in a single error (one reask): components/interactions must name a planned object, no duplicate object names or object/component pairs, no duplicate declarations or input names; under an `asset_plan_validation(catalog, allow_new=..., min_objects=..., min_clip_beats=...)` ContextVar scope, `component_type` must be in the catalog or in `new_components`, a declaration must not duplicate the catalog, `--no-new-components` means `new_components` is empty, and per-module minimums apply (instructor's `context=` is avoided because it Jinja-renders messages). A declared but unattached new component is a soft metric (`plan_adherence.unattached_new_components`), not a reask
 
 **`Code/Schemas/arlem_full.py`** — Full ARLEM specification:
 - `ARLEMScenario` contains a `Workplace` (static environment) + `Activity` (logic/workflow)
@@ -228,12 +230,14 @@ instead of in one `Lab` call; see `HIERARCHICAL.md`.
 
 - **`pipeline.py`** — `HierarchicalPipeline`: plan (`LabPlan` = `LabOutline` + scene
   cap, default 8) → per scene a `ModuleAssetPlan` → a `PlannedDemoModule` (DemoModule
-  + a check that every `NewComponent` was planned or is in the catalog) → `Lab`
+  + a check that every `NewComponent` was planned or is in the catalog and uses only
+  its declared input names) → `Lab`
   assembled in code. Each step has its own retry budget, is regenerated alone on
   terminal failure (`step_attempts`; 401/403/404/auth/config errors fail at once),
   is saved to `Runs/<run>/`, and can be resumed; the metrics file is rewritten after
-  every step. Accepted steps get new-component names/descriptions normalized to one
-  canonical form (logged as `normalizations`). Imports the client factory, provider
+  every step. Accepted steps get new-component names/descriptions/input definitions
+  normalized to one canonical form, keeping each instance's input values (logged as
+  `normalizations`). Imports the client factory, provider
   kwargs, and transient retryer from `benchmark.py`, so the Gemini and Anthropic guards apply.
 - **`registry.py`** — component catalog (built-ins with full field descriptions,
   derived from the json_lab classes, plus NewComponents from accepted modules),

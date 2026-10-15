@@ -19,15 +19,20 @@ Usage with Instructor:
 
 from __future__ import annotations
 
+import json
+import typing
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date
 from enum import Enum
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Iterator, Literal, Optional, Union
 
 from pydantic import (
     AliasChoices,
     BaseModel,
     BeforeValidator,
     Field,
+    ValidationError,
     field_validator,
     model_validator,
 )
@@ -234,6 +239,72 @@ class PointerReceiverComponent(ConstToEnumSchemaMixin):
     matchWallWhileDragging: bool = Field(default=False)
     invertForward: bool = Field(default=False)
 
+def to_camel_case(name):
+    """Inspector field names are camelCase (``pulse_speed`` / ``PulseSpeed`` ->
+    ``pulseSpeed``); normalized rather than reasked. A leading acronym is lowercased
+    whole, Unity-style: ``URL`` -> ``url``, ``XMLSource`` -> ``xmlSource``,
+    ``IDLabel`` -> ``idLabel``, and a plural acronym with it: ``URLs`` -> ``urls``,
+    ``GPUsList`` -> ``gpusList``. Non-strings pass through."""
+    name = to_pascal_case(name)
+    if not isinstance(name, str):
+        return name
+    upper = len(name) - len(name.lstrip("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+    rest = name[upper:]
+    if upper > 1 and rest[:1] == "s" and not rest[1:2].islower():
+        lead = upper + 1  # 'URLs', 'GPUsList': the 's' pluralizes the acronym
+    elif 1 < upper < len(name) and rest[0].islower():
+        lead = upper - 1  # 'XMLSource': the run's last capital starts the next word
+    else:
+        lead = upper
+    return name[:lead].lower() + name[lead:]
+
+
+class ComponentInput(BaseModel):
+    """One inspector field of a new component: what the C# script exposes."""
+
+    name: str = Field(
+        pattern=r"^[a-z][A-Za-z0-9]*$",
+        description="Inspector field name in camelCase, e.g. 'pulseSpeed' or 'targetObject'",
+    )
+    type: str = Field(
+        min_length=2,
+        description=(
+            "C# / Unity type of the field, e.g. float, int, bool, string, Vector3, "
+            "Color, GameObject, Transform, Texture2D, or another component's script "
+            "name for a reference to it"
+        ),
+    )
+    description: str = Field(
+        min_length=5,
+        description="What the field controls, with units and a sensible range where they apply",
+    )
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _normalize_name(cls, v):
+        return to_camel_case(v)
+
+
+class NewComponentInput(ComponentInput):
+    """A new component's inspector field, with the value this instance sets."""
+
+    value: Optional[str] = Field(
+        default=None,
+        description=(
+            "Value this instance sets, written as text: a number ('2.5'), 'true', an "
+            "object name for a reference, or an array ('[255, 0, 0, 255]'). Omit to "
+            "keep the script's default."
+        ),
+    )
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def _value_as_text(cls, v):
+        """Accept a number, bool or array as written (2.5, true, [255, 0, 0, 255])
+        and store it as JSON text, rather than reasking over the field's type."""
+        return v if v is None or isinstance(v, str) else json.dumps(v)
+
+
 class NewComponent(ConstToEnumSchemaMixin):
     """A name and description for a new C# Monobehavior component that should implement functionality not covered in the other components"""
 
@@ -261,6 +332,14 @@ class NewComponent(ConstToEnumSchemaMixin):
         description="""A description of what the component script does. It should note all required inputs, either references to other objects, or numeric values that can be set in the inspector.
         The description should also note the outputs and effects of the script."""
     )
+    inputs: Optional[list[NewComponentInput]] = Field(
+        default=None,
+        description=(
+            "The script's inspector fields (object references and values), each with "
+            "the value this instance sets. Reuse the field names of a component that "
+            "already exists."
+        ),
+    )
 
 
 # Plain (smart) union of all component types — no `discriminator=`.
@@ -279,6 +358,76 @@ Component = Union[
     PointerReceiverComponent,
     NewComponent,
 ]
+
+
+# ── One error per bad component entry (opt-in) ───────────────────────
+# Component is a plain union, so a bad entry makes pydantic report every member's
+# failure (~14 lines each). Inside ``component_entry_checks()`` each entry is
+# instead checked against the one class its `type` tag names: an unknown tag gives
+# a single line saying how invented components are written, a known tag only that
+# class's errors. The reask still happens; it just reads one line per mistake.
+# Off by default, so one-shot runs keep their reask text; the hierarchical
+# pipeline's module step turns it on (issue #77). Entries without a `type` (saved
+# outputs drop it) go to the union as before.
+
+_COMPONENT_BY_TAG = {cls.model_fields["type"].default: cls for cls in typing.get_args(Component)}
+_COMPONENT_ENTRY_CHECKS: ContextVar[bool] = ContextVar("json_lab_component_entry_checks", default=False)
+
+
+@contextmanager
+def component_entry_checks() -> Iterator[None]:
+    """Validate component entries against the class their `type` tag names, with
+    one clear error per bad entry, in this scope."""
+    token = _COMPONENT_ENTRY_CHECKS.set(True)
+    try:
+        yield
+    finally:
+        _COMPONENT_ENTRY_CHECKS.reset(token)
+
+
+def _tag_key(tag: str) -> str:
+    return "".join(ch for ch in tag if ch.isalnum()).lower()
+
+
+_BUILTIN_TAG_BY_KEY = {_tag_key(t): t for t in _COMPONENT_BY_TAG}
+
+
+def _check_component_entries(entries):
+    if not _COMPONENT_ENTRY_CHECKS.get() or not isinstance(entries, list):
+        return entries
+    checked, problems = [], []
+    unknown = False
+    for j, entry in enumerate(entries):
+        tag = entry.get("type") if isinstance(entry, dict) else None
+        if not isinstance(tag, str):  # no tag (or a malformed one): the union reports it
+            checked.append(entry)
+            continue
+        cls = _COMPONENT_BY_TAG.get(tag)
+        if cls is None:
+            meant = _BUILTIN_TAG_BY_KEY.get(_tag_key(tag))
+            if meant is not None:
+                # A built-in tag with the wrong casing or spacing, not an invention.
+                problems.append(f"components[{j}]: type {tag!r} is misspelled; did you mean {meant!r}?")
+            else:
+                unknown = True
+                problems.append(
+                    f"components[{j}]: {tag!r} is not a built-in component type. An invented "
+                    f"component is written as {{type: NewComponent, scriptName: {tag!r}, "
+                    "scriptDescription: ...}."
+                )
+            continue
+        try:
+            checked.append(cls.model_validate(entry))
+        except ValidationError as e:
+            for err in e.errors():
+                where = ".".join(str(x) for x in err["loc"])
+                problems.append(f"components[{j}] ({tag}){' ' + where if where else ''}: {err['msg']}")
+    if problems:
+        if unknown:  # listed once, not on every line
+            builtins = ", ".join(t for t in _COMPONENT_BY_TAG if t != "NewComponent")
+            problems.append(f"Built-in component types: {builtins}.")
+        raise ValueError("\n".join(problems))
+    return checked
 
 
 # ── Scene Objects ─────────────────────────────────────────────────────
@@ -341,6 +490,12 @@ class SceneObject(BaseModel):
     )
 
 
+    @field_validator("components", mode="before")
+    @classmethod
+    def _check_components(cls, v):
+        return _check_component_entries(v)
+
+
 # ── Clip Changes (Sparse Deltas) ─────────────────────────────────────
 
 
@@ -378,6 +533,12 @@ class ObjectChange(BaseModel):
         default=None,
         description="Components to add or update on this object",
     )
+
+
+    @field_validator("components", mode="before")
+    @classmethod
+    def _check_components(cls, v):
+        return _check_component_entries(v)
 
 
 # ── Clips ─────────────────────────────────────────────────────────────

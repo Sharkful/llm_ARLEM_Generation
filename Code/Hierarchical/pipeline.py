@@ -36,6 +36,7 @@ import json
 import re
 import time
 import traceback
+from collections import Counter
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
@@ -61,7 +62,10 @@ from benchmark import (
     warn_served_model,
 )
 from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, Provider, SpecType
-from json_lab import DemoModule, Lab, NewComponent, PointerReceiverComponent
+from json_lab import (
+    DemoModule, Lab, NewComponent, NewComponentInput, PointerReceiverComponent,
+    component_entry_checks,
+)
 from lab_metrics import analyze_assets, analyze_json_lab
 from lab_outline import LabOutline
 from module_asset_plan import ModuleAssetPlan, asset_plan_validation, component_key
@@ -90,8 +94,9 @@ CallFn = Callable[[Type[BaseModel], list[dict], int], BaseModel]
 # message as a Jinja template (see module_asset_plan.py).
 
 _MAX_SCENES: ContextVar[Optional[int]] = ContextVar("lab_plan_max_scenes", default=None)
-_ALLOWED_NEW_COMPONENTS: ContextVar[Optional[frozenset[str]]] = ContextVar(
-    "planned_module_allowed_new_components", default=None
+# component_key(scriptName) -> the usable new component it names
+_ALLOWED_NEW_COMPONENTS: ContextVar[Optional[dict[str, prompts.UsableNewComponent]]] = (
+    ContextVar("planned_module_allowed_new_components", default=None)
 )
 
 
@@ -106,13 +111,18 @@ def plan_validation(max_scenes: int) -> Iterator[None]:
 
 
 @contextmanager
-def module_validation(allowed_new_components: Iterable[str]) -> Iterator[None]:
-    """Activate PlannedDemoModule's NewComponent check in this scope."""
-    token = _ALLOWED_NEW_COMPONENTS.set(
-        frozenset(component_key(n) for n in allowed_new_components)
-    )
+def module_validation(
+    usable: Iterable[prompts.UsableNewComponent | str],
+) -> Iterator[None]:
+    """Activate PlannedDemoModule's NewComponent checks, and json_lab's one clear
+    error per bad component entry, in this scope. ``usable`` is
+    ``prompts.usable_new_components(...)``; a bare name allows that component
+    without checking its input names."""
+    usable = [prompts.UsableNewComponent(u) if isinstance(u, str) else u for u in usable]
+    token = _ALLOWED_NEW_COMPONENTS.set({component_key(u.name): u for u in usable})
     try:
-        yield
+        with component_entry_checks():
+            yield
     finally:
         _ALLOWED_NEW_COMPONENTS.reset(token)
 
@@ -134,25 +144,46 @@ class LabPlan(LabOutline):
 
 
 class PlannedDemoModule(DemoModule):
-    """DemoModule plus one check for the module step: every NewComponent must be
-    one this module's approved asset plan introduces or one already in the
-    catalog. Serializes exactly like DemoModule (no extra fields)."""
+    """DemoModule plus the module step's NewComponent checks: every NewComponent
+    must be one this module's approved asset plan declares or one already in the
+    catalog, and may use only that component's declared inputs (names compared
+    case- and separator-insensitively). Every problem is one line in one error.
+    Serializes exactly like DemoModule (no extra fields)."""
 
     @model_validator(mode="after")
     def _validate_new_components(self) -> "PlannedDemoModule":
         allowed = _ALLOWED_NEW_COMPONENTS.get()
         if allowed is None:
             return self
-        unplanned = sorted({
-            c.scriptName for c in iter_module_components(self)
-            if isinstance(c, NewComponent) and component_key(c.scriptName) not in allowed
-        })
+        unplanned: set[str] = set()
+        problems: list[str] = []
+        for c in iter_module_components(self):
+            if not isinstance(c, NewComponent):
+                continue
+            usable = allowed.get(component_key(c.scriptName))
+            if usable is None:
+                unplanned.add(c.scriptName)
+                continue
+            name, declared = usable.name, usable.input_names()
+            for i in c.inputs or []:
+                if prompts.is_value_placeholder(i.value):
+                    line = (f"NewComponent '{name}': input '{i.name}' still has the placeholder "
+                            "value; set the value for this instance, or leave the value out.")
+                    if line not in problems:
+                        problems.append(line)
+                if declared is not None and component_key(i.name) not in declared:
+                    line = (f"NewComponent '{name}': input '{i.name}' isn't one of its inputs "
+                            f"{list(declared.values())}. Use those names, or leave the input out.")
+                    if line not in problems:
+                        problems.append(line)
         if unplanned:
-            raise ValueError(
-                f"NewComponent(s) {unplanned} were not planned for this module. Use a "
+            problems.insert(0,
+                f"NewComponent(s) {sorted(unplanned)} were not planned for this module. Use a "
                 "built-in component, or a NewComponent with one of these scriptNames: "
-                f"{sorted(allowed) or 'none'}"
+                f"{sorted(u.name for u in allowed.values()) or 'none'}"
             )
+        if problems:
+            raise ValueError("\n".join(problems))
         return self
 
 
@@ -319,12 +350,9 @@ def _same_text(a: str, b: str) -> bool:
 def normalize_asset_plan(asset_plan: ModuleAssetPlan, registry: AssetRegistry) -> list[dict]:
     """Rewrite component references to their canonical spelling: the catalog's,
     or the one this plan declared a new component with. Returns the changes."""
-    declared = {component_key(c.component_type): c.component_type
-                for c in asset_plan.components if c.is_new}
+    declared = {component_key(c.name): c.name for c in asset_plan.new_components}
     changes = []
     for comp in asset_plan.components:
-        if comp.is_new:
-            continue
         entry = registry.find_component(comp.component_type)
         canonical = entry.name if entry else declared.get(component_key(comp.component_type))
         if canonical and canonical != comp.component_type:
@@ -335,33 +363,79 @@ def normalize_asset_plan(asset_plan: ModuleAssetPlan, registry: AssetRegistry) -
 
 
 def normalize_module(
-    module: DemoModule, asset_plan: ModuleAssetPlan, registry: AssetRegistry
+    module: DemoModule, usable: Iterable[prompts.UsableNewComponent]
 ) -> list[dict]:
-    """Give every NewComponent one canonical name and description: a component
-    already in the catalog takes the catalog's; one introduced here takes the
-    asset plan's name and its first description in this module."""
-    planned = {component_key(c.component_type): c.component_type
-               for c in asset_plan.components if c.is_new}
+    """Give every NewComponent one canonical name, description and set of input
+    definitions: a component already in the catalog takes the catalog's; one
+    introduced here takes the asset plan's name and inputs and its first
+    description in this module. Each instance keeps the values it set.
+    ``usable`` is the module's ``prompts.usable_new_components(...)``."""
+    usable = {component_key(u.name): u for u in usable}
     first_description: dict[str, str] = {}
     changes = []
+    redefined: dict[tuple[str, str], dict] = {}  # (component, diff) -> input log record
     for comp in iter_module_components(module):
         if not isinstance(comp, NewComponent):
             continue
         key = component_key(comp.scriptName)
-        entry = registry.find_component(comp.scriptName)
-        if entry is not None and not entry.builtin:
-            name, description = entry.name, entry.description
+        u = usable.get(key)
+        name = u.name if u else comp.scriptName
+        if u is not None and u.from_catalog:
+            description = u.description
         else:
-            name = planned.get(key, comp.scriptName)
             description = first_description.setdefault(key, comp.scriptDescription)
+        if u is not None and u.inputs is not None:
+            diff = _canonical_inputs(comp, u.inputs)
+            if diff:
+                rec = redefined.setdefault(
+                    (name, json.dumps(diff, sort_keys=True)),
+                    {"field": "inputs", "component": name, "redefined": diff, "instances": 0},
+                )
+                rec["instances"] += 1
         if comp.scriptName != name:
             changes.append({"field": "scriptName", "from": comp.scriptName, "to": name})
             comp.scriptName = name
         if not _same_text(comp.scriptDescription, description):
             changes.append({"field": "scriptDescription", "component": name,
-                            "from": comp.scriptDescription[:80], "to": description[:80]})
+                            **_excerpts(comp.scriptDescription, description)})
             comp.scriptDescription = description
-    return changes
+    return changes + list(redefined.values())
+
+
+def _canonical_inputs(comp: NewComponent, inputs: list[dict]) -> dict:
+    """Set ``comp.inputs`` to the canonical definitions, keeping the values this
+    instance set (matched by name, case-insensitively). PlannedDemoModule has
+    already rejected input names the component doesn't declare. Returns what the
+    instance wrote differently: {input: {field: {"from": ..., "to": ...}}}."""
+    given = {component_key(i.name): i for i in comp.inputs or []}
+    canonical = [NewComponentInput(**d, value=getattr(given.get(component_key(d["name"])),
+                                                     "value", None)) for d in inputs]
+    diff = {}
+    for c in canonical:
+        g = given.get(component_key(c.name))
+        if g is None:
+            continue
+        fields = {f: _excerpts(getattr(g, f), getattr(c, f))
+                  for f in ("name", "type", "description") if getattr(g, f) != getattr(c, f)}
+        if fields:
+            diff[c.name] = fields
+    comp.inputs = canonical or None
+    return diff
+
+
+def _excerpts(old: str, new: str, width: int = 80) -> dict[str, str]:
+    """{"from", "to"} excerpts of two differing texts, starting a little before
+    their first difference so the logged excerpts actually differ."""
+    first = next((i for i, (a, b) in enumerate(zip(old, new)) if a != b), min(len(old), len(new)))
+    start = max(0, first - 20)
+    cut = lambda t: ("…" if start else "") + t[start:start + width]  # noqa: E731
+    return {"from": cut(old), "to": cut(new)}
+
+
+def input_type_counts(registry: AssetRegistry) -> dict[str, int]:
+    """How often each new-component input type was declared across the lab (free
+    text, #74), so misspelled or ad-hoc types stand out in the metrics."""
+    return dict(Counter(i["type"] for c in registry.components for i in c.inputs).most_common())
 
 
 # ── Plan adherence (soft metric) ─────────────────────────────────────
@@ -391,6 +465,7 @@ def plan_adherence(
     planned_comps = [(c.object_name, component_key(c.component_type)) for c in asset_plan.components]
     present_comps = [p for p in planned_comps if p[1] in attached.get(p[0], set())]
     pointer = component_key(PointerReceiverComponent.__name__)
+    attached_types = {component_key(c.component_type) for c in asset_plan.components}
     return {
         "planned_objects": len(planned_objs),
         "planned_objects_present": len(present_objs),
@@ -408,6 +483,12 @@ def plan_adherence(
             i.object_name for i in asset_plan.interactions
             if pointer not in attached.get(i.object_name, set())
         }),
+        # Declared in new_components but attached to no object in the plan (a soft
+        # metric rather than a reask, to save tokens).
+        "unattached_new_components": [
+            c.name for c in asset_plan.new_components
+            if component_key(c.name) not in attached_types
+        ],
     }
 
 
@@ -834,17 +915,17 @@ class HierarchicalPipeline:
                     normalize=lambda ap: normalize_asset_plan(ap, self.registry),
                     cache_prefix=opening,
                 )
-                allowed = prompts.allowed_new_component_names(asset_plan, self.registry)
+                usable = prompts.usable_new_components(asset_plan, self.registry)
                 module = self._run_step(
                     "module", i, PlannedDemoModule,
                     prompts.build_module_prompt(
-                        self.lab_context, plan, i, self.registry, asset_plan,
+                        self.lab_context, plan, i, self.registry, asset_plan, usable=usable,
                         min_objects=cfg.min_objects, min_clips=cfg.min_clips,
                     ),
                     cfg.module_retries, f"{i:02d}_module", "module",
-                    scope=lambda: module_validation(allowed),
+                    scope=lambda: module_validation(usable),
                     context={**shared_context, "asset_plan": asset_plan},
-                    normalize=lambda m: normalize_module(m, asset_plan, self.registry),
+                    normalize=lambda m: normalize_module(m, usable),
                     cache_prefix=opening,
                 )
                 adherence = plan_adherence(
@@ -855,7 +936,7 @@ class HierarchicalPipeline:
                     o.name for o in asset_plan.objects
                     if o.is_new_asset != self._is_novel_asset(o.prefab, o.texture)
                 ]
-                adherence["new_components_planned"] = sum(c.is_new for c in asset_plan.components)
+                adherence["new_components_planned"] = len(asset_plan.new_components)
                 before = len(self.registry.new_component_names())
                 self.registry.register_module(i, module, asset_plan, scene_purpose=scene.brief_purpose)
                 adherence["new_components_added"] = len(self.registry.new_component_names()) - before
@@ -951,6 +1032,7 @@ class HierarchicalPipeline:
             "normalizations": self.normalizations,
             "plan_adherence": self.adherence,
             "new_components_total": len(self.registry.new_component_names()),
+            "new_component_input_types": input_type_counts(self.registry),
             "registry": {
                 "new_components": [asdict(c) for c in self.registry.components if not c.builtin],
                 "invented_prefabs": {k: asdict(v) for k, v in self.registry.invented_prefabs.items()},

@@ -36,7 +36,11 @@ The Lab wrapper is filled in by code: `labId` = slug of the plan's `lab_title`,
 
 - `design_notes` comes **first** (fields generate in order): what the student must
   see and do, and what that requires of the scene.
-- Every object has a `purpose`, every component a `rationale`.
+- Every object has a `purpose`, every component attachment a `rationale`.
+- **Declare once, attach many** (#77): a new component is declared once in
+  `new_components` (`name`, `behavior_description`, `why_existing_insufficient`,
+  `inputs`); `components` only attaches components to objects, naming a catalog
+  component or a declared one.
 - Each interaction is tied to an object: `{object_name, action, effect}`.
 - `clip_beats` gives one line per clip; the module writes at least one clip per beat.
 
@@ -48,11 +52,68 @@ instead of one per problem. It checks:
 - **Per-module minimums**: at least `--min-objects` objects and `--min-clips` beats
   (defaults 4 and 5).
 - `component_type` is free text, **not** a fixed list. It must name a **catalog**
-  component, or set `is_new=true` with a single-purpose `behavior_description` and
-  `why_existing_insufficient`.
-- A new component that re-invents a catalog entry is rejected with "reuse `<name>`",
-  and so is one declared twice with different descriptions.
-- With `--no-new-components`, any `is_new` is rejected.
+  component or one declared in `new_components`.
+- A declaration that re-invents a catalog entry is rejected ("attach the catalog
+  component by name"), and so is one declared twice or with a duplicate input name.
+- With `--no-new-components`, `new_components` must be empty.
+
+A new component that is declared but attached to no object is **not** reasked; it
+is recorded as `unattached_new_components` in `plan_adherence`, to save tokens.
+
+### Structured inputs for new components (#74)
+
+A new component lists its inspector fields as `inputs: [{name, type, description}]`.
+
+- `name` is normalized to camelCase (`pulse_speed` -> `pulseSpeed`; a leading
+  acronym is lowercased whole, `URL` -> `url`) instead of reasked.
+- `type` is **free text**, not a fixed list: Unity scripts take references to other
+  scripts, textures and user-defined types, and a fixed vocabulary would limit what
+  can be invented. To catch misspellings and ad-hoc types, the metrics tally every
+  declared type across the lab in `new_component_input_types`.
+- In the module, `json_lab.NewComponent.inputs` repeats the fields, each with the
+  `value` this instance sets, stored as text: a number, bool or array the model
+  writes as such (`2.5`, `true`, `[255, 0, 0, 255]`) is kept as its JSON text, not
+  reasked. The prompt's `<value for this instance>` placeholder, copied back
+  (ignoring case, spaces and the angle brackets), is reasked.
+- The module step accepts only the component's declared input names (compared
+  case- and separator-insensitively, so `pulse_speed` matches `pulseSpeed`). Any
+  other name is reasked with one line per mistake, e.g. `NewComponent 'PulseGlow':
+  input 'wobble' isn't one of its inputs ['pulseSpeed', 'glowColor']`. It isn't
+  dropped, so no value is silently lost.
+- The input names are not enums in the tool schema: per-component schema members
+  would add ~1k characters per invented component (doubled on Gemini, whose schema
+  is inlined) and change the tool schema at every module step, which defeats prompt
+  caching.
+- After a module is accepted, every instance takes the canonical definitions (from
+  the catalog or this module's asset plan) and keeps its own values. A reworded
+  name (casing), type or description is rewritten and logged under
+  `normalizations` with what differed (`redefined: {input: {name|type|description:
+  {from, to}}}`, excerpts starting near the first difference). Identical rewordings
+  of one component in one module are logged once, with the number of `instances`
+  that wrote them; different rewordings get one record each.
+- The registry carries the inputs with each catalog entry, so later modules reuse
+  the same field names.
+
+### Module step: one clear error per bad component entry
+
+Claude Haiku 5.5 sometimes wrote an earlier-invented component as its own type
+(`{"type": "ToggleOnClick"}`). Because components are a plain union, pydantic
+reported every member's failure for each such entry (15 errors, 46 lines, for one
+entry). In the module step (`module_validation` enters
+`json_lab.component_entry_checks()`), each entry is instead checked against the one
+class its `type` names:
+
+- an unknown `type` gives a single line saying how an invented component is
+  written (`{type: NewComponent, scriptName: 'ToggleOnClick', ...}`), with the
+  built-in types listed once at the end;
+- a built-in `type` with the wrong casing or spacing (`simpleOrbitComponent`) gets
+  "did you mean 'SimpleOrbitComponent'?", not the invented-component hint;
+- a known `type` reports only that class's errors.
+
+The reask still happens, so retry and self-correction metrics keep their meaning.
+One-shot runs don't enter the scope and keep the union's full error text. The
+module prompt also lists every new component the module may use as a ready-to-copy
+`NewComponent` entry, with its inputs.
 
 ### Component names: PascalCase, one version per component
 
@@ -90,8 +151,8 @@ New component names are **PascalCase** (C# class convention): `orbit_trail` and
   new ones should stay small: one behavior, clear inputs and outputs, and complex
   behavior split into reusable pieces.
 - `PlannedDemoModule` only accepts a `NewComponent` that this module's asset plan
-  introduces or that's already in the catalog. It serializes exactly like
-  `DemoModule`.
+  declares or that's already in the catalog, using only that component's declared
+  inputs. It serializes exactly like `DemoModule`.
 
 The validators get their per-run state (catalog, new-component switch, minimums,
 scene cap) through ContextVar scopes (`asset_plan_validation`, `module_validation`,
@@ -191,6 +252,9 @@ written to `review_log.json`.
 >   `--run-group` naming rule.
 > - A metrics file whose step records have keys this version doesn't know (e.g.
 >   written by a later version) fails to resume with a `TypeError`.
+> - A run dir whose asset plans use the old inline declaration (`is_new` on a
+>   component, before #77) can't be resumed: its saved asset plans no longer
+>   validate.
 
 All LLM calls go through `benchmark.create_instructor_client`,
 `benchmark.provider_create_kwargs` and `benchmark._transient_retryer`, the same
@@ -270,8 +334,12 @@ loads it as is. Fields added by the hierarchical pipeline:
   - `is_new_asset` claims that disagree with the registry
   - `new_components_planned` / `new_components_added` (new components the plan
     declared, and those the module actually added to the catalog)
+  - `unattached_new_components`: declared in `new_components` but attached to no
+    object
 - `new_components_total`: new components invented across the lab
-- `registry`: new components, invented prefabs and textures (with their purposes)
+- `new_component_input_types`: how often each input `type` was declared (#74)
+- `registry`: new components (with their inputs), invented prefabs and textures
+  (with their purposes)
 
 Cost prices each part of the input at its own rate: uncached input at the input
 rate, cache reads at `cached_input` and cache writes at `cache_write`
@@ -329,4 +397,3 @@ the two.
 - #70 instructor upgrade
 - #72 model roster review
 - #73 Anthropic prompt caching
-- #74 structured inputs for new components

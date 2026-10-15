@@ -44,6 +44,17 @@ class CatalogEntry:
     description: str
     builtin: bool
     origin_module: int | None = None  # 1-based module index that invented it
+    # New components only: inspector fields as {name, type, description} (#74),
+    # so later modules reuse the same field names.
+    inputs: list[dict] = field(default_factory=list)
+
+    def render(self) -> str:
+        text = f"{self.name} (from module {self.origin_module}): {self.description}"
+        if self.inputs:
+            text += " Inputs: " + "; ".join(
+                f"{i['name']} ({i['type']}): {i['description']}" for i in self.inputs
+            ) + "."
+        return text
 
 
 def _builtin_catalog() -> list[CatalogEntry]:
@@ -146,6 +157,7 @@ class AssetRegistry:
                     description=" ".join(comp.scriptDescription.split()),
                     builtin=False,
                     origin_module=index,
+                    inputs=[i.model_dump(exclude={"value"}) for i in comp.inputs or []],
                 ))
         for obj in module.objects:
             purpose = purposes.get(obj.name)
@@ -176,9 +188,7 @@ class AssetRegistry:
                 "New components already invented by earlier modules (reuse these by "
                 "their exact PascalCase name when they fit):"
             )
-            lines += [
-                f"- {c.name} (from module {c.origin_module}): {c.description}" for c in new
-            ]
+            lines += [f"- {c.render()}" for c in new]
         return "\n".join(lines)
 
     def is_known_asset(self, prefab: str | None = None, texture: str | None = None) -> bool:
