@@ -363,14 +363,14 @@ def normalize_asset_plan(asset_plan: ModuleAssetPlan, registry: AssetRegistry) -
 
 
 def normalize_module(
-    module: DemoModule, asset_plan: ModuleAssetPlan, registry: AssetRegistry
+    module: DemoModule, usable: Iterable[prompts.UsableNewComponent]
 ) -> list[dict]:
     """Give every NewComponent one canonical name, description and set of input
     definitions: a component already in the catalog takes the catalog's; one
     introduced here takes the asset plan's name and inputs and its first
-    description in this module. Each instance keeps the values it set."""
-    usable = {component_key(u.name): u
-              for u in prompts.usable_new_components(asset_plan, registry)}
+    description in this module. Each instance keeps the values it set.
+    ``usable`` is the module's ``prompts.usable_new_components(...)``."""
+    usable = {component_key(u.name): u for u in usable}
     first_description: dict[str, str] = {}
     changes = []
     redefined: dict[tuple[str, str], dict] = {}  # (component, diff) -> input log record
@@ -380,9 +380,8 @@ def normalize_module(
         key = component_key(comp.scriptName)
         u = usable.get(key)
         name = u.name if u else comp.scriptName
-        entry = registry.find_component(comp.scriptName)
-        if entry is not None and not entry.builtin:
-            description = entry.description
+        if u is not None and u.from_catalog:
+            description = u.description
         else:
             description = first_description.setdefault(key, comp.scriptDescription)
         if u is not None and u.inputs is not None:
@@ -890,13 +889,13 @@ class HierarchicalPipeline:
                 module = self._run_step(
                     "module", i, PlannedDemoModule,
                     prompts.build_module_prompt(
-                        self.lab_context, plan, i, self.registry, asset_plan,
+                        self.lab_context, plan, i, self.registry, asset_plan, usable=usable,
                         min_objects=cfg.min_objects, min_clips=cfg.min_clips,
                     ),
                     cfg.module_retries, f"{i:02d}_module", "module",
                     scope=lambda: module_validation(usable),
                     context={**shared_context, "asset_plan": asset_plan},
-                    normalize=lambda m: normalize_module(m, asset_plan, self.registry),
+                    normalize=lambda m: normalize_module(m, usable),
                 )
                 adherence = plan_adherence(
                     asset_plan, module, min_objects=cfg.min_objects, min_clips=cfg.min_clips

@@ -263,10 +263,13 @@ class UsableNewComponent:
     """A new component a module may use, with its canonical definition: from the
     catalog for one an earlier module invented, from this module's asset plan for
     one it declares. ``inputs`` holds {name, type, description} dicts; None leaves
-    the module's input names unchecked."""
+    the module's input names unchecked. ``from_catalog``: the description is the
+    catalog's (canonical); otherwise it is the plan's, and normalization takes the
+    module's first description instead."""
     name: str
     description: str = ""
     inputs: Optional[list[dict]] = None
+    from_catalog: bool = False
 
     def input_names(self) -> Optional[dict[str, str]]:
         """component_key(input name) -> its canonical name, or None if unchecked."""
@@ -279,9 +282,10 @@ def usable_new_components(
     asset_plan: ModuleAssetPlan, registry: AssetRegistry
 ) -> list[UsableNewComponent]:
     """Every new component a module may use: all already in the catalog, plus the
-    ones its plan declares. The single source for the module prompt's entries,
-    the module step's validation scope, and normalization."""
-    usable = [UsableNewComponent(c.name, c.description, list(c.inputs))
+    ones its plan declares. Computed once per module by the pipeline and passed to
+    the module prompt's entries, the module step's validation scope, and
+    normalization."""
+    usable = [UsableNewComponent(c.name, c.description, list(c.inputs), from_catalog=True)
               for c in registry.components if not c.builtin]
     for spec in asset_plan.new_components:
         if registry.find_component(spec.name) is None:
@@ -312,9 +316,11 @@ def build_module_prompt(
     registry: AssetRegistry,
     asset_plan: ModuleAssetPlan,
     *,
+    usable: list[UsableNewComponent],
     min_objects: int,
     min_clips: int,
 ) -> str:
+    """``usable`` is ``usable_new_components(asset_plan, registry)``."""
     return MODULE_INSTRUCTION.format(
         lab_context=lab_context,
         plan=render_plan(plan),
@@ -325,9 +331,7 @@ def build_module_prompt(
         asset_plan=json.dumps(asset_plan.model_dump(mode="json", exclude_none=True), indent=2),
         catalog=registry.render_component_catalog(),
         module_name=asset_plan.module_name,
-        new_component_entries=render_new_component_entries(
-            usable_new_components(asset_plan, registry)
-        ),
+        new_component_entries=render_new_component_entries(usable),
         min_objects=min_objects,
         min_clips=min_clips,
     )

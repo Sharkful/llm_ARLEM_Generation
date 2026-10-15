@@ -239,6 +239,17 @@ check(f'{{"type": "NewComponent", "scriptName": "{first["name"]}", "scriptDescri
       "module prompt lists each allowed new component as a NewComponent entry to copy")
 check(rec["pipeline"] == "hierarchical" and rec["structure"] == "multi-module", "metrics keys")
 
+# the usable-component list is computed once per module and shared by the module
+# prompt, the validation scope and normalization (review 2 #6)
+_real_usable, _usable_calls = prompts.usable_new_components, []
+prompts.usable_new_components = lambda *a: _usable_calls.append(1) or _real_usable(*a)
+try:
+    _rec_once = make(FakeLLM(), "t1b_usable_once").run()
+finally:
+    prompts.usable_new_components = _real_usable
+check(_rec_once["success"] and len(_usable_calls) == len(MODS),
+      f"usable new components computed once per module ({len(_usable_calls)} calls, {len(MODS)} modules)")
+
 # 2. scripted reviewer: revise the plan once, replace asset plan 1
 
 
@@ -511,7 +522,7 @@ with _scope():
             _rejected += "still has the placeholder value" in str(e)
     check(_rejected == 3, "module step rejects the value placeholder, also with spaces/case/no brackets")
     _mod = P.PlannedDemoModule.model_validate(_glow_module([_speed]))
-_changes = P.normalize_module(_mod, _glow, P.AssetRegistry())
+_changes = P.normalize_module(_mod, prompts.usable_new_components(_glow, P.AssetRegistry()))
 _after = _mod.objects[0].components[0].inputs
 check([(i.name, i.type, i.value) for i in _after]
       == [("pulseSpeed", "float", "2.5"), ("glowColor", "Color", None)],
@@ -534,7 +545,7 @@ _two = _glow_module([_speed])
 _two["objects"][1]["components"] = list(_two["objects"][0]["components"])
 with _scope():
     _mod2 = P.PlannedDemoModule.model_validate(_two)
-_input_logs = [c for c in P.normalize_module(_mod2, _glow, P.AssetRegistry()) if c["field"] == "inputs"]
+_input_logs = [c for c in P.normalize_module(_mod2, prompts.usable_new_components(_glow, P.AssetRegistry())) if c["field"] == "inputs"]
 check(len(_input_logs) == 1 and _input_logs[0]["instances"] == 2,
       "identical input rewrites logged once per component per module, with an instance count")
 check("inputs" not in P._dump(NewComponent(scriptName="OrbitTrail", scriptDescription="d" * 25)),
