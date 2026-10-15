@@ -1182,7 +1182,7 @@ check(len(df) == 1 and bool(df.iloc[0]["success"]) and df.iloc[0]["structure"] =
 # max_tokens. The first module request is answered in plain text, as "auto"
 # allows, to check instructor's "no tool invocation" reask.
 print("\n-- part 3: mock Anthropic server --")
-anth = {"asset": 0, "requests": [], "text_sent": False}
+anth = {"asset": 0, "requests": [], "text_sent": False, "written": set()}
 
 
 class MockAnthropic(BaseHTTPRequestHandler):
@@ -1207,12 +1207,21 @@ class MockAnthropic(BaseHTTPRequestHandler):
             content = [{"type": "tool_use", "id": "toolu_mock", "name": tool,
                         "input": json.loads(data)}]
             stop = "tool_use"
+        # Usage as the real API reports it: no cache fields without a breakpoint, a
+        # cache write on the first marked request per tool (the tool is part of the
+        # cached prefix), reads after that. input_tokens excludes cache reads/writes;
+        # the tracker folds them in, so every request is 1000 input tokens.
+        usage = {"input_tokens": 1000, "output_tokens": 200}
+        if '"cache_control"' in json.dumps(body["messages"]):
+            usage["input_tokens"] = 600
+            if tool in anth["written"]:
+                usage["cache_read_input_tokens"] = 400
+            else:
+                anth["written"].add(tool)
+                usage["cache_creation_input_tokens"] = 400
         payload = json.dumps({
             "id": "msg_mock", "type": "message", "role": "assistant", "model": body["model"],
-            "content": content, "stop_reason": stop, "stop_sequence": None,
-            # input_tokens excludes cache reads/writes; the tracker folds them in
-            "usage": {"input_tokens": 600, "cache_read_input_tokens": 300,
-                      "cache_creation_input_tokens": 100, "output_tokens": 200},
+            "content": content, "stop_reason": stop, "stop_sequence": None, "usage": usage,
         }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -1286,13 +1295,25 @@ check([r["tools"][0]["name"] for r in reqs[:3]] == ["LabPlan", "ModuleAssetPlan"
       "tool names follow the step response models")
 check(all(r["model"] == "claude-haiku-5-5" for r in reqs) and rec["served_models"] == ["claude-haiku-5-5"],
       "model id sent and served (Claude Haiku 5.5)")
+# One unmarked plan request, one cache write per step type, reads on the rest.
+_reads = len(reqs) - 3
 check(rec["totals"]["prompt_tokens"] == 1000 * len(reqs)
-      and rec["totals"]["cached_tokens"] == 300 * len(reqs)
-      and rec["totals"]["cache_write_tokens"] == 100 * len(reqs),
-      "Anthropic usage tracked per step, cache reads and writes folded into the input")
+      and rec["totals"]["cached_tokens"] == 400 * _reads
+      and rec["totals"]["cache_write_tokens"] == 400 * 2,
+      "Anthropic usage tracked, cache reads and writes folded into the input")
 check(abs(rec["totals"]["cost_usd"]
-          - len(reqs) * (600 * 0.10 + 300 * 0.01 + 100 * 0.125 + 200 * 0.50) / 1e6) < 1e-9,
+          - (1000 * 0.10 + 2 * (600 * 0.10 + 400 * 0.125) + _reads * (600 * 0.10 + 400 * 0.01)
+             + len(reqs) * 200 * 0.50) / 1e6) < 1e-9,
       "Claude Haiku 5.5 priced at $0.10 / $0.50, cache reads $0.01, writes $0.125 per MTok")
+_steps = {(s["step"], s["index"]): s for s in rec["steps"]}
+_cache = {k: (s["cache_write_tokens"], s["cached_tokens"]) for k, s in _steps.items()}
+check(_cache[("plan", None)] == (0, 0)
+      and _cache[("asset_plan", 1)] == (400, 0)
+      and _cache[("module", 1)] == (400, 400)
+      and all(w == 0 and r > 0 for (st, i), (w, r) in _cache.items()
+              if st in ("asset_plan", "module") and i > 1),
+      "per step: the plan caches nothing, the first asset plan and module write the "
+      "cache (module 1's reask reads it), later steps only read it")
 
 # ── Part 4: GPT-6 on the OpenAI Responses API (mock /v1/responses server) ──
 # Real create_instructor_client (pointed at the mock via OPENAI_BASE_URL). Checks the
