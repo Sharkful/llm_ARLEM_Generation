@@ -19,6 +19,7 @@ Usage with Instructor:
 
 from __future__ import annotations
 
+import json
 import typing
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -240,9 +241,16 @@ class PointerReceiverComponent(ConstToEnumSchemaMixin):
 
 def to_camel_case(name):
     """Inspector field names are camelCase (``pulse_speed`` / ``PulseSpeed`` ->
-    ``pulseSpeed``); normalized rather than reasked. Non-strings pass through."""
+    ``pulseSpeed``); normalized rather than reasked. A leading acronym is lowercased
+    whole, Unity-style: ``URL`` -> ``url``, ``XMLSource`` -> ``xmlSource``,
+    ``IDLabel`` -> ``idLabel``. Non-strings pass through."""
     name = to_pascal_case(name)
-    return name[:1].lower() + name[1:] if isinstance(name, str) else name
+    if not isinstance(name, str):
+        return name
+    upper = len(name) - len(name.lstrip("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+    # In 'XMLSource' the last capital of the run starts the next word ('Source').
+    lead = upper - 1 if 1 < upper < len(name) and name[upper].islower() else upper
+    return name[:lead].lower() + name[lead:]
 
 
 class ComponentInput(BaseModel):
@@ -282,6 +290,13 @@ class NewComponentInput(ComponentInput):
             "keep the script's default."
         ),
     )
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def _value_as_text(cls, v):
+        """Accept a number, bool or array as written (2.5, true, [255, 0, 0, 255])
+        and store it as JSON text, rather than reasking over the field's type."""
+        return v if v is None or isinstance(v, str) else json.dumps(v)
 
 
 class NewComponent(ConstToEnumSchemaMixin):

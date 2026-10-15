@@ -444,6 +444,14 @@ with asset_plan_validation(_catalog):
         {"name": "glowColor", "type": "Color", "description": "emission color"}]}]})
 check([i.name for i in _glow.new_components[0].inputs] == ["pulseSpeed", "glowColor"],
       "input names normalized to camelCase")
+from json_lab import NewComponentInput, to_camel_case  # noqa: E402
+check([to_camel_case(n) for n in ("URL", "XMLSource", "IDLabel", "ID2", "pulse_speed", "PulseSpeed")]
+      == ["url", "xmlSource", "idLabel", "id2", "pulseSpeed", "pulseSpeed"],
+      "camelCase lowercases a leading acronym whole (URL -> url, XMLSource -> xmlSource)")
+check([NewComponentInput(name="a", type="float", description="speed x", value=v).value
+       for v in (2.5, True, 3, [255, 0, 0, 255], "Mars", None)]
+      == ["2.5", "true", "3", "[255, 0, 0, 255]", "Mars", None],
+      "input values written as numbers, bools or arrays are stored as text, not reasked")
 _speed = {"name": "pulse_speed", "type": "Single", "description": "speed!", "value": "2.5"}
 _wobble = {"name": "wobble", "type": "float", "description": "not planned", "value": "1"}
 
