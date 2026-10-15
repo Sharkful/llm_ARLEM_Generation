@@ -10,7 +10,9 @@ Prompt order is cache-friendly: every prompt *starts* with the same block (the
 lab description), and the asset-plan and module prompts continue with the same
 approved plan, before anything step- or module-specific. Providers with automatic
 prefix caching (OpenAI, Gemini) then bill that repeated opening at the cached
-rate on every call after the first. Anthropic needs explicit cache markers (#73).
+rate on every call after the first. Anthropic caches only marked prefixes: the
+pipeline marks the end of shared_opening() as a cache breakpoint (#73), so the
+asset-plan and module templates must keep starting with LAB_BLOCK + PLAN_BLOCK.
 
 The plan, earlier modules, and the asset registry are appended as compact
 summaries rather than full JSON, so prompt size grows slowly with module count.

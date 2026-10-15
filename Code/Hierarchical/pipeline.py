@@ -611,10 +611,11 @@ class HierarchicalPipeline:
         blocks and mark the first as a cache breakpoint (#73): the tools + system +
         opening prefix is then written once per step type and read by the later
         steps of that type (Anthropic orders the prefix tools -> system ->
-        messages, and each step type has its own tool). Reasks and revisions append
-        after it, so they read it too. Everything else stays a plain string; a prompt
-        that should split but doesn't prints a one-time warning, because caching is
-        then silently off for that step."""
+        messages, and each step type has its own tool and its own system tool
+        line). Reasks and revisions append after it, so they read it too.
+        Everything else stays a plain string; a prompt that should split but
+        doesn't prints a one-time warning, because caching is then off for that
+        step."""
         if not cache_prefix or self.model_config.provider != Provider.ANTHROPIC:
             return prompt
         if prompt.startswith(cache_prefix) and len(prompt) > len(cache_prefix):

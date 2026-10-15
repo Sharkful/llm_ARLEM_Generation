@@ -281,15 +281,19 @@ implicit caching has no write charge. Claude caches only what is marked (#73): t
 asset-plan and module requests mark the end of the shared lab + plan opening
 (`prompts.shared_opening`) with a 5-minute `cache_control` breakpoint; the one-off
 plan request carries none. Anthropic orders the cached prefix tools -> system ->
-messages and each step type sends its own tool, so the cache is shared between steps
-of the same type: the first asset plan and the first module write it (1.25x input),
+messages, and each step type sends its own tool and its own system line ("Respond
+only by calling the `<Tool>` tool..."), so the cache is shared between steps of the
+same type: the first asset plan and the first module write it (1.25x input),
 later ones and every reask or revision read it (0.1x; 0.05x on Opus 5.5). Prefixes
 below the model's minimum (Haiku 4.5: 4096 tokens; the 5.5 family: 512) silently
 don't cache. A slow model whose same-type steps start more than 5 minutes apart
 would keep re-writing it; the run's cache writes vs reads show that. Anthropic reports cache reads and
 writes outside `input_tokens`; the tracker folds them into `prompt_tokens`, so
 `prompt_tokens` is all input on every provider. Models without cache rates (the
-wave-2 roster) bill all input at the input rate, as they always did.
+wave-2 roster) are priced with all input at the input rate; for wave-2 Claude models,
+which now also send the breakpoint, that is an approximation. A step whose prompt
+doesn't start with the shared opening can't carry the breakpoint; the pipeline then
+prints a one-time warning rather than silently losing caching.
 
 `retries` is the tracker's `retry_count`: the number of reasks, i.e. requests
 minus one per instructor call. A failed parse is reasked, so `retries` equals
