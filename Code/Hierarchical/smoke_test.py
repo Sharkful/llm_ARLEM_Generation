@@ -107,17 +107,17 @@ class FakeLLM:
             pairs = [(o["name"], c) for o in m["objects"] for c in o.get("components") or []]
             pairs += [(ch["target"], c) for cl in m["clips"] for ch in cl.get("changes") or []
                       for c in ch.get("components") or []]
-            comps, seen = [], set()
+            comps, new_comps, seen = [], [], set()
             for obj_name, c in pairs:
                 name = _comp_name(c)
-                new = (c["componentType"] == "newscript"
-                       and self.pipe.registry.find_component(name) is None
-                       and name.lower() not in seen)
+                if (c["componentType"] == "newscript"
+                        and self.pipe.registry.find_component(name) is None
+                        and name.lower() not in seen):
+                    new_comps.append({"name": name, "behavior_description": c["scriptDescription"],
+                                      "why_existing_insufficient": "no built-in component does this"})
                 seen.add(name.lower())
-                extra = {"behavior_description": c["scriptDescription"],
-                         "why_existing_insufficient": "no built-in component does this"} if new else {}
                 comps.append({"object_name": obj_name, "component_type": name,
-                              "rationale": "needed for this scene's behavior", "is_new": new, **extra})
+                              "rationale": "needed for this scene's behavior"})
             beats = [cl["changeMeaning"] for cl in m["clips"]]
             return model.model_validate({
                 "module_name": m["moduleName"],
@@ -125,6 +125,7 @@ class FakeLLM:
                 "objects": [{"name": o["name"], "prefab": o["prefab"], "texture": o.get("texture"),
                              "purpose": f"Shows {o['name']} in this scene", "is_new_asset": False}
                             for o in m["objects"]],
+                "new_components": new_comps,
                 "components": comps,
                 "interactions": [{"object_name": m["objects"][0]["name"],
                                   "action": "advances with Next",
@@ -325,6 +326,56 @@ with asset_plan_validation(["SimpleOrbitComponent", "SimpleRotationComponent"],
             "Duplicate planned object", "at least 4 scene objects", "at least 5 clip beats",
             "unknown object 'earth'", "unknown object", "planned more than once")),
             "all asset-plan problems reported at once (duplicates, minimums, interactions)")
+
+# 8b. declare once, attach many (#77): attachments resolve against the catalog plus
+# new_components; a declaration is checked once, not per attachment
+_decl = {"name": "pulse_glow", "behavior_description": "pulses the object's emission color",
+         "why_existing_insufficient": "no catalog component changes emission"}
+_glow_plan = {
+    "module_name": "M", "design_notes": "d" * 40, "clip_beats": ["a", "b"],
+    "objects": [{"name": "sun", **_obj}, {"name": "moon", **_obj}],
+    "components": [
+        {"object_name": "sun", "component_type": "PulseGlow", "rationale": "r" * 20},
+        {"object_name": "moon", "component_type": "pulseGlow", "rationale": "r" * 20},
+    ],
+}
+_catalog = ["SimpleOrbitComponent", "SimpleRotationComponent"]
+with asset_plan_validation(_catalog):
+    try:
+        ModuleAssetPlan.model_validate(_glow_plan)
+        check(False, "attachment to an undeclared new component rejected")
+    except ValidationError as e:
+        check("2 problem(s)" in str(e) and "declare it in new_components" in str(e),
+              "attachment to an undeclared new component rejected")
+    ok = ModuleAssetPlan.model_validate({**_glow_plan, "new_components": [_decl]})
+    check(ok.new_components[0].name == "PulseGlow",
+          "one declaration covers every attachment; its name normalized to PascalCase")
+    try:
+        ModuleAssetPlan.model_validate({**_glow_plan, "new_components": [_decl, _decl]})
+        check(False, "a new component declared twice is rejected")
+    except ValidationError as e:
+        check("declared more than once" in str(e), "a new component declared twice is rejected")
+    try:
+        ModuleAssetPlan.model_validate({**_glow_plan, "new_components": [
+            _decl, {**_decl, "name": "SimpleOrbitComponent"}]})
+        check(False, "a new component re-declaring a catalog entry is rejected")
+    except ValidationError as e:
+        check("already exists in the component catalog" in str(e),
+              "a new component re-declaring a catalog entry is rejected")
+with asset_plan_validation(_catalog, allow_new=False):
+    try:
+        ModuleAssetPlan.model_validate({**_glow_plan, "new_components": [_decl]})
+        check(False, "--no-new-components rejects a non-empty new_components")
+    except ValidationError as e:
+        check("leave new_components empty" in str(e),
+              "--no-new-components rejects a non-empty new_components")
+# declared but attached nowhere: a soft metric, not a reask
+with asset_plan_validation(_catalog):
+    _unused = ModuleAssetPlan.model_validate({**_glow_plan, "components": [], "new_components": [
+        _decl, {**_decl, "name": "OrbitTrail"}]})
+_adh = P.plan_adherence(_unused, DemoModule.model_validate(MODS[0]), min_objects=1, min_clips=1)
+check(_adh["unattached_new_components"] == ["PulseGlow", "OrbitTrail"],
+      "declared-but-unattached new components recorded in plan_adherence (no reask)")
 
 # 9. per-module minimums are enforced on the asset plan (defaults 4 objects / 5 beats)
 rec = make(FakeLLM(), "t9_minimums",

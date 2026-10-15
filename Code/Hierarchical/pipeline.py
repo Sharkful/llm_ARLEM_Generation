@@ -319,12 +319,9 @@ def _same_text(a: str, b: str) -> bool:
 def normalize_asset_plan(asset_plan: ModuleAssetPlan, registry: AssetRegistry) -> list[dict]:
     """Rewrite component references to their canonical spelling: the catalog's,
     or the one this plan declared a new component with. Returns the changes."""
-    declared = {component_key(c.component_type): c.component_type
-                for c in asset_plan.components if c.is_new}
+    declared = {component_key(c.name): c.name for c in asset_plan.new_components}
     changes = []
     for comp in asset_plan.components:
-        if comp.is_new:
-            continue
         entry = registry.find_component(comp.component_type)
         canonical = entry.name if entry else declared.get(component_key(comp.component_type))
         if canonical and canonical != comp.component_type:
@@ -340,8 +337,7 @@ def normalize_module(
     """Give every NewComponent one canonical name and description: a component
     already in the catalog takes the catalog's; one introduced here takes the
     asset plan's name and its first description in this module."""
-    planned = {component_key(c.component_type): c.component_type
-               for c in asset_plan.components if c.is_new}
+    planned = {component_key(c.name): c.name for c in asset_plan.new_components}
     first_description: dict[str, str] = {}
     changes = []
     for comp in iter_module_components(module):
@@ -391,6 +387,7 @@ def plan_adherence(
     planned_comps = [(c.object_name, component_key(c.component_type)) for c in asset_plan.components]
     present_comps = [p for p in planned_comps if p[1] in attached.get(p[0], set())]
     pointer = component_key(PointerReceiverComponent.__name__)
+    attached_types = {component_key(c.component_type) for c in asset_plan.components}
     return {
         "planned_objects": len(planned_objs),
         "planned_objects_present": len(present_objs),
@@ -408,6 +405,12 @@ def plan_adherence(
             i.object_name for i in asset_plan.interactions
             if pointer not in attached.get(i.object_name, set())
         }),
+        # Declared in new_components but attached to no object in the plan (a soft
+        # metric rather than a reask, to save tokens).
+        "unattached_new_components": [
+            c.name for c in asset_plan.new_components
+            if component_key(c.name) not in attached_types
+        ],
     }
 
 
@@ -824,7 +827,7 @@ class HierarchicalPipeline:
                     o.name for o in asset_plan.objects
                     if o.is_new_asset != self._is_novel_asset(o.prefab, o.texture)
                 ]
-                adherence["new_components_planned"] = sum(c.is_new for c in asset_plan.components)
+                adherence["new_components_planned"] = len(asset_plan.new_components)
                 before = len(self.registry.new_component_names())
                 self.registry.register_module(i, module, asset_plan, scene_purpose=scene.brief_purpose)
                 adherence["new_components_added"] = len(self.registry.new_component_names()) - before

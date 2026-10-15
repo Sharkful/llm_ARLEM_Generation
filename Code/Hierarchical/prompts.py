@@ -101,17 +101,19 @@ Instructions:
 
 NEW_COMPONENTS_ALLOWED = """\
 - A component is a small piece of C# behavior and can do almost anything. That makes
-  new components powerful but costly to build, so only plan a new one (is_new=true)
-  when no catalog component, or combination of them, can provide the behavior. Keep
-  each new component to ONE simple behavior with clear inputs and outputs; split
-  complex behavior into several small components that later modules can reuse. Give
-  it a PascalCase script name of at least 5 letters or digits (e.g. 'PulseGlow'), a
-  behavior_description, and why_existing_insufficient. Declare it once (is_new=true)
-  and reference it by name if other objects use it too. Never re-invent a component
-  that is already in the catalog: reference it by name with is_new=false."""
+  new components powerful but costly to build, so only plan a new one when no catalog
+  component, or combination of them, can provide the behavior. Keep each new
+  component to ONE simple behavior with clear inputs and outputs; split complex
+  behavior into several small components that later modules can reuse.
+- Declare each new component exactly once in new_components: a PascalCase name of
+  at least 5 letters or digits (e.g. 'PulseGlow'), a behavior_description, and
+  why_existing_insufficient. Then attach it by that name in components, once for
+  every object that uses it. Never re-declare a component that is already in the
+  catalog: attach it by its catalog name."""
 
 NEW_COMPONENTS_DISABLED = """\
-- New components are disabled for this run: use only components from the catalog."""
+- New components are disabled for this run: leave new_components empty and use only
+  components from the catalog."""
 
 MODULE_INSTRUCTION = LAB_BLOCK + "\n" + PLAN_BLOCK + """
 # Component catalog
@@ -246,10 +248,9 @@ def allowed_new_component_names(
     """NewComponent scriptNames a module may use: the ones its plan introduces
     plus every new component already in the catalog."""
     names = list(registry.new_component_names())
-    for comp in asset_plan.components:
-        if comp.is_new and registry.find_component(comp.component_type) is None:
-            if comp.component_type not in names:
-                names.append(comp.component_type)
+    for spec in asset_plan.new_components:
+        if registry.find_component(spec.name) is None and spec.name not in names:
+            names.append(spec.name)
     return names
 
 
