@@ -55,8 +55,10 @@ from benchmark import (
     exception_chain,
     get_provenance,
     provider_create_kwargs,
+    run_group_dir,
     status_of,
     tool_choice_for,
+    warn_served_model,
 )
 from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, SpecType
 from json_lab import DemoModule, Lab, NewComponent, PointerReceiverComponent
@@ -72,20 +74,12 @@ from review import Approve, AutoApproveReviewer, Checkpoint, Replace, Reviewer, 
 
 
 DEFAULT_OUTPUT_DIR = Path("Artifacts") / "Data" / "Hierarchical"
-_RUN_GROUP_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def output_dir_for(run_group: Optional[str]) -> Path:
-    """``Artifacts/Data/Hierarchical/[<run_group>/]``. A run group is a single folder
-    name, so test runs and data-collection runs can be kept apart."""
-    if run_group is None:
-        return DEFAULT_OUTPUT_DIR
-    if not _RUN_GROUP_RE.match(run_group):
-        raise ValueError(
-            f"Invalid run group {run_group!r}: use a single folder name made of "
-            "letters, digits, '_' or '-'"
-        )
-    return DEFAULT_OUTPUT_DIR / run_group
+    """``Artifacts/Data/Hierarchical/[<run_group>/]`` (the shared rule:
+    ``benchmark.run_group_dir``)."""
+    return run_group_dir(DEFAULT_OUTPUT_DIR, run_group)
 
 # A step function: (response_model, messages, max_retries) -> validated model.
 CallFn = Callable[[Type[BaseModel], list[dict], int], BaseModel]
@@ -227,6 +221,7 @@ class StepRecord:
                                    # started over with a fresh parse-retry budget
     prompt_tokens: int = 0
     cached_tokens: int = 0         # of prompt_tokens, served from the provider's prompt cache
+    cache_write_tokens: int = 0    # of prompt_tokens, written to it (billed above input rate)
     completion_tokens: int = 0
     total_tokens: int = 0
     cost_usd: float = 0.0
@@ -567,6 +562,7 @@ class HierarchicalPipeline:
             rec.parse_errors += call.parse_errors
             rec.prompt_tokens += call.total_usage.prompt_tokens
             rec.cached_tokens += call.total_usage.cached_tokens
+            rec.cache_write_tokens += call.total_usage.cache_write_tokens
             rec.completion_tokens += call.total_usage.completion_tokens
             rec.total_tokens += call.total_usage.total_tokens
             rec.cost_usd += self.tracker.pricing.calculate_cost(call.total_usage)
@@ -883,7 +879,8 @@ class HierarchicalPipeline:
         totals = {
             k: sum(s[k] for s in steps)
             for k in ("calls", "retries", "parse_errors", "transient_retries", "reask_restarts",
-                      "prompt_tokens", "cached_tokens", "completion_tokens",
+                      "prompt_tokens", "cached_tokens", "cache_write_tokens",
+                      "completion_tokens",
                       "total_tokens", "cost_usd", "wall_time_s")
         }
         return {
@@ -894,6 +891,8 @@ class HierarchicalPipeline:
             "spec_type": SpecType.JSON_LAB.value,
             "decode_mode": decode_mode_for(self.model_config, SpecType.JSON_LAB).value,
             "tool_choice": tool_choice_for(self.model_config),
+            "reasoning_effort": self.model_config.reasoning_effort,   # None = provider default
+            "served_models": self.tracker.served_models(),   # what answered (this session)
             "topic": None,
             "lab_name": self.lab_name,
             "level": self.config.level.value,
@@ -969,7 +968,9 @@ class HierarchicalPipeline:
                    if t.get("transient_retries") else "")
         print(f"  Steps: {len(record['steps'])} | calls: {t['calls']} | retries: {t['retries']}"
               f"{resends}")
-        print(f"  Tokens: {t['prompt_tokens']:,} in ({t['cached_tokens']:,} cached) / "
+        writes = (f", {t['cache_write_tokens']:,} cache writes"
+                  if t.get("cache_write_tokens") else "")
+        print(f"  Tokens: {t['prompt_tokens']:,} in ({t['cached_tokens']:,} cached{writes}) / "
               f"{t['completion_tokens']:,} out "
               f"| Cost: ${t['cost_usd']:.6f} | Wall time: {record['wall_time_seconds']}s")
         lab = record.get("lab_metrics") or {}
@@ -980,3 +981,4 @@ class HierarchicalPipeline:
         if record.get("normalizations"):
             print(f"  Normalized names/descriptions: {len(record['normalizations'])}")
         print(f"  Run dir: {record['run_dir']}")
+        warn_served_model(record["model"], record.get("served_models") or [])

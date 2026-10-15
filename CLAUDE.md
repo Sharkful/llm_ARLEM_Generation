@@ -63,9 +63,11 @@ python "Code/Benchmark/benchmark.py" --model claude-haiku-4.5 --lab apparent_ret
 python "Code/Benchmark/benchmark.py" --model gpt-5.4-mini --lab apparent_retrograde_motion --level L3 \
     --spec json_lab arlem arlem_simple
 
-# Run a pre-defined suite (quick = cheap models, full = all models)
+# Run a pre-defined suite (quick = current small tier, full = current roster,
+# wave2 = the paper's frozen roster)
 python "Code/Benchmark/benchmark.py" --suite quick
 python "Code/Benchmark/benchmark.py" --suite full
+python "Code/Benchmark/benchmark.py" --suite wave2
 
 # List registered models / available lab YAMLs
 python "Code/Benchmark/benchmark.py" --list-models
@@ -120,9 +122,8 @@ Benchmark runs:
   → instructor + tracking/ (token/retry tracking)
   → Lab / DemoModule / LabOutline generation
   → lab_metrics.py (structural analysis)
-  → Artifacts/Data/Benchmark/ (output + metrics JSON)
-  → Artifacts/Data/Benchmark/prompts/ (deduped prompt artifacts, one per
-                                       lab × level × spec × structure tuple)
+  → Artifacts/Data/OneShot/[<run group>/] (output + metrics JSON, prompts/)
+    (Artifacts/Data/Benchmark/ is the frozen wave-2 sweep and is never written)
   → Artifacts/Data/Errors/   ← instructor error logs (gitignored)
 
 Hierarchical runs (Code/Hierarchical/, json_lab only):
@@ -141,7 +142,10 @@ Analysis (everything below reads run artifacts; nothing here calls an LLM):
 (2026-07-10, 385 runs, one provenance-stamped stack), which is the paper's dataset.
 `Artifacts/Data/Benchmark_formative_202606-07/` is the frozen earlier archive;
 never pool the two. `suite_results_*.json` is gitignored, so in a clone failed
-runs survive only in the `Reports/` CSVs. `README.md` is the data guide.
+runs survive only in the `Reports/` CSVs. `README.md` is the data guide. New
+one-shot runs (any roster, `--suite wave2` included) go to
+`Artifacts/Data/OneShot/[<run group>/]` (`benchmark.py --run-group NAME`), so they
+are never pooled with the paper's data; `load_runs()` still reads `Benchmark/` (#79).
 
 **Reports/ vs Paper/**: `Artifacts/Data/Benchmark/Reports/` is the exploration
 layer (notebooks, HTML, CSV). `Artifacts/Paper/` is the publication layer —
@@ -182,7 +186,7 @@ lives in `Code/Analysis/` (below) and never imports the other way around.
 - Legacy: `--topic "..."` uses the templates in `benchmark_config.py`
 - YAML-driven: `--lab <topic_name> --level {L1,L3,L4}` delegates to `prompt_builder.build_prompt()` and also picks the response model
 
-**`benchmark_config.py`** — Model registry (`MODELS` dict), legacy prompt templates, `BenchmarkRunConfig` dataclass. Add new models here. `BenchmarkRunConfig` carries optional `lab_name`, `level`, and `structure` fields for the YAML-driven path; when both `lab_name` and `level` are set, the benchmark runner bypasses `get_prompt()` and calls `build_prompt()` instead. Defaults: `min_objects=4`, `min_clips=5`.
+**`benchmark_config.py`** — Model registry (`MODELS` dict), legacy prompt templates, `BenchmarkRunConfig` dataclass. Add new models here. The registry holds two rosters: `CURRENT_MODELS` (issue #72, 2026-10: GPT-6.1 Sol / GPT-6 Luna, Claude Opus / Sonnet / Haiku 5.5, Gemini 4 Argon / 3.8 Flash / 3.5 Flash-Lite), which the suites and tier flags use, and the frozen `WAVE2_MODELS` (the paper's 11 models, `--suite wave2`). Wave-2 entries stay registered with unchanged display names, which the figures key on. `BenchmarkRunConfig` carries optional `lab_name`, `level`, and `structure` fields for the YAML-driven path; when both `lab_name` and `level` are set, the benchmark runner bypasses `get_prompt()` and calls `build_prompt()` instead. Defaults: `min_objects=4`, `min_clips=5`.
 
 **`prompt_builder.py`** — Loads a `<topic>_lab.yaml` from `Artifacts/Lab Descriptions/` into a `LabDescription` dataclass (plain dataclass, not Pydantic — input layer doesn't cross a system boundary). Strips `*` authoring flags and `[REVIEW: ...]` markers silently at load time. `build_prompt(lab, level, spec_type, structure=..., min_objects=..., min_clips=..., min_things=..., min_places=..., min_actions=...)` returns `(prompt_string, response_model_class)`. Levels:
 - **L1** — field/course/description → `LabOutline` (rough outline; not a full spec)
@@ -193,7 +197,7 @@ lives in `Code/Analysis/` (below) and never imports the other way around.
 
 `--structure` (json_lab L3–L4 only) selects the output shape: `multi-module` (default, one DemoModule per scene), `single-module` (one DemoModule, many clips), or `module-only` (bare `DemoModule`, no `Lab` wrapper). For **ARLEM** (`arlem` / `arlem_simple`) at L3–L4, `build_prompt` returns an `ARLEMScenario` and ignores `--structure` (ARLEM has a single output shape). L1 returns the spec-agnostic `LabOutline` for every spec.
 
-Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `Artifacts/Data/Benchmark/prompts/`. Every metrics record carries `lab_name`, `level`, `structure`, and `prompt_file` for traceability. Pass `--no-save-prompts` for large sweeps or `--overwrite-prompts` after a wrapper-template tweak.
+Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under the output folder's `prompts/` (`Artifacts/Data/Benchmark/prompts/` for wave 2). Every metrics record carries `lab_name`, `level`, `structure`, and `prompt_file` for traceability. Pass `--no-save-prompts` for large sweeps or `--overwrite-prompts` after a wrapper-template tweak.
 
 **`lab_metrics.py`** — Post-generation structural analysis:
 - `analyze_json_lab()` — counts objects, clips, components, text labels, object changes, prefab diversity. Shaped for the full `Lab` schema; reports zeros for `LabOutline` outputs (L1 runs)
@@ -202,10 +206,11 @@ Prompts are deduped: one file per `(lab, level, spec, structure)` tuple under `A
 
 **`tracking/`** — Token/retry tracking module (copied from `feature/instructor-tracking`):
 - `InstructorTracker` / `TrackedClient` — wraps instructor clients, hooks into completion events
-- `PricingCalculator` / `DEFAULT_PRICING` — cost calculation; update `tracking/pricing.py` when adding new models
+- `PricingCalculator` / `DEFAULT_PRICING` — cost calculation; update `tracking/pricing.py` when adding new models. Entries can carry `cached_input` / `cache_write` rates (current roster only, issue #72), and cost bills uncached input, cache reads and cache writes each at its own rate. `TokenUsage.prompt_tokens` is all input on every provider (Anthropic's separately reported cache reads/writes are folded in); `cached_tokens` and `cache_write_tokens` are parts of it
 - `BenchmarkExporter` — export to JSON, CSV, or Markdown
+- **Served model**: each attempt records the model id the response reports (`served_model_of`: Gemini `model_version`, OpenAI/Anthropic `model`); `summary()` and both run records carry `served_models`, and both CLIs (and the gate probe) warn when it isn't the requested id or a dated snapshot of it. Google serves `gemini-3.5-flash` with `gemini-3.6-flash` since 2026-10-08; cost is still priced as the requested id
 
-Benchmark outputs go to `Artifacts/Data/Benchmark/`:
+New benchmark outputs go to `Artifacts/Data/OneShot/[<run group>/]` (the wave-2 runs in `Artifacts/Data/Benchmark/` use the same layout):
 - `{model}_{spec}[_{level}]_{timestamp}_output.json` — the generated Lab / DemoModule / LabOutline / ARLEM JSON (`{level}` is present on the YAML-driven L1/L3/L4 path)
 - `{model}_{spec}[_{level}]_{timestamp}_metrics.json` — full tracking record (includes `prompt_file` reference for YAML-driven runs)
 - `suite_results_{timestamp}.json` — combined results across all suite runs
@@ -324,6 +329,8 @@ result = client.create(
 ```
 
 Use `instructor.from_provider("provider/model-id")` — this is the unified API. Anthropic always requires `max_tokens`. For Anthropic runs the benchmark sends `tool_choice={"type": "auto", "disable_parallel_tool_use": True}` plus a system line asking for exactly one call to the response model's tool (`provider_create_kwargs`). `disable_parallel_tool_use` is the #44 guard: a parallel tool call always fails parsing under instructor (Haiku 4.5 retry-death). The choice is `auto`, not forced, because Claude Sonnet 5.5, Opus 5.5 and Fable 5.1 return 400 for a forced `tool_choice` (issue #70; Claude Haiku 5.5 accepts it, but forcing skips its thinking); a plain-text reply is reasked by instructor and costs one attempt. instructor only sets `tool_choice` when the caller hasn't, so ours always wins. Wave 2 ran with the forced choice on instructor 1.15.4; metrics records carry `tool_choice`, and Anthropic runs since #70 are never pooled with wave 2.
+
+**Reasoning effort and reasks (issue #72).** Every current-roster model pins reasoning effort to `medium` (`ModelConfig.reasoning_effort`, recorded as `reasoning_effort`; wave-2 models keep the provider default, `None`): Anthropic `output_config.effort`, Gemini `thinking_config.thinking_level`, OpenAI `reasoning.effort`. GPT-6 (`responses_api=True`) runs on the **Responses API** (`decode_mode` `responses_tools`), because since GPT-5.4 Chat Completions rejects function tools whenever reasoning is on. Reasks keep the model's reasoning on every provider: instructor resends Claude's thinking blocks (with signatures) and Gemini's content (with thought signatures), and `benchmark._patch_openai_responses()` makes the OpenAI Responses reask do the same, stateless (`store=False`, `include=["reasoning.encrypted_content"]`): previous output items (encrypted reasoning + function call) plus a `function_call_output` carrying the validation error. The same patch drops instructor's strict `text.format` (redundant with the forced tool). It is applied lazily by `create_instructor_client` like the Gemini patch, so the same new-entry-point rule applies.
 
 **Gemini limitation (resolved for all specs)**: Gemini's function-calling schema validator rejects discriminated unions (`oneOf` + `discriminator`) and `const` tags. This is now resolved on the models themselves for **every** spec — `json_lab.py`, `arlem_full.py`, and `arlem_simplified.py` all inherit `ConstToEnumSchemaMixin` (`const`→`enum`, shared from `Code/Schemas/_schema_helpers.py`) and carry no field-level discriminated unions, so one provider-agnostic schema per spec runs on every provider via the free-decode `GENAI_TOOLS` path. All Gemini twins (`json_lab_gemini.py`, `arlem_full_gemini.py`, `arlem_simplified_gemini.py`) were retired (issues #26, #29), along with the constrained `GENAI_STRUCTURED_OUTPUTS` path and its response-schema-token estimation. `decode_mode_for()` in `benchmark.py` is the single source of truth for the per-run decode mode (recorded as `decode_mode` in metrics). Shared schema helpers (`ConstToEnumSchemaMixin`, `clamp_number`, `_coerce_number_list`) live in `_schema_helpers.py`.
 

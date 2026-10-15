@@ -286,6 +286,10 @@ check("New components are disabled" in prompt, "prompt states the switch")
 # 6. --run-group resolves to one folder under Artifacts/Data/Hierarchical/
 check(P.output_dir_for("pilot_oct") == P.DEFAULT_OUTPUT_DIR / "pilot_oct"
       and P.output_dir_for(None) == P.DEFAULT_OUTPUT_DIR, "run group folder")
+import benchmark_config as _bc  # noqa: E402
+check(_bc.BenchmarkRunConfig().output_dir == "Artifacts/Data/OneShot"
+      and P.run_group_dir(_bc.ONESHOT_OUTPUT_DIR, "trial") == Path("Artifacts/Data/OneShot/trial"),
+      "one-shot runs go to Artifacts/Data/OneShot/[<run group>/], never the frozen Benchmark/")
 for bad in ("../x", "a/b", "", "has space"):
     try:
         P.output_dir_for(bad)
@@ -821,6 +825,121 @@ check(m1["calls"] == 1 and m1["errors"][-1].endswith("END-OF-ERROR"),
       "an error the tracker didn't record keeps its full text in errors.txt")
 
 
+# 25. cached input is priced at its own rate (issue #72): usage parsing per provider
+#     shape, and the cost formula
+from tracking import PricingCalculator, TokenUsage  # noqa: E402
+_oa = TokenUsage.from_completion(SimpleNamespace(usage=SimpleNamespace(
+    prompt_tokens=1000, completion_tokens=100, total_tokens=1100,
+    prompt_tokens_details=SimpleNamespace(cached_tokens=600, cache_write_tokens=300),
+    completion_tokens_details=None)))
+_an = TokenUsage.from_completion(SimpleNamespace(usage=SimpleNamespace(
+    input_tokens=100, cache_read_input_tokens=600, cache_creation_input_tokens=300,
+    output_tokens=100)))
+_ge = TokenUsage.from_completion(SimpleNamespace(usage_metadata=SimpleNamespace(
+    prompt_token_count=1000, candidates_token_count=100, total_token_count=1100,
+    cached_content_token_count=600, thoughts_token_count=0)))
+check((_oa.prompt_tokens, _oa.cached_tokens, _oa.cache_write_tokens) == (1000, 600, 300)
+      and (_an.prompt_tokens, _an.cached_tokens, _an.cache_write_tokens, _an.total_tokens)
+      == (1000, 600, 300, 1100)
+      and (_ge.prompt_tokens, _ge.cached_tokens, _ge.cache_write_tokens) == (1000, 600, 0),
+      "cache reads and writes parsed from OpenAI, Anthropic and Gemini usage, all inside prompt_tokens")
+check(abs(PricingCalculator(model="gpt-6-luna").calculate_cost(_oa)
+          - (100 * 0.10 + 600 * 0.01 + 300 * 0.125 + 100 * 0.50) / 1e6) < 1e-12
+      and abs(PricingCalculator(model="gemini-3.5-flash-lite").calculate_cost(_ge)
+              - (400 * 0.30 + 600 * 0.03 + 100 * 2.50) / 1e6) < 1e-12,
+      "uncached input, cache reads and cache writes each billed at their own rate")
+check(abs(PricingCalculator(model="gpt-5.4-mini").calculate_cost(_oa)
+          - (1000 * 0.75 + 100 * 4.50) / 1e6) < 1e-12,
+      "a model without cache rates (wave 2) bills all input at the input rate, as before")
+
+
+# 26. the model that actually answered is recorded (issue #72): Google serves
+#     gemini-3.5-flash requests with gemini-3.6-flash since 2026-10-08
+import contextlib  # noqa: E402
+import io  # noqa: E402
+from tracking.metrics import served_model_of  # noqa: E402
+check(served_model_of(SimpleNamespace(model_version="models/gemini-3.6-flash", usage_metadata=None))
+      == "gemini-3.6-flash"
+      and served_model_of(SimpleNamespace(model="gpt-6-luna-2026-09-01")) == "gpt-6-luna-2026-09-01"
+      and served_model_of(SimpleNamespace(model=None)) is None,
+      "served model read from Gemini model_version and OpenAI/Anthropic model")
+_out = io.StringIO()
+with contextlib.redirect_stdout(_out):
+    benchmark.warn_served_model("gpt-6-luna", ["gpt-6-luna-2026-09-01"])
+    _quiet = _out.getvalue()
+    benchmark.warn_served_model("gemini-3.5-flash", ["gemini-3.6-flash"])
+check(_quiet == "" and "answered with gemini-3.6-flash" in _out.getvalue(),
+      "a dated snapshot of the requested model is fine; a redirect to another model warns")
+
+
+# 27. reasoning effort pinned per provider (current roster), provider default for
+#     wave 2 (#72); Responses usage parsed; the Responses reask falls back to
+#     instructor's own when the reply has no function call
+_pk = lambda m: benchmark.provider_create_kwargs(P.MODELS[m], P.LabPlan)
+check(_pk("gemini-3.8-flash").get("thinking_config") == {"thinking_level": "medium"}
+      and "thinking_config" not in _pk("gemini-3.5-flash")
+      and _pk("claude-sonnet-5.5").get("output_config") == {"effort": "medium"}
+      and "output_config" not in _pk("claude-sonnet-5")
+      and _pk("gpt-6-luna").get("reasoning") == {"effort": "medium"}
+      and not {"reasoning", "store", "include"} & set(_pk("gpt-5.4-mini")),
+      "effort medium on the current roster, nothing extra on wave-2 models")
+_ru = TokenUsage.from_completion(SimpleNamespace(usage=SimpleNamespace(
+    input_tokens=1000, output_tokens=200, total_tokens=1200,
+    input_tokens_details=SimpleNamespace(cached_tokens=600, cache_write_tokens=100),
+    output_tokens_details=SimpleNamespace(reasoning_tokens=50))))
+check((_ru.prompt_tokens, _ru.cached_tokens, _ru.cache_write_tokens, _ru.completion_tokens,
+       _ru.reasoning_tokens) == (1000, 600, 100, 200, 50),
+      "Responses usage: cached and cache writes inside input_tokens, reasoning inside output")
+try:
+    import instructor.v2.providers.openai.handlers as _oh
+    benchmark._patch_openai_responses()
+    _text_only = SimpleNamespace(output=[SimpleNamespace(type="message")])
+    _fallback = _oh.reask_responses_tools({"messages": [{"role": "user", "content": "q"}]},
+                                          _text_only, ValueError("bad"))
+    check(_fallback["messages"][-1]["role"] == "user"
+          and "Validation Error found" in str(_fallback["messages"][-1]["content"]),
+          "a Responses reply with no function call gets instructor's own reask")
+except Exception as _e:  # noqa: BLE001 — report, don't crash the offline test
+    check(False, f"Responses reask fallback ({type(_e).__name__}: {_e})")
+
+
+# 28. PR #83 review fixes: served-model match, empty-arguments reask, OpenAI
+#     timeout, price override keeps cache rates, probe reads Responses system text
+check(benchmark.served_model_mismatches("gemini-3.5-flash", ["gemini-3.5-flash-lite"])
+      == ["gemini-3.5-flash-lite"]
+      and benchmark.served_model_mismatches("claude-x", ["claude-x-20261001", "claude-x"]) == []
+      and benchmark.served_model_mismatches("gpt-6-luna", ["gpt-6-luna-2026-09-01"]) == [],
+      "only the requested id or a dated snapshot counts as the same served model")
+try:
+    import instructor.v2.providers.openai.handlers as _oh
+    benchmark._patch_openai_responses()
+    _empty = SimpleNamespace(output=[SimpleNamespace(type="function_call", call_id="c1",
+                                                     arguments="{}")])
+    _out = _oh.reask_responses_tools({"messages": []}, _empty, ValueError("bad"))["messages"][-1]
+    check(_out["type"] == "function_call_output" and "empty arguments" in _out["output"],
+          "an empty-arguments call gets instructor's empty-arguments feedback")
+except Exception as _e:  # noqa: BLE001 — report, don't crash the offline test
+    check(False, f"empty-arguments reask ({type(_e).__name__}: {_e})")
+_env = {k: os.environ.get(k) for k in ("OPENAI_API_KEY",)}
+os.environ["OPENAI_API_KEY"] = _env["OPENAI_API_KEY"] or "test"
+try:
+    _timeouts = {m: benchmark.create_instructor_client(P.MODELS[m], P.SpecType.JSON_LAB)
+                 .client.timeout.read for m in ("gpt-6-luna", "gpt-5.4-mini")}
+finally:
+    if _env["OPENAI_API_KEY"] is None:
+        os.environ.pop("OPENAI_API_KEY", None)
+check(_timeouts == {"gpt-6-luna": 900.0, "gpt-5.4-mini": 900.0},
+      f"OpenAI clients get the same 900 s timeout as Anthropic ({_timeouts})")
+check(PricingCalculator(config={"input": 1.0, "output": 2.0}, model="gpt-6-luna").cached_input_price
+      == 0.01,
+      "a price override keeps the model's cache rates")
+sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Benchmark" / "probes"))
+from probe_tool_schemas import system_text  # noqa: E402
+check(system_text({"input": [{"role": "system", "content": "be brief"},
+                             {"role": "user", "content": "hi"}]}) == "be brief",
+      "the schema probe reads the system line from a Responses request's input")
+
+
 # ── Part 2: real _llm_call path against a local mock OpenAI server ──────
 print("\n-- part 2: mock OpenAI server --")
 REPLAY = FAKE / "Runs" / "t1_auto"
@@ -835,6 +954,7 @@ class MockOpenAI(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         tool = body["tools"][0]["function"]["name"]
         state["requests"].append((tool, len(body["messages"])))
+        state.setdefault("body_keys", set()).update(body)
         if tool == "LabPlan":
             args = (REPLAY / "00_plan.json").read_text(encoding="utf-8")
         elif tool == "ModuleAssetPlan":
@@ -943,6 +1063,8 @@ finally:
     srv.shutdown()
 
 check(rec["success"], "mock-server run succeeds")
+check(rec["served_models"] == ["gpt-5.4-mini"] == rec["tracking"]["served_models"],
+      "the record lists the model that answered")
 check(rec["totals"]["calls"] == len(rec["steps"]) + 1 and rec["steps"][0]["calls"] == 2,
       "one tracked call per step, plus the reviewer's call charged to the plan step")
 m2 = next(s for s in rec["steps"] if s["step"] == "module" and s["index"] == 2)
@@ -963,6 +1085,9 @@ check((MOCK / "Runs" / "mock" / "errors.txt").exists(), "errors.txt written")
 check(rec["totals"]["cached_tokens"] == 600 * n_good_requests and m2["cached_tokens"] == 1200,
       "cached prompt tokens recorded per step and in totals")
 check(state["requests"][0] == ("LabPlan", 2), "first request is the plan (system + user)")
+check(not {"reasoning", "reasoning_effort", "store", "include", "output_config"} & state["body_keys"]
+      and rec["reasoning_effort"] is None,
+      "a wave-2 model sends no reasoning settings (provider default, as in wave 2)")
 bad_m1 = bad["steps"][-1]
 check(not bad["success"] and bad_m1["step"] == "module" and len(bad_m1["errors"]) == 3
       and [e.split(" ", 2)[:2] for e in bad_m1["errors"][:2]] == [["attempt", "1"], ["attempt", "2"]]
@@ -1066,7 +1191,9 @@ class MockAnthropic(BaseHTTPRequestHandler):
         payload = json.dumps({
             "id": "msg_mock", "type": "message", "role": "assistant", "model": body["model"],
             "content": content, "stop_reason": stop, "stop_sequence": None,
-            "usage": {"input_tokens": 1000, "output_tokens": 200},
+            # input_tokens excludes cache reads/writes; the tracker folds them in
+            "usage": {"input_tokens": 600, "cache_read_input_tokens": 300,
+                      "cache_creation_input_tokens": 100, "output_tokens": 200},
         }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -1117,12 +1244,115 @@ check(_m1 is not None and _m1["success"] and _m1["parse_errors"] == 1
       and rec.get("tool_choice") == "auto",
       "the reask costs one attempt; the record says tool_choice auto")
 check(all(r["max_tokens"] == 32000 for r in reqs), "every request sets max_tokens=32000")
+check(all(r.get("output_config") == {"effort": "medium"} for r in reqs)
+      and rec["reasoning_effort"] == "medium",
+      "every request pins reasoning effort medium (output_config.effort)")
 check([r["tools"][0]["name"] for r in reqs[:3]] == ["LabPlan", "ModuleAssetPlan", "PlannedDemoModule"],
       "tool names follow the step response models")
-check(all(r["model"] == "claude-haiku-5-5" for r in reqs), "model id sent (Claude Haiku 5.5)")
-check(rec["totals"]["prompt_tokens"] == 1000 * len(reqs), "Anthropic usage tracked per step")
-check(abs(rec["totals"]["cost_usd"] - len(reqs) * (1000 * 0.10 + 200 * 0.50) / 1e6) < 1e-9,
-      "Claude Haiku 5.5 priced at $0.10 / $0.50 per MTok")
+check(all(r["model"] == "claude-haiku-5-5" for r in reqs) and rec["served_models"] == ["claude-haiku-5-5"],
+      "model id sent and served (Claude Haiku 5.5)")
+check(rec["totals"]["prompt_tokens"] == 1000 * len(reqs)
+      and rec["totals"]["cached_tokens"] == 300 * len(reqs)
+      and rec["totals"]["cache_write_tokens"] == 100 * len(reqs),
+      "Anthropic usage tracked per step, cache reads and writes folded into the input")
+check(abs(rec["totals"]["cost_usd"]
+          - len(reqs) * (600 * 0.10 + 300 * 0.01 + 100 * 0.125 + 200 * 0.50) / 1e6) < 1e-9,
+      "Claude Haiku 5.5 priced at $0.10 / $0.50, cache reads $0.01, writes $0.125 per MTok")
+
+# ── Part 4: GPT-6 on the OpenAI Responses API (mock /v1/responses server) ──
+# Real create_instructor_client (pointed at the mock via OPENAI_BASE_URL). Checks the
+# request we send (reasoning effort, stateless encrypted reasoning, forced tool, no
+# strict text.format) and that a reask sends the model's reasoning back with the
+# error as the function call's output (_patch_openai_responses, #72).
+print("\n-- part 4: mock OpenAI Responses server --")
+resp = {"asset": 0, "requests": [], "bad_sent": False}
+
+
+class MockResponses(BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        resp["requests"].append((self.path, body))
+        tool = body["tools"][0]["name"]
+        if tool == "LabPlan":
+            data = (REPLAY / "00_plan.json").read_text(encoding="utf-8")
+        elif tool == "ModuleAssetPlan":
+            resp["asset"] += 1
+            data = (REPLAY / f"{resp['asset']:02d}_asset_plan.json").read_text(encoding="utf-8")
+        elif not resp["bad_sent"]:
+            resp["bad_sent"] = True
+            data = json.dumps({"moduleName": "broken"})   # invalid -> reask
+        else:
+            data = (REPLAY / f"{resp['asset']:02d}_module.json").read_text(encoding="utf-8")
+        n = len(resp["requests"])
+        payload = json.dumps({
+            "id": f"resp_{n}", "object": "response", "created_at": 0, "status": "completed",
+            "model": body["model"],
+            "output": [
+                {"type": "reasoning", "id": f"rs_{n}", "summary": [],
+                 "encrypted_content": f"enc-{n}"},
+                {"type": "function_call", "id": f"fc_{n}", "call_id": f"call_{n}",
+                 "name": tool, "arguments": data, "status": "completed"},
+            ],
+            "usage": {"input_tokens": 1000, "output_tokens": 200, "total_tokens": 1200,
+                      "input_tokens_details": {"cached_tokens": 600, "cache_write_tokens": 100},
+                      "output_tokens_details": {"reasoning_tokens": 50}},
+        }).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+
+rsrv = HTTPServer(("127.0.0.1", 0), MockResponses)
+threading.Thread(target=rsrv.serve_forever, daemon=True).start()
+_saved_env = {k: os.environ.get(k) for k in ("OPENAI_BASE_URL", "OPENAI_API_KEY")}
+os.environ["OPENAI_BASE_URL"] = f"http://127.0.0.1:{rsrv.server_port}/v1"
+os.environ["OPENAI_API_KEY"] = "test"
+try:
+    rec = P.HierarchicalPipeline("gpt-6-luna", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
+                                 output_dir=TMP / "responses", run_name="responses").run()
+finally:
+    rsrv.shutdown()
+    for k, v in _saved_env.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
+rreqs = resp["requests"]
+check(rec["success"] and rec["decode_mode"] == "responses_tools"
+      and all(path == "/v1/responses" for path, _ in rreqs),
+      "GPT-6 runs on the Responses API (every request to /v1/responses)")
+check(all(b.get("store") is False and b.get("include") == ["reasoning.encrypted_content"]
+          and b.get("reasoning") == {"effort": "medium"} for _, b in rreqs)
+      and rec["reasoning_effort"] == "medium",
+      "every request: effort medium, store false, encrypted reasoning requested")
+check(all(b.get("tool_choice") == {"type": "function", "name": b["tools"][0]["name"]}
+          and "text" not in b for _, b in rreqs),
+      "the step's tool is forced and no strict text.format is sent")
+_rr = next((b for _, b in rreqs if any(isinstance(i, dict) and i.get("type") == "function_call_output"
+                                       for i in b["input"])), None)
+_tail = _rr["input"][-3:] if _rr else []
+check(_rr is not None and [i.get("type") for i in _tail] == ["reasoning", "function_call",
+                                                            "function_call_output"]
+      and _tail[0].get("encrypted_content", "").startswith("enc-")
+      and _tail[2]["call_id"] == _tail[1]["call_id"]
+      and "Validation Error found" in _tail[2]["output"],
+      "a reask sends the reasoning and the call back, with the error as the call's output")
+_m1 = next((s for s in rec["steps"] if s["step"] == "module" and s["index"] == 1), None)
+check(_m1 is not None and _m1["success"] and _m1["parse_errors"] == 1 and _m1["retries"] == 1,
+      "the reask costs one attempt and the step succeeds")
+check(rec["served_models"] == ["gpt-6-luna"]
+      and rec["totals"]["prompt_tokens"] == 1000 * len(rreqs)
+      and rec["totals"]["cached_tokens"] == 600 * len(rreqs)
+      and rec["totals"]["cache_write_tokens"] == 100 * len(rreqs)
+      and abs(rec["totals"]["cost_usd"]
+              - len(rreqs) * (300 * 0.10 + 600 * 0.01 + 100 * 0.125 + 200 * 0.50) / 1e6) < 1e-9,
+      "Responses usage (cached, cache writes) tracked and priced at GPT-6 Luna rates")
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("\nALL PASSED" if not FAILED else "\nSOME FAILED")

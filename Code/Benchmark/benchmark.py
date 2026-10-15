@@ -19,11 +19,14 @@ Usage:
     python benchmark.py --model gpt-4o-mini --lab phases_of_the_moon --level L3 \
         --spec json_lab arlem arlem_simple
 
-    # Quick benchmark suite (all default topics × cheap models)
+    # Quick benchmark suite (all default topics × the current small tier)
     python benchmark.py --suite quick
 
-    # Full benchmark suite (all default topics × all models)
+    # Full benchmark suite (all default topics × the current roster)
     python benchmark.py --suite full
+
+    # The paper's wave-2 roster (frozen)
+    python benchmark.py --suite wave2
 """
 
 import argparse
@@ -32,6 +35,7 @@ import importlib.util
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 import time
@@ -53,15 +57,18 @@ load_dotenv(PROJECT_ROOT / ".env")
 from benchmark_config import (
     ARLEM_PROMPT_TEMPLATE,
     BenchmarkRunConfig,
+    CURRENT_MODELS,
     DEFAULT_TOPICS,
     FULL_BENCHMARK_MODELS,
     MODELS,
+    ONESHOT_OUTPUT_DIR,
     ModelConfig,
     ModelSize,
     Provider,
     QUICK_BENCHMARK_MODELS,
     SYSTEM_PROMPT,
     SpecType,
+    WAVE2_MODELS,
     models_by_size,
 )
 from prompt_builder import (
@@ -149,6 +156,65 @@ def _patch_genai_parallel_call_retry():
 
     parse_genai_tools_retryable._arlem_retryable_patch = True
     genai_handlers.parse_genai_tools = parse_genai_tools_retryable
+
+
+_RESPONSES_PATCH_WARNED = False
+
+
+def _patch_openai_responses():
+    """Two changes to instructor's OpenAI Responses handler (GPT-6, issue #72).
+
+    1. **The reask keeps the model's reasoning.** instructor's
+       ``reask_responses_tools`` answers a failed parse with a plain user message,
+       so the model reasons from scratch on every reask. Claude's and Gemini's
+       reasks send their reasoning back (thinking blocks / thought signatures), so
+       this one does too: the previous output items unchanged (the encrypted
+       reasoning item, requested by ``provider_create_kwargs`` with
+       ``store=False`` + ``include``, and the function call), then a
+       ``function_call_output`` carrying the validation error, the same way
+       Claude gets a ``tool_result``. A reply with no function call falls back to
+       instructor's own reask.
+    2. **No strict ``text.format``.** The handler also sends the tool schema as a
+       strict JSON ``text.format``. The forced function call already defines the
+       output, and strict mode is the part most likely to reject our schemas
+       (``default`` keys, nesting), so it is dropped.
+
+    Both targets are module globals the handler calls by name (instructor 1.17).
+    Idempotent: a marker attribute on the installed reask makes repeat calls no-ops.
+    """
+    import instructor.v2.providers.openai.handlers as openai_handlers
+
+    original_reask = openai_handlers.reask_responses_tools
+    if getattr(original_reask, "_arlem_responses_patch", False):
+        return
+
+    def reask_with_reasoning(kwargs, response, exception):
+        output = list(getattr(response, "output", None) or [])
+        calls = [item for item in output if getattr(item, "type", None) == "function_call"]
+        if not calls:
+            return original_reask(kwargs, response, exception)
+        def feedback(call):
+            # instructor's own wording, including its empty-arguments case
+            args = getattr(call, "arguments", "")
+            if not args or (isinstance(args, str) and args.strip() in {"", "{}"}):
+                return (f"Validation Error found:\n{exception}\nThe function was called "
+                        "with empty arguments '{}'. You MUST populate ALL required fields "
+                        "in the function call according to the schema. Do not return "
+                        "empty arguments.")
+            return f"Validation Error found:\n{exception}\nRecall the function correctly, fix the errors"
+
+        kwargs = kwargs.copy()
+        kwargs["messages"] = [
+            *kwargs.get("messages", []),
+            *output,
+            *({"type": "function_call_output", "call_id": c.call_id, "output": feedback(c)}
+              for c in calls),
+        ]
+        return kwargs
+
+    reask_with_reasoning._arlem_responses_patch = True
+    openai_handlers.reask_responses_tools = reask_with_reasoning
+    openai_handlers._ensure_text_format_config = lambda *args, **kwargs: None
 
 
 # ── bounded transient-error retry (issue #54 / review F5) ──────────────
@@ -288,6 +354,8 @@ def decode_mode_for(model_config: ModelConfig, spec_type: SpecType):
         return instructor.Mode.ANTHROPIC_TOOLS
     if model_config.provider == Provider.GOOGLE:
         return instructor.Mode.GENAI_TOOLS
+    if model_config.responses_api:
+        return instructor.Mode.RESPONSES_TOOLS  # GPT-6: tools + reasoning (#72)
     return instructor.Mode.TOOLS  # OpenAI (from_provider default)
 
 
@@ -356,6 +424,24 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
     kwargs = {}
     if model_config.provider == Provider.OPENAI:
         kwargs["max_retries"] = 0  # SDK retries off: _transient_retryer is the one (counted)
+        # Same 900 s timeout as Anthropic: a long lab (GPT-6 reasons by default)
+        # must not hit the SDK's 600 s default and be re-sent as "transient".
+        import httpx
+        kwargs["timeout"] = httpx.Timeout(900.0, connect=5.0)
+        if model_config.responses_api:
+            kwargs["mode"] = decode_mode_for(model_config, spec_type)
+            try:
+                _patch_openai_responses()
+            except (ImportError, AttributeError):
+                global _RESPONSES_PATCH_WARNED
+                if not _RESPONSES_PATCH_WARNED:
+                    print(
+                        "  WARNING: OpenAI Responses patch not applied (it targets the "
+                        "pinned instructor's v2 openai handlers, #72): reasks won't "
+                        "carry the model's reasoning, and a strict text.format is sent.",
+                        file=sys.stderr,
+                    )
+                    _RESPONSES_PATCH_WARNED = True
     # from_provider expects GOOGLE_API_KEY but our .env uses GEMINI_API_KEY.
     # All specs use free-decode GENAI_TOOLS on the unified schema (see decode_mode_for).
     if model_config.provider == Provider.GOOGLE:
@@ -366,6 +452,41 @@ def create_instructor_client(model_config: ModelConfig, spec_type: SpecType):
         f"{prefix}/{model_config.model_id}",
         **kwargs,
     )
+
+
+_RUN_GROUP_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def run_group_dir(root, run_group: Optional[str]) -> Path:
+    """``root/[<run_group>/]``. A run group is a single folder name, so test runs
+    and data-collection runs can be kept apart (one-shot and hierarchical alike)."""
+    root = Path(root)
+    if run_group is None:
+        return root
+    if not _RUN_GROUP_RE.match(run_group):
+        raise ValueError(
+            f"Invalid run group {run_group!r}: use a single folder name made of "
+            "letters, digits, '_' or '-'"
+        )
+    return root / run_group
+
+
+def served_model_mismatches(model_id: str, served_models: list[str]) -> list[str]:
+    """Served model ids that aren't the requested one. A dated snapshot of it
+    (``gpt-6-luna-2026-09-01`` / ``-20260901`` for ``gpt-6-luna``) counts as the same
+    model; anything else does, whether a redirect (``gemini-3.6-flash`` for
+    ``gemini-3.5-flash``) or a sibling that merely extends the id
+    (``gemini-3.5-flash-lite``)."""
+    same = re.compile(re.escape(model_id) + r"(-\d{4}-\d{2}-\d{2}|-\d{8})?")
+    return [m for m in served_models if not same.fullmatch(m)]
+
+
+def warn_served_model(model_id: str, served_models: list[str]) -> None:
+    """Print a warning when a run was answered by a model other than the one asked for."""
+    other = served_model_mismatches(model_id, served_models)
+    if other:
+        print(f"  WARNING: requested {model_id}, but the provider answered with "
+              f"{', '.join(other)} (recorded in served_models; priced as {model_id})")
 
 
 # ── Environment preflight ────────────────────────────────────────────
@@ -494,6 +615,23 @@ def provider_create_kwargs(model_config: ModelConfig, response_model) -> dict:
             f"Respond only by calling the `{tool_name}` tool, exactly once. "
             "Do not answer in plain text."
         )
+
+    # Reasoning effort, pinned per model (ModelConfig.reasoning_effort; None keeps
+    # the provider default, as in wave 2). Each provider names it differently.
+    effort = model_config.reasoning_effort
+    if effort and model_config.provider == Provider.ANTHROPIC:
+        kwargs["output_config"] = {"effort": effort}
+    elif effort and model_config.provider == Provider.GOOGLE:
+        # instructor's update_genai_kwargs moves this into GenerateContentConfig
+        kwargs["thinking_config"] = {"thinking_level": effort}
+    if model_config.provider == Provider.OPENAI and model_config.responses_api:
+        if effort:
+            kwargs["reasoning"] = {"effort": effort}
+        # Stateless reasoning: nothing stored by OpenAI, and the reasoning comes
+        # back encrypted so a reask can send it back (_patch_openai_responses),
+        # the way Claude's thinking blocks and Gemini's thought signatures go back.
+        kwargs["store"] = False
+        kwargs["include"] = ["reasoning.encrypted_content"]
     return kwargs
 
 
@@ -709,6 +847,7 @@ def run_single_benchmark(
 
     # Collect tracking metrics
     tracker_summary = tracker.summary()
+    warn_served_model(model_config.model_id, tracker_summary["served_models"])
 
     # Save any retry / terminal errors next to the metrics file
     errors_file_rel: Optional[str] = None
@@ -724,6 +863,8 @@ def run_single_benchmark(
         "spec_type": run_config.spec_type.value,
         "decode_mode": decode_mode.value,  # instructor enforcement path actually used
         "tool_choice": tool_choice_for(model_config),
+        "reasoning_effort": model_config.reasoning_effort,   # None = provider default
+        "served_models": tracker_summary["served_models"],   # what actually answered
         "topic": run_config.topic,
         "lab_name": run_config.lab_name,
         "level": run_config.level.value if run_config.level else None,
@@ -743,6 +884,7 @@ def run_single_benchmark(
         # tracking.retries (instructor parse-error self-correction) so infra noise
         # does not inflate the self-correction signal (issue #54).
         "transient_retries": transient_retries,
+        "run_group": run_config.run_group,
         "wall_time_seconds": round(wall_time_s, 2),
         "provenance": get_provenance(),
         "tracking": tracker_summary,
@@ -903,6 +1045,7 @@ def run_benchmark_suite(
     structure: Structure = Structure.MULTI_MODULE,
     save_prompts: bool = True,
     overwrite_prompts: bool = False,
+    run_group: Optional[str] = None,
 ) -> list[dict]:
     """
     Run benchmarks across multiple models and work items.
@@ -916,6 +1059,7 @@ def run_benchmark_suite(
     Returns list of all result records.
     """
     spec_types = spec_types or [SpecType.JSON_LAB]
+    output_dir = run_group_dir(ONESHOT_OUTPUT_DIR, run_group)
 
     # Build the ordered work-item list: (lab_name, level, topic, spec_type)
     work_items: list[tuple[Optional[str], Optional[Level], Optional[str], SpecType]] = []
@@ -968,6 +1112,8 @@ def run_benchmark_suite(
                 structure=structure,
                 max_retries=max_retries,
                 save_output=save_output,
+                output_dir=str(output_dir),
+                run_group=run_group,
             )
             # Only override the dataclass default topic on the legacy path,
             # so YAML runs keep BenchmarkRunConfig's default topic string.
@@ -1000,10 +1146,10 @@ def run_benchmark_suite(
 
     # Save combined results
     if save_output:
-        output_dir = PROJECT_ROOT / "Artifacts" / "Data" / "Benchmark"
-        output_dir.mkdir(parents=True, exist_ok=True)
+        suite_dir = PROJECT_ROOT / output_dir
+        suite_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        summary_path = output_dir / f"suite_results_{ts}.json"
+        summary_path = suite_dir / f"suite_results_{ts}.json"
         summary_path.write_text(
             json.dumps(results, indent=2, default=str), encoding="utf-8"
         )
@@ -1056,22 +1202,24 @@ def parse_args():
     parser.add_argument(
         "--small-models",
         action="store_true",
-        help="Include all SMALL-tier models (combinable with other tiers / --model)",
+        help="Include the current roster's SMALL-tier models (combinable with other "
+             "tiers / --model)",
     )
     parser.add_argument(
         "--medium-models",
         action="store_true",
-        help="Include all MEDIUM-tier models",
+        help="Include the current roster's MEDIUM-tier models",
     )
     parser.add_argument(
         "--large-models",
         action="store_true",
-        help="Include all LARGE-tier models",
+        help="Include the current roster's LARGE-tier models",
     )
     parser.add_argument(
         "--all-models",
         action="store_true",
-        help="Include every registered model (all three tiers)",
+        help="Include the whole current roster (all three tiers); wave-2 models "
+             "run by name or with --suite wave2",
     )
     parser.add_argument(
         "--topic", "-t",
@@ -1089,9 +1237,10 @@ def parse_args():
     )
     parser.add_argument(
         "--suite",
-        choices=["quick", "full"],
+        choices=["quick", "full", "wave2"],
         default=None,
-        help="Run a pre-defined benchmark suite",
+        help="Run a pre-defined benchmark suite: quick (current small tier), full "
+             "(current roster) or wave2 (the paper's frozen roster)",
     )
     parser.add_argument(
         "--max-retries",
@@ -1150,6 +1299,13 @@ def parse_args():
         help="Skip writing the prompt artifact alongside benchmark outputs",
     )
     parser.add_argument(
+        "--run-group",
+        type=str,
+        default=None,
+        help="Write runs to Artifacts/Data/OneShot/<NAME>/ (default: Artifacts/Data/OneShot/). "
+             "Artifacts/Data/Benchmark/ is the frozen wave-2 dataset and is never written.",
+    )
+    parser.add_argument(
         "--overwrite-prompts",
         action="store_true",
         help="Rewrite the prompt artifact file even if it already exists",
@@ -1163,10 +1319,12 @@ def main():
 
     if args.list_models:
         print("\nAvailable models:")
-        print(f"  {'model':<25} {'tier':<8} {'provider':<12} name")
+        print(f"  {'model':<25} {'roster':<8} {'tier':<8} {'provider':<12} name")
         for model_id, config in MODELS.items():
+            roster = ("current" if model_id in CURRENT_MODELS
+                      else "wave 2" if model_id in WAVE2_MODELS else "-")
             print(
-                f"  {model_id:<25} {config.size.value:<8} "
+                f"  {model_id:<25} {roster:<8} {config.size.value:<8} "
                 f"{config.provider.value:<12} {config.display_name}"
             )
         return
@@ -1263,16 +1421,22 @@ def main():
 
     # ── Dispatch ─────────────────────────────────────────────────────────
     if args.suite:
-        model_ids = (
-            QUICK_BENCHMARK_MODELS if args.suite == "quick"
-            else FULL_BENCHMARK_MODELS
-        )
+        model_ids = {
+            "quick": QUICK_BENCHMARK_MODELS,
+            "full": FULL_BENCHMARK_MODELS,
+            "wave2": WAVE2_MODELS,
+        }[args.suite]
     else:
         model_ids = resolved_models
 
+    try:
+        run_group_dir(ONESHOT_OUTPUT_DIR, args.run_group)  # validate before any run
+    except ValueError as e:
+        sys.exit(f"Error: {e}")
     require_environment([MODELS[m] for m in model_ids if m in MODELS])
 
     common = dict(
+        run_group=args.run_group,
         spec_types=spec_types,
         max_retries=args.max_retries,
         save_output=save_output,

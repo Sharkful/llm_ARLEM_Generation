@@ -31,8 +31,10 @@ class TokenUsage:
     completion_tokens: int = 0
     total_tokens: int = 0
 
-    # Extended details (optional, provider-dependent)
-    cached_tokens: int = 0
+    # Extended details (optional, provider-dependent). Both cache counts are part
+    # of prompt_tokens on every provider (Anthropic's are folded in below).
+    cached_tokens: int = 0          # input read from the provider's prompt cache
+    cache_write_tokens: int = 0     # input written to the cache (OpenAI GPT-5.6+, Anthropic)
     reasoning_tokens: int = 0
 
     def __add__(self, other: 'TokenUsage') -> 'TokenUsage':
@@ -42,6 +44,7 @@ class TokenUsage:
             completion_tokens=self.completion_tokens + other.completion_tokens,
             total_tokens=self.total_tokens + other.total_tokens,
             cached_tokens=self.cached_tokens + other.cached_tokens,
+            cache_write_tokens=self.cache_write_tokens + other.cache_write_tokens,
             reasoning_tokens=self.reasoning_tokens + other.reasoning_tokens,
         )
 
@@ -90,11 +93,32 @@ class TokenUsage:
 
         usage = completion.usage
 
+        # --- OpenAI Responses API (GPT-6): input_tokens already includes cached
+        # tokens; both cache counts and reasoning sit in the *_details objects.
+        input_details = getattr(usage, 'input_tokens_details', None)
+        if input_details is not None:
+            output_details = getattr(usage, 'output_tokens_details', None)
+            prompt = getattr(usage, 'input_tokens', 0) or 0
+            output = getattr(usage, 'output_tokens', 0) or 0
+            return cls(
+                prompt_tokens=prompt,
+                completion_tokens=output,   # includes reasoning tokens
+                total_tokens=getattr(usage, 'total_tokens', None) or prompt + output,
+                cached_tokens=getattr(input_details, 'cached_tokens', 0) or 0,
+                cache_write_tokens=getattr(input_details, 'cache_write_tokens', 0) or 0,
+                reasoning_tokens=getattr(output_details, 'reasoning_tokens', 0) or 0,
+            )
+
         # Extract base token counts
+        cached = 0
+        cache_write = 0
         prompt = getattr(usage, 'prompt_tokens', None)
         if prompt is None:
-            # Anthropic uses input_tokens
-            prompt = getattr(usage, 'input_tokens', 0)
+            # Anthropic uses input_tokens, which excludes cache reads and writes;
+            # fold them in so prompt_tokens means all input on every provider.
+            cached = getattr(usage, 'cache_read_input_tokens', 0) or 0
+            cache_write = getattr(usage, 'cache_creation_input_tokens', 0) or 0
+            prompt = (getattr(usage, 'input_tokens', 0) or 0) + cached + cache_write
 
         completion_tokens = getattr(usage, 'completion_tokens', None)
         if completion_tokens is None:
@@ -105,13 +129,14 @@ class TokenUsage:
         if total is None:
             total = (prompt or 0) + (completion_tokens or 0)
 
-        # Extract extended details if available
-        cached = 0
+        # Extract extended details if available (OpenAI)
         reasoning = 0
 
         prompt_details = getattr(usage, 'prompt_tokens_details', None)
         if prompt_details:
             cached = getattr(prompt_details, 'cached_tokens', 0) or 0
+            # GPT-5.6 and later bill cache writes at 1.25x input and report them here
+            cache_write = getattr(prompt_details, 'cache_write_tokens', 0) or 0
 
         completion_details = getattr(usage, 'completion_tokens_details', None)
         if completion_details:
@@ -122,8 +147,25 @@ class TokenUsage:
             completion_tokens=completion_tokens or 0,
             total_tokens=total or 0,
             cached_tokens=cached,
+            cache_write_tokens=cache_write,
             reasoning_tokens=reasoning,
         )
+
+
+def served_model_of(completion: Any) -> Optional[str]:
+    """The model id a provider response says answered it: Gemini
+    ``model_version``, OpenAI / Anthropic ``model``. A provider can serve a
+    request with a different model than the one asked for (Google routes
+    gemini-3.5-flash to gemini-3.6-flash since 2026-10-08)."""
+    if completion is None:
+        return None
+    if hasattr(completion, '_raw_response'):
+        completion = completion._raw_response
+    for attr in ('model_version', 'model'):
+        val = getattr(completion, attr, None)
+        if isinstance(val, str) and val:
+            return val.removeprefix('models/')
+    return None
 
 
 @dataclass
@@ -147,6 +189,7 @@ class AttemptMetrics:
     error: Optional[ErrorRecord] = None
     duration_ms: Optional[float] = None
     responded: bool = False         # a response arrived for this request
+    served_model: Optional[str] = None  # model id the response reports
 
 
 @dataclass

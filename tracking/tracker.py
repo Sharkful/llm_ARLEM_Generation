@@ -18,6 +18,7 @@ from .metrics import (
     CallMetrics,
     AggregateMetrics,
     ErrorType,
+    served_model_of,
 )
 from .hooks import (
     classify_error,
@@ -185,6 +186,11 @@ class InstructorTracker:
     # Public API - Reporting
     # =========================================================================
 
+    def served_models(self) -> List[str]:
+        """Every model id the responses reported, sorted (see served_model_of)."""
+        return sorted({a.served_model for c in self.aggregate.calls for a in c.attempts
+                       if a.served_model})
+
     def summary(self) -> Dict[str, Any]:
         """Generate a summary dictionary of all metrics."""
         agg = self.aggregate
@@ -192,6 +198,7 @@ class InstructorTracker:
             "session_id": self.session_id,
             "model": self.model,
             "provider": self.provider,
+            "served_models": self.served_models(),
             "total_calls": agg.total_calls,
             "successful_calls": agg.successful_calls,
             "failed_calls": agg.failed_calls,
@@ -200,6 +207,8 @@ class InstructorTracker:
                 "prompt": agg.total_usage.prompt_tokens,
                 "completion": agg.total_usage.completion_tokens,
                 "total": agg.total_usage.total_tokens,
+                "cached": agg.total_usage.cached_tokens,
+                "cache_write": agg.total_usage.cache_write_tokens,
             },
             "retries": {
                 "total": agg.total_retries,
@@ -431,6 +440,7 @@ class InstructorTracker:
 
             usage = TokenUsage.from_completion(response)
             attempt.usage = attempt.usage + usage
+            attempt.served_model = served_model_of(response)
             attempt.responded = True
             attempt.success = True      # provisional: a parse error clears it
             call.total_usage = call.total_usage + usage

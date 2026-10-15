@@ -48,14 +48,16 @@ supplied, the YAML path wins and `--topic` is ignored.
 | Flag | Behavior |
 | --- | --- |
 | `--model`, `-m` `<id> [<id> ...]` | One or more explicit model IDs (space-separated). |
-| `--small-models` | All `SMALL`-tier models. |
-| `--medium-models` | All `MEDIUM`-tier models. |
-| `--large-models` | All `LARGE`-tier models. |
-| `--all-models` | Every registered model (all three tiers). |
+| `--small-models` | The current roster's `SMALL`-tier models. |
+| `--medium-models` | The current roster's `MEDIUM`-tier models. |
+| `--large-models` | The current roster's `LARGE`-tier models. |
+| `--all-models` | The whole current roster (all three tiers). |
 
-Tier flags and `--model` combine (union, de-duplicated, registry order
-preserved). For example `--small-models -m claude-opus-4.8` runs every small
-model **plus** Opus.
+Tier flags and `--model` combine (union, de-duplicated, roster order
+preserved). They draw from the current roster only (`CURRENT_MODELS`); wave-2
+models run by name or with `--suite wave2`. For example
+`--small-models -m claude-opus-4.8` runs every current small model **plus**
+Opus 4.8.
 
 ### Lab / level (YAML-driven path)
 
@@ -94,10 +96,11 @@ Coherence rules enforced at startup (non-suite path):
 
 | Flag | Behavior |
 | --- | --- |
-| `--suite {quick,full}` | Run a predefined model set across `DEFAULT_TOPICS` (legacy path). |
+| `--suite {quick,full,wave2}` | Run a predefined model set across `DEFAULT_TOPICS` (legacy path). |
 
-- `quick` → `gpt-5.4-nano`, `claude-haiku-4.5`, `gemini-2.5-flash-lite`
-- `full` → every registered model
+- `quick` → the current small tier: `gpt-6-luna`, `claude-haiku-5.5`, `gemini-3.5-flash-lite`
+- `full` → the whole current roster (`CURRENT_MODELS`, 8 models)
+- `wave2` → the paper's frozen 11-model roster (`WAVE2_MODELS`)
 
 `--suite` **cannot** be combined with `--model`, the tier flags, `--all-labs`,
 or `--all-levels`. (You may pair `--suite` with a single `--lab`/`--level` if
@@ -133,7 +136,7 @@ total runs = (models) × (specs × topics)          # legacy path
 ```
 
 So `--all-models --all-levels --lab heart_anatomy_and_blood_flow` is
-`11 models × 1 spec × 1 lab × 3 levels = 33 runs`. Confirm your model count with
+`8 models × 1 spec × 1 lab × 3 levels = 24 runs`. Confirm your model count with
 `--list-models` before launching a large paid sweep.
 
 L1 returns the same spec-agnostic `LabOutline` whatever `--spec` says, so
@@ -190,10 +193,29 @@ ARLEM prompts take their own structural minima (`min_things`, `min_places`,
 
 ## Registered models
 
-Snapshot of the registry (`MODELS` in `benchmark_config.py`), the 11-model
-roster locked in issue #32 and used for wave 2. Run `--list-models` for the live
-list. The CLI id is the registry key; file names use the provider model id with
-dots turned into dashes.
+Snapshot of the registry (`MODELS` in `benchmark_config.py`), which holds two
+rosters. Run `--list-models` for the live list. The CLI id is the registry key;
+file names use the provider model id with dots turned into dashes.
+
+**Current roster** (issue #72, 2026-10; `CURRENT_MODELS`, used by the suites and
+tier flags). GPT-6.1 Sol is priced like Sonnet 5.5, so OpenAI has no large entry.
+Every current model runs at reasoning effort `medium` (wave-2 models keep their
+provider defaults), and both GPT-6 models use the OpenAI Responses API.
+
+| CLI id | Provider model id | Tier | Provider |
+| --- | --- | --- | --- |
+| `gpt-6.1-sol` | `gpt-6.1-sol` | medium | OpenAI |
+| `gpt-6-luna` | `gpt-6-luna` | small | OpenAI |
+| `claude-opus-5.5` | `claude-opus-5-5` | large | Anthropic |
+| `claude-sonnet-5.5` | `claude-sonnet-5-5` | medium | Anthropic |
+| `claude-haiku-5.5` | `claude-haiku-5-5` | small | Anthropic |
+| `gemini-4-argon` | `gemini-4-argon` | large | Google |
+| `gemini-3.8-flash` | `gemini-3.8-flash` | medium | Google |
+| `gemini-3.5-flash-lite` | `gemini-3.5-flash-lite` | small | Google |
+
+**Wave-2 roster** (locked in issue #32, the paper's dataset; `WAVE2_MODELS`,
+frozen). Since 2026-10-08 Google serves `gemini-3.5-flash` requests with
+`gemini-3.6-flash`; runs record the answering model in `served_models`.
 
 | CLI id | Provider model id | Tier | Provider |
 | --- | --- | --- | --- |
@@ -239,7 +261,10 @@ the "streaming required" guard.
 
 ## Output files
 
-Everything lands under `Artifacts/Data/Benchmark/` unless `--no-save` is set.
+Everything lands under `Artifacts/Data/OneShot/` (or `OneShot/<NAME>/` with
+`--run-group NAME`) unless `--no-save` is set. `Artifacts/Data/Benchmark/` holds the
+frozen wave-2 sweep, the paper's dataset, and is never written by new runs, wave-2
+roster reruns included (they use a different request stack).
 Base name is `{model}_{spec}[_{level}]_{timestamp}` (dots in the model ID become
 dashes; `{level}` — L1-L4 — is included on the YAML-driven path so runs that differ
 only by level are distinguishable by filename). The `Outputs/{base}_output.json`,
@@ -249,7 +274,7 @@ only by level are distinguishable by filename). The `Outputs/{base}_output.json`
 | --- | --- |
 | `Outputs/{base}_output.json` | The generated `Lab` / `DemoModule` / `LabOutline` / ARLEM JSON. |
 | `Metrics/{base}_metrics.json` | Full record: tokens, cost, retries, wall time, `lab_metrics`, and references to the prompt / errors files. |
-| `suite_results_{timestamp}.json` | Combined records for the whole invocation (at the Benchmark root). |
+| `suite_results_{timestamp}.json` | Combined records for the whole invocation (at the output folder's root). |
 | `prompts/{lab}_{level}_{spec}[_{structure}].txt` | The assembled user prompt. |
 | `Reports/` | Generated notebooks/HTML/CSV from the report builders. |
 | `../Errors/{base}_errors.txt` | Per-attempt validation / API errors for that run (under `Artifacts/Data/Errors/`). |
@@ -298,6 +323,7 @@ python "Code/Benchmark/benchmark.py" --model claude-sonnet-5 --spec arlem --topi
 # Predefined suites
 python "Code/Benchmark/benchmark.py" --suite quick
 python "Code/Benchmark/benchmark.py" --suite full
+python "Code/Benchmark/benchmark.py" --suite wave2
 ```
 
 ### Sweeping a subset of labs
@@ -312,7 +338,7 @@ python "Code/Benchmark/benchmark.py" --all-models --all-levels --lab heart_anato
 python "Code/Benchmark/benchmark.py" --all-models --all-levels --lab apparent_retrograde_motion
 ```
 
-Each command writes its own `suite_results_{timestamp}.json` at the
-`Artifacts/Data/Benchmark/` root; the per-run `_output.json` / `_metrics.json`
-files accumulate in the shared `Benchmark/Outputs/` and `Benchmark/Metrics/`
-subfolders.
+Each command writes its own `suite_results_{timestamp}.json` at the output
+folder's root (`Artifacts/Data/OneShot/[<run group>/]`; wave 2 used
+`Artifacts/Data/Benchmark/`); the per-run `_output.json` / `_metrics.json` files
+accumulate in its `Outputs/` and `Metrics/` subfolders.
