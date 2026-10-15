@@ -902,7 +902,7 @@ class HierarchicalPipeline:
                 asset_plan = self._run_step(
                     "asset_plan", i, ModuleAssetPlan,
                     prompts.build_asset_plan_prompt(
-                        self.lab_context, plan, i, self.registry,
+                        opening, plan, i, self.registry,
                         allow_new_components=cfg.allow_new_components,
                         min_objects=cfg.min_objects, min_beats=cfg.min_clips,
                     ),
@@ -919,7 +919,7 @@ class HierarchicalPipeline:
                 module = self._run_step(
                     "module", i, PlannedDemoModule,
                     prompts.build_module_prompt(
-                        self.lab_context, plan, i, self.registry, asset_plan, usable=usable,
+                        opening, plan, i, self.registry, asset_plan, usable=usable,
                         min_objects=cfg.min_objects, min_clips=cfg.min_clips,
                     ),
                     cfg.module_retries, f"{i:02d}_module", "module",

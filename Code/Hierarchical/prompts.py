@@ -2,17 +2,18 @@
 Prompt templates for hierarchical (module-at-a-time) JSON Lab generation.
 
 Three LLM steps, each with its own template:
-  1. PLAN_INSTRUCTION         lab description -> LabOutline (one scene per module)
-  2. ASSET_PLAN_INSTRUCTION   one scene -> ModuleAssetPlan (objects, components, why)
-  3. MODULE_INSTRUCTION       approved asset plan -> DemoModule
+  1. PLAN_INSTRUCTION   lab description -> LabOutline (one scene per module)
+  2. ASSET_PLAN_TASK    one scene -> ModuleAssetPlan (objects, components, why)
+  3. MODULE_TASK        approved asset plan -> DemoModule
 
 Prompt order is cache-friendly: every prompt *starts* with the same block (the
 lab description), and the asset-plan and module prompts continue with the same
 approved plan, before anything step- or module-specific. Providers with automatic
 prefix caching (OpenAI, Gemini) then bill that repeated opening at the cached
-rate on every call after the first. Anthropic caches only marked prefixes: the
-pipeline marks the end of shared_opening() as a cache breakpoint (#73), so the
-asset-plan and module templates must keep starting with LAB_BLOCK + PLAN_BLOCK.
+rate on every call after the first. The asset-plan and module prompts are built
+as shared_opening() + their task template, so the opening is the same bytes by
+construction; Anthropic caches only marked prefixes, and the pipeline marks the
+end of that opening as a cache breakpoint (#73).
 
 The plan, earlier modules, and the asset registry are appended as compact
 summaries rather than full JSON, so prompt size grows slowly with module count.
@@ -65,7 +66,8 @@ Requirements:
 - top_level_objectives are the learning objectives for the lab as a whole.
 """
 
-ASSET_PLAN_INSTRUCTION = LAB_BLOCK + "\n" + PLAN_BLOCK + """
+# The asset-plan and module prompts are shared_opening() + one of these.
+ASSET_PLAN_TASK = """
 # Asset library
 {assets}
 
@@ -120,7 +122,7 @@ NEW_COMPONENTS_DISABLED = """\
 - New components are disabled for this run: leave new_components empty and use only
   components from the catalog."""
 
-MODULE_INSTRUCTION = LAB_BLOCK + "\n" + PLAN_BLOCK + """
+MODULE_TASK = """
 # Component catalog
 {catalog}
 
@@ -211,9 +213,9 @@ def render_plan(plan: LabOutline) -> str:
 # ── Prompt builders ──────────────────────────────────────────────────
 
 def shared_opening(lab_context: str, plan: LabOutline) -> str:
-    """The opening every asset-plan and module prompt starts with, byte for byte
-    (both templates begin LAB_BLOCK + "\n" + PLAN_BLOCK). The pipeline marks its
-    end as Anthropic's cache breakpoint (#73)."""
+    """The opening every asset-plan and module prompt starts with: the builders
+    below take it and append their task. The pipeline builds it once per run and
+    marks its end as Anthropic's cache breakpoint (#73)."""
     return (LAB_BLOCK.format(lab_context=lab_context) + "\n"
             + PLAN_BLOCK.format(plan=render_plan(plan)))
 
@@ -230,7 +232,7 @@ def build_plan_prompt(lab_context: str, *, has_script: bool, max_scenes: int) ->
 
 
 def build_asset_plan_prompt(
-    lab_context: str,
+    opening: str,
     plan: LabOutline,
     index: int,
     registry: AssetRegistry,
@@ -239,9 +241,8 @@ def build_asset_plan_prompt(
     min_objects: int,
     min_beats: int,
 ) -> str:
-    return ASSET_PLAN_INSTRUCTION.format(
-        lab_context=lab_context,
-        plan=render_plan(plan),
+    """``opening`` is ``shared_opening(lab_context, plan)``."""
+    return opening + ASSET_PLAN_TASK.format(
         index=index,
         total=len(plan.scenes),
         scene=_render_scene(plan.scenes[index - 1]),
@@ -320,7 +321,7 @@ def render_new_component_entries(usable: list[UsableNewComponent]) -> str:
 
 
 def build_module_prompt(
-    lab_context: str,
+    opening: str,
     plan: LabOutline,
     index: int,
     registry: AssetRegistry,
@@ -330,10 +331,9 @@ def build_module_prompt(
     min_objects: int,
     min_clips: int,
 ) -> str:
-    """``usable`` is ``usable_new_components(asset_plan, registry)``."""
-    return MODULE_INSTRUCTION.format(
-        lab_context=lab_context,
-        plan=render_plan(plan),
+    """``opening`` is ``shared_opening(lab_context, plan)``; ``usable`` is
+    ``usable_new_components(asset_plan, registry)``."""
+    return opening + MODULE_TASK.format(
         index=index,
         total=len(plan.scenes),
         scene=_render_scene(plan.scenes[index - 1]),
