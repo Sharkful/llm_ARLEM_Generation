@@ -466,9 +466,11 @@ with asset_plan_validation(_catalog):
 check([i.name for i in _glow.new_components[0].inputs] == ["pulseSpeed", "glowColor"],
       "input names normalized to camelCase")
 from json_lab import NewComponentInput, to_camel_case  # noqa: E402
-check([to_camel_case(n) for n in ("URL", "XMLSource", "IDLabel", "ID2", "pulse_speed", "PulseSpeed")]
-      == ["url", "xmlSource", "idLabel", "id2", "pulseSpeed", "pulseSpeed"],
-      "camelCase lowercases a leading acronym whole (URL -> url, XMLSource -> xmlSource)")
+check([to_camel_case(n) for n in ("URL", "XMLSource", "IDLabel", "ID2", "pulse_speed", "PulseSpeed",
+                                   "URLs", "IDs", "GPUsList", "URLPath")]
+      == ["url", "xmlSource", "idLabel", "id2", "pulseSpeed", "pulseSpeed",
+          "urls", "ids", "gpusList", "urlPath"],
+      "camelCase lowercases a leading acronym whole, plural too (URLs -> urls)")
 check([NewComponentInput(name="a", type="float", description="speed x", value=v).value
        for v in (2.5, True, 3, [255, 0, 0, 255], "Mars", None)]
       == ["2.5", "true", "3", "[255, 0, 0, 255]", "Mars", None],
@@ -501,12 +503,13 @@ with _scope():
         _msgs = [ln for err in e.errors() for ln in str(err["msg"]).splitlines()]
         check(len(_msgs) == 1 and "input 'wobble' isn't one of its inputs ['pulseSpeed', 'glowColor']"
               in _msgs[0], "module step rejects an undeclared input name, in one line")
-    try:
-        P.PlannedDemoModule.model_validate(_glow_module([{**_speed, "value": prompts.VALUE_PLACEHOLDER}]))
-        check(False, "module step rejects the prompt's value placeholder copied verbatim")
-    except ValidationError as e:
-        check("still has the placeholder value" in str(e),
-              "module step rejects the prompt's value placeholder copied verbatim")
+    _rejected = 0
+    for _ph in (prompts.VALUE_PLACEHOLDER, "<value for this instance> ", "Value for this instance"):
+        try:
+            P.PlannedDemoModule.model_validate(_glow_module([{**_speed, "value": _ph}]))
+        except ValidationError as e:
+            _rejected += "still has the placeholder value" in str(e)
+    check(_rejected == 3, "module step rejects the value placeholder, also with spaces/case/no brackets")
     _mod = P.PlannedDemoModule.model_validate(_glow_module([_speed]))
 _changes = P.normalize_module(_mod, _glow, P.AssetRegistry())
 _after = _mod.objects[0].components[0].inputs
@@ -517,6 +520,15 @@ check({"field": "inputs", "component": "PulseGlow", "instances": 1, "redefined":
           "type": {"from": "Single", "to": "float"},
           "description": {"from": "speed!", "to": "pulses per second, 0.1-5"}}}} in _changes,
       "a redefined input is logged with what differed (type / description, from -> to)")
+_ren = NewComponent(scriptName="PulseGlow", scriptDescription="pulses the emission color",
+                    inputs=[{"name": "pulsespeed", "type": "float", "description": "pulses per second, 0.1-5"}])
+check(P._canonical_inputs(_ren, [{"name": "pulseSpeed", "type": "float",
+                                  "description": "pulses per second, 0.1-5"}])
+      == {"pulseSpeed": {"name": {"from": "pulsespeed", "to": "pulseSpeed"}}},
+      "an input renamed to its canonical spelling is logged too")
+_x = "x" * 90
+check(P._excerpts(_x + "A", _x + "B") == {"from": "…" + "x" * 20 + "A", "to": "…" + "x" * 20 + "B"},
+      "logged excerpts start near the first difference, so they differ")
 # the same rewording on several instances of a component is logged once, with a count
 _two = _glow_module([_speed])
 _two["objects"][1]["components"] = list(_two["objects"][0]["components"])

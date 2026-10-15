@@ -73,8 +73,8 @@ A new component lists its inspector fields as `inputs: [{name, type, description
 - In the module, `json_lab.NewComponent.inputs` repeats the fields, each with the
   `value` this instance sets, stored as text: a number, bool or array the model
   writes as such (`2.5`, `true`, `[255, 0, 0, 255]`) is kept as its JSON text, not
-  reasked. The prompt's `<value for this instance>` placeholder, copied unchanged,
-  is reasked.
+  reasked. The prompt's `<value for this instance>` placeholder, copied back
+  (ignoring case, spaces and the angle brackets), is reasked.
 - The module step accepts only the component's declared input names (compared
   case- and separator-insensitively, so `pulse_speed` matches `pulseSpeed`). Any
   other name is reasked with one line per mistake, e.g. `NewComponent 'PulseGlow':
@@ -86,9 +86,11 @@ A new component lists its inspector fields as `inputs: [{name, type, description
   caching.
 - After a module is accepted, every instance takes the canonical definitions (from
   the catalog or this module's asset plan) and keeps its own values. A reworded
-  type or description is rewritten and logged under `normalizations` with what
-  differed (`redefined: {input: {type|description: {from, to}}}`), once per
-  component per module, with the number of `instances` that wrote it.
+  name (casing), type or description is rewritten and logged under
+  `normalizations` with what differed (`redefined: {input: {name|type|description:
+  {from, to}}}`, excerpts starting near the first difference). Identical rewordings
+  of one component in one module are logged once, with the number of `instances`
+  that wrote them; different rewordings get one record each.
 - The registry carries the inputs with each catalog entry, so later modules reuse
   the same field names.
 

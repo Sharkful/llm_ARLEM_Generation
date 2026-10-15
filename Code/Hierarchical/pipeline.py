@@ -166,7 +166,7 @@ class PlannedDemoModule(DemoModule):
                 continue
             name, declared = usable.name, usable.input_names()
             for i in c.inputs or []:
-                if i.value == prompts.VALUE_PLACEHOLDER:
+                if prompts.is_value_placeholder(i.value):
                     line = (f"NewComponent '{name}': input '{i.name}' still has the placeholder "
                             "value; set the value for this instance, or leave the value out.")
                     if line not in problems:
@@ -398,7 +398,7 @@ def normalize_module(
             comp.scriptName = name
         if not _same_text(comp.scriptDescription, description):
             changes.append({"field": "scriptDescription", "component": name,
-                            "from": comp.scriptDescription[:80], "to": description[:80]})
+                            **_excerpts(comp.scriptDescription, description)})
             comp.scriptDescription = description
     return changes + list(redefined.values())
 
@@ -416,12 +416,21 @@ def _canonical_inputs(comp: NewComponent, inputs: list[dict]) -> dict:
         g = given.get(component_key(c.name))
         if g is None:
             continue
-        fields = {f: {"from": getattr(g, f)[:80], "to": getattr(c, f)[:80]}
-                  for f in ("type", "description") if getattr(g, f) != getattr(c, f)}
+        fields = {f: _excerpts(getattr(g, f), getattr(c, f))
+                  for f in ("name", "type", "description") if getattr(g, f) != getattr(c, f)}
         if fields:
             diff[c.name] = fields
     comp.inputs = canonical or None
     return diff
+
+
+def _excerpts(old: str, new: str, width: int = 80) -> dict[str, str]:
+    """{"from", "to"} excerpts of two differing texts, starting a little before
+    their first difference so the logged excerpts actually differ."""
+    first = next((i for i, (a, b) in enumerate(zip(old, new)) if a != b), min(len(old), len(new)))
+    start = max(0, first - 20)
+    cut = lambda t: ("…" if start else "") + t[start:start + width]  # noqa: E731
+    return {"from": cut(old), "to": cut(new)}
 
 
 def input_type_counts(registry: AssetRegistry) -> dict[str, int]:

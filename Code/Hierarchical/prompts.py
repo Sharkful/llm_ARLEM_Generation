@@ -251,6 +251,13 @@ def build_asset_plan_prompt(
 VALUE_PLACEHOLDER = "<value for this instance>"
 
 
+def is_value_placeholder(value: Optional[str]) -> bool:
+    """True for the placeholder, ignoring case, surrounding spaces and the angle
+    brackets ('<value for this instance> ', 'Value for this instance')."""
+    return value is not None and value.strip().strip("<>").strip().lower() == \
+        VALUE_PLACEHOLDER.strip("<>").lower()
+
+
 @dataclass
 class UsableNewComponent:
     """A new component a module may use, with its canonical definition: from the

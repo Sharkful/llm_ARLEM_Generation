@@ -243,13 +243,19 @@ def to_camel_case(name):
     """Inspector field names are camelCase (``pulse_speed`` / ``PulseSpeed`` ->
     ``pulseSpeed``); normalized rather than reasked. A leading acronym is lowercased
     whole, Unity-style: ``URL`` -> ``url``, ``XMLSource`` -> ``xmlSource``,
-    ``IDLabel`` -> ``idLabel``. Non-strings pass through."""
+    ``IDLabel`` -> ``idLabel``, and a plural acronym with it: ``URLs`` -> ``urls``,
+    ``GPUsList`` -> ``gpusList``. Non-strings pass through."""
     name = to_pascal_case(name)
     if not isinstance(name, str):
         return name
     upper = len(name) - len(name.lstrip("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
-    # In 'XMLSource' the last capital of the run starts the next word ('Source').
-    lead = upper - 1 if 1 < upper < len(name) and name[upper].islower() else upper
+    rest = name[upper:]
+    if upper > 1 and rest[:1] == "s" and not rest[1:2].islower():
+        lead = upper + 1  # 'URLs', 'GPUsList': the 's' pluralizes the acronym
+    elif 1 < upper < len(name) and rest[0].islower():
+        lead = upper - 1  # 'XMLSource': the run's last capital starts the next word
+    else:
+        lead = upper
     return name[:lead].lower() + name[lead:]
 
 
