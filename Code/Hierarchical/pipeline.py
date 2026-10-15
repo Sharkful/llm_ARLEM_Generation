@@ -168,10 +168,13 @@ class PlannedDemoModule(DemoModule):
             if name is None:
                 unplanned.add(c.scriptName)
                 continue
-            if declared is None:
-                continue
             for i in c.inputs or []:
-                if component_key(i.name) not in declared:
+                if i.value == prompts.VALUE_PLACEHOLDER:
+                    line = (f"NewComponent '{name}': input '{i.name}' still has the placeholder "
+                            "value; set the value for this instance, or leave the value out.")
+                    if line not in problems:
+                        problems.append(line)
+                if declared is not None and component_key(i.name) not in declared:
                     line = (f"NewComponent '{name}': input '{i.name}' isn't one of its inputs "
                             f"{list(declared.values())}. Use those names, or leave the input out.")
                     if line not in problems:

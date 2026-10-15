@@ -106,9 +106,11 @@ NEW_COMPONENTS_ALLOWED = """\
   component to ONE simple behavior with clear inputs and outputs; split complex
   behavior into several small components that later modules can reuse.
 - Declare each new component exactly once in new_components: a PascalCase name of
-  at least 5 letters or digits (e.g. 'PulseGlow'), a behavior_description, and
-  why_existing_insufficient. Then attach it by that name in components, once for
-  every object that uses it. Never re-declare a component that is already in the
+  at least 5 letters or digits (e.g. 'PulseGlow'), a behavior_description,
+  why_existing_insufficient, and its inputs: every inspector field it exposes
+  (object references and values) as {name, type, description}, or an empty list if
+  it has none. Then attach it by that name in components, once for every object
+  that uses it. Never re-declare a component that is already in the
   catalog: attach it by its catalog name."""
 
 NEW_COMPONENTS_DISABLED = """\
@@ -255,6 +257,11 @@ def allowed_new_component_names(
     return names
 
 
+# Shown as each input's value in the module prompt's ready-to-copy entries; the
+# module step rejects it if it comes back unchanged.
+VALUE_PLACEHOLDER = "<value for this instance>"
+
+
 def allowed_new_component_inputs(
     asset_plan: ModuleAssetPlan, registry: AssetRegistry
 ) -> dict[str, list[str]]:
@@ -286,7 +293,7 @@ def render_new_component_entries(
             inputs = [i.model_dump() for i in spec.inputs]
         literal = {"type": "NewComponent", "scriptName": name, "scriptDescription": description}
         if inputs:
-            literal["inputs"] = [{**i, "value": "<value for this instance>"} for i in inputs]
+            literal["inputs"] = [{**i, "value": VALUE_PLACEHOLDER} for i in inputs]
         lines.append("  " + json.dumps(literal, ensure_ascii=False))
     return "\n".join(lines) if lines else (
         "  (none: no new components are available to this module; use built-in "

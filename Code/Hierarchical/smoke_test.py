@@ -229,6 +229,9 @@ check(all(c.get("inputs") == [{k: v for k, v in first["inputs"][0].items()}]
       "every NewComponent instance carries its canonical input definitions")
 check(rec["new_component_input_types"] == {"GameObject": len(newc)},
       "input types tallied across the lab (new_component_input_types)")
+check("its inputs: every inspector field it exposes\n  (object references and values) as "
+      "{name, type, description}" in later[0].read_text(encoding="utf-8"),
+      "asset-plan prompt asks for each new component's inputs (they are required)")
 # the module prompt shows each usable new component as a ready-to-copy entry (#77)
 _mp = (run_dir / f"{first['origin_module']:02d}_module_prompt.txt").read_text(encoding="utf-8")
 check(f'{{"type": "NewComponent", "scriptName": "{first["name"]}", "scriptDescription": ' in _mp
@@ -481,6 +484,12 @@ with _scope():
         _msgs = [ln for err in e.errors() for ln in str(err["msg"]).splitlines()]
         check(len(_msgs) == 1 and "input 'wobble' isn't one of its inputs ['pulseSpeed', 'glowColor']"
               in _msgs[0], "module step rejects an undeclared input name, in one line")
+    try:
+        P.PlannedDemoModule.model_validate(_glow_module([{**_speed, "value": prompts.VALUE_PLACEHOLDER}]))
+        check(False, "module step rejects the prompt's value placeholder copied verbatim")
+    except ValidationError as e:
+        check("still has the placeholder value" in str(e),
+              "module step rejects the prompt's value placeholder copied verbatim")
     _mod = P.PlannedDemoModule.model_validate(_glow_module([_speed]))
 _changes = P.normalize_module(_mod, _glow, P.AssetRegistry())
 _after = _mod.objects[0].components[0].inputs
