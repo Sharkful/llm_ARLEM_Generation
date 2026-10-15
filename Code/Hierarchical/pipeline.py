@@ -61,7 +61,9 @@ from benchmark import (
     warn_served_model,
 )
 from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, SpecType
-from json_lab import DemoModule, Lab, NewComponent, PointerReceiverComponent
+from json_lab import (
+    DemoModule, Lab, NewComponent, PointerReceiverComponent, component_entry_checks,
+)
 from lab_metrics import analyze_assets, analyze_json_lab
 from lab_outline import LabOutline
 from module_asset_plan import ModuleAssetPlan, asset_plan_validation, component_key
@@ -107,12 +109,14 @@ def plan_validation(max_scenes: int) -> Iterator[None]:
 
 @contextmanager
 def module_validation(allowed_new_components: Iterable[str]) -> Iterator[None]:
-    """Activate PlannedDemoModule's NewComponent check in this scope."""
+    """Activate PlannedDemoModule's NewComponent check, and json_lab's one clear
+    error per bad component entry, in this scope."""
     token = _ALLOWED_NEW_COMPONENTS.set(
         frozenset(component_key(n) for n in allowed_new_components)
     )
     try:
-        yield
+        with component_entry_checks():
+            yield
     finally:
         _ALLOWED_NEW_COMPONENTS.reset(token)
 

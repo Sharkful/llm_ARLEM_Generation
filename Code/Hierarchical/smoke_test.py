@@ -274,6 +274,31 @@ with P.module_validation([]):
     except Exception as e:  # noqa: BLE001
         check("were not planned" in str(e), "unplanned NewComponent rejected")
 
+# 4b. an invented component written as its own type gets one clear error line per
+# entry in the module step (#77), not every union member's failure
+import copy  # noqa: E402
+_bad_mod = copy.deepcopy(MODS[0])
+_bad_mod["objects"][1]["components"] = [{"type": "ToggleOnClick", "target": "x"},
+                                        {"type": "NewComponent", "scriptName": "ToggleOnClick"}]
+
+
+def _module_errors(scope):
+    with scope:
+        try:
+            P.PlannedDemoModule.model_validate(_bad_mod)
+            return []
+        except ValidationError as e:
+            return [ln for err in e.errors() for ln in str(err["msg"]).splitlines()]
+
+
+_lines = _module_errors(P.module_validation(["ToggleOnClick"]))
+check(len(_lines) == 2 and "'ToggleOnClick' is not a built-in component type" in _lines[0]
+      and "components[0]" in _lines[0] and "type: NewComponent, scriptName: 'ToggleOnClick'" in _lines[0]
+      and _lines[1].startswith("components[1] (NewComponent) scriptDescription"),
+      "module step: one error line per bad component entry, naming the fix")
+check(len(_module_errors(P.plan_validation(12))) > 10,
+      "outside the module step (one-shot runs) the union's full error list is unchanged")
+
 # 5. --no-new-components: an asset plan proposing a new component fails its step
 rec = make(FakeLLM(), "t5_nonew", cfg={"allow_new_components": False, "step_attempts": 1}).run()
 first_new = next(i for i, m in enumerate(MODS, 1) if "newscript" in json.dumps(m))

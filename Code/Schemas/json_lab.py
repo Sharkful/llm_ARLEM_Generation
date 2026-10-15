@@ -19,15 +19,19 @@ Usage with Instructor:
 
 from __future__ import annotations
 
+import typing
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date
 from enum import Enum
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Iterator, Literal, Optional, Union
 
 from pydantic import (
     AliasChoices,
     BaseModel,
     BeforeValidator,
     Field,
+    ValidationError,
     field_validator,
     model_validator,
 )
@@ -281,6 +285,60 @@ Component = Union[
 ]
 
 
+# ── One error per bad component entry (opt-in) ───────────────────────
+# Component is a plain union, so a bad entry makes pydantic report every member's
+# failure (~14 lines each). Inside ``component_entry_checks()`` each entry is
+# instead checked against the one class its `type` tag names: an unknown tag gives
+# a single line saying how invented components are written, a known tag only that
+# class's errors. The reask still happens; it just reads one line per mistake.
+# Off by default, so one-shot runs keep their reask text; the hierarchical
+# pipeline's module step turns it on (issue #77). Entries without a `type` (saved
+# outputs drop it) go to the union as before.
+
+_COMPONENT_BY_TAG = {cls.model_fields["type"].default: cls for cls in typing.get_args(Component)}
+_COMPONENT_ENTRY_CHECKS: ContextVar[bool] = ContextVar("json_lab_component_entry_checks", default=False)
+
+
+@contextmanager
+def component_entry_checks() -> Iterator[None]:
+    """Validate component entries against the class their `type` tag names, with
+    one clear error per bad entry, in this scope."""
+    token = _COMPONENT_ENTRY_CHECKS.set(True)
+    try:
+        yield
+    finally:
+        _COMPONENT_ENTRY_CHECKS.reset(token)
+
+
+def _check_component_entries(entries):
+    if not _COMPONENT_ENTRY_CHECKS.get() or not isinstance(entries, list):
+        return entries
+    checked, problems = [], []
+    for j, entry in enumerate(entries):
+        tag = entry.get("type") if isinstance(entry, dict) else None
+        if tag is None:
+            checked.append(entry)
+            continue
+        cls = _COMPONENT_BY_TAG.get(tag)
+        if cls is None:
+            problems.append(
+                f"components[{j}]: {tag!r} is not a built-in component type "
+                f"({', '.join(t for t in _COMPONENT_BY_TAG if t != 'NewComponent')}). "
+                "An invented component is written as {type: NewComponent, scriptName: "
+                f"{tag!r}, scriptDescription: ...}}."
+            )
+            continue
+        try:
+            checked.append(cls.model_validate(entry))
+        except ValidationError as e:
+            for err in e.errors():
+                where = ".".join(str(x) for x in err["loc"])
+                problems.append(f"components[{j}] ({tag}){' ' + where if where else ''}: {err['msg']}")
+    if problems:
+        raise ValueError("\n".join(problems))
+    return checked
+
+
 # ── Scene Objects ─────────────────────────────────────────────────────
 
 
@@ -341,6 +399,12 @@ class SceneObject(BaseModel):
     )
 
 
+    @field_validator("components", mode="before")
+    @classmethod
+    def _check_components(cls, v):
+        return _check_component_entries(v)
+
+
 # ── Clip Changes (Sparse Deltas) ─────────────────────────────────────
 
 
@@ -378,6 +442,12 @@ class ObjectChange(BaseModel):
         default=None,
         description="Components to add or update on this object",
     )
+
+
+    @field_validator("components", mode="before")
+    @classmethod
+    def _check_components(cls, v):
+        return _check_component_entries(v)
 
 
 # ── Clips ─────────────────────────────────────────────────────────────
