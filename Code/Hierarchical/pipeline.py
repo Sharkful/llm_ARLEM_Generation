@@ -559,7 +559,7 @@ class HierarchicalPipeline:
         self._current_step: Optional[str] = None
         self._traceback: Optional[str] = None   # set when run() catches an unexpected error
         self._calls_absorbed = 0                # tracker calls already charged to a step
-        self._cache_warned = False              # Anthropic cache-split warning printed once
+        self._cache_warned: set[str] = set()   # step types warned about a failed cache split
 
     # ── resume ───────────────────────────────────────────────────────
     @staticmethod
@@ -686,7 +686,7 @@ class HierarchicalPipeline:
         raise StepFailed(rec.step, rec.index, last_error or "step failed")
 
     # ── one checkpointed step ────────────────────────────────────────
-    def _user_content(self, prompt: str, cache_prefix: Optional[str]):
+    def _user_content(self, prompt: str, cache_prefix: Optional[str], step: str):
         """The step's user message content. For Anthropic, when the prompt starts
         with ``cache_prefix`` (the shared lab + plan opening), split it into two text
         blocks and mark the first as a cache breakpoint (#73): the tools + system +
@@ -694,9 +694,10 @@ class HierarchicalPipeline:
         steps of that type (Anthropic orders the prefix tools -> system ->
         messages, and each step type has its own tool and its own system tool
         line). Reasks and revisions append after it, so they read it too.
-        Everything else stays a plain string; a prompt that should split but
-        doesn't prints a one-time warning, because caching is then off for that
-        step."""
+        Everything else stays a plain string. The prompt builders start every
+        asset-plan and module prompt with the opening, so the split always holds
+        for them; a step that passes a prefix its prompt can't be split on prints
+        a warning once per step type, because caching is then off for it."""
         if not cache_prefix or self.model_config.provider != Provider.ANTHROPIC:
             return prompt
         if prompt.startswith(cache_prefix) and len(prompt) > len(cache_prefix):
@@ -704,11 +705,13 @@ class HierarchicalPipeline:
                 {"type": "text", "text": cache_prefix, "cache_control": {"type": "ephemeral"}},
                 {"type": "text", "text": prompt[len(cache_prefix):]},
             ]
-        if not self._cache_warned:
-            self._cache_warned = True
-            print("  WARNING: a step prompt doesn't start with prompts.shared_opening(), so "
-                  "Anthropic prompt caching is off for it (#73). Keep the asset-plan and "
-                  "module templates opening with LAB_BLOCK + PLAN_BLOCK.")
+        if step not in self._cache_warned:
+            self._cache_warned.add(step)
+            why = ("has nothing after the cache prefix" if prompt == cache_prefix
+                   else "doesn't start with the cache prefix")
+            print(f"  WARNING: the {self._current_step or step} prompt {why}, so Anthropic "
+                  f"prompt caching is off for {step} steps (#73). Build it with "
+                  "prompts.shared_opening() + its task template.")
         return prompt
 
     def _run_step(
@@ -756,7 +759,7 @@ class HierarchicalPipeline:
         t0 = time.time()
         base_messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": self._user_content(prompt, cache_prefix)},
+            {"role": "user", "content": self._user_content(prompt, cache_prefix, step)},
         ]
         context = dict(context or {})
         context.setdefault("run_dir", str(self.run_dir))
