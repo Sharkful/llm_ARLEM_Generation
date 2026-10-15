@@ -230,7 +230,8 @@ instead of in one `Lab` call; see `HIERARCHICAL.md`.
 
 - **`pipeline.py`** — `HierarchicalPipeline`: plan (`LabPlan` = `LabOutline` + scene
   cap, default 8) → per scene a `ModuleAssetPlan` → a `PlannedDemoModule` (DemoModule
-  + a check that every `NewComponent` was planned or is in the catalog) → `Lab`
+  + a check that every `NewComponent` was planned or is in the catalog and uses only
+  its declared input names) → `Lab`
   assembled in code. Each step has its own retry budget, is regenerated alone on
   terminal failure (`step_attempts`; 401/403/404/auth/config errors fail at once),
   is saved to `Runs/<run>/`, and can be resumed; the metrics file is rewritten after

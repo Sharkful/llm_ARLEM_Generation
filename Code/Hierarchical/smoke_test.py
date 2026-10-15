@@ -41,6 +41,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import pipeline as P  # noqa: E402
+import prompts  # noqa: E402
 from _paths import PROJECT_ROOT  # noqa: E402
 from json_lab import DemoModule, Lab, NewComponent  # noqa: E402
 from module_asset_plan import asset_plan_validation  # noqa: E402
@@ -427,8 +428,9 @@ _adh = P.plan_adherence(_unused, DemoModule.model_validate(MODS[0]), min_objects
 check(_adh["unattached_new_components"] == ["PulseGlow", "OrbitTrail"],
       "declared-but-unattached new components recorded in plan_adherence (no reask)")
 
-# 8c. structured inputs: required on a declaration; instances keep their values but
-# take the canonical definitions, and undeclared inputs are dropped and logged
+# 8c. structured inputs: required on a declaration; the module step rejects an input
+# the component doesn't declare (one line per mistake); accepted instances keep their
+# values but take the canonical definitions
 with asset_plan_validation(_catalog):
     try:
         ModuleAssetPlan.model_validate({**_glow_plan, "new_components": [
@@ -442,21 +444,43 @@ with asset_plan_validation(_catalog):
         {"name": "glowColor", "type": "Color", "description": "emission color"}]}]})
 check([i.name for i in _glow.new_components[0].inputs] == ["pulseSpeed", "glowColor"],
       "input names normalized to camelCase")
-_inst = NewComponent(scriptName="PulseGlow", scriptDescription="pulses the emission color",
-                     inputs=[{"name": "pulse_speed", "type": "Single", "description": "speed!",
-                              "value": "2.5"},
-                             {"name": "wobble", "type": "float", "description": "not planned",
-                              "value": "1"}])
-_mod = DemoModule.model_validate({**MODS[0], "objects": [
-    {**MODS[0]["objects"][0], "components": [_inst.model_dump()]}, *MODS[0]["objects"][1:]]})
+_speed = {"name": "pulse_speed", "type": "Single", "description": "speed!", "value": "2.5"}
+_wobble = {"name": "wobble", "type": "float", "description": "not planned", "value": "1"}
+
+
+def _glow_module(inputs):
+    """MODS[0] with its own components removed and one PulseGlow on its first object."""
+    inst = NewComponent(scriptName="PulseGlow", scriptDescription="pulses the emission color",
+                        inputs=inputs)
+    mod = copy.deepcopy(MODS[0])
+    for o in mod["objects"]:
+        o.pop("components", None)
+    for cl in mod["clips"]:
+        for ch in cl.get("changes") or []:
+            ch.pop("components", None)
+    mod["objects"][0]["components"] = [inst.model_dump()]
+    return mod
+
+
+_scope = lambda: P.module_validation(  # noqa: E731
+    prompts.allowed_new_component_names(_glow, P.AssetRegistry()),
+    prompts.allowed_new_component_inputs(_glow, P.AssetRegistry()))
+with _scope():
+    try:
+        P.PlannedDemoModule.model_validate(_glow_module([_speed, _wobble]))
+        check(False, "module step rejects an undeclared input name")
+    except ValidationError as e:
+        _msgs = [ln for err in e.errors() for ln in str(err["msg"]).splitlines()]
+        check(len(_msgs) == 1 and "input 'wobble' isn't one of its inputs ['pulseSpeed', 'glowColor']"
+              in _msgs[0], "module step rejects an undeclared input name, in one line")
+    _mod = P.PlannedDemoModule.model_validate(_glow_module([_speed]))
 _changes = P.normalize_module(_mod, _glow, P.AssetRegistry())
 _after = _mod.objects[0].components[0].inputs
 check([(i.name, i.type, i.value) for i in _after]
       == [("pulseSpeed", "float", "2.5"), ("glowColor", "Color", None)],
       "instance inputs take the planned definitions and keep their values")
-check({"field": "inputs", "component": "PulseGlow", "dropped": ["wobble"]} in _changes
-      and {"field": "inputs", "component": "PulseGlow", "redefined": ["pulseSpeed"]} in _changes,
-      "undeclared and redefined inputs logged as normalizations")
+check({"field": "inputs", "component": "PulseGlow", "redefined": ["pulseSpeed"]} in _changes,
+      "redefined inputs logged as normalizations")
 check("inputs" not in P._dump(NewComponent(scriptName="OrbitTrail", scriptDescription="d" * 25)),
       "a NewComponent without inputs dumps exactly as before (wave-2 outputs unchanged)")
 

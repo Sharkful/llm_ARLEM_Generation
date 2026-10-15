@@ -72,10 +72,18 @@ A new component lists its inspector fields as `inputs: [{name, type, description
   declared type across the lab in `new_component_input_types`.
 - In the module, `json_lab.NewComponent.inputs` repeats the fields, each with the
   `value` this instance sets (text: `"2.5"`, `"true"`, an object name, an array).
+- The module step accepts only the component's declared input names (compared
+  case- and separator-insensitively, so `pulse_speed` matches `pulseSpeed`). Any
+  other name is reasked with one line per mistake, e.g. `NewComponent 'PulseGlow':
+  input 'wobble' isn't one of its inputs ['pulseSpeed', 'glowColor']`. It isn't
+  dropped, so no value is silently lost.
+- The input names are not enums in the tool schema: per-component schema members
+  would add ~1k characters per invented component (doubled on Gemini, whose schema
+  is inlined) and change the tool schema at every module step, which defeats prompt
+  caching.
 - After a module is accepted, every instance takes the canonical definitions (from
-  the catalog or this module's asset plan) and keeps its own values. An input the
-  plan didn't declare is dropped, and a redefined one rewritten; both are logged
-  under `normalizations` rather than reasked.
+  the catalog or this module's asset plan) and keeps its own values; a redefined
+  type or description is rewritten and logged under `normalizations`.
 - The registry carries the inputs with each catalog entry, so later modules reuse
   the same field names.
 
@@ -133,8 +141,8 @@ New component names are **PascalCase** (C# class convention): `orbit_trail` and
   new ones should stay small: one behavior, clear inputs and outputs, and complex
   behavior split into reusable pieces.
 - `PlannedDemoModule` only accepts a `NewComponent` that this module's asset plan
-  declares or that's already in the catalog. It serializes exactly like
-  `DemoModule`.
+  declares or that's already in the catalog, using only that component's declared
+  inputs. It serializes exactly like `DemoModule`.
 
 The validators get their per-run state (catalog, new-component switch, minimums,
 scene cap) through ContextVar scopes (`asset_plan_validation`, `module_validation`,

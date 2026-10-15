@@ -255,6 +255,20 @@ def allowed_new_component_names(
     return names
 
 
+def allowed_new_component_inputs(
+    asset_plan: ModuleAssetPlan, registry: AssetRegistry
+) -> dict[str, list[str]]:
+    """Declared input names of each new component a module may use: the catalog's
+    for an earlier-invented one, the asset plan's for one declared here."""
+    planned = {component_key(c.name): c for c in asset_plan.new_components}
+    out = {}
+    for name in allowed_new_component_names(asset_plan, registry):
+        entry = registry.find_component(name)
+        out[name] = ([i["name"] for i in entry.inputs] if entry is not None
+                     else [i.name for i in planned[component_key(name)].inputs])
+    return out
+
+
 def render_new_component_entries(
     asset_plan: ModuleAssetPlan, registry: AssetRegistry
 ) -> str:

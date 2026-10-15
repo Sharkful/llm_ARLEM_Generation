@@ -42,7 +42,7 @@ from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, ContextManager, Iterable, Iterator, Optional, Type
+from typing import Any, Callable, ContextManager, Iterable, Iterator, Mapping, Optional, Type
 
 from pydantic import BaseModel, ValidationError, model_validator
 
@@ -94,8 +94,9 @@ CallFn = Callable[[Type[BaseModel], list[dict], int], BaseModel]
 # message as a Jinja template (see module_asset_plan.py).
 
 _MAX_SCENES: ContextVar[Optional[int]] = ContextVar("lab_plan_max_scenes", default=None)
-_ALLOWED_NEW_COMPONENTS: ContextVar[Optional[frozenset[str]]] = ContextVar(
-    "planned_module_allowed_new_components", default=None
+# component key -> (canonical scriptName, its inputs' keys, or None if unchecked)
+_ALLOWED_NEW_COMPONENTS: ContextVar[Optional[dict[str, tuple[str, Optional[dict[str, str]]]]]] = (
+    ContextVar("planned_module_allowed_new_components", default=None)
 )
 
 
@@ -110,12 +111,19 @@ def plan_validation(max_scenes: int) -> Iterator[None]:
 
 
 @contextmanager
-def module_validation(allowed_new_components: Iterable[str]) -> Iterator[None]:
-    """Activate PlannedDemoModule's NewComponent check, and json_lab's one clear
-    error per bad component entry, in this scope."""
-    token = _ALLOWED_NEW_COMPONENTS.set(
-        frozenset(component_key(n) for n in allowed_new_components)
-    )
+def module_validation(
+    allowed_new_components: Iterable[str],
+    inputs: Optional[Mapping[str, Iterable[str]]] = None,
+) -> Iterator[None]:
+    """Activate PlannedDemoModule's NewComponent checks, and json_lab's one clear
+    error per bad component entry, in this scope. ``inputs`` maps a component's
+    name to its declared input names; a component it lists may use only those."""
+    by_key = {component_key(k): list(v) for k, v in (inputs or {}).items()}
+    token = _ALLOWED_NEW_COMPONENTS.set({
+        component_key(n): (n, {component_key(i): i for i in by_key[component_key(n)]}
+                           if component_key(n) in by_key else None)
+        for n in allowed_new_components
+    })
     try:
         with component_entry_checks():
             yield
@@ -140,25 +148,42 @@ class LabPlan(LabOutline):
 
 
 class PlannedDemoModule(DemoModule):
-    """DemoModule plus one check for the module step: every NewComponent must be
-    one this module's approved asset plan introduces or one already in the
-    catalog. Serializes exactly like DemoModule (no extra fields)."""
+    """DemoModule plus the module step's NewComponent checks: every NewComponent
+    must be one this module's approved asset plan declares or one already in the
+    catalog, and may use only that component's declared inputs (names compared
+    case- and separator-insensitively). Every problem is one line in one error.
+    Serializes exactly like DemoModule (no extra fields)."""
 
     @model_validator(mode="after")
     def _validate_new_components(self) -> "PlannedDemoModule":
         allowed = _ALLOWED_NEW_COMPONENTS.get()
         if allowed is None:
             return self
-        unplanned = sorted({
-            c.scriptName for c in iter_module_components(self)
-            if isinstance(c, NewComponent) and component_key(c.scriptName) not in allowed
-        })
+        unplanned: set[str] = set()
+        problems: list[str] = []
+        for c in iter_module_components(self):
+            if not isinstance(c, NewComponent):
+                continue
+            name, declared = allowed.get(component_key(c.scriptName), (None, None))
+            if name is None:
+                unplanned.add(c.scriptName)
+                continue
+            if declared is None:
+                continue
+            for i in c.inputs or []:
+                if component_key(i.name) not in declared:
+                    line = (f"NewComponent '{name}': input '{i.name}' isn't one of its inputs "
+                            f"{list(declared.values())}. Use those names, or leave the input out.")
+                    if line not in problems:
+                        problems.append(line)
         if unplanned:
-            raise ValueError(
-                f"NewComponent(s) {unplanned} were not planned for this module. Use a "
+            problems.insert(0,
+                f"NewComponent(s) {sorted(unplanned)} were not planned for this module. Use a "
                 "built-in component, or a NewComponent with one of these scriptNames: "
-                f"{sorted(allowed) or 'none'}"
+                f"{sorted(n for n, _ in allowed.values()) or 'none'}"
             )
+        if problems:
+            raise ValueError("\n".join(problems))
         return self
 
 
@@ -373,16 +398,12 @@ def normalize_module(
 
 def _canonical_inputs(comp: NewComponent, name: str, inputs: list[dict]) -> list[dict]:
     """Set ``comp.inputs`` to the canonical definitions, keeping the values this
-    instance set (matched by name, case-insensitively). An input the canonical
-    component doesn't have is dropped and logged. Returns the changes."""
+    instance set (matched by name, case-insensitively). PlannedDemoModule has
+    already rejected input names the component doesn't declare. Returns the changes."""
     given = {component_key(i.name): i for i in comp.inputs or []}
     canonical = [NewComponentInput(**d, value=getattr(given.get(component_key(d["name"])),
                                                      "value", None)) for d in inputs]
     changes = []
-    dropped = sorted(i.name for k, i in given.items()
-                     if k not in {component_key(d["name"]) for d in inputs})
-    if dropped:
-        changes.append({"field": "inputs", "component": name, "dropped": dropped})
     redefined = sorted(c.name for c in canonical
                        if (g := given.get(component_key(c.name)))
                        and g.model_dump(exclude={"value"}) != c.model_dump(exclude={"value"}))
@@ -846,6 +867,7 @@ class HierarchicalPipeline:
                     normalize=lambda ap: normalize_asset_plan(ap, self.registry),
                 )
                 allowed = prompts.allowed_new_component_names(asset_plan, self.registry)
+                allowed_inputs = prompts.allowed_new_component_inputs(asset_plan, self.registry)
                 module = self._run_step(
                     "module", i, PlannedDemoModule,
                     prompts.build_module_prompt(
@@ -853,7 +875,7 @@ class HierarchicalPipeline:
                         min_objects=cfg.min_objects, min_clips=cfg.min_clips,
                     ),
                     cfg.module_retries, f"{i:02d}_module", "module",
-                    scope=lambda: module_validation(allowed),
+                    scope=lambda: module_validation(allowed, allowed_inputs),
                     context={**shared_context, "asset_plan": asset_plan},
                     normalize=lambda m: normalize_module(m, asset_plan, self.registry),
                 )
