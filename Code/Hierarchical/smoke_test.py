@@ -170,10 +170,12 @@ _plan = P.LabPlan.model_validate_json((_t1 / "00_plan.json").read_text(encoding=
 # The Anthropic cache breakpoint (#73) needs every asset-plan and module prompt,
 # including the later ones that read the cache, to start with the shared opening.
 _opening = P.prompts.shared_opening(_p1.lab_context, _plan)
-check(all((_t1 / f).read_text(encoding="utf-8").startswith(_opening)
-          for f in ("01_asset_plan_prompt.txt", "01_module_prompt.txt",
-                    "02_asset_plan_prompt.txt", "02_module_prompt.txt")),
-      "asset-plan and module prompts start with the shared opening, byte for byte")
+_step_prompts = sorted(_t1.glob("*_asset_plan_prompt.txt")) + sorted(_t1.glob("*_module_prompt.txt"))
+check(len(_step_prompts) == 2 * len(_plan.scenes)
+      and all(f.read_text(encoding="utf-8").startswith(_opening) for f in _step_prompts),
+      f"all {len(_step_prompts)} asset-plan and module prompts start with the shared "
+      "opening, byte for byte")
+check(not _p1._cache_warned, "a normal run (Anthropic model) prints no cache-split warning")
 # A prompt that should carry the Anthropic cache breakpoint but can't be split
 # warns once per step type, naming the step and the reason (#73).
 _wp = make(FakeLLM(), "t1_warn")             # claude-haiku-4.5: Anthropic
@@ -1442,16 +1444,18 @@ class MockAnthropic(BaseHTTPRequestHandler):
                         "input": json.loads(data)}]
             stop = "tool_use"
         # Usage as the real API reports it: no cache fields without a breakpoint, a
-        # cache write on the first marked request per tool (the tool is part of the
-        # cached prefix), reads after that. input_tokens excludes cache reads/writes;
+        # cache write the first time a cached prefix (tools + system + the marked
+        # block) is seen, reads after that. input_tokens excludes cache reads/writes;
         # the tracker folds them in, so every request is 1000 input tokens.
         usage = {"input_tokens": 1000, "output_tokens": 200}
         if '"cache_control"' in json.dumps(body["messages"]):
             usage["input_tokens"] = 600
-            if tool in anth["written"]:
+            first = body["messages"][0]["content"][0]
+            prefix = json.dumps([body["tools"], body.get("system"), first], sort_keys=True)
+            if prefix in anth["written"]:
                 usage["cache_read_input_tokens"] = 400
             else:
-                anth["written"].add(tool)
+                anth["written"].add(prefix)
                 usage["cache_creation_input_tokens"] = 400
         payload = json.dumps({
             "id": "msg_mock", "type": "message", "role": "assistant", "model": body["model"],
@@ -1470,8 +1474,9 @@ _saved_env = {k: os.environ.get(k) for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_AP
 os.environ["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{asrv.server_port}"
 os.environ["ANTHROPIC_API_KEY"] = "test"
 try:
-    rec = P.HierarchicalPipeline("claude-haiku-5.5", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
-                                 output_dir=TMP / "anthropic", run_name="anthropic").run()
+    _ap = P.HierarchicalPipeline("claude-haiku-5.5", LAB_NAME, P.PipelineConfig(**REPLAY_MINIMUMS),
+                                 output_dir=TMP / "anthropic", run_name="anthropic")
+    rec = _ap.run()
 finally:
     asrv.shutdown()
     for k, v in _saved_env.items():
@@ -1548,6 +1553,17 @@ check(_cache[("plan", None)] == (0, 0)
               if st in ("asset_plan", "module") and i > 1),
       "per step: the plan caches nothing, the first asset plan and module write the "
       "cache (module 1's reask reads it), later steps only read it")
+# The cached prefix itself: within a step type, every marked request sends the same
+# tools, system text and marked opening, so later steps can read the first one's cache.
+_prefixes = {}
+for r in reqs:
+    if r["tools"][0]["name"] != "LabPlan":
+        _prefixes.setdefault(r["tools"][0]["name"], set()).add(
+            json.dumps([r["tools"], r.get("system"), r["messages"][0]["content"][0]], sort_keys=True))
+check(sorted(_prefixes) == ["ModuleAssetPlan", "PlannedDemoModule"]
+      and all(len(v) == 1 for v in _prefixes.values()),
+      "each step type sends one cached prefix: same tools, system text and opening")
+check(not _ap._cache_warned, "the mock-Anthropic run prints no cache-split warning")
 
 # ── Part 4: GPT-6 on the OpenAI Responses API (mock /v1/responses server) ──
 # Real create_instructor_client (pointed at the mock via OPENAI_BASE_URL). Checks the
