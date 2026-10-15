@@ -10,8 +10,9 @@ the real response models and validation scopes. It covers the auto-approved run,
 name/description normalization, Revise/Replace review decisions (including a
 rejected edit and accumulated feedback), failure + resume, an interrupted run,
 fail-fast errors, the scene cap, per-module minimums, all-errors-at-once asset-plan
-validation, run groups, PascalCase names, soft metrics, the NewComponent check, and
-the --no-new-components switch.
+validation, run groups, PascalCase names, soft metrics, the NewComponent check,
+declare-once new components, structured inputs, one error per bad component entry,
+and the --no-new-components switch.
 
 Part 2 runs the real _llm_call path (instructor client, tracker, transient
 retryer, provider kwargs) against a local mock OpenAI server that replays part
