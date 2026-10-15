@@ -40,7 +40,7 @@ from collections import Counter
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, ContextManager, Iterable, Iterator, Optional, Type
 
@@ -556,6 +556,7 @@ class HierarchicalPipeline:
         self._pending_resends = [0, 0]          # (transient_retries, reask_restarts) for the step
         self._prior_steps: dict[tuple[str, Optional[int]], dict] = {}
         self._t0 = time.time()
+        self._started_at = datetime.now(timezone.utc)
         self._current_step: Optional[str] = None
         self._traceback: Optional[str] = None   # set when run() catches an unexpected error
         self._calls_absorbed = 0                # tracker calls already charged to a step
@@ -880,6 +881,7 @@ class HierarchicalPipeline:
             }, indent=2), encoding="utf-8")
 
         self._t0 = time.time()
+        self._started_at = datetime.now(timezone.utc)
         lab: Optional[Lab] = None
         failed_step = None
         error = None
@@ -1000,6 +1002,11 @@ class HierarchicalPipeline:
         }
         return {
             "timestamp": datetime.now().isoformat(),
+            # UTC window of this session's API calls (the `tracking` block), for
+            # matching provider usage reports (#75); a resumed run's earlier
+            # sessions are not in it
+            "started_at": self._started_at.isoformat(),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
             "model": self.model_config.model_id,
             "provider": self.model_config.provider.value,
             "display_name": self.model_config.display_name,

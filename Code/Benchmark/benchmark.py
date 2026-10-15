@@ -39,7 +39,7 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -809,6 +809,7 @@ def run_single_benchmark(
         print(f"  Spec: {run_config.spec_type.value} | Topic: {run_config.topic[:50]}...")
 
     start_time = time.time()
+    started_at = datetime.now(timezone.utc)
     result = None
     generation_error = None
     transient_retries = 0
@@ -857,6 +858,9 @@ def run_single_benchmark(
     # Build result record
     record = {
         "timestamp": datetime.now().isoformat(),
+        # UTC window of the API calls, for matching provider usage reports (#75)
+        "started_at": started_at.isoformat(),
+        "finished_at": datetime.now(timezone.utc).isoformat(),
         "model": model_config.model_id,
         "provider": model_config.provider.value,
         "display_name": model_config.display_name,
