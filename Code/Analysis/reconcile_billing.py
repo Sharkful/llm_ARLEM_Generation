@@ -6,7 +6,7 @@ Every run's cost is an estimate: recorded tokens x the published rates in
 data for the same window and prints ours vs theirs, so a few runs can show how
 far the estimate is off (cache pricing, Gemini thinking tokens, #84).
 
-What each provider offers (nothing is per request; see the #75 comment):
+What each provider offers (nothing is per request; setup in BILLING_RECONCILE.md):
 - Anthropic: Usage report (1-minute buckets: uncached input, cache reads, 5m/1h
   cache writes, output) and Cost report (daily only, USD). Admin API key.
 - OpenAI: Usage API, completions (1-minute buckets: input, cached input,

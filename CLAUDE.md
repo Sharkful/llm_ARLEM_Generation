@@ -98,6 +98,10 @@ python "Code/Analysis/figures/cost_by_model_figures.py"
 # Re-cost a run table against current tracking/pricing.py rates
 python "Code/Analysis/reprice_runs.py"     "Artifacts/Data/Benchmark/Reports/benchmark_runs_wave2.csv" --dry-run
 
+# Check recorded tokens / estimated cost against provider billing data (admin keys; see BILLING_RECONCILE.md)
+python "Code/Analysis/reconcile_billing.py" --runs "Artifacts/Data/Hierarchical/testing/Metrics"
+python "Code/Analysis/reconcile_smoke_test.py"   # offline check (mock admin endpoints)
+
 # Render any figure script against a repriced table, as _repriced siblings
 CSV="Artifacts/Data/Benchmark/Reports/benchmark_runs_wave2_repriced.csv"
 python "Code/Analysis/figures/cost_figures.py" --runs-csv "$CSV" --suffix _repriced
@@ -292,6 +296,13 @@ via a `sys.path` insert — the only cross-package import in the codebase.
 rates, written as a `_repriced` sibling so originals stay put.
 **`quarantine_infra_failures.py`** — moves infra-caused failures out of the
 live run set.
+**`reconcile_billing.py`** (#75) — compares a run's recorded tokens and estimated
+cost with what the provider reports for its UTC window (`started_at` /
+`finished_at`, recorded since #75): Anthropic usage report and OpenAI usage API
+in 1-minute buckets (tokens; nothing is per request), daily cost reports, and for
+Gemini a BigQuery query over the Cloud Billing export (about a day behind). Needs
+admin keys and a dedicated workspace / project per provider; setup and limits in
+`Code/Analysis/BILLING_RECONCILE.md`.
 
 **`reports/`** — `build_statistics_report.py` (structural + cost/token/time
 aggregates) and `build_summary_report.py` (which models/levels generated at all).
