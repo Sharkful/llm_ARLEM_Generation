@@ -22,6 +22,7 @@ minimums apply per module here (they are lab-wide in the one-shot runs).
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Optional
 
 from pydantic import BaseModel
@@ -29,7 +30,7 @@ from pydantic import BaseModel
 import _paths  # noqa: F401
 
 from lab_outline import LabOutline, OutlineScene
-from module_asset_plan import ModuleAssetPlan
+from module_asset_plan import ModuleAssetPlan, component_key
 from registry import AssetRegistry
 
 
@@ -101,17 +102,21 @@ Instructions:
 
 NEW_COMPONENTS_ALLOWED = """\
 - A component is a small piece of C# behavior and can do almost anything. That makes
-  new components powerful but costly to build, so only plan a new one (is_new=true)
-  when no catalog component, or combination of them, can provide the behavior. Keep
-  each new component to ONE simple behavior with clear inputs and outputs; split
-  complex behavior into several small components that later modules can reuse. Give
-  it a PascalCase script name of at least 5 letters or digits (e.g. 'PulseGlow'), a
-  behavior_description, and why_existing_insufficient. Declare it once (is_new=true)
-  and reference it by name if other objects use it too. Never re-invent a component
-  that is already in the catalog: reference it by name with is_new=false."""
+  new components powerful but costly to build, so only plan a new one when no catalog
+  component, or combination of them, can provide the behavior. Keep each new
+  component to ONE simple behavior with clear inputs and outputs; split complex
+  behavior into several small components that later modules can reuse.
+- Declare each new component exactly once in new_components: a PascalCase name of
+  at least 5 letters or digits (e.g. 'PulseGlow'), a behavior_description,
+  why_existing_insufficient, and its inputs: every inspector field it exposes
+  (object references and values) as {name, type, description}, or an empty list if
+  it has none. Then attach it by that name in components, once for every object
+  that uses it. Never re-declare a component that is already in the
+  catalog: attach it by its catalog name."""
 
 NEW_COMPONENTS_DISABLED = """\
-- New components are disabled for this run: use only components from the catalog."""
+- New components are disabled for this run: leave new_components empty and use only
+  components from the catalog."""
 
 MODULE_INSTRUCTION = LAB_BLOCK + "\n" + PLAN_BLOCK + """
 # Component catalog
@@ -137,10 +142,11 @@ Requirements:
 - Attach each planned component to its planned object, either in the object's
   components or in a clip change if it should only take effect later.
 - Built-in components use their own type (e.g. SimpleOrbitComponent). A new
-  component, or one invented by an earlier module, is written as a NewComponent
-  whose scriptName is exactly its planned or catalog name; for a catalog component,
-  reuse its description. Allowed NewComponent scriptNames for this module:
-  {allowed_new}. Do not use NewComponent with any other scriptName.
+  component, or one invented by an earlier module, is never its own type: write it
+  as a NewComponent entry exactly as shown below, setting each input's value for
+  that instance (or leaving it out to keep the default). Do not use NewComponent
+  with any other scriptName.
+{new_component_entries}
 - Write the clips in the order of the clip beats, at least one clip per beat and at
   least {min_clips} clips in total (you may split a beat into several clips). Each
   clip uses sparse object changes, states its changeMeaning, and gives narration and
@@ -240,17 +246,67 @@ def build_asset_plan_prompt(
     )
 
 
-def allowed_new_component_names(
+# Shown as each input's value in the module prompt's ready-to-copy entries; the
+# module step rejects it if it comes back unchanged.
+VALUE_PLACEHOLDER = "<value for this instance>"
+
+
+def is_value_placeholder(value: Optional[str]) -> bool:
+    """True for the placeholder, ignoring case, surrounding spaces and the angle
+    brackets ('<value for this instance> ', 'Value for this instance')."""
+    return value is not None and value.strip().strip("<>").strip().lower() == \
+        VALUE_PLACEHOLDER.strip("<>").lower()
+
+
+@dataclass
+class UsableNewComponent:
+    """A new component a module may use, with its canonical definition: from the
+    catalog for one an earlier module invented, from this module's asset plan for
+    one it declares. ``inputs`` holds {name, type, description} dicts; None leaves
+    the module's input names unchecked. ``from_catalog``: the description is the
+    catalog's (canonical); otherwise it is the plan's, and normalization takes the
+    module's first description instead."""
+    name: str
+    description: str = ""
+    inputs: Optional[list[dict]] = None
+    from_catalog: bool = False
+
+    def input_names(self) -> Optional[dict[str, str]]:
+        """component_key(input name) -> its canonical name, or None if unchecked."""
+        if self.inputs is None:
+            return None
+        return {component_key(i["name"]): i["name"] for i in self.inputs}
+
+
+def usable_new_components(
     asset_plan: ModuleAssetPlan, registry: AssetRegistry
-) -> list[str]:
-    """NewComponent scriptNames a module may use: the ones its plan introduces
-    plus every new component already in the catalog."""
-    names = list(registry.new_component_names())
-    for comp in asset_plan.components:
-        if comp.is_new and registry.find_component(comp.component_type) is None:
-            if comp.component_type not in names:
-                names.append(comp.component_type)
-    return names
+) -> list[UsableNewComponent]:
+    """Every new component a module may use: all already in the catalog, plus the
+    ones its plan declares. Computed once per module by the pipeline and passed to
+    the module prompt's entries, the module step's validation scope, and
+    normalization."""
+    usable = [UsableNewComponent(c.name, c.description, list(c.inputs), from_catalog=True)
+              for c in registry.components if not c.builtin]
+    for spec in asset_plan.new_components:
+        if registry.find_component(spec.name) is None:
+            usable.append(UsableNewComponent(spec.name, spec.behavior_description,
+                                             [i.model_dump() for i in spec.inputs]))
+    return usable
+
+
+def render_new_component_entries(usable: list[UsableNewComponent]) -> str:
+    """One ready-to-copy NewComponent entry per component the module may use, so
+    the plan's bare names don't prime ``{"type": "<name>"}`` (#77)."""
+    lines = []
+    for c in usable:
+        literal = {"type": "NewComponent", "scriptName": c.name, "scriptDescription": c.description}
+        if c.inputs:
+            literal["inputs"] = [{**i, "value": VALUE_PLACEHOLDER} for i in c.inputs]
+        lines.append("  " + json.dumps(literal, ensure_ascii=False))
+    return "\n".join(lines) if lines else (
+        "  (none: no new components are available to this module; use built-in "
+        "components only)"
+    )
 
 
 def build_module_prompt(
@@ -260,10 +316,11 @@ def build_module_prompt(
     registry: AssetRegistry,
     asset_plan: ModuleAssetPlan,
     *,
+    usable: list[UsableNewComponent],
     min_objects: int,
     min_clips: int,
 ) -> str:
-    allowed = allowed_new_component_names(asset_plan, registry)
+    """``usable`` is ``usable_new_components(asset_plan, registry)``."""
     return MODULE_INSTRUCTION.format(
         lab_context=lab_context,
         plan=render_plan(plan),
@@ -274,7 +331,7 @@ def build_module_prompt(
         asset_plan=json.dumps(asset_plan.model_dump(mode="json", exclude_none=True), indent=2),
         catalog=registry.render_component_catalog(),
         module_name=asset_plan.module_name,
-        allowed_new=", ".join(allowed) if allowed else "none",
+        new_component_entries=render_new_component_entries(usable),
         min_objects=min_objects,
         min_clips=min_clips,
     )

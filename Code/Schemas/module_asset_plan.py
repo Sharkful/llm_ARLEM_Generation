@@ -33,10 +33,10 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Iterable, Iterator, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from _schema_helpers import to_pascal_case
-from json_lab import Color4
+from json_lab import Color4, ComponentInput
 
 
 # NewComponent.scriptName's constraint (json_lab.py), restated for new components
@@ -127,48 +127,60 @@ class PlannedObject(BaseModel):
     )
 
 
+class NewComponentSpec(BaseModel):
+    """A new component this module introduces, declared once here. Every object
+    that uses it attaches it by name in ``components``."""
+
+    name: str = Field(
+        description=(
+            "New PascalCase script name of at least 5 letters or digits, e.g. "
+            "'PulseGlow'. It must not be a catalog component."
+        )
+    )
+    behavior_description: str = Field(
+        min_length=20,
+        description=(
+            "The ONE behavior this new component implements, its inputs (object "
+            "references, inspector values) and its outputs/effects. Keep it small "
+            "and single-purpose."
+        ),
+    )
+    why_existing_insufficient: str = Field(
+        min_length=15,
+        description="Why no catalog component (or combination of them) works",
+    )
+    inputs: list[ComponentInput] = Field(
+        description=(
+            "The component's inspector fields: object references and values the "
+            "module sets on each instance. Use an empty list only if it needs none."
+        ),
+    )
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _normalize_name(cls, v):
+        # Same normalization as json_lab.NewComponent.scriptName, so a declared
+        # name is exactly the scriptName the module step will use.
+        return to_pascal_case(v)
+
+
 class PlannedComponent(BaseModel):
-    """A component to attach to one of this module's planned objects."""
+    """A component attached to one of this module's planned objects."""
 
     object_name: str = Field(
         description="Name of the planned object (from `objects`) this component attaches to"
     )
     component_type: str = Field(
         description=(
-            "Name of the component. For an existing component use its catalog name "
-            "exactly (e.g. 'SimpleOrbitComponent', or a script name invented by an "
-            "earlier module). For a new component (is_new=true), give a new PascalCase "
-            "script name of at least 5 letters or digits, e.g. 'PulseGlow'."
+            "Name of the component: a catalog component exactly as listed (e.g. "
+            "'SimpleOrbitComponent', or a script name invented by an earlier module), "
+            "or the name of a component declared in this plan's `new_components`."
         )
     )
     rationale: str = Field(
         min_length=15,
         description="Why this object needs this component: what it lets the student see or do",
     )
-    is_new: bool = Field(
-        default=False,
-        description="True only when no catalog component can provide the needed behavior",
-    )
-    behavior_description: Optional[str] = Field(
-        default=None,
-        description=(
-            "Required when is_new: the ONE behavior this new component implements, "
-            "its inputs (object references, inspector values) and its outputs/effects. "
-            "Keep it small and single-purpose."
-        ),
-    )
-    why_existing_insufficient: Optional[str] = Field(
-        default=None,
-        description="Required when is_new: why no catalog component (or combination) works",
-    )
-
-    @model_validator(mode="after")
-    def _normalize_new_name(self) -> "PlannedComponent":
-        # Same normalization as json_lab.NewComponent.scriptName, so a planned
-        # name is exactly the scriptName the module step will use.
-        if self.is_new:
-            self.component_type = to_pascal_case(self.component_type)
-        return self
 
 
 class PlannedInteraction(BaseModel):
@@ -201,9 +213,19 @@ class ModuleAssetPlan(BaseModel):
     objects: list[PlannedObject] = Field(
         min_length=1, description="Every scene object the module needs"
     )
+    new_components: list[NewComponentSpec] = Field(
+        default_factory=list,
+        description=(
+            "New components this module introduces, each declared exactly once. Leave "
+            "empty when catalog components can provide every behavior."
+        ),
+    )
     components: list[PlannedComponent] = Field(
         default_factory=list,
-        description="Components to attach to the planned objects, each with a rationale",
+        description=(
+            "Every component attachment: one entry per (object, component) pair, naming "
+            "a catalog component or one declared in new_components, each with a rationale"
+        ),
     )
     interactions: list[PlannedInteraction] = Field(
         default_factory=list,
@@ -245,20 +267,46 @@ class ModuleAssetPlan(BaseModel):
                     f"'{inter.object_name}'; object_name must be one of {known}."
                 )
 
-        # A new component may be attached to several objects: one entry declares it
-        # (is_new=true), the others may reference it by name.
-        new_declarations: dict[str, str] = {}
-        for comp in self.components:
-            if comp.is_new:
-                key = component_key(comp.component_type)
-                desc = " ".join((comp.behavior_description or "").split())
-                if key in new_declarations and new_declarations[key] != desc:
-                    problems.append(
-                        f"New component '{comp.component_type}' is declared more than once "
-                        "with different behavior_descriptions; declare it once (is_new=true) "
-                        "and reference it by name elsewhere."
-                    )
-                new_declarations.setdefault(key, desc)
+        # New components are declared once in new_components; components only
+        # attaches them (or catalog components) to objects.
+        declared: dict[str, str] = {}
+        for spec in self.new_components:
+            label = f"New component '{spec.name}'"
+            key = component_key(spec.name)
+            if key in declared:
+                problems.append(
+                    f"{label} is declared more than once in new_components; declare it "
+                    "once and attach it to every object that uses it in components."
+                )
+                continue
+            declared[key] = spec.name
+            # Compared like everywhere downstream: 'pulseSpeed' and 'pulsespeed' are one input.
+            input_keys = [component_key(i.name) for i in spec.inputs]
+            if dupes := sorted({i.name for i, k in zip(spec.inputs, input_keys)
+                                if input_keys.count(k) > 1}):
+                problems.append(f"{label}: input name(s) {dupes} are listed more than once.")
+            if spec.name.strip() == "NewComponent":
+                problems.append(
+                    f"{label}: give the new component its own script name, not the "
+                    "generic 'NewComponent'."
+                )
+            elif not _SCRIPT_NAME_RE.match(spec.name):
+                problems.append(
+                    f"{label}: a new component name must be PascalCase letters and "
+                    "digits, start with a capital letter, and be at least 5 characters."
+                )
+            if ctx is None:
+                continue
+            if not ctx.allow_new:
+                problems.append(
+                    f"{label}: new components are disabled for this run; leave "
+                    f"new_components empty and use catalog components: {sorted(ctx.catalog)}."
+                )
+            elif (existing := ctx.find(spec.name)) is not None:
+                problems.append(
+                    f"{label}: '{existing}' already exists in the component catalog; "
+                    "remove it from new_components and attach the catalog component by name."
+                )
 
         seen_pairs: set[tuple[str, str]] = set()
         for comp in self.components:
@@ -275,47 +323,20 @@ class ModuleAssetPlan(BaseModel):
             if comp.component_type.strip() == "NewComponent":
                 problems.append(
                     f"Component {label}: component_type must not be the generic "
-                    "'NewComponent'. Name an existing catalog component, or set "
-                    "is_new=true and give the new component its own script name."
+                    "'NewComponent'. Name a catalog component or one declared in "
+                    "new_components."
                 )
                 continue
-
-            if comp.is_new:
-                if not _SCRIPT_NAME_RE.match(comp.component_type):
-                    problems.append(
-                        f"Component {label}: a new component name must be PascalCase "
-                        "letters and digits, start with a capital letter, and be at "
-                        "least 5 characters."
-                    )
-                if not comp.behavior_description or not comp.why_existing_insufficient:
-                    problems.append(
-                        f"Component {label}: a new component needs both "
-                        "behavior_description and why_existing_insufficient."
-                    )
-
-            if ctx is None:
+            if ctx is None or pair[1] in declared or ctx.find(comp.component_type):
                 continue
-            existing = ctx.find(comp.component_type)
-            if comp.is_new:
-                if not ctx.allow_new:
-                    problems.append(
-                        f"Component {label}: new components are disabled for this run; "
-                        f"use a catalog component: {sorted(ctx.catalog)}."
-                    )
-                elif existing is not None:
-                    problems.append(
-                        f"Component {label}: '{existing}' already exists in the component "
-                        "catalog; reuse it with is_new=false instead of inventing it again."
-                    )
-            elif existing is None and pair[1] not in new_declarations:
-                hint = (
-                    " or set is_new=true if no catalog component can provide the behavior"
-                    if ctx.allow_new else ""
-                )
-                problems.append(
-                    f"Component {label}: unknown component. Use a catalog component "
-                    f"{sorted(ctx.catalog)}{hint}."
-                )
+            hint = (
+                ", or declare it in new_components if no catalog component can "
+                "provide the behavior" if ctx.allow_new else ""
+            )
+            problems.append(
+                f"Component {label}: unknown component. Use a catalog component "
+                f"{sorted(ctx.catalog)}{hint}."
+            )
 
         if problems:
             raise ValueError(
