@@ -478,6 +478,7 @@ class HierarchicalPipeline:
         self._current_step: Optional[str] = None
         self._traceback: Optional[str] = None   # set when run() catches an unexpected error
         self._calls_absorbed = 0                # tracker calls already charged to a step
+        self._cache_warned = False              # Anthropic cache-split warning printed once
 
     # ── resume ───────────────────────────────────────────────────────
     @staticmethod
@@ -611,13 +612,21 @@ class HierarchicalPipeline:
         opening prefix is then written once per step type and read by the later
         steps of that type (Anthropic orders the prefix tools -> system ->
         messages, and each step type has its own tool). Reasks and revisions append
-        after it, so they read it too. Everything else stays a plain string."""
-        if (cache_prefix and self.model_config.provider == Provider.ANTHROPIC
-                and prompt.startswith(cache_prefix) and len(prompt) > len(cache_prefix)):
+        after it, so they read it too. Everything else stays a plain string; a prompt
+        that should split but doesn't prints a one-time warning, because caching is
+        then silently off for that step."""
+        if not cache_prefix or self.model_config.provider != Provider.ANTHROPIC:
+            return prompt
+        if prompt.startswith(cache_prefix) and len(prompt) > len(cache_prefix):
             return [
                 {"type": "text", "text": cache_prefix, "cache_control": {"type": "ephemeral"}},
                 {"type": "text", "text": prompt[len(cache_prefix):]},
             ]
+        if not self._cache_warned:
+            self._cache_warned = True
+            print("  WARNING: a step prompt doesn't start with prompts.shared_opening(), so "
+                  "Anthropic prompt caching is off for it (#73). Keep the asset-plan and "
+                  "module templates opening with LAB_BLOCK + PLAN_BLOCK.")
         return prompt
 
     def _run_step(
@@ -798,6 +807,8 @@ class HierarchicalPipeline:
                 scope=lambda: plan_validation(cfg.max_scenes),
             )
             modules: list[DemoModule] = []
+            # Asset-plan and module prompts all start with this; Anthropic caches it (#73).
+            opening = prompts.shared_opening(self.lab_context, plan)
             for i in range(1, len(plan.scenes) + 1):
                 scene = plan.scenes[i - 1]
                 shared_context = {
@@ -820,7 +831,7 @@ class HierarchicalPipeline:
                     ),
                     context=shared_context,
                     normalize=lambda ap: normalize_asset_plan(ap, self.registry),
-                    cache_prefix=prompts.shared_opening(self.lab_context, plan),
+                    cache_prefix=opening,
                 )
                 allowed = prompts.allowed_new_component_names(asset_plan, self.registry)
                 module = self._run_step(
@@ -833,7 +844,7 @@ class HierarchicalPipeline:
                     scope=lambda: module_validation(allowed),
                     context={**shared_context, "asset_plan": asset_plan},
                     normalize=lambda m: normalize_module(m, asset_plan, self.registry),
-                    cache_prefix=prompts.shared_opening(self.lab_context, plan),
+                    cache_prefix=opening,
                 )
                 adherence = plan_adherence(
                     asset_plan, module, min_objects=cfg.min_objects, min_clips=cfg.min_clips

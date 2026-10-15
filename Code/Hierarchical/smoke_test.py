@@ -26,6 +26,8 @@ Outputs go to a temp dir that is removed afterwards. Exit code 1 on any failure.
 """
 
 import atexit
+import contextlib
+import io
 import json
 import os
 import re
@@ -164,6 +166,17 @@ check(all((_t1 / f).read_text(encoding="utf-8").startswith(P.prompts.shared_open
           for f in ("01_asset_plan_prompt.txt", "01_module_prompt.txt", "02_module_prompt.txt"))
       and _open.startswith("# Lab description\nCTX {x}"),
       "asset-plan and module prompts start with the shared opening, byte for byte")
+# A prompt that should carry the Anthropic cache breakpoint but can't be split
+# warns once per run instead of silently losing caching (#73).
+_wp = make(FakeLLM(), "t1_warn")             # claude-haiku-4.5: Anthropic
+_out = io.StringIO()
+with contextlib.redirect_stdout(_out):
+    _r1 = _wp._user_content("other text", "# Lab description\n")
+    _r2 = _wp._user_content("more text", "# Lab description\n")
+    _r3 = _wp._user_content("other text", None)
+check(_r1 == "other text" and _r2 == "more text" and _r3 == "other text"
+      and _out.getvalue().count("WARNING") == 1 and "shared_opening" in _out.getvalue(),
+      "an Anthropic prompt that can't be split for caching stays a string and warns once")
 check(rec["success"], "auto run succeeds")
 lab = Lab.model_validate_json(Path(rec["output_path"]).read_text(encoding="utf-8"))
 check(len(lab.modules) == len(MODS), f"assembled Lab has {len(MODS)} modules")
@@ -863,8 +876,6 @@ check(abs(PricingCalculator(model="gpt-5.4-mini").calculate_cost(_oa)
 
 # 26. the model that actually answered is recorded (issue #72): Google serves
 #     gemini-3.5-flash requests with gemini-3.6-flash since 2026-10-08
-import contextlib  # noqa: E402
-import io  # noqa: E402
 from tracking.metrics import served_model_of  # noqa: E402
 check(served_model_of(SimpleNamespace(model_version="models/gemini-3.6-flash", usage_metadata=None))
       == "gemini-3.6-flash"
