@@ -64,6 +64,8 @@ _BUILTIN_BY_COMPONENT_TYPE = {
 }
 
 FAILED = False
+# The fake asset plans declare this one input on every new component (#74).
+FAKE_INPUT = {"name": "target_object", "type": "GameObject", "description": "object it acts on"}
 
 
 def check(cond, msg):
@@ -114,7 +116,8 @@ class FakeLLM:
                         and self.pipe.registry.find_component(name) is None
                         and name.lower() not in seen):
                     new_comps.append({"name": name, "behavior_description": c["scriptDescription"],
-                                      "why_existing_insufficient": "no built-in component does this"})
+                                      "why_existing_insufficient": "no built-in component does this",
+                                      "inputs": [FAKE_INPUT]})
                 seen.add(name.lower())
                 comps.append({"object_name": obj_name, "component_type": name,
                               "rationale": "needed for this scene's behavior"})
@@ -168,11 +171,11 @@ SRC_NORMALIZED = [P._dump(DemoModule.model_validate(m)) for m in MODS]
 
 
 def _strip_scripts(node):
-    """Drop dateCreated and NewComponent name/description, which the pipeline
-    deliberately normalizes; everything else must come through untouched."""
+    """Drop dateCreated and NewComponent name/description/inputs, which the
+    pipeline deliberately normalizes; everything else must come through untouched."""
     if isinstance(node, dict):
         return {k: _strip_scripts(v) for k, v in node.items()
-                if k not in ("dateCreated", "scriptName", "scriptDescription")}
+                if k not in ("dateCreated", "scriptName", "scriptDescription", "inputs")}
     if isinstance(node, list):
         return [_strip_scripts(v) for v in node]
     return node
@@ -212,6 +215,18 @@ check(bool(later) and first["name"] in later[0].read_text(encoding="utf-8"),
       f"'{first['name']}' (module {first['origin_module']}) is in a later asset-plan catalog")
 check(len(rec["steps"]) == 1 + 2 * len(MODS) and all(s["success"] for s in rec["steps"]),
       "one successful step record per step")
+# structured inputs (#74): the plan's definitions reach the module, the catalog
+# and later prompts, and their types are tallied for the metrics
+check(first["inputs"] == [{"name": "targetObject", "type": "GameObject",
+                           "description": "object it acts on"}]
+      and "targetObject (GameObject): object it acts on" in later[0].read_text(encoding="utf-8"),
+      "planned inputs (name camelCased) carried by the catalog into later prompts")
+check(all(c.get("inputs") == [{k: v for k, v in first["inputs"][0].items()}]
+          for m in out["modules"] for o in m["objects"] for c in o.get("components") or []
+          if c["componentType"] == "newscript"),
+      "every NewComponent instance carries its canonical input definitions")
+check(rec["new_component_input_types"] == {"GameObject": len(newc)},
+      "input types tallied across the lab (new_component_input_types)")
 check(rec["pipeline"] == "hierarchical" and rec["structure"] == "multi-module", "metrics keys")
 
 # 2. scripted reviewer: revise the plan once, replace asset plan 1
@@ -355,7 +370,7 @@ with asset_plan_validation(["SimpleOrbitComponent", "SimpleRotationComponent"],
 # 8b. declare once, attach many (#77): attachments resolve against the catalog plus
 # new_components; a declaration is checked once, not per attachment
 _decl = {"name": "pulse_glow", "behavior_description": "pulses the object's emission color",
-         "why_existing_insufficient": "no catalog component changes emission"}
+         "why_existing_insufficient": "no catalog component changes emission", "inputs": []}
 _glow_plan = {
     "module_name": "M", "design_notes": "d" * 40, "clip_beats": ["a", "b"],
     "objects": [{"name": "sun", **_obj}, {"name": "moon", **_obj}],
@@ -401,6 +416,39 @@ with asset_plan_validation(_catalog):
 _adh = P.plan_adherence(_unused, DemoModule.model_validate(MODS[0]), min_objects=1, min_clips=1)
 check(_adh["unattached_new_components"] == ["PulseGlow", "OrbitTrail"],
       "declared-but-unattached new components recorded in plan_adherence (no reask)")
+
+# 8c. structured inputs: required on a declaration; instances keep their values but
+# take the canonical definitions, and undeclared inputs are dropped and logged
+with asset_plan_validation(_catalog):
+    try:
+        ModuleAssetPlan.model_validate({**_glow_plan, "new_components": [
+            {k: v for k, v in _decl.items() if k != "inputs"}]})
+        check(False, "a new component declared without inputs is rejected")
+    except ValidationError as e:
+        check("inputs" in str(e) and "Field required" in str(e),
+              "a new component declared without inputs is rejected")
+    _glow = ModuleAssetPlan.model_validate({**_glow_plan, "new_components": [{**_decl, "inputs": [
+        {"name": "PulseSpeed", "type": "float", "description": "pulses per second, 0.1-5"},
+        {"name": "glowColor", "type": "Color", "description": "emission color"}]}]})
+check([i.name for i in _glow.new_components[0].inputs] == ["pulseSpeed", "glowColor"],
+      "input names normalized to camelCase")
+_inst = NewComponent(scriptName="PulseGlow", scriptDescription="pulses the emission color",
+                     inputs=[{"name": "pulse_speed", "type": "Single", "description": "speed!",
+                              "value": "2.5"},
+                             {"name": "wobble", "type": "float", "description": "not planned",
+                              "value": "1"}])
+_mod = DemoModule.model_validate({**MODS[0], "objects": [
+    {**MODS[0]["objects"][0], "components": [_inst.model_dump()]}, *MODS[0]["objects"][1:]]})
+_changes = P.normalize_module(_mod, _glow, P.AssetRegistry())
+_after = _mod.objects[0].components[0].inputs
+check([(i.name, i.type, i.value) for i in _after]
+      == [("pulseSpeed", "float", "2.5"), ("glowColor", "Color", None)],
+      "instance inputs take the planned definitions and keep their values")
+check({"field": "inputs", "component": "PulseGlow", "dropped": ["wobble"]} in _changes
+      and {"field": "inputs", "component": "PulseGlow", "redefined": ["pulseSpeed"]} in _changes,
+      "undeclared and redefined inputs logged as normalizations")
+check("inputs" not in P._dump(NewComponent(scriptName="OrbitTrail", scriptDescription="d" * 25)),
+      "a NewComponent without inputs dumps exactly as before (wave-2 outputs unchanged)")
 
 # 9. per-module minimums are enforced on the asset plan (defaults 4 objects / 5 beats)
 rec = make(FakeLLM(), "t9_minimums",

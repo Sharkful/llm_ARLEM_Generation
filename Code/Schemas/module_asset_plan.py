@@ -36,7 +36,7 @@ from typing import Iterable, Iterator, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from _schema_helpers import to_pascal_case
-from json_lab import Color4
+from json_lab import Color4, ComponentInput
 
 
 # NewComponent.scriptName's constraint (json_lab.py), restated for new components
@@ -148,6 +148,12 @@ class NewComponentSpec(BaseModel):
     why_existing_insufficient: str = Field(
         min_length=15,
         description="Why no catalog component (or combination of them) works",
+    )
+    inputs: list[ComponentInput] = Field(
+        description=(
+            "The component's inspector fields: object references and values the "
+            "module sets on each instance. Use an empty list only if it needs none."
+        ),
     )
 
     @field_validator("name", mode="before")
@@ -274,6 +280,9 @@ class ModuleAssetPlan(BaseModel):
                 )
                 continue
             declared[key] = spec.name
+            input_names = [i.name for i in spec.inputs]
+            if dupes := sorted({n for n in input_names if input_names.count(n) > 1}):
+                problems.append(f"{label}: input name(s) {dupes} are listed more than once.")
             if spec.name.strip() == "NewComponent":
                 problems.append(
                     f"{label}: give the new component its own script name, not the "

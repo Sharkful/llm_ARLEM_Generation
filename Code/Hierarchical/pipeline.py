@@ -36,6 +36,7 @@ import json
 import re
 import time
 import traceback
+from collections import Counter
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
@@ -62,7 +63,8 @@ from benchmark import (
 )
 from benchmark_config import MODELS, SYSTEM_PROMPT, ModelConfig, SpecType
 from json_lab import (
-    DemoModule, Lab, NewComponent, PointerReceiverComponent, component_entry_checks,
+    DemoModule, Lab, NewComponent, NewComponentInput, PointerReceiverComponent,
+    component_entry_checks,
 )
 from lab_metrics import analyze_assets, analyze_json_lab
 from lab_outline import LabOutline
@@ -338,10 +340,11 @@ def normalize_asset_plan(asset_plan: ModuleAssetPlan, registry: AssetRegistry) -
 def normalize_module(
     module: DemoModule, asset_plan: ModuleAssetPlan, registry: AssetRegistry
 ) -> list[dict]:
-    """Give every NewComponent one canonical name and description: a component
-    already in the catalog takes the catalog's; one introduced here takes the
-    asset plan's name and its first description in this module."""
-    planned = {component_key(c.name): c.name for c in asset_plan.new_components}
+    """Give every NewComponent one canonical name, description and set of input
+    definitions: a component already in the catalog takes the catalog's; one
+    introduced here takes the asset plan's name and inputs and its first
+    description in this module. Each instance keeps the values it set."""
+    planned = {component_key(c.name): c for c in asset_plan.new_components}
     first_description: dict[str, str] = {}
     changes = []
     for comp in iter_module_components(module):
@@ -350,10 +353,14 @@ def normalize_module(
         key = component_key(comp.scriptName)
         entry = registry.find_component(comp.scriptName)
         if entry is not None and not entry.builtin:
-            name, description = entry.name, entry.description
+            name, description, inputs = entry.name, entry.description, entry.inputs
         else:
-            name = planned.get(key, comp.scriptName)
+            spec = planned.get(key)
+            name = spec.name if spec else comp.scriptName
+            inputs = [i.model_dump() for i in spec.inputs] if spec else None
             description = first_description.setdefault(key, comp.scriptDescription)
+        if inputs is not None:
+            changes += _canonical_inputs(comp, name, inputs)
         if comp.scriptName != name:
             changes.append({"field": "scriptName", "from": comp.scriptName, "to": name})
             comp.scriptName = name
@@ -362,6 +369,33 @@ def normalize_module(
                             "from": comp.scriptDescription[:80], "to": description[:80]})
             comp.scriptDescription = description
     return changes
+
+
+def _canonical_inputs(comp: NewComponent, name: str, inputs: list[dict]) -> list[dict]:
+    """Set ``comp.inputs`` to the canonical definitions, keeping the values this
+    instance set (matched by name, case-insensitively). An input the canonical
+    component doesn't have is dropped and logged. Returns the changes."""
+    given = {component_key(i.name): i for i in comp.inputs or []}
+    canonical = [NewComponentInput(**d, value=getattr(given.get(component_key(d["name"])),
+                                                     "value", None)) for d in inputs]
+    changes = []
+    dropped = sorted(i.name for k, i in given.items()
+                     if k not in {component_key(d["name"]) for d in inputs})
+    if dropped:
+        changes.append({"field": "inputs", "component": name, "dropped": dropped})
+    redefined = sorted(c.name for c in canonical
+                       if (g := given.get(component_key(c.name)))
+                       and g.model_dump(exclude={"value"}) != c.model_dump(exclude={"value"}))
+    if redefined:
+        changes.append({"field": "inputs", "component": name, "redefined": redefined})
+    comp.inputs = canonical or None
+    return changes
+
+
+def input_type_counts(registry: AssetRegistry) -> dict[str, int]:
+    """How often each new-component input type was declared across the lab (free
+    text, #74), so misspelled or ad-hoc types stand out in the metrics."""
+    return dict(Counter(i["type"] for c in registry.components for i in c.inputs).most_common())
 
 
 # ── Plan adherence (soft metric) ─────────────────────────────────────
@@ -927,6 +961,7 @@ class HierarchicalPipeline:
             "normalizations": self.normalizations,
             "plan_adherence": self.adherence,
             "new_components_total": len(self.registry.new_component_names()),
+            "new_component_input_types": input_type_counts(self.registry),
             "registry": {
                 "new_components": [asdict(c) for c in self.registry.components if not c.builtin],
                 "invented_prefabs": {k: asdict(v) for k, v in self.registry.invented_prefabs.items()},

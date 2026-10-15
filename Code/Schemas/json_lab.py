@@ -238,6 +238,52 @@ class PointerReceiverComponent(ConstToEnumSchemaMixin):
     matchWallWhileDragging: bool = Field(default=False)
     invertForward: bool = Field(default=False)
 
+def to_camel_case(name):
+    """Inspector field names are camelCase (``pulse_speed`` / ``PulseSpeed`` ->
+    ``pulseSpeed``); normalized rather than reasked. Non-strings pass through."""
+    name = to_pascal_case(name)
+    return name[:1].lower() + name[1:] if isinstance(name, str) else name
+
+
+class ComponentInput(BaseModel):
+    """One inspector field of a new component: what the C# script exposes."""
+
+    name: str = Field(
+        pattern=r"^[a-z][A-Za-z0-9]*$",
+        description="Inspector field name in camelCase, e.g. 'pulseSpeed' or 'targetObject'",
+    )
+    type: str = Field(
+        min_length=2,
+        description=(
+            "C# / Unity type of the field, e.g. float, int, bool, string, Vector3, "
+            "Color, GameObject, Transform, Texture2D, or another component's script "
+            "name for a reference to it"
+        ),
+    )
+    description: str = Field(
+        min_length=5,
+        description="What the field controls, with units and a sensible range where they apply",
+    )
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _normalize_name(cls, v):
+        return to_camel_case(v)
+
+
+class NewComponentInput(ComponentInput):
+    """A new component's inspector field, with the value this instance sets."""
+
+    value: Optional[str] = Field(
+        default=None,
+        description=(
+            "Value this instance sets, written as text: a number ('2.5'), 'true', an "
+            "object name for a reference, or an array ('[255, 0, 0, 255]'). Omit to "
+            "keep the script's default."
+        ),
+    )
+
+
 class NewComponent(ConstToEnumSchemaMixin):
     """A name and description for a new C# Monobehavior component that should implement functionality not covered in the other components"""
 
@@ -264,6 +310,14 @@ class NewComponent(ConstToEnumSchemaMixin):
         min_length=20,
         description="""A description of what the component script does. It should note all required inputs, either references to other objects, or numeric values that can be set in the inspector.
         The description should also note the outputs and effects of the script."""
+    )
+    inputs: Optional[list[NewComponentInput]] = Field(
+        default=None,
+        description=(
+            "The script's inspector fields (object references and values), each with "
+            "the value this instance sets. Reuse the field names of a component that "
+            "already exists."
+        ),
     )
 
 
