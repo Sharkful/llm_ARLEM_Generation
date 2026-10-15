@@ -313,14 +313,25 @@ def _module_errors(scope):
             P.PlannedDemoModule.model_validate(_bad_mod)
             return []
         except ValidationError as e:
-            return [ln for err in e.errors() for ln in str(err["msg"]).splitlines()]
+            return [ln for err in e.errors()
+                    for ln in str(err["msg"]).removeprefix("Value error, ").splitlines()]
 
 
+_bad_mod["objects"][1]["components"] += [{"type": "PulseGlow"}]
 _lines = _module_errors(P.module_validation(["ToggleOnClick"]))
-check(len(_lines) == 2 and "'ToggleOnClick' is not a built-in component type" in _lines[0]
+check(len(_lines) == 4 and "'ToggleOnClick' is not a built-in component type" in _lines[0]
       and "components[0]" in _lines[0] and "type: NewComponent, scriptName: 'ToggleOnClick'" in _lines[0]
-      and _lines[1].startswith("components[1] (NewComponent) scriptDescription"),
-      "module step: one error line per bad component entry, naming the fix")
+      and _lines[1].startswith("components[1] (NewComponent) scriptDescription")
+      and "'PulseGlow' is not a built-in" in _lines[2]
+      and _lines[3].startswith("Built-in component types: TextMeshProComponent")
+      and sum("SimpleOrbitComponent" in ln for ln in _lines) == 1,
+      "module step: one error line per bad component entry, built-ins listed once")
+_bad_mod["objects"][1]["components"] = [{"type": "simple orbitComponent"}, {"type": "newComponent"}]
+_lines = _module_errors(P.module_validation([]))
+check(_lines == ["components[0]: type 'simple orbitComponent' is misspelled; did you mean "
+                 "'SimpleOrbitComponent'?",
+                 "components[1]: type 'newComponent' is misspelled; did you mean 'NewComponent'?"],
+      "a miscased built-in tag gets 'did you mean', not the invented-component hint")
 _bad_mod["objects"][1]["components"] = [{"type": ["NewComponent"], "scriptName": "Toggle"}]
 _lines = _module_errors(P.module_validation([]))  # must be a ValidationError (a reask), not a crash
 check(bool(_lines), "a malformed (non-string) type is reported by the union, not a crash")
@@ -423,6 +434,13 @@ with asset_plan_validation(_catalog, allow_new=False):
     except ValidationError as e:
         check("leave new_components empty" in str(e),
               "--no-new-components rejects a non-empty new_components")
+    try:
+        ModuleAssetPlan.model_validate({**_glow_plan, "new_components": [{**_decl, "inputs": [
+            {"name": "pulseSpeed", "type": "float", "description": "pulses per second"},
+            {"name": "pulsespeed", "type": "float", "description": "pulses per second"}]}]})
+        check(False, "input names differing only in case are duplicates")
+    except ValidationError as e:
+        check("listed more than once" in str(e), "input names differing only in case are duplicates")
 # declared but attached nowhere: a soft metric, not a reask
 with asset_plan_validation(_catalog):
     _unused = ModuleAssetPlan.model_validate({**_glow_plan, "components": [], "new_components": [

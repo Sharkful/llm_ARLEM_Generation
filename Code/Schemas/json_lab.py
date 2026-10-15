@@ -379,10 +379,18 @@ def component_entry_checks() -> Iterator[None]:
         _COMPONENT_ENTRY_CHECKS.reset(token)
 
 
+def _tag_key(tag: str) -> str:
+    return "".join(ch for ch in tag if ch.isalnum()).lower()
+
+
+_BUILTIN_TAG_BY_KEY = {_tag_key(t): t for t in _COMPONENT_BY_TAG}
+
+
 def _check_component_entries(entries):
     if not _COMPONENT_ENTRY_CHECKS.get() or not isinstance(entries, list):
         return entries
     checked, problems = [], []
+    unknown = False
     for j, entry in enumerate(entries):
         tag = entry.get("type") if isinstance(entry, dict) else None
         if not isinstance(tag, str):  # no tag (or a malformed one): the union reports it
@@ -390,12 +398,17 @@ def _check_component_entries(entries):
             continue
         cls = _COMPONENT_BY_TAG.get(tag)
         if cls is None:
-            problems.append(
-                f"components[{j}]: {tag!r} is not a built-in component type "
-                f"({', '.join(t for t in _COMPONENT_BY_TAG if t != 'NewComponent')}). "
-                "An invented component is written as {type: NewComponent, scriptName: "
-                f"{tag!r}, scriptDescription: ...}}."
-            )
+            meant = _BUILTIN_TAG_BY_KEY.get(_tag_key(tag))
+            if meant is not None:
+                # A built-in tag with the wrong casing or spacing, not an invention.
+                problems.append(f"components[{j}]: type {tag!r} is misspelled; did you mean {meant!r}?")
+            else:
+                unknown = True
+                problems.append(
+                    f"components[{j}]: {tag!r} is not a built-in component type. An invented "
+                    f"component is written as {{type: NewComponent, scriptName: {tag!r}, "
+                    "scriptDescription: ...}."
+                )
             continue
         try:
             checked.append(cls.model_validate(entry))
@@ -404,6 +417,9 @@ def _check_component_entries(entries):
                 where = ".".join(str(x) for x in err["loc"])
                 problems.append(f"components[{j}] ({tag}){' ' + where if where else ''}: {err['msg']}")
     if problems:
+        if unknown:  # listed once, not on every line
+            builtins = ", ".join(t for t in _COMPONENT_BY_TAG if t != "NewComponent")
+            problems.append(f"Built-in component types: {builtins}.")
         raise ValueError("\n".join(problems))
     return checked
 

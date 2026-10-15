@@ -280,8 +280,10 @@ class ModuleAssetPlan(BaseModel):
                 )
                 continue
             declared[key] = spec.name
-            input_names = [i.name for i in spec.inputs]
-            if dupes := sorted({n for n in input_names if input_names.count(n) > 1}):
+            # Compared like everywhere downstream: 'pulseSpeed' and 'pulsespeed' are one input.
+            input_keys = [component_key(i.name) for i in spec.inputs]
+            if dupes := sorted({i.name for i, k in zip(spec.inputs, input_keys)
+                                if input_keys.count(k) > 1}):
                 problems.append(f"{label}: input name(s) {dupes} are listed more than once.")
             if spec.name.strip() == "NewComponent":
                 problems.append(
