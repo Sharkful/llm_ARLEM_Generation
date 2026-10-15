@@ -22,6 +22,7 @@ minimums apply per module here (they are lab-wide in the one-shot runs).
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Optional
 
 from pydantic import BaseModel
@@ -245,55 +246,51 @@ def build_asset_plan_prompt(
     )
 
 
-def allowed_new_component_names(
-    asset_plan: ModuleAssetPlan, registry: AssetRegistry
-) -> list[str]:
-    """NewComponent scriptNames a module may use: the ones its plan introduces
-    plus every new component already in the catalog."""
-    names = list(registry.new_component_names())
-    for spec in asset_plan.new_components:
-        if registry.find_component(spec.name) is None and spec.name not in names:
-            names.append(spec.name)
-    return names
-
-
 # Shown as each input's value in the module prompt's ready-to-copy entries; the
 # module step rejects it if it comes back unchanged.
 VALUE_PLACEHOLDER = "<value for this instance>"
 
 
-def allowed_new_component_inputs(
-    asset_plan: ModuleAssetPlan, registry: AssetRegistry
-) -> dict[str, list[str]]:
-    """Declared input names of each new component a module may use: the catalog's
-    for an earlier-invented one, the asset plan's for one declared here."""
-    planned = {component_key(c.name): c for c in asset_plan.new_components}
-    out = {}
-    for name in allowed_new_component_names(asset_plan, registry):
-        entry = registry.find_component(name)
-        out[name] = ([i["name"] for i in entry.inputs] if entry is not None
-                     else [i.name for i in planned[component_key(name)].inputs])
-    return out
+@dataclass
+class UsableNewComponent:
+    """A new component a module may use, with its canonical definition: from the
+    catalog for one an earlier module invented, from this module's asset plan for
+    one it declares. ``inputs`` holds {name, type, description} dicts; None leaves
+    the module's input names unchecked."""
+    name: str
+    description: str = ""
+    inputs: Optional[list[dict]] = None
+
+    def input_names(self) -> Optional[dict[str, str]]:
+        """component_key(input name) -> its canonical name, or None if unchecked."""
+        if self.inputs is None:
+            return None
+        return {component_key(i["name"]): i["name"] for i in self.inputs}
 
 
-def render_new_component_entries(
+def usable_new_components(
     asset_plan: ModuleAssetPlan, registry: AssetRegistry
-) -> str:
+) -> list[UsableNewComponent]:
+    """Every new component a module may use: all already in the catalog, plus the
+    ones its plan declares. The single source for the module prompt's entries,
+    the module step's validation scope, and normalization."""
+    usable = [UsableNewComponent(c.name, c.description, list(c.inputs))
+              for c in registry.components if not c.builtin]
+    for spec in asset_plan.new_components:
+        if registry.find_component(spec.name) is None:
+            usable.append(UsableNewComponent(spec.name, spec.behavior_description,
+                                             [i.model_dump() for i in spec.inputs]))
+    return usable
+
+
+def render_new_component_entries(usable: list[UsableNewComponent]) -> str:
     """One ready-to-copy NewComponent entry per component the module may use, so
     the plan's bare names don't prime ``{"type": "<name>"}`` (#77)."""
-    planned = {component_key(c.name): c for c in asset_plan.new_components}
     lines = []
-    for name in allowed_new_component_names(asset_plan, registry):
-        entry = registry.find_component(name)
-        if entry is not None:
-            description, inputs = entry.description, entry.inputs
-        else:
-            spec = planned[component_key(name)]
-            description = spec.behavior_description
-            inputs = [i.model_dump() for i in spec.inputs]
-        literal = {"type": "NewComponent", "scriptName": name, "scriptDescription": description}
-        if inputs:
-            literal["inputs"] = [{**i, "value": VALUE_PLACEHOLDER} for i in inputs]
+    for c in usable:
+        literal = {"type": "NewComponent", "scriptName": c.name, "scriptDescription": c.description}
+        if c.inputs:
+            literal["inputs"] = [{**i, "value": VALUE_PLACEHOLDER} for i in c.inputs]
         lines.append("  " + json.dumps(literal, ensure_ascii=False))
     return "\n".join(lines) if lines else (
         "  (none: no new components are available to this module; use built-in "
@@ -321,7 +318,9 @@ def build_module_prompt(
         asset_plan=json.dumps(asset_plan.model_dump(mode="json", exclude_none=True), indent=2),
         catalog=registry.render_component_catalog(),
         module_name=asset_plan.module_name,
-        new_component_entries=render_new_component_entries(asset_plan, registry),
+        new_component_entries=render_new_component_entries(
+            usable_new_components(asset_plan, registry)
+        ),
         min_objects=min_objects,
         min_clips=min_clips,
     )

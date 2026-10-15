@@ -64,14 +64,17 @@ is recorded as `unattached_new_components` in `plan_adherence`, to save tokens.
 
 A new component lists its inspector fields as `inputs: [{name, type, description}]`.
 
-- `name` is normalized to camelCase (`pulse_speed` -> `pulseSpeed`) instead of
-  reasked.
+- `name` is normalized to camelCase (`pulse_speed` -> `pulseSpeed`; a leading
+  acronym is lowercased whole, `URL` -> `url`) instead of reasked.
 - `type` is **free text**, not a fixed list: Unity scripts take references to other
   scripts, textures and user-defined types, and a fixed vocabulary would limit what
   can be invented. To catch misspellings and ad-hoc types, the metrics tally every
   declared type across the lab in `new_component_input_types`.
 - In the module, `json_lab.NewComponent.inputs` repeats the fields, each with the
-  `value` this instance sets (text: `"2.5"`, `"true"`, an object name, an array).
+  `value` this instance sets, stored as text: a number, bool or array the model
+  writes as such (`2.5`, `true`, `[255, 0, 0, 255]`) is kept as its JSON text, not
+  reasked. The prompt's `<value for this instance>` placeholder, copied unchanged,
+  is reasked.
 - The module step accepts only the component's declared input names (compared
   case- and separator-insensitively, so `pulse_speed` matches `pulseSpeed`). Any
   other name is reasked with one line per mistake, e.g. `NewComponent 'PulseGlow':
@@ -82,8 +85,10 @@ A new component lists its inspector fields as `inputs: [{name, type, description
   is inlined) and change the tool schema at every module step, which defeats prompt
   caching.
 - After a module is accepted, every instance takes the canonical definitions (from
-  the catalog or this module's asset plan) and keeps its own values; a redefined
-  type or description is rewritten and logged under `normalizations`.
+  the catalog or this module's asset plan) and keeps its own values. A reworded
+  type or description is rewritten and logged under `normalizations` with what
+  differed (`redefined: {input: {type|description: {from, to}}}`), once per
+  component per module, with the number of `instances` that wrote it.
 - The registry carries the inputs with each catalog entry, so later modules reuse
   the same field names.
 
@@ -97,7 +102,10 @@ entry). In the module step (`module_validation` enters
 class its `type` names:
 
 - an unknown `type` gives a single line saying how an invented component is
-  written (`{type: NewComponent, scriptName: 'ToggleOnClick', ...}`);
+  written (`{type: NewComponent, scriptName: 'ToggleOnClick', ...}`), with the
+  built-in types listed once at the end;
+- a built-in `type` with the wrong casing or spacing (`simpleOrbitComponent`) gets
+  "did you mean 'SimpleOrbitComponent'?", not the invented-component hint;
 - a known `type` reports only that class's errors.
 
 The reask still happens, so retry and self-correction metrics keep their meaning.

@@ -492,8 +492,7 @@ def _glow_module(inputs):
 
 
 _scope = lambda: P.module_validation(  # noqa: E731
-    prompts.allowed_new_component_names(_glow, P.AssetRegistry()),
-    prompts.allowed_new_component_inputs(_glow, P.AssetRegistry()))
+    prompts.usable_new_components(_glow, P.AssetRegistry()))
 with _scope():
     try:
         P.PlannedDemoModule.model_validate(_glow_module([_speed, _wobble]))
@@ -514,8 +513,18 @@ _after = _mod.objects[0].components[0].inputs
 check([(i.name, i.type, i.value) for i in _after]
       == [("pulseSpeed", "float", "2.5"), ("glowColor", "Color", None)],
       "instance inputs take the planned definitions and keep their values")
-check({"field": "inputs", "component": "PulseGlow", "redefined": ["pulseSpeed"]} in _changes,
-      "redefined inputs logged as normalizations")
+check({"field": "inputs", "component": "PulseGlow", "instances": 1, "redefined": {"pulseSpeed": {
+          "type": {"from": "Single", "to": "float"},
+          "description": {"from": "speed!", "to": "pulses per second, 0.1-5"}}}} in _changes,
+      "a redefined input is logged with what differed (type / description, from -> to)")
+# the same rewording on several instances of a component is logged once, with a count
+_two = _glow_module([_speed])
+_two["objects"][1]["components"] = list(_two["objects"][0]["components"])
+with _scope():
+    _mod2 = P.PlannedDemoModule.model_validate(_two)
+_input_logs = [c for c in P.normalize_module(_mod2, _glow, P.AssetRegistry()) if c["field"] == "inputs"]
+check(len(_input_logs) == 1 and _input_logs[0]["instances"] == 2,
+      "identical input rewrites logged once per component per module, with an instance count")
 check("inputs" not in P._dump(NewComponent(scriptName="OrbitTrail", scriptDescription="d" * 25)),
       "a NewComponent without inputs dumps exactly as before (wave-2 outputs unchanged)")
 

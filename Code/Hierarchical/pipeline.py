@@ -42,7 +42,7 @@ from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, ContextManager, Iterable, Iterator, Mapping, Optional, Type
+from typing import Any, Callable, ContextManager, Iterable, Iterator, Optional, Type
 
 from pydantic import BaseModel, ValidationError, model_validator
 
@@ -94,8 +94,8 @@ CallFn = Callable[[Type[BaseModel], list[dict], int], BaseModel]
 # message as a Jinja template (see module_asset_plan.py).
 
 _MAX_SCENES: ContextVar[Optional[int]] = ContextVar("lab_plan_max_scenes", default=None)
-# component key -> (canonical scriptName, its inputs' keys, or None if unchecked)
-_ALLOWED_NEW_COMPONENTS: ContextVar[Optional[dict[str, tuple[str, Optional[dict[str, str]]]]]] = (
+# component_key(scriptName) -> the usable new component it names
+_ALLOWED_NEW_COMPONENTS: ContextVar[Optional[dict[str, prompts.UsableNewComponent]]] = (
     ContextVar("planned_module_allowed_new_components", default=None)
 )
 
@@ -112,18 +112,14 @@ def plan_validation(max_scenes: int) -> Iterator[None]:
 
 @contextmanager
 def module_validation(
-    allowed_new_components: Iterable[str],
-    inputs: Optional[Mapping[str, Iterable[str]]] = None,
+    usable: Iterable[prompts.UsableNewComponent | str],
 ) -> Iterator[None]:
     """Activate PlannedDemoModule's NewComponent checks, and json_lab's one clear
-    error per bad component entry, in this scope. ``inputs`` maps a component's
-    name to its declared input names; a component it lists may use only those."""
-    by_key = {component_key(k): list(v) for k, v in (inputs or {}).items()}
-    token = _ALLOWED_NEW_COMPONENTS.set({
-        component_key(n): (n, {component_key(i): i for i in by_key[component_key(n)]}
-                           if component_key(n) in by_key else None)
-        for n in allowed_new_components
-    })
+    error per bad component entry, in this scope. ``usable`` is
+    ``prompts.usable_new_components(...)``; a bare name allows that component
+    without checking its input names."""
+    usable = [prompts.UsableNewComponent(u) if isinstance(u, str) else u for u in usable]
+    token = _ALLOWED_NEW_COMPONENTS.set({component_key(u.name): u for u in usable})
     try:
         with component_entry_checks():
             yield
@@ -164,10 +160,11 @@ class PlannedDemoModule(DemoModule):
         for c in iter_module_components(self):
             if not isinstance(c, NewComponent):
                 continue
-            name, declared = allowed.get(component_key(c.scriptName), (None, None))
-            if name is None:
+            usable = allowed.get(component_key(c.scriptName))
+            if usable is None:
                 unplanned.add(c.scriptName)
                 continue
+            name, declared = usable.name, usable.input_names()
             for i in c.inputs or []:
                 if i.value == prompts.VALUE_PLACEHOLDER:
                     line = (f"NewComponent '{name}': input '{i.name}' still has the placeholder "
@@ -183,7 +180,7 @@ class PlannedDemoModule(DemoModule):
             problems.insert(0,
                 f"NewComponent(s) {sorted(unplanned)} were not planned for this module. Use a "
                 "built-in component, or a NewComponent with one of these scriptNames: "
-                f"{sorted(n for n, _ in allowed.values()) or 'none'}"
+                f"{sorted(u.name for u in allowed.values()) or 'none'}"
             )
         if problems:
             raise ValueError("\n".join(problems))
@@ -372,23 +369,30 @@ def normalize_module(
     definitions: a component already in the catalog takes the catalog's; one
     introduced here takes the asset plan's name and inputs and its first
     description in this module. Each instance keeps the values it set."""
-    planned = {component_key(c.name): c for c in asset_plan.new_components}
+    usable = {component_key(u.name): u
+              for u in prompts.usable_new_components(asset_plan, registry)}
     first_description: dict[str, str] = {}
     changes = []
+    redefined: dict[tuple[str, str], dict] = {}  # (component, diff) -> input log record
     for comp in iter_module_components(module):
         if not isinstance(comp, NewComponent):
             continue
         key = component_key(comp.scriptName)
+        u = usable.get(key)
+        name = u.name if u else comp.scriptName
         entry = registry.find_component(comp.scriptName)
         if entry is not None and not entry.builtin:
-            name, description, inputs = entry.name, entry.description, entry.inputs
+            description = entry.description
         else:
-            spec = planned.get(key)
-            name = spec.name if spec else comp.scriptName
-            inputs = [i.model_dump() for i in spec.inputs] if spec else None
             description = first_description.setdefault(key, comp.scriptDescription)
-        if inputs is not None:
-            changes += _canonical_inputs(comp, name, inputs)
+        if u is not None and u.inputs is not None:
+            diff = _canonical_inputs(comp, u.inputs)
+            if diff:
+                rec = redefined.setdefault(
+                    (name, json.dumps(diff, sort_keys=True)),
+                    {"field": "inputs", "component": name, "redefined": diff, "instances": 0},
+                )
+                rec["instances"] += 1
         if comp.scriptName != name:
             changes.append({"field": "scriptName", "from": comp.scriptName, "to": name})
             comp.scriptName = name
@@ -396,24 +400,28 @@ def normalize_module(
             changes.append({"field": "scriptDescription", "component": name,
                             "from": comp.scriptDescription[:80], "to": description[:80]})
             comp.scriptDescription = description
-    return changes
+    return changes + list(redefined.values())
 
 
-def _canonical_inputs(comp: NewComponent, name: str, inputs: list[dict]) -> list[dict]:
+def _canonical_inputs(comp: NewComponent, inputs: list[dict]) -> dict:
     """Set ``comp.inputs`` to the canonical definitions, keeping the values this
     instance set (matched by name, case-insensitively). PlannedDemoModule has
-    already rejected input names the component doesn't declare. Returns the changes."""
+    already rejected input names the component doesn't declare. Returns what the
+    instance wrote differently: {input: {field: {"from": ..., "to": ...}}}."""
     given = {component_key(i.name): i for i in comp.inputs or []}
     canonical = [NewComponentInput(**d, value=getattr(given.get(component_key(d["name"])),
                                                      "value", None)) for d in inputs]
-    changes = []
-    redefined = sorted(c.name for c in canonical
-                       if (g := given.get(component_key(c.name)))
-                       and g.model_dump(exclude={"value"}) != c.model_dump(exclude={"value"}))
-    if redefined:
-        changes.append({"field": "inputs", "component": name, "redefined": redefined})
+    diff = {}
+    for c in canonical:
+        g = given.get(component_key(c.name))
+        if g is None:
+            continue
+        fields = {f: {"from": getattr(g, f)[:80], "to": getattr(c, f)[:80]}
+                  for f in ("type", "description") if getattr(g, f) != getattr(c, f)}
+        if fields:
+            diff[c.name] = fields
     comp.inputs = canonical or None
-    return changes
+    return diff
 
 
 def input_type_counts(registry: AssetRegistry) -> dict[str, int]:
@@ -869,8 +877,7 @@ class HierarchicalPipeline:
                     context=shared_context,
                     normalize=lambda ap: normalize_asset_plan(ap, self.registry),
                 )
-                allowed = prompts.allowed_new_component_names(asset_plan, self.registry)
-                allowed_inputs = prompts.allowed_new_component_inputs(asset_plan, self.registry)
+                usable = prompts.usable_new_components(asset_plan, self.registry)
                 module = self._run_step(
                     "module", i, PlannedDemoModule,
                     prompts.build_module_prompt(
@@ -878,7 +885,7 @@ class HierarchicalPipeline:
                         min_objects=cfg.min_objects, min_clips=cfg.min_clips,
                     ),
                     cfg.module_retries, f"{i:02d}_module", "module",
-                    scope=lambda: module_validation(allowed, allowed_inputs),
+                    scope=lambda: module_validation(usable),
                     context={**shared_context, "asset_plan": asset_plan},
                     normalize=lambda m: normalize_module(m, asset_plan, self.registry),
                 )
