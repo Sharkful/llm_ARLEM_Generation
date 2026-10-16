@@ -195,6 +195,10 @@ check(_r1 == "other text" and _r2 == "more text" and _r3 == "other text"
       "an Anthropic prompt that can't be split for caching stays a string and warns "
       "once per step type, naming the step and the reason")
 check(rec["success"], "auto run succeeds")
+from datetime import datetime as _dt  # noqa: E402
+_s, _f = _dt.fromisoformat(rec["started_at"]), _dt.fromisoformat(rec["finished_at"])
+check(_s.utcoffset() is not None and _s.utcoffset().total_seconds() == 0 and _s <= _f,
+      "the record carries the UTC window of its API calls (started_at <= finished_at)")
 lab = Lab.model_validate_json(Path(rec["output_path"]).read_text(encoding="utf-8"))
 check(len(lab.modules) == len(MODS), f"assembled Lab has {len(MODS)} modules")
 check(rec["lab_metrics"]["num_clips"] == sum(len(m["clips"]) for m in MODS), "clip count preserved")
