@@ -486,7 +486,8 @@ def warn_served_model(model_id: str, served_models: list[str]) -> None:
     other = served_model_mismatches(model_id, served_models)
     if other:
         print(f"  WARNING: requested {model_id}, but the provider answered with "
-              f"{', '.join(other)} (recorded in served_models; priced as {model_id})")
+              f"{', '.join(other)} (recorded in served_models; priced as the served "
+              "model when tracking/pricing.py has it, see cost.priced_as)")
 
 
 # ── Environment preflight ────────────────────────────────────────────

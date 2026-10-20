@@ -254,6 +254,7 @@ class StepRecord:
     cached_tokens: int = 0         # of prompt_tokens, served from the provider's prompt cache
     cache_write_tokens: int = 0    # of prompt_tokens, written to it (billed above input rate)
     completion_tokens: int = 0
+    reasoning_tokens: int = 0      # of completion_tokens, reported as reasoning / thinking
     total_tokens: int = 0
     cost_usd: float = 0.0
     wall_time_s: float = 0.0
@@ -646,8 +647,9 @@ class HierarchicalPipeline:
             rec.cached_tokens += call.total_usage.cached_tokens
             rec.cache_write_tokens += call.total_usage.cache_write_tokens
             rec.completion_tokens += call.total_usage.completion_tokens
+            rec.reasoning_tokens += call.total_usage.reasoning_tokens
             rec.total_tokens += call.total_usage.total_tokens
-            rec.cost_usd += self.tracker.pricing.calculate_cost(call.total_usage)
+            rec.cost_usd += self.tracker.cost_of(call)   # at the served model's price
             rec.errors.extend(f"attempt {err.attempt_number} {err.exception_class}: {err.message}"
                               for err in call.errors)
         return new
@@ -995,7 +997,7 @@ class HierarchicalPipeline:
             k: sum(s[k] for s in steps)
             for k in ("calls", "retries", "parse_errors", "transient_retries", "reask_restarts",
                       "prompt_tokens", "cached_tokens", "cache_write_tokens",
-                      "completion_tokens",
+                      "completion_tokens", "reasoning_tokens",
                       "total_tokens", "cost_usd", "wall_time_s")
         }
         return {
@@ -1086,8 +1088,10 @@ class HierarchicalPipeline:
               f"{resends}")
         writes = (f", {t['cache_write_tokens']:,} cache writes"
                   if t.get("cache_write_tokens") else "")
+        reasoning = (f" ({t['reasoning_tokens']:,} reasoning)"
+                     if t.get("reasoning_tokens") else "")
         print(f"  Tokens: {t['prompt_tokens']:,} in ({t['cached_tokens']:,} cached{writes}) / "
-              f"{t['completion_tokens']:,} out "
+              f"{t['completion_tokens']:,} out{reasoning} "
               f"| Cost: ${t['cost_usd']:.6f} | Wall time: {record['wall_time_seconds']}s")
         lab = record.get("lab_metrics") or {}
         if lab:

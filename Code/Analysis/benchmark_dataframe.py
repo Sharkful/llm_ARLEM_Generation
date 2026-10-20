@@ -186,7 +186,21 @@ def flatten_record(rec: dict) -> dict:
     prompt_tokens = toks.get("prompt", 0) or 0
     completion_tokens = toks.get("completion", 0) or 0
     total_tokens = toks.get("total", 0) or 0
+    cached_tokens = toks.get("cached", 0) or 0
+    cache_write_tokens = toks.get("cache_write", 0) or 0
+    reasoning_tokens = toks.get("reasoning", 0) or 0
     cost_usd = (t.get("cost") or {}).get("total_usd", 0.0) or 0.0
+    # A hierarchical record's `tracking` covers only its last session; `totals`
+    # also counts steps resumed from disk, so it is the run's figure (#84).
+    totals = rec.get("totals")
+    if totals:
+        prompt_tokens = totals.get("prompt_tokens", prompt_tokens) or 0
+        completion_tokens = totals.get("completion_tokens", completion_tokens) or 0
+        total_tokens = totals.get("total_tokens", total_tokens) or 0
+        cached_tokens = totals.get("cached_tokens", cached_tokens) or 0
+        cache_write_tokens = totals.get("cache_write_tokens", cache_write_tokens) or 0
+        reasoning_tokens = totals.get("reasoning_tokens", reasoning_tokens) or 0
+        cost_usd = totals.get("cost_usd", cost_usd) or 0.0
 
     # Every spec now runs free-decode, so the raw provider-reported tokens/cost are
     # the real figures — no Gemini schema-token adjustment to apply (issue #29).
@@ -233,6 +247,10 @@ def flatten_record(rec: dict) -> dict:
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "total_tokens": total_tokens,
+        # parts of prompt_tokens / completion_tokens (0 on records before #72 / #84)
+        "cached_tokens": cached_tokens,
+        "cache_write_tokens": cache_write_tokens,
+        "reasoning_tokens": reasoning_tokens,
         "cost_usd": cost_usd,
         "duration_ms": duration_ms,
         "wall_s": wall_s,

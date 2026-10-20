@@ -1109,6 +1109,128 @@ check(abs(PricingCalculator(model="gpt-5.4-mini").calculate_cost(_oa)
           - (1000 * 0.75 + 100 * 4.50) / 1e6) < 1e-12,
       "a model without cache rates (wave 2) bills all input at the input rate, as before")
 
+# 25b. token parsing from the real SDK response types (#84): every branch gives all
+#      input in prompt_tokens and all output, reasoning included, in completion_tokens
+from anthropic.types import Usage as _AnUsage  # noqa: E402
+from google.genai import types as _gt  # noqa: E402
+from openai.types import CompletionUsage as _OaUsage  # noqa: E402
+from openai.types.completion_usage import (  # noqa: E402
+    CompletionTokensDetails as _OaOut, PromptTokensDetails as _OaIn)
+from openai.types.responses import ResponseUsage as _RsUsage  # noqa: E402
+from openai.types.responses.response_usage import (  # noqa: E402
+    InputTokensDetails as _RsIn, OutputTokensDetails as _RsOut)
+_shapes = {
+    "OpenAI chat": SimpleNamespace(usage=_OaUsage(
+        prompt_tokens=1000, completion_tokens=300, total_tokens=1300,
+        prompt_tokens_details=_OaIn(cached_tokens=600, cache_write_tokens=300),
+        completion_tokens_details=_OaOut(reasoning_tokens=200))),
+    "OpenAI Responses": SimpleNamespace(usage=_RsUsage(
+        input_tokens=1000, output_tokens=300, total_tokens=1300,
+        input_tokens_details=_RsIn(cached_tokens=600, cache_write_tokens=300),
+        output_tokens_details=_RsOut(reasoning_tokens=200))),
+    "Anthropic": SimpleNamespace(usage=_AnUsage(
+        input_tokens=100, cache_read_input_tokens=600, cache_creation_input_tokens=300,
+        output_tokens=300)),
+    "Gemini": _gt.GenerateContentResponse(usage_metadata=_gt.GenerateContentResponseUsageMetadata(
+        prompt_token_count=1000, cached_content_token_count=600, candidates_token_count=100,
+        thoughts_token_count=200, total_token_count=1300)),
+}
+_parsed = {k: TokenUsage.from_completion(v) for k, v in _shapes.items()}
+for _name, _u in _parsed.items():
+    _want_write = 0 if _name == "Gemini" else 300
+    _want_reason = 0 if _name == "Anthropic" else 200   # Anthropic reports no split
+    check((_u.prompt_tokens, _u.cached_tokens, _u.cache_write_tokens, _u.completion_tokens,
+           _u.reasoning_tokens, _u.total_tokens) == (1000, 600, _want_write, 300, _want_reason, 1300),
+          f"{_name} usage (real SDK type): all input in prompt_tokens, all output "
+          "(reasoning included) in completion_tokens")
+check(abs(PricingCalculator(model="gemini-3.5-flash-lite").calculate_cost(_parsed["Gemini"])
+          - (400 * 0.30 + 600 * 0.03 + 300 * 2.50) / 1e6) < 1e-12,
+      "Gemini thinking billed at the output rate (#84)")
+
+# 25c. pricing by the served model, and the counters for what cost can't price (#84)
+from datetime import datetime  # noqa: E402
+def _oa_resp(model, prompt=1000, completion=100, cached=0, write=0):
+    return SimpleNamespace(model=model, usage=SimpleNamespace(
+        prompt_tokens=prompt, completion_tokens=completion, total_tokens=prompt + completion,
+        prompt_tokens_details=SimpleNamespace(cached_tokens=cached, cache_write_tokens=write),
+        completion_tokens_details=None))
+
+
+def _priced(model, provider, responses):
+    tracker = InstructorTracker(model=model, provider=provider)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        for r in responses:
+            TrackedClient(_StubInstructor(), tracker).create(script=[("kwargs",), ("response", r)])
+    return tracker, out.getvalue()
+
+
+_t, _w = _priced("gpt-6-luna", "openai", [_oa_resp("gpt-6-luna-2026-09-01")])
+check(abs(_t.get_total_cost() - (1000 * 0.10 + 100 * 0.50) / 1e6) < 1e-12
+      and _t.summary()["cost"].get("priced_as") == ["gpt-6-luna"] and "WARNING" not in _w,
+      "a dated snapshot is priced at its base entry, silently")
+_gem = _gt.GenerateContentResponse(model_version="gemini-3.6-flash",
+                                   usage_metadata=_gt.GenerateContentResponseUsageMetadata(
+    prompt_token_count=1000, candidates_token_count=100, total_token_count=1100))
+_t, _w = _priced("gemini-3.5-flash", "google", [_gem])
+_t.aggregate.start_time = datetime(2026, 10, 20)
+_cost = _t.summary()["cost"]
+check(abs(_t.get_total_cost() - (1000 * 1.50 + 100 * 7.50) / 1e6) < 1e-12
+      and _cost.get("priced_as") == ["gemini-3.6-flash"] and _cost.get("unpriced_served_models") == []
+      and any("gemini-3.6-flash: introductory price" in n for n in _cost.get("notes") or []),
+      "a served model with its own entry is priced at it; an intro window adds a note")
+_t.aggregate.start_time = datetime(2027, 2, 1)
+check(_t.summary()["cost"].get("notes") == [], "no intro note once the discount has ended")
+_t, _w = _priced("gpt-6-luna", "openai", [_oa_resp("gpt-7-preview"), _oa_resp("gpt-7-preview")])
+check(abs(_t.get_total_cost() - 2 * (1000 * 0.10 + 100 * 0.50) / 1e6) < 1e-12
+      and _t.summary()["cost"].get("unpriced_served_models") == ["gpt-7-preview"]
+      and _w.count("no stored price for served model gpt-7-preview") == 1,
+      "an unpriced served model falls back to the requested price and warns once")
+_t, _w = _priced("claude-haiku-5-5", "anthropic", [SimpleNamespace(
+    model="claude-haiku-5-5", usage=_AnUsage(input_tokens=150_000, output_tokens=10))])
+check(_t.summary()["cost"].get("long_context_requests") == 1 and "long-context tier" in _w,
+      "a prompt above the model's long-context tier is counted and warned about")
+_t, _w = _priced("gpt-6-luna", "openai", [_oa_resp("gpt-6-luna", prompt=100, cached=80, write=50)])
+check(_t.summary()["cost"].get("cache_split_overflow") == 1 and "more than its" in _w,
+      "a cache split larger than the input is counted and warned about")
+
+# 25d. analysis side (#84): re-pricing uses the run calculator, cache columns and the
+#      Gemini thinking gap; load_runs takes a hierarchical run's figures from totals
+sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
+import pandas as pd  # noqa: E402
+import reprice_runs  # noqa: E402
+from benchmark_dataframe import flatten_record  # noqa: E402
+_csv = pd.DataFrame({
+    "model": ["gemini-3.5-flash-lite", "gemini-3.5-flash-lite", "gpt-6-luna"],
+    "display_name": ["Flash-Lite (old record)", "Flash-Lite (old record)", "Luna"],
+    "provider": ["google", "google", "openai"],
+    "prompt_tokens": ["1000", "1000", "1000"], "completion_tokens": ["100", "300", "100"],
+    "total_tokens": ["1300", "1300", "1100"],
+    "cached_tokens": ["600", "600", "600"], "cache_write_tokens": ["0", "0", "300"],
+})
+_rate = [(400 * 0.30 + 600 * 0.03 + 100 * 2.50) / 1e6, (400 * 0.30 + 600 * 0.03 + 300 * 2.50) / 1e6,
+         (100 * 0.10 + 600 * 0.01 + 300 * 0.125 + 100 * 0.50) / 1e6]
+_csv["cost_usd"] = [str(c) for c in _rate]
+_out, _rep = reprice_runs.reprice(_csv)
+_thk = list(_out["thinking_cost_usd"]) if "thinking_cost_usd" in _out else [None] * 3
+check(_thk[0] is not None and abs(_thk[0] - 200 * 2.50 / 1e6) < 1e-12
+      and _thk[1] == 0 and _thk[2] == 0
+      and abs(_out["cost_usd"][2] - _rate[2]) < 1e-12,
+      "re-pricing adds a pre-fix Gemini record's thinking, prices cache columns, "
+      "and leaves a post-fix record alone")
+check(reprice_runs.check_unchanged_models(_rep) == [],
+      "the thinking add-on doesn't count as a rate change in the integrity check")
+_row = flatten_record({"model": "m", "provider": "anthropic",
+                       "tracking": {"tokens": {"prompt": 10, "completion": 1, "total": 11},
+                                    "cost": {"total_usd": 0.01}},
+                       "totals": {"prompt_tokens": 500, "completion_tokens": 50,
+                                  "total_tokens": 550, "cached_tokens": 200,
+                                  "cache_write_tokens": 20, "reasoning_tokens": 5,
+                                  "cost_usd": 0.5}})
+check((_row.get("prompt_tokens"), _row.get("cached_tokens"), _row.get("cache_write_tokens"),
+       _row.get("reasoning_tokens"), _row.get("cost_usd")) == (500, 200, 20, 5, 0.5),
+      "load_runs reads a hierarchical run's tokens and cost from totals, cache columns included")
+
 
 # 26. the model that actually answered is recorded (issue #72): Google serves
 #     gemini-3.5-flash requests with gemini-3.6-flash since 2026-10-08
@@ -1659,6 +1781,10 @@ check(rec["served_models"] == ["gpt-6-luna"]
       and abs(rec["totals"]["cost_usd"]
               - len(rreqs) * (300 * 0.10 + 600 * 0.01 + 100 * 0.125 + 200 * 0.50) / 1e6) < 1e-9,
       "Responses usage (cached, cache writes) tracked and priced at GPT-6 Luna rates")
+check(rec["totals"]["reasoning_tokens"] == 50 * len(rreqs)
+      and all(s_["reasoning_tokens"] == 50 * s_["calls"] + 50 * s_["retries"] for s_ in rec["steps"])
+      and rec["tracking"]["tokens"]["reasoning"] == 50 * len(rreqs),
+      "reasoning tokens recorded per step, in totals and in the tracker summary (#84)")
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("\nALL PASSED" if not FAILED else "\nSOME FAILED")

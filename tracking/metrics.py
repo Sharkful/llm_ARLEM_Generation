@@ -51,9 +51,25 @@ class TokenUsage:
     @classmethod
     def from_completion(cls, completion: Any) -> 'TokenUsage':
         """
-        Factory to extract usage from various provider response formats.
+        Factory to extract usage from various provider response formats (#84).
 
-        Handles OpenAI, Anthropic, and Google Gemini (google.genai) responses.
+        The result means the same thing on every provider: ``prompt_tokens`` is all
+        input (``cached_tokens`` and ``cache_write_tokens`` are parts of it) and
+        ``completion_tokens`` is all output, reasoning / thinking included
+        (``reasoning_tokens`` is the part of it the provider reports as reasoning).
+
+        - Gemini (``usage_metadata``): ``prompt_token_count`` includes
+          ``cached_content_token_count``; ``candidates_token_count`` excludes
+          ``thoughts_token_count``, which is billed at the output rate, so output
+          is their sum.
+        - OpenAI Responses (``usage.input_tokens_details``): ``input_tokens``
+          includes cached and written tokens; ``output_tokens`` includes reasoning.
+        - OpenAI Chat Completions (``usage.prompt_tokens``): ``prompt_tokens``
+          includes ``prompt_tokens_details.cached_tokens`` / ``cache_write_tokens``;
+          ``completion_tokens`` includes ``completion_tokens_details.reasoning_tokens``.
+        - Anthropic (``usage.input_tokens``): ``input_tokens`` excludes
+          ``cache_read_input_tokens`` and ``cache_creation_input_tokens``, which
+          are folded in; ``output_tokens`` includes thinking (not reported apart).
         """
         if completion is None:
             return cls()
@@ -72,17 +88,13 @@ class TokenUsage:
             cached = getattr(um, 'cached_content_token_count', 0) or 0
             thinking = getattr(um, 'thoughts_token_count', 0) or 0
 
-            # NOTE: In GENAI_STRUCTURED_OUTPUTS mode the Pydantic response schema is
-            # passed as a native parameter (response_schema). Gemini counts ONLY the
-            # text prompt here; the schema tokens are billed as input but reported
-            # nowhere in usage_metadata (total == prompt + candidates + thinking
-            # exactly). They are recovered separately at the benchmark layer via
-            # estimate_gemini_schema_tokens(); we keep prompt as the raw reported value.
-
+            # Thinking is reported apart from the candidates but billed as output
+            # ("output price, including thinking tokens"). Records made before #84
+            # left it out of completion_tokens (total - prompt - completion = thinking).
             return cls(
                 prompt_tokens=prompt,
-                completion_tokens=candidates,
-                total_tokens=total,
+                completion_tokens=candidates + thinking,
+                total_tokens=total or prompt + candidates + thinking,
                 cached_tokens=cached,
                 reasoning_tokens=thinking,
             )
