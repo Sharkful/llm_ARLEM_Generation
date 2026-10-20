@@ -6,9 +6,17 @@ Each run's cost is baked into its ``*_metrics.json`` at generation time from the
 rate after the fact, every downstream artifact keeps quoting the stale number and
 there is no way to notice — cost is stored, never derived.
 
-This script re-derives cost from the token counts a run already recorded
-(``prompt_tokens``/``completion_tokens`` x ``tracking.pricing.DEFAULT_PRICING``)
-and writes a *new* CSV alongside the original. Nothing is overwritten: the input
+This script re-derives cost from the token counts a run already recorded, through
+the same ``tracking.pricing.PricingCalculator`` the runs use (uncached input, cache
+reads and cache writes each at their own rate, when the CSV carries
+``cached_tokens`` / ``cache_write_tokens``; 0 otherwise), and writes a *new* CSV
+alongside the original.
+
+Gemini thinking (#84): records made before the fix left Gemini's thinking tokens
+out of ``completion_tokens``, but they are still in ``total_tokens``, so the gap
+``total - prompt - completion`` is exactly the unbilled thinking (0 on records
+after the fix, and on every other provider). It is billed at the output rate and
+reported in its own ``thinking_cost_usd`` column. Nothing is overwritten: the input
 CSV, and the ``*_metrics.json`` files behind it, are read-only here. The output is
 a strict superset of the input — the recomputed figure lands in ``cost_usd`` and
 the original is preserved in ``cost_usd_recorded``.
@@ -19,7 +27,8 @@ than the current one the CSV export is the only surviving record. Repricing has 
 work on what survives.
 
 Integrity check: models whose rate did not change must reproduce their recorded
-cost to the cent. Any mismatch means the stored cost and the stored tokens
+cost to the cent. It compares the rate-only re-cost (without the thinking add-on),
+so a Gemini run's thinking doesn't count as a rate change. Any mismatch means the stored cost and the stored tokens
 disagree for a reason unrelated to this reprice, so the script reports it and
 exits non-zero rather than quietly publishing a number it can't account for.
 
@@ -41,7 +50,8 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from tracking.pricing import DEFAULT_PRICING  # noqa: E402
+from tracking.metrics import TokenUsage  # noqa: E402
+from tracking.pricing import DEFAULT_PRICING, PricingCalculator  # noqa: E402
 
 # A recorded cost and a recomputed one may differ in the last float bit purely
 # from summation order, so "unchanged" is a tolerance, not equality. Half a cent
@@ -49,9 +59,17 @@ from tracking.pricing import DEFAULT_PRICING  # noqa: E402
 UNCHANGED_TOL_USD = 0.005
 
 
-def cost_for(model: str, prompt_tokens: float, completion_tokens: float) -> float:
-    price = DEFAULT_PRICING[model]
-    return (prompt_tokens * price["input"] + completion_tokens * price["output"]) / 1_000_000
+def cost_for(model: str, prompt_tokens: float, completion_tokens: float,
+             cached_tokens: float = 0, cache_write_tokens: float = 0) -> float:
+    """Cost at the current rates, by the calculator the runs use."""
+    return PricingCalculator(model=model).calculate_cost(TokenUsage(
+        prompt_tokens=int(prompt_tokens), completion_tokens=int(completion_tokens),
+        cached_tokens=int(cached_tokens), cache_write_tokens=int(cache_write_tokens)))
+
+
+def thinking_gap(provider: str, prompt: float, completion: float, total: float) -> float:
+    """Gemini thinking left out of completion_tokens (records before #84); 0 otherwise."""
+    return max(0.0, total - prompt - completion) if provider == "google" else 0.0
 
 
 def reprice(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -75,30 +93,44 @@ def reprice(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
             "silently understate the totals."
         )
 
-    prompt = pd.to_numeric(df["prompt_tokens"])
-    completion = pd.to_numeric(df["completion_tokens"])
+    def col(name):
+        # Older CSVs lack the cache columns; their runs cached nothing.
+        return pd.to_numeric(df[name]) if name in df.columns else pd.Series(0, index=df.index)
+
+    prompt, completion, total = col("prompt_tokens"), col("completion_tokens"), col("total_tokens")
+    cached, written = col("cached_tokens"), col("cache_write_tokens")
+
+    rate_only = [cost_for(m, p, c, ca, w) for m, p, c, ca, w
+                 in zip(df["model"], prompt, completion, cached, written)]
+    thinking = [thinking_gap(pv, p, c, t) * DEFAULT_PRICING[m]["output"] / 1_000_000
+                for m, pv, p, c, t in zip(df["model"], df["provider"], prompt, completion, total)]
 
     out = df.copy()
     # Preserve the recorded figure as the exact text the source carried.
     out["cost_usd_recorded"] = df["cost_usd"]
-    out["cost_usd"] = [
-        cost_for(m, p, c) for m, p, c in zip(df["model"], prompt, completion)
-    ]
+    out["cost_usd"] = [r + t for r, t in zip(rate_only, thinking)]
+    out["thinking_cost_usd"] = thinking
 
     report = (
         pd.DataFrame({
             "model": df["model"],
             "display_name": df["display_name"],
             "recorded": pd.to_numeric(df["cost_usd"]),
+            "rate_only": rate_only,
+            "thinking": thinking,
             "repriced": out["cost_usd"],
         })
         .groupby(["model", "display_name"], as_index=False)
         .agg(
             runs=("recorded", "size"),
             recorded_usd=("recorded", "sum"),
+            rate_only_usd=("rate_only", "sum"),
+            thinking_usd=("thinking", "sum"),
             repriced_usd=("repriced", "sum"),
         )
     )
+    # A rate change moves rate_only; thinking is reported apart (see the docstring).
+    report["rate_delta_usd"] = report["rate_only_usd"] - report["recorded_usd"]
     report["delta_usd"] = report["repriced_usd"] - report["recorded_usd"]
     report["delta_pct"] = (
         report["delta_usd"] / report["recorded_usd"].where(report["recorded_usd"] != 0)
@@ -113,7 +145,7 @@ def check_unchanged_models(report: pd.DataFrame) -> list[str]:
     ``UNCHANGED_TOL_USD`` *per run* — the caller decides whether that was
     expected. A model whose published rate is unchanged should land at ~0.
     """
-    per_run = (report["delta_usd"].abs() / report["runs"]).fillna(0)
+    per_run = (report["rate_delta_usd"].abs() / report["runs"]).fillna(0)
     return report.loc[per_run > UNCHANGED_TOL_USD, "model"].tolist()
 
 
@@ -161,8 +193,8 @@ def main(argv=None) -> int:
         print(
             report.to_string(
                 index=False,
-                columns=["display_name", "runs", "recorded_usd", "repriced_usd",
-                         "delta_usd", "delta_pct"],
+                columns=["display_name", "runs", "recorded_usd", "rate_only_usd",
+                         "thinking_usd", "repriced_usd", "delta_usd", "delta_pct"],
                 float_format=lambda v: f"{v:,.4f}",
             )
         )
@@ -177,7 +209,7 @@ def main(argv=None) -> int:
     # Integrity: every model that did NOT move must reproduce its recorded cost,
     # which is what makes the moved ones trustworthy.
     unmoved = report[~report["model"].isin(moved)]
-    bad = unmoved[(unmoved["delta_usd"].abs() / unmoved["runs"]) > 1e-6]
+    bad = unmoved[(unmoved["rate_delta_usd"].abs() / unmoved["runs"]) > 1e-6]
     if not bad.empty:
         print(
             "\nerror: models with an unchanged rate did not reproduce their "

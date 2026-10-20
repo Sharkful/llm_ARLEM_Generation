@@ -1194,6 +1194,43 @@ _t, _w = _priced("gpt-6-luna", "openai", [_oa_resp("gpt-6-luna", prompt=100, cac
 check(_t.summary()["cost"].get("cache_split_overflow") == 1 and "more than its" in _w,
       "a cache split larger than the input is counted and warned about")
 
+# 25d. analysis side (#84): re-pricing uses the run calculator, cache columns and the
+#      Gemini thinking gap; load_runs takes a hierarchical run's figures from totals
+sys.path.insert(0, str(PROJECT_ROOT / "Code" / "Analysis"))
+import pandas as pd  # noqa: E402
+import reprice_runs  # noqa: E402
+from benchmark_dataframe import flatten_record  # noqa: E402
+_csv = pd.DataFrame({
+    "model": ["gemini-3.5-flash-lite", "gemini-3.5-flash-lite", "gpt-6-luna"],
+    "display_name": ["Flash-Lite (old record)", "Flash-Lite (old record)", "Luna"],
+    "provider": ["google", "google", "openai"],
+    "prompt_tokens": ["1000", "1000", "1000"], "completion_tokens": ["100", "300", "100"],
+    "total_tokens": ["1300", "1300", "1100"],
+    "cached_tokens": ["600", "600", "600"], "cache_write_tokens": ["0", "0", "300"],
+})
+_rate = [(400 * 0.30 + 600 * 0.03 + 100 * 2.50) / 1e6, (400 * 0.30 + 600 * 0.03 + 300 * 2.50) / 1e6,
+         (100 * 0.10 + 600 * 0.01 + 300 * 0.125 + 100 * 0.50) / 1e6]
+_csv["cost_usd"] = [str(c) for c in _rate]
+_out, _rep = reprice_runs.reprice(_csv)
+_thk = list(_out["thinking_cost_usd"]) if "thinking_cost_usd" in _out else [None] * 3
+check(_thk[0] is not None and abs(_thk[0] - 200 * 2.50 / 1e6) < 1e-12
+      and _thk[1] == 0 and _thk[2] == 0
+      and abs(_out["cost_usd"][2] - _rate[2]) < 1e-12,
+      "re-pricing adds a pre-fix Gemini record's thinking, prices cache columns, "
+      "and leaves a post-fix record alone")
+check(reprice_runs.check_unchanged_models(_rep) == [],
+      "the thinking add-on doesn't count as a rate change in the integrity check")
+_row = flatten_record({"model": "m", "provider": "anthropic",
+                       "tracking": {"tokens": {"prompt": 10, "completion": 1, "total": 11},
+                                    "cost": {"total_usd": 0.01}},
+                       "totals": {"prompt_tokens": 500, "completion_tokens": 50,
+                                  "total_tokens": 550, "cached_tokens": 200,
+                                  "cache_write_tokens": 20, "reasoning_tokens": 5,
+                                  "cost_usd": 0.5}})
+check((_row.get("prompt_tokens"), _row.get("cached_tokens"), _row.get("cache_write_tokens"),
+       _row.get("reasoning_tokens"), _row.get("cost_usd")) == (500, 200, 20, 5, 0.5),
+      "load_runs reads a hierarchical run's tokens and cost from totals, cache columns included")
+
 
 # 26. the model that actually answered is recorded (issue #72): Google serves
 #     gemini-3.5-flash requests with gemini-3.6-flash since 2026-10-08
