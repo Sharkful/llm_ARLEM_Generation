@@ -322,7 +322,9 @@ loads it as is. Fields added by the hierarchical pipeline:
 - `steps[]`: per-step calls, attempts, `retries`, `parse_errors`, revisions,
   `transient_retries`, `reask_restarts` (see below), tokens (including
   `cached_tokens`, the part of the input read from the provider's prompt cache,
-  and `cache_write_tokens`, the part written to it), cost, wall time, `resumed`,
+  and `cache_write_tokens`, the part written to it; `reasoning_tokens`, the part of
+  the output reported as reasoning or thinking), cost (each response at its served
+  model's price; see `tracking/COST.md`), wall time, `resumed`,
   `non_retryable`
 - `totals`: the sum over steps, including steps resumed from an earlier session
   (`tracking` covers only this session)
@@ -341,7 +343,7 @@ loads it as is. Fields added by the hierarchical pipeline:
 - `registry`: new components (with their inputs), invented prefabs and textures
   (with their purposes)
 
-Cost prices each part of the input at its own rate: uncached input at the input
+How cost is computed, end to end, is in `tracking/COST.md`. Cost prices each part of the input at its own rate: uncached input at the input
 rate, cache reads at `cached_input` and cache writes at `cache_write`
 (`tracking/pricing.py`; current-roster models only, issue #72). OpenAI caches
 automatically, and GPT-5.6 and later bill cache writes at 1.25x input. Gemini's
