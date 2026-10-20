@@ -209,6 +209,7 @@ class InstructorTracker:
                 "total": agg.total_usage.total_tokens,
                 "cached": agg.total_usage.cached_tokens,
                 "cache_write": agg.total_usage.cache_write_tokens,
+                "reasoning": agg.total_usage.reasoning_tokens,   # part of completion
             },
             "retries": {
                 "total": agg.total_retries,

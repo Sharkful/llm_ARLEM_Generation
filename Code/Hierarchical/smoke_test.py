@@ -1109,6 +1109,44 @@ check(abs(PricingCalculator(model="gpt-5.4-mini").calculate_cost(_oa)
           - (1000 * 0.75 + 100 * 4.50) / 1e6) < 1e-12,
       "a model without cache rates (wave 2) bills all input at the input rate, as before")
 
+# 25b. token parsing from the real SDK response types (#84): every branch gives all
+#      input in prompt_tokens and all output, reasoning included, in completion_tokens
+from anthropic.types import Usage as _AnUsage  # noqa: E402
+from google.genai import types as _gt  # noqa: E402
+from openai.types import CompletionUsage as _OaUsage  # noqa: E402
+from openai.types.completion_usage import (  # noqa: E402
+    CompletionTokensDetails as _OaOut, PromptTokensDetails as _OaIn)
+from openai.types.responses import ResponseUsage as _RsUsage  # noqa: E402
+from openai.types.responses.response_usage import (  # noqa: E402
+    InputTokensDetails as _RsIn, OutputTokensDetails as _RsOut)
+_shapes = {
+    "OpenAI chat": SimpleNamespace(usage=_OaUsage(
+        prompt_tokens=1000, completion_tokens=300, total_tokens=1300,
+        prompt_tokens_details=_OaIn(cached_tokens=600, cache_write_tokens=300),
+        completion_tokens_details=_OaOut(reasoning_tokens=200))),
+    "OpenAI Responses": SimpleNamespace(usage=_RsUsage(
+        input_tokens=1000, output_tokens=300, total_tokens=1300,
+        input_tokens_details=_RsIn(cached_tokens=600, cache_write_tokens=300),
+        output_tokens_details=_RsOut(reasoning_tokens=200))),
+    "Anthropic": SimpleNamespace(usage=_AnUsage(
+        input_tokens=100, cache_read_input_tokens=600, cache_creation_input_tokens=300,
+        output_tokens=300)),
+    "Gemini": _gt.GenerateContentResponse(usage_metadata=_gt.GenerateContentResponseUsageMetadata(
+        prompt_token_count=1000, cached_content_token_count=600, candidates_token_count=100,
+        thoughts_token_count=200, total_token_count=1300)),
+}
+_parsed = {k: TokenUsage.from_completion(v) for k, v in _shapes.items()}
+for _name, _u in _parsed.items():
+    _want_write = 0 if _name == "Gemini" else 300
+    _want_reason = 0 if _name == "Anthropic" else 200   # Anthropic reports no split
+    check((_u.prompt_tokens, _u.cached_tokens, _u.cache_write_tokens, _u.completion_tokens,
+           _u.reasoning_tokens, _u.total_tokens) == (1000, 600, _want_write, 300, _want_reason, 1300),
+          f"{_name} usage (real SDK type): all input in prompt_tokens, all output "
+          "(reasoning included) in completion_tokens")
+check(abs(PricingCalculator(model="gemini-3.5-flash-lite").calculate_cost(_parsed["Gemini"])
+          - (400 * 0.30 + 600 * 0.03 + 300 * 2.50) / 1e6) < 1e-12,
+      "Gemini thinking billed at the output rate (#84)")
+
 
 # 26. the model that actually answered is recorded (issue #72): Google serves
 #     gemini-3.5-flash requests with gemini-3.6-flash since 2026-10-08
@@ -1659,6 +1697,10 @@ check(rec["served_models"] == ["gpt-6-luna"]
       and abs(rec["totals"]["cost_usd"]
               - len(rreqs) * (300 * 0.10 + 600 * 0.01 + 100 * 0.125 + 200 * 0.50) / 1e6) < 1e-9,
       "Responses usage (cached, cache writes) tracked and priced at GPT-6 Luna rates")
+check(rec["totals"]["reasoning_tokens"] == 50 * len(rreqs)
+      and all(s_["reasoning_tokens"] == 50 * s_["calls"] + 50 * s_["retries"] for s_ in rec["steps"])
+      and rec["tracking"]["tokens"]["reasoning"] == 50 * len(rreqs),
+      "reasoning tokens recorded per step, in totals and in the tracker summary (#84)")
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("\nALL PASSED" if not FAILED else "\nSOME FAILED")
