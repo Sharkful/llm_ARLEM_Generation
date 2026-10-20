@@ -649,7 +649,7 @@ class HierarchicalPipeline:
             rec.completion_tokens += call.total_usage.completion_tokens
             rec.reasoning_tokens += call.total_usage.reasoning_tokens
             rec.total_tokens += call.total_usage.total_tokens
-            rec.cost_usd += self.tracker.pricing.calculate_cost(call.total_usage)
+            rec.cost_usd += self.tracker.cost_of(call)   # at the served model's price
             rec.errors.extend(f"attempt {err.attempt_number} {err.exception_class}: {err.message}"
                               for err in call.errors)
         return new

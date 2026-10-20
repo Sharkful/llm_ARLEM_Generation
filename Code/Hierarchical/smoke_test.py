@@ -1147,6 +1147,53 @@ check(abs(PricingCalculator(model="gemini-3.5-flash-lite").calculate_cost(_parse
           - (400 * 0.30 + 600 * 0.03 + 300 * 2.50) / 1e6) < 1e-12,
       "Gemini thinking billed at the output rate (#84)")
 
+# 25c. pricing by the served model, and the counters for what cost can't price (#84)
+from datetime import datetime  # noqa: E402
+def _oa_resp(model, prompt=1000, completion=100, cached=0, write=0):
+    return SimpleNamespace(model=model, usage=SimpleNamespace(
+        prompt_tokens=prompt, completion_tokens=completion, total_tokens=prompt + completion,
+        prompt_tokens_details=SimpleNamespace(cached_tokens=cached, cache_write_tokens=write),
+        completion_tokens_details=None))
+
+
+def _priced(model, provider, responses):
+    tracker = InstructorTracker(model=model, provider=provider)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        for r in responses:
+            TrackedClient(_StubInstructor(), tracker).create(script=[("kwargs",), ("response", r)])
+    return tracker, out.getvalue()
+
+
+_t, _w = _priced("gpt-6-luna", "openai", [_oa_resp("gpt-6-luna-2026-09-01")])
+check(abs(_t.get_total_cost() - (1000 * 0.10 + 100 * 0.50) / 1e6) < 1e-12
+      and _t.summary()["cost"].get("priced_as") == ["gpt-6-luna"] and "WARNING" not in _w,
+      "a dated snapshot is priced at its base entry, silently")
+_gem = _gt.GenerateContentResponse(model_version="gemini-3.6-flash",
+                                   usage_metadata=_gt.GenerateContentResponseUsageMetadata(
+    prompt_token_count=1000, candidates_token_count=100, total_token_count=1100))
+_t, _w = _priced("gemini-3.5-flash", "google", [_gem])
+_t.aggregate.start_time = datetime(2026, 10, 20)
+_cost = _t.summary()["cost"]
+check(abs(_t.get_total_cost() - (1000 * 1.50 + 100 * 7.50) / 1e6) < 1e-12
+      and _cost.get("priced_as") == ["gemini-3.6-flash"] and _cost.get("unpriced_served_models") == []
+      and any("gemini-3.6-flash: introductory price" in n for n in _cost.get("notes") or []),
+      "a served model with its own entry is priced at it; an intro window adds a note")
+_t.aggregate.start_time = datetime(2027, 2, 1)
+check(_t.summary()["cost"].get("notes") == [], "no intro note once the discount has ended")
+_t, _w = _priced("gpt-6-luna", "openai", [_oa_resp("gpt-7-preview"), _oa_resp("gpt-7-preview")])
+check(abs(_t.get_total_cost() - 2 * (1000 * 0.10 + 100 * 0.50) / 1e6) < 1e-12
+      and _t.summary()["cost"].get("unpriced_served_models") == ["gpt-7-preview"]
+      and _w.count("no stored price for served model gpt-7-preview") == 1,
+      "an unpriced served model falls back to the requested price and warns once")
+_t, _w = _priced("claude-haiku-5-5", "anthropic", [SimpleNamespace(
+    model="claude-haiku-5-5", usage=_AnUsage(input_tokens=150_000, output_tokens=10))])
+check(_t.summary()["cost"].get("long_context_requests") == 1 and "long-context tier" in _w,
+      "a prompt above the model's long-context tier is counted and warned about")
+_t, _w = _priced("gpt-6-luna", "openai", [_oa_resp("gpt-6-luna", prompt=100, cached=80, write=50)])
+check(_t.summary()["cost"].get("cache_split_overflow") == 1 and "more than its" in _w,
+      "a cache split larger than the input is counted and warned about")
+
 
 # 26. the model that actually answered is recorded (issue #72): Google serves
 #     gemini-3.5-flash requests with gemini-3.6-flash since 2026-10-08

@@ -28,7 +28,7 @@ from .hooks import (
     create_parse_error_handler,
     create_last_attempt_handler,
 )
-from .pricing import PricingCalculator
+from .pricing import PricingCalculator, pricing_key
 
 
 class InstructorTracker:
@@ -96,6 +96,12 @@ class InstructorTracker:
 
         # Hook references for cleanup
         self._registered_hooks: Dict[str, List] = {}
+
+        # Served-model pricing and cost checks (#84)
+        self._calculators: Dict[str, PricingCalculator] = {}
+        self._unpriced_served: set = set()
+        self.long_context_requests = 0    # requests over their model's tier threshold
+        self.cache_split_overflow = 0     # responses with cached + writes > prompt
 
     # =========================================================================
     # Public API - Simple Drop-in Usage
@@ -171,16 +177,61 @@ class InstructorTracker:
         """Get accumulated metrics across all tracked calls."""
         return self.aggregate
 
+    def pricing_for(self, served_model: Optional[str]) -> PricingCalculator:
+        """The calculator for a response: the served model's price when one is
+        stored (dated snapshots resolve to their base entry), else the requested
+        model's, with a one-time warning (#84). The requested model's own entry
+        keeps any pricing_config override."""
+        key = pricing_key(served_model)
+        if served_model is None or key == pricing_key(self.model):
+            return self.pricing
+        if key is None:
+            if served_model not in self._unpriced_served:
+                self._unpriced_served.add(served_model)
+                print(f"  WARNING: no stored price for served model {served_model}; "
+                      f"priced as the requested {self.model} (add it to tracking/pricing.py)")
+            return self.pricing
+        if key not in self._calculators:
+            self._calculators[key] = PricingCalculator(model=key)
+        return self._calculators[key]
+
+    def cost_of(self, call: CallMetrics) -> float:
+        """A call's cost: each attempt priced at the model that served it."""
+        if not call.attempts:
+            return self.pricing.calculate_cost(call.total_usage)
+        return sum(self.pricing_for(a.served_model).calculate_cost(a.usage)
+                   for a in call.attempts)
+
     def get_total_cost(self) -> float:
-        """Calculate total cost based on accumulated tokens."""
-        return self.pricing.calculate_cost(self.aggregate.total_usage)
+        """Total cost over all tracked calls (each attempt at its served model's price)."""
+        if not self.store_call_details:
+            return self.pricing.calculate_cost(self.aggregate.total_usage)
+        return sum(self.cost_of(c) for c in self.aggregate.calls)
 
     def get_call_cost(self, call_id: str) -> Optional[float]:
         """Calculate cost for a specific call."""
         metrics = self.get_call_metrics(call_id)
         if metrics:
-            return self.pricing.calculate_cost(metrics.total_usage)
+            return self.cost_of(metrics)
         return None
+
+    def priced_as(self) -> List[str]:
+        """The pricing entries the cost used (requested model's when nothing else)."""
+        keys = {pricing_key(a.served_model) or pricing_key(self.model) or self.model
+                for c in self.aggregate.calls for a in c.attempts if a.responded}
+        return sorted(keys or {pricing_key(self.model) or self.model})
+
+    def cost_notes(self) -> List[str]:
+        """Introductory-price notes for the entries the cost used."""
+        on = self.aggregate.start_time.date()
+        notes = []
+        for key in self.priced_as():
+            calc = (self.pricing if key in (pricing_key(self.model), self.model)
+                    else self.pricing_for(key))
+            note = calc.intro_note(key, on)
+            if note:
+                notes.append(note)
+        return notes
 
     # =========================================================================
     # Public API - Reporting
@@ -230,6 +281,12 @@ class InstructorTracker:
             "cost": {
                 "total_usd": self.get_total_cost(),
                 "formatted": f"${self.get_total_cost():.6f}",
+                # how the estimate was made, and where it is known to fall short (#84)
+                "priced_as": self.priced_as(),
+                "unpriced_served_models": sorted(self._unpriced_served),
+                "long_context_requests": self.long_context_requests,
+                "cache_split_overflow": self.cache_split_overflow,
+                "notes": self.cost_notes(),
             },
         }
 
@@ -430,6 +487,24 @@ class InstructorTracker:
                         str(response_model)
                     )
 
+    def _check_usage(self, usage: TokenUsage, served_model: Optional[str]):
+        """Count, and warn once about, responses the cost can't price fully (#84):
+        a prompt above the model's long-context tier, and a cache split larger than
+        the input (cost_breakdown clamps uncached input at 0)."""
+        threshold = self.pricing_for(served_model).long_context_above
+        if threshold and usage.prompt_tokens > threshold:
+            if not self.long_context_requests:
+                print(f"  WARNING: a {usage.prompt_tokens:,}-token prompt is above the "
+                      f"{threshold:,}-token long-context tier of {served_model or self.model}; "
+                      "the tier isn't priced, so cost is understated")
+            self.long_context_requests += 1
+        if usage.cached_tokens + usage.cache_write_tokens > usage.prompt_tokens:
+            if not self.cache_split_overflow:
+                print(f"  WARNING: response reports {usage.cached_tokens:,} cached + "
+                      f"{usage.cache_write_tokens:,} cache-write tokens, more than its "
+                      f"{usage.prompt_tokens:,} input tokens; uncached input priced as 0")
+            self.cache_split_overflow += 1
+
     def _on_response(self, call_id: str, response):
         """Called on successful completion response (before it is parsed)."""
         with self._lock:
@@ -443,6 +518,7 @@ class InstructorTracker:
             attempt.usage = attempt.usage + usage
             attempt.served_model = served_model_of(response)
             attempt.responded = True
+            self._check_usage(usage, attempt.served_model)
             attempt.success = True      # provisional: a parse error clears it
             call.total_usage = call.total_usage + usage
 

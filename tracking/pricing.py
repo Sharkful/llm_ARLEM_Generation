@@ -5,29 +5,36 @@ Provides pricing data for common models and a calculator
 to estimate costs from token usage.
 """
 
+import re
+from datetime import date
 from typing import Dict, Optional
 
 from .metrics import TokenUsage
 
 
-# Default pricing per 1M tokens (USD), base/standard tier (no batch).
+# Default pricing per 1M tokens (USD), base/standard tier (no batch). See COST.md.
 # Optional "cached_input" (cache read) and "cache_write" rates price the part of
 # the input the provider reports as cached or written; an entry without them
 # bills all input at "input" (how every wave-2 run was costed). Only the current
 # roster (issue #72) carries cache rates.
+# Optional "long_context_above": the per-request prompt size above which the
+# provider bills a higher tier. Tiers aren't priced (our prompts stay far below);
+# a request over it is counted and warned about, since its cost is understated.
+# Optional "intro_until": the last day of an introductory discount. The stored
+# rate is the list (post-discount) rate; a run before that day carries a note.
 # Entries marked "verified 2026-07" (issue #32) or "verified 2026-10" (issue #72)
 # were re-checked against the official provider pricing pages
 # (platform.claude.com, developers.openai.com, ai.google.dev). Entries marked "legacy"/"retired" were superseded or removed
 # from the current page and are NOT in the benchmark roster; the stored value is
 # retained for historical-artifact cost comparison — treat with caution.
-DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
+DEFAULT_PRICING: Dict[str, Dict] = {
     # ── OpenAI ────────────────────────────────────────────────────────────
-    "gpt-5.5":       {"input": 5.00,  "output": 30.00},   # verified 2026-07 (current flagship; >272k in = 2x/1.5x)
+    "gpt-5.5":       {"input": 5.00,  "output": 30.00, "long_context_above": 272_000},   # verified 2026-07 (current flagship; >272k in = 2x/1.5x)
     "gpt-5.4":       {"input": 2.50,  "output": 15.00},   # verified 2026-07 (current mid)
     "gpt-5.4-mini":  {"input": 0.75,  "output":  4.50},   # verified 2026-07
     "gpt-5.4-nano":  {"input": 0.20,  "output":  1.25},   # verified 2026-07
     # GPT-5.6 and later: automatic caching; cache writes billed at 1.25x input.
-    "gpt-6.1-sol":   {"input": 2.00,  "output": 10.00, "cached_input": 0.10, "cache_write": 2.50},   # verified 2026-10 (current mid; >272k in = 2x/1.5x)
+    "gpt-6.1-sol":   {"input": 2.00,  "output": 10.00, "cached_input": 0.10, "cache_write": 2.50, "long_context_above": 272_000},   # verified 2026-10 (current mid; >272k in = 2x/1.5x)
     "gpt-6-luna":    {"input": 0.10,  "output":  0.50, "cached_input": 0.01, "cache_write": 0.125},  # verified 2026-10 (current small)
     "gpt-5-mini":    {"input": 0.25,  "output":  2.00},   # 2026-07: superseded by 5.4-mini (was mis-stored 0.15/0.60); not in roster
     "gpt-5-nano":    {"input": 0.05,  "output":  0.40},   # retired 2026-07 — removed from current page; not in roster
@@ -56,7 +63,7 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     # isn't modelled here (benchmark and hierarchical prompts stay well under 100K).
     # Cache reads 0.1x input (0.05x on Opus 5.5), writes 1.25x (5-minute TTL).
     # Nothing is cached until the pipeline sends cache_control markers (#73).
-    "claude-haiku-5-5":         {"input":  0.10, "output":  0.50, "cached_input": 0.01, "cache_write": 0.125},  # verified 2026-10 (current small; #70)
+    "claude-haiku-5-5":         {"input":  0.10, "output":  0.50, "cached_input": 0.01, "cache_write": 0.125, "long_context_above": 100_000},  # verified 2026-10 (current small; #70)
     "claude-sonnet-5-5":        {"input":  2.00, "output": 10.00, "cached_input": 0.20, "cache_write": 2.50},   # verified 2026-10 (current mid)
     "claude-opus-5-5":          {"input":  4.00, "output": 20.00, "cached_input": 0.20, "cache_write": 5.00},   # verified 2026-10 (current large)
     "claude-fable-5":           {"input": 10.00, "output": 50.00},   # verified 2026-07 (most capable; GA 2026-06-09; not in roster)
@@ -81,13 +88,19 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     #   gemini-3.8-flash: $0.75 / $3.75,  cached $0.075, until 2026-12-31
     # Implicit caching (automatic; Argon from 4,096-token prompts): no write charge
     # and no storage fee, so these carry a read rate only.
-    "gemini-4-argon":         {"input": 4.00,  "output": 20.00, "cached_input": 0.20},  # verified 2026-10 (current large; from 2026-12-01)
-    "gemini-3.8-flash":       {"input": 1.50,  "output":  7.50, "cached_input": 0.15},  # verified 2026-10 (current mid; from 2027-01-01)
+    "gemini-4-argon":         {"input": 4.00,  "output": 20.00, "cached_input": 0.20,
+                               "intro_until": "2026-11-30", "long_context_above": 200_000},  # verified 2026-10 (current large; from 2026-12-01; 200k tier to confirm)
+    "gemini-3.8-flash":       {"input": 1.50,  "output":  7.50, "cached_input": 0.15,
+                               "intro_until": "2026-12-31"},  # verified 2026-10 (current mid; from 2027-01-01)
+    # Serves gemini-3.5-flash requests since 2026-10-08 (served-model pricing, #84).
+    # Intro $0.75 / $3.75, cached $0.075, until 2026-12-31.
+    "gemini-3.6-flash":       {"input": 1.50,  "output":  7.50, "cached_input": 0.15,
+                               "intro_until": "2026-12-31"},  # 2026-10 (ai.google.dev pricing page; to verify)
     "gemini-3.5-flash-lite":  {"input": 0.30,  "output":  2.50, "cached_input": 0.03},  # verified 2026-10 (current small)
-    "gemini-3.1-pro-preview": {"input": 2.00,  "output": 12.00},  # verified 2026-07 (keyed by model_id; v1beta serves only -preview, not the GA-renamed plain id — issue #42; <=200k tier)
+    "gemini-3.1-pro-preview": {"input": 2.00,  "output": 12.00, "long_context_above": 200_000},  # verified 2026-07 (keyed by model_id; v1beta serves only -preview, not the GA-renamed plain id — issue #42; <=200k tier)
     "gemini-3.1-flash-lite":  {"input": 0.25,  "output":  1.50},  # verified 2026-07 (GA'd 2026-05-07, renamed from -preview)
     "gemini-3.5-flash":       {"input": 1.50,  "output":  9.00},  # verified 2026-07 (current text flash)
-    "gemini-2.5-pro":         {"input": 1.25,  "output": 10.00},  # verified 2026-07 (<=200k tier; current but dropped from roster)
+    "gemini-2.5-pro":         {"input": 1.25,  "output": 10.00, "long_context_above": 200_000},  # verified 2026-07 (<=200k tier; current but dropped from roster)
     "gemini-2.5-flash":       {"input": 0.30,  "output":  2.50},  # verified 2026-07 (current but dropped from roster)
     "gemini-2.5-flash-lite":  {"input": 0.10,  "output":  0.40},  # verified 2026-07 (cheapest; kept in roster)
     "gemini-2.0-flash":       {"input": 0.10,  "output":  0.40},
@@ -103,6 +116,22 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     "llama-3.1-70b": {"input": 0.88, "output": 0.88},
     "llama-3.1-8b":  {"input": 0.10, "output": 0.10},
 }
+
+
+_DATE_SUFFIX = re.compile(r"(-\d{4}-\d{2}-\d{2}|-\d{8})$")
+
+
+def pricing_key(model_id: Optional[str]) -> Optional[str]:
+    """The DEFAULT_PRICING key for a model id: the id itself, or the id without a
+    dated-snapshot suffix (``gpt-6-luna-2026-09-01`` -> ``gpt-6-luna``). None when
+    neither has an entry."""
+    if not model_id:
+        return None
+    model_id = model_id.removeprefix("models/")
+    if model_id in DEFAULT_PRICING:
+        return model_id
+    base = _DATE_SUFFIX.sub("", model_id)
+    return base if base in DEFAULT_PRICING else None
 
 
 class PricingCalculator:
@@ -136,6 +165,15 @@ class PricingCalculator:
         self.output_price = pricing.get("output", 0.0)
         self.cached_input_price = pricing.get("cached_input", self.input_price)
         self.cache_write_price = pricing.get("cache_write", self.input_price)
+        self.long_context_above: Optional[int] = pricing.get("long_context_above")
+        self.intro_until: Optional[str] = pricing.get("intro_until")
+
+    def intro_note(self, model: str, on: date) -> Optional[str]:
+        """A note when ``on`` falls inside the model's introductory discount."""
+        if self.intro_until and on <= date.fromisoformat(self.intro_until):
+            return (f"{model}: introductory price in effect until {self.intro_until}; "
+                    "cost uses the list rate")
+        return None
 
     def calculate_cost(self, usage: TokenUsage) -> float:
         """
