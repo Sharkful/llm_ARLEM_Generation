@@ -278,6 +278,13 @@ PascalCase (`to_pascal_case` in `_schema_helpers.py`) instead of retrying, and
 `module_asset_plan.component_key()`. This also changes future one-shot runs' tool
 schema text and output casing (wave 2 is unaffected).
 
+### Narration (`Code/Narration/`, milestone "Narration Generation", #90)
+
+Spec only so far: `NARRATION.md` (#91). It describes turning a finished lab's existing
+`Clip.narration` into one audio file per clip, named `<audioClip>`, bundled into the lab
+resources zip. Output goes to `Artifacts/Data/Narration/`. JW's `narration_generator/`
+(branch `jw-expermiments`) was reviewed in the spec, not reused.
+
 ### Analysis System (`Code/Analysis/`)
 
 Everything downstream of a run. Reads `Metrics/` + `Outputs/`; never calls an LLM.
