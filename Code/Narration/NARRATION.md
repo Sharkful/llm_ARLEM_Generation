@@ -1,6 +1,6 @@
 # Narration generation: goals spec
 
-Status: **draft for review** (#91). No code yet. This spec decides what the
+Status: **agreed** (#91). No code yet. This spec decides what the
 narration tool produces. The CLI (#93), spoken-form pass (#94) and zip layout
 (#92) are built to it.
 
@@ -93,10 +93,25 @@ compared with the original.
   inserted silences. The longest wave-2 clip (966 characters) fits every
   candidate provider's per-request limit; a longer clip is an error, never
   split silently.
-- **One voice and one style for the whole lab:** a fixed default voice per
-  provider and a fixed short style instruction (e.g. clear, friendly
-  instructor). Both are recorded. Per-clip voices or styles are out of scope;
-  a fixed setup keeps paper runs comparable.
+- **One voice and one style for the whole lab.** Per-clip voices or styles
+  are out of scope; a fixed setup keeps paper runs comparable.
+
+### Defaults (frozen for paper runs)
+
+| Provider | Model | Voice |
+|---|---|---|
+| OpenAI | `gpt-4o-mini-tts` (dated snapshot pinned in #93) | `marin`, one of the two voices OpenAI recommends for best quality |
+| Gemini | Gemini 3.8 Flash TTS | `Charon`, a stock voice commonly picked for academic narration |
+
+Style instruction, the same for both providers:
+
+> Speak as a clear, friendly science instructor guiding a student through a
+> lab, at a calm, moderate pace.
+
+These defaults are set once in code and recorded in every manifest. Changing
+any of them means a new run group; old and new runs are never mixed. #93 does
+one short listening check before the first paper run, and that is the last
+chance to swap a voice.
 
 ## Output
 
@@ -120,6 +135,13 @@ The **working folder** goes under
 - Audio is encoded **once**: request uncompressed audio (PCM/WAV) where the
   provider offers it, then write the target format. mp3 and wav are both
   acceptable; #92 picks the default.
+
+**What is committed:**
+- Committed: `narration_manifest.json` and the bundled `lab.json`.
+- Not committed: `audio/` and the zip, which contains the audio. Both are
+  covered by `.gitignore` rules.
+- Hand-picked example audio can be committed later, under a path with an
+  explicit `.gitignore` exception, decided when we pick the examples.
 
 ### `narration_manifest.json`
 
@@ -148,7 +170,10 @@ matches and the file exists, unless `--overwrite` is passed.
 These come straight from the manifest: cost per lab and per audio minute,
 seconds of audio per lab, wall time and real-time factor, and failure and
 retry rates. Each is reported per provider, per spoken-form mode, and per
-source model and level. See open question 2 for an objective quality measure.
+source model and level.
+
+Quality is judged by listening checks; there is no automatic transcription
+metric.
 
 ## Engineering rules (from the repo, not from JW's code)
 
@@ -205,16 +230,3 @@ Reviewed against the goals above:
 
 Nothing from `narration_generator/` is copied. The ideas marked "keep" are
 reimplemented to this spec.
-
-## Open questions
-
-1. **Committing audio.** Should narration runs be committed like
-   `Benchmark/` (about 4 MB of mp3 per lab), or should audio be gitignored with
-   only the manifests committed? A paper set might be the exception.
-2. **Objective quality metric for the paper.** One option: transcribe each
-   clip with a speech-recognition model and measure the word error rate
-   against its spoken text. This catches mispronounced or skipped words
-   automatically, on both providers and later local models. Listening checks
-   would still cover naturalness.
-3. **Default voices and style text.** Pick one stock voice per provider and
-   one style sentence, then freeze them for paper runs.

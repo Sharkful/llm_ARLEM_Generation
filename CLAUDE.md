@@ -282,7 +282,8 @@ schema text and output casing (wave 2 is unaffected).
 
 Spec only so far: `NARRATION.md` (#91). It describes turning a finished lab's existing
 `Clip.narration` into one audio file per clip, named `<audioClip>`, bundled into the lab
-resources zip. Output goes to `Artifacts/Data/Narration/`. JW's `narration_generator/`
+resources zip. Output goes to `Artifacts/Data/Narration/` (audio and zips are gitignored;
+manifests are tracked). JW's `narration_generator/`
 (branch `jw-expermiments`) was reviewed in the spec, not reused.
 
 ### Analysis System (`Code/Analysis/`)
