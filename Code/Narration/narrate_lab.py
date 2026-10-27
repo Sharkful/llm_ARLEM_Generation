@@ -205,11 +205,11 @@ def check_environment(spec: tts.ProviderSpec) -> str:
         found = importlib.util.find_spec(spec.sdk_module) is not None
     except ModuleNotFoundError:
         found = False
-    if not found:
-        raise InputError(
-            f"Python package '{spec.sdk_package}' is not installed ({spec.name} needs it). "
-            "Activate the project venv and run: pip install -r requirements.txt"
-        )
+    problem = tts.sdk_problem(spec) if found else (
+        f"Python package '{spec.sdk_package}' is not installed ({spec.name} needs it). "
+        "Activate the project venv and run: pip install -r requirements.txt")
+    if problem:
+        raise InputError(problem)
     for var in spec.api_key_env:
         if os.environ.get(var):
             return os.environ[var]

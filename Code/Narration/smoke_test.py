@@ -777,6 +777,9 @@ if HAVE_NARRATION:
         def close(self):
             self.server.shutdown()
 
+    class _SkipGemini(Exception):
+        pass
+
     half = len(PCM) // 2 // 2 * 2
 
     def sse(*events):
@@ -845,8 +848,25 @@ if HAVE_NARRATION:
             "modelVersion": "gemini-3.8-flash-tts",
         }).encode()
 
+    import dataclasses
+    future = dataclasses.replace(tts.PROVIDERS["gemini"], min_sdk_version="999.0.0")
+    problem = tts.sdk_problem(future)
+    check(problem is not None and 'pip install -U "google-genai>=999.0.0"' in problem,
+          "an SDK older than a provider's minimum is reported with the upgrade command")
+    try:
+        narrate_lab.check_environment(future)
+        ok = False
+    except narrate_lab.InputError as exc:
+        ok = "too old" in str(exc)
+    check(ok, "the CLI's environment check stops on an SDK that is too old")
+
+    gemini_sdk_problem = tts.sdk_problem(tts.PROVIDERS["gemini"])
+    check(gemini_sdk_problem is None,
+          f"google-genai is new enough for Gemini 3.8 TTS: {gemini_sdk_problem or 'ok'}")
     gm = Mock(gemini_handler)
     try:
+        if gemini_sdk_problem:
+            raise _SkipGemini()
         prov = tts.make_provider("gemini", api_key="g-test", base_url=gm.url)
         syn = prov.synthesize("Hello there.")
         path, headers, req = gm.requests[-1]
@@ -895,6 +915,8 @@ if HAVE_NARRATION:
         code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
                        provider=prov, log=quiet)
         check(code == 1 and len(gm.requests) - n_before == 1, "a Gemini 403 stops the run after one request")
+    except _SkipGemini:
+        print("     (Gemini mock checks skipped until google-genai is upgraded)")
     finally:
         gm.close()
 

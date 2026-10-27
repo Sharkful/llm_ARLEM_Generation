@@ -17,6 +17,7 @@ attempt): retries are the caller's job, transient errors only, counted.
 from __future__ import annotations
 
 import base64
+import importlib.metadata
 import io
 import json
 import re
@@ -40,6 +41,7 @@ class ProviderSpec:
     api_key_env: tuple[str, ...]
     sdk_module: str
     sdk_package: str
+    min_sdk_version: str | None = None   # first SDK release with every field we send
 
 
 PROVIDERS: dict[str, ProviderSpec] = {
@@ -60,8 +62,29 @@ PROVIDERS: dict[str, ProviderSpec] = {
         api_key_env=("GEMINI_API_KEY", "GOOGLE_API_KEY"),
         sdk_module="google.genai",
         sdk_package="google-genai",
+        # Part.speech_metadata (the style) and VoiceConfig.voice first appear in
+        # google-genai 2.25.0 (built 2026-09-22, the day before Gemini 3.8 Flash TTS).
+        min_sdk_version="2.25.0",
     ),
 }
+
+
+def _version_tuple(version: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in re.findall(r"\d+", version)[:3])
+
+
+def sdk_problem(spec: ProviderSpec) -> str | None:
+    """Why the installed SDK can't run this provider (missing or too old), or None."""
+    try:
+        have = importlib.metadata.version(spec.sdk_package)
+    except importlib.metadata.PackageNotFoundError:
+        return (f"Python package '{spec.sdk_package}' is not installed ({spec.name} needs it). "
+                "Activate the project venv and run: pip install -r requirements.txt")
+    if spec.min_sdk_version and _version_tuple(have) < _version_tuple(spec.min_sdk_version):
+        return (f"{spec.sdk_package} {have} is too old for {spec.model}: it needs "
+                f"{spec.min_sdk_version} or newer. Run: "
+                f'pip install -U "{spec.sdk_package}>={spec.min_sdk_version}"')
+    return None
 
 
 @dataclass
@@ -175,6 +198,9 @@ class GeminiTTS:
 
     def __init__(self, spec: ProviderSpec, voice: str, style: str,
                  api_key: str | None = None, base_url: str | None = None):
+        problem = sdk_problem(spec)
+        if problem:
+            raise RuntimeError(problem)
         from google import genai
         from google.genai import types
 

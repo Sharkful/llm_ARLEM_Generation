@@ -316,7 +316,9 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   - OpenAI `gpt-4o-mini-tts-2025-12-15`/`marin`: PCM over SSE, because only the
     `speech.audio.done` event reports usage.
   - Gemini `gemini-3.8-flash-tts`/`Charon`: style in `Part.speech_metadata.style`;
-    raw PCM or WAV accepted, never resampled.
+    raw PCM or WAV accepted, never resampled. Needs `google-genai>=2.25.0` (pinned as a
+    floor in `requirements.txt`, because instructor's extra allows >=1.5.0); the CLI
+    checks it.
   - The SDK clients never retry.
 - **`smoke_test.py`**: offline (`python "Code/Narration/smoke_test.py"`; parts 2 and 3
   need the venv). Covers the bundle (all wave-2 labs), the CLI with a fake TTS, and the

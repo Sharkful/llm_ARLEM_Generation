@@ -321,7 +321,9 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
 - **Environment check** before any call, in the style of
   `benchmark.require_environment()`: provider SDK installed and API key set.
 - **Dependencies** go in the root `requirements.txt` and keys in the root
-  `.env`; no separate environment.
+  `.env`; no separate environment. Gemini TTS needs `google-genai>=2.25.0`
+  (the first release with `speech_metadata` and `VoiceConfig.voice`). The CLI
+  checks this and stops with the upgrade command.
 - **Offline smoke test** with a fake TTS provider and a fake LLM, in the style
   of `Code/Hierarchical/smoke_test.py`, so it runs with no API keys.
 
