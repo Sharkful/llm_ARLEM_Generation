@@ -230,7 +230,8 @@ one top-level folder with the zip's own name:
 
 **Per clip:** module and clip index; `clipName`; final audio name (and why it
 changed, if it did); display text; spoken text; characters; audio seconds;
-cost; wall time; served model; the provider's request id (to match billing
+cost; wall time; time to first audio and (OpenAI) the longest gap between
+audio pieces; served model; the provider's request id (to match billing
 records); status (`generated` / `skipped` / `failed` / `silent` / `dropped`,
 plus `shared` for a clip that reuses another clip's file); `transient_errors`,
 one entry per retried attempt with its HTTP status, exception type, a short
@@ -280,9 +281,21 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
   - HTTP 401/402/403/404 (key, billing such as used-up prepaid credits,
     permission, unknown model), or audio in an unexpected format, stops the run
     at once, since every clip would fail and unusable audio is still billed.
-  - Transient errors (429/5xx/connection) are retried up to 3 attempts with
-    `benchmark._transient_retryer()` and counted. The SDK clients never retry
-    on their own.
+  - Transient errors (429/5xx/connection) are retried up to 3 attempts, with
+    the same policy as `benchmark._transient_retryer()`, and counted. The SDK
+    clients never retry on their own.
+  - **Every request has a hard 90 s limit** (`tts.REQUEST_TIME_LIMIT`; a clip
+    normally takes under 12 s). At the limit the request is abandoned and retried
+    like a transient error, recorded as "no complete reply within the
+    per-request time limit".
+    - OpenAI streams its audio. A watchdog closes a stream still open at 90 s,
+      whether it has gone silent or is trickling, and the client timeout covers
+      the wait for the stream to start.
+    - Gemini answers in one piece, so its SDK timeout is the limit; it is also
+      sent to the server as a deadline (`X-Server-Timeout`).
+    - Each clip records `first_audio_seconds` and, for OpenAI,
+      `max_gap_seconds`, which show whether a slow request waited before
+      starting or stalled partway.
   - A clip longer than the provider's limit (OpenAI 4,096 characters, our Gemini
     cap 4,000) fails without a request.
 - **OpenAI:** `/v1/audio/speech` with `gpt-4o-mini-tts-2025-12-15`, voice
@@ -305,8 +318,9 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
   - Still open: whether Gemini follows the style without ever reading it aloud
     (the #93 listening check), and whether the prices in `tracking/pricing.py`
     match what was billed (#101).
-  - Some OpenAI requests stalled for 2–4 minutes before succeeding; a
-    per-request time limit is still to be decided. The offline smoke test
+  - Some OpenAI requests stalled for 2–4 minutes before succeeding (wall time
+    was 1.85× the audio length, against Gemini's 0.34×). That led to the 90 s
+    per-request limit above. The offline smoke test
   (`smoke_test.py` parts 2 and 3: a fake service, then mock OpenAI and Gemini
   servers) covers everything else.
 

@@ -326,6 +326,8 @@ def describe_error(exc: BaseException) -> dict:
     status = next((s for e in chain if (s := status_of(e)) is not None), None)
     if isinstance(exc, tts.TTSFormatError):
         reason = "the provider's audio was not in the format we asked for"
+    elif isinstance(exc, tts.TTSTimeout):
+        reason = "no complete reply within the per-request time limit, so it was abandoned"
     elif status in _STATUS_REASONS:
         reason = _STATUS_REASONS[status]
     else:
@@ -335,6 +337,21 @@ def describe_error(exc: BaseException) -> dict:
         reason += f" (HTTP {status})"
     return {"status": status, "type": type(exc).__name__, "reason": reason,
             "detail": " ".join(str(exc).split())[:300]}
+
+
+def _retryer():
+    """``benchmark._transient_retryer()``'s policy (same attempts and back-off), also
+    retrying a request abandoned at the time limit (``tts.TTSTimeout``)."""
+    import benchmark
+    import tenacity
+    return tenacity.Retrying(
+        retry=tenacity.retry_if_exception(
+            lambda e: isinstance(e, tts.TTSTimeout) or benchmark._is_transient_api_error(e)),
+        stop=tenacity.stop_after_attempt(benchmark._TRANSIENT_ATTEMPTS),
+        wait=(benchmark._TRANSIENT_WAIT if benchmark._TRANSIENT_WAIT is not None
+              else tenacity.wait_exponential(multiplier=2, min=2, max=20)),
+        reraise=True,
+    )
 
 
 def _is_fatal(exc: BaseException) -> bool:
@@ -355,7 +372,6 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
         api_key: str | None = None, log=print) -> int:
     """Narrate ``settings.input_path`` into ``run_dir``. ``provider`` (anything with
     ``synthesize(text) -> tts.Synthesis``) replaces the real client in tests."""
-    from benchmark import _transient_retryer
     from tracking.metrics import TokenUsage
     from tracking.pricing import PricingCalculator
 
@@ -403,6 +419,7 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
                    "validation": None},
         "voice_service": {"provider": spec.name, "model": spec.model, "served_models": [],
                           "voice": settings.voice, "style_instruction": settings.style,
+                          "request_time_limit_seconds": getattr(provider, "time_limit", None),
                           **AUDIO_FORMAT},
         "spoken_form": {"mode": settings.spoken_form, "model": None, "glossary_version": None},
         "counts": {},
@@ -442,7 +459,8 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
         elif not overwrite and prev and prev.get("source_hash") == h and wav.is_file():
             rec.update({k: prev.get(k) for k in ("audio_seconds", "input_tokens", "output_tokens",
                                                   "cost_usd", "wall_seconds", "served_model",
-                                                  "request_id", "transient_retries",
+                                                  "request_id", "first_audio_seconds",
+                                                  "max_gap_seconds", "transient_retries",
                                                   "transient_errors", "generated_at")})
             rec["transient_errors"] = rec["transient_errors"] or []
             rec["status"] = "skipped"
@@ -453,7 +471,7 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
                              f"{spec.max_chars}; clips are never split")
             log(f"  FAIL  {p.name}: too long ({len(text)} characters)")
         else:
-            retryer = _transient_retryer()
+            retryer = _retryer()
             errors: list[BaseException] = []   # every failed attempt, in order
 
             def attempt(text=text, errors=errors):
@@ -475,7 +493,9 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
                 rec.update(status="generated", audio_seconds=round(syn.seconds, 3),
                            input_tokens=syn.input_tokens, output_tokens=syn.output_tokens,
                            cost_usd=cost, served_model=syn.served_model,
-                           request_id=syn.request_id, generated_at=_now())
+                           request_id=syn.request_id,
+                           first_audio_seconds=syn.first_audio_seconds,
+                           max_gap_seconds=syn.max_gap_seconds, generated_at=_now())
                 if syn.seconds == 0:
                     rec["warnings"].append("the provider returned no audio")
                 if cost is None:
@@ -551,7 +571,8 @@ def _plan_record(p: ClipPlan) -> dict:
         "status": {"silent": "silent", "dropped": "dropped"}.get(p.action, "pending"),
         "audio_seconds": None, "input_tokens": None, "output_tokens": None,
         "cost_usd": None, "wall_seconds": None, "served_model": None,
-        "request_id": None, "transient_retries": None, "transient_errors": [],
+        "request_id": None, "first_audio_seconds": None, "max_gap_seconds": None,
+        "transient_retries": None, "transient_errors": [],
         "generated_at": None, "source_hash": None,
         "error": None, "error_reason": None, "warnings": [],
     }

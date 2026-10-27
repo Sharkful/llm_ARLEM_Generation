@@ -773,10 +773,13 @@ if HAVE_NARRATION:
     print("\n-- Part 3: OpenAI and Gemini clients against mock servers")
     import base64
     import threading
-    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import time
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     class Mock:
-        """A local HTTP server: ``handler(path, body_json) -> (status, headers, bytes)``."""
+        """A local threaded HTTP server: ``handler(path, body_json) -> (status, headers,
+        data)``, where data is bytes, or a list of ``(delay_seconds, bytes)`` pieces sent
+        one by one (to stall or trickle). A handler may also sleep before answering."""
         def __init__(self, handler):
             self.requests = []
             mock = self
@@ -787,17 +790,29 @@ if HAVE_NARRATION:
                     body = json.loads(self.rfile.read(n) or b"{}")
                     mock.requests.append((self.path, dict(self.headers), body))
                     status, headers, data = handler(self.path, body)
-                    self.send_response(status)
-                    for k, v in headers.items():
-                        self.send_header(k, v)
-                    self.send_header("content-length", str(len(data)))
-                    self.end_headers()
-                    self.wfile.write(data)
+                    try:
+                        self.send_response(status)
+                        for k, v in headers.items():
+                            self.send_header(k, v)
+                        if isinstance(data, (bytes, bytearray)):
+                            self.send_header("content-length", str(len(data)))
+                            self.end_headers()
+                            self.wfile.write(data)
+                            return
+                        self.send_header("connection", "close")   # body ends at close
+                        self.end_headers()
+                        for delay, piece in data:
+                            time.sleep(delay)
+                            self.wfile.write(piece)
+                            self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass   # the client gave up (time limit): expected in these tests
 
                 def log_message(self, *a):
                     pass
 
-            self.server = HTTPServer(("127.0.0.1", 0), H)
+            self.server = ThreadingHTTPServer(("127.0.0.1", 0), H)
+            self.server.daemon_threads = True
             threading.Thread(target=self.server.serve_forever, daemon=True).start()
             self.url = f"http://127.0.0.1:{self.server.server_port}"
 
@@ -858,8 +873,86 @@ if HAVE_NARRATION:
         code = narrate(settings_for(SAMPLE_LAB), r, provider=prov, log=quiet)
         check(code == 1 and len(om.requests) - n_before == 1 and manifest_of(r)["status"] == "failed",
               "an OpenAI 401 stops the run after one request")
+        check(syn.first_audio_seconds is not None and syn.max_gap_seconds is not None,
+              "OpenAI: time to first audio and the longest gap between pieces are measured")
+        check(isinstance(prov.client.timeout, object) and prov.time_limit == tts.REQUEST_TIME_LIMIT == 90.0,
+              "the default per-request time limit is 90 s")
     finally:
         om.close()
+
+    # ── The per-request time limit (short limits so the checks run fast) ─
+    def delta(chunk):
+        return b"data: " + json.dumps({"type": "speech.audio.delta",
+                                       "audio": base64.b64encode(chunk).decode()}).encode() + b"\n\n"
+    done = b"data: " + json.dumps({"type": "speech.audio.done", "usage": {
+        "input_tokens": 14, "output_tokens": 101, "total_tokens": 115}}).encode() + b"\n\n"
+    stall = {"mode": None, "count": 0}
+
+    def stalling_handler(path, body):
+        stall["count"] += 1
+        # The first request stalls; with "every", each attempt for one clip's text does.
+        mode = stall["mode"] if (stall["count"] == 1 or (
+            stall.get("every") and body.get("input") == stall.get("text"))) else None
+        head = {"content-type": "text/event-stream", "x-request-id": f"req_{stall['count']}"}
+        if mode == "before_headers":
+            time.sleep(3)
+            return 200, head, delta(PCM) + done
+        if mode == "silent":      # some audio, then nothing
+            return 200, head, [(0, delta(PCM[:half])), (5, delta(PCM[half:]) + done)]
+        if mode == "trickle":     # keeps sending, slowly, past the limit
+            return 200, head, [(0.25, delta(PCM[:2])) for _ in range(16)] + [(0, done)]
+        return 200, head, [(0, delta(PCM[:half])), (0.05, delta(PCM[half:])), (0, done)]
+
+    sm = Mock(stalling_handler)
+    try:
+        fast = tts.make_provider("openai", api_key="sk-test", base_url=sm.url + "/v1", time_limit=1.0)
+        for mode in ("silent", "trickle"):
+            stall.update(mode=mode, count=0)
+            t0 = time.monotonic()
+            try:
+                fast.synthesize("x")
+                outcome = "no error"
+            except tts.TTSTimeout as exc:
+                outcome = str(exc)
+            took = time.monotonic() - t0
+            check(outcome.startswith("no complete reply within 1 s") and took < 2.5,
+                  f"a stream that goes {mode} past the limit is abandoned at the limit "
+                  f"({took:.1f} s; {outcome})")
+        stall.update(mode="before_headers", count=0)
+        t0 = time.monotonic()
+        try:
+            fast.synthesize("x")
+            outcome = None
+        except Exception as exc:  # noqa: BLE001
+            outcome = exc
+        took = time.monotonic() - t0
+        check(outcome is not None and "Timeout" in type(outcome).__name__ and took < 2.5,
+              f"a reply that doesn't start within the limit times out ({type(outcome).__name__}, {took:.1f} s)")
+
+        stall.update(mode="silent", count=0)
+        r = TMP / "runs" / "openai_time_limit"
+        code = narrate(settings_for(SAMPLE_LAB), r, provider=fast, log=quiet)
+        tl = manifest_of(r)
+        c0 = tl["clips"][0]
+        check(code == 0 and tl["status"] == "complete" and c0["transient_retries"] == 1
+              and c0["transient_errors"][0]["type"] == "TTSTimeout"
+              and "time limit" in c0["transient_errors"][0]["reason"]
+              and tl["voice_service"]["request_time_limit_seconds"] == 1.0,
+              "end to end: a stalled request is abandoned, retried and recorded with its reason")
+        check(c0["first_audio_seconds"] is not None and c0["max_gap_seconds"] is not None
+              and c0["request_id"] == "req_2",
+              "the manifest records time to first audio, the longest gap and the request id")
+        stall.update(mode="trickle", count=0, every=True,
+                     text=lab["modules"][0]["clips"][0]["narration"].strip())
+        r = TMP / "runs" / "openai_time_limit_exhausted"
+        code = narrate(settings_for(SAMPLE_LAB), r, provider=fast, log=quiet)
+        c0 = manifest_of(r)["clips"][0]
+        check(code == 1 and c0["status"] == "failed" and c0["transient_retries"] == 2
+              and "time limit" in c0["error_reason"],
+              "a request that hits the limit on every attempt fails after 3 attempts (resumable)")
+        stall.pop("every")
+    finally:
+        sm.close()
 
     gem_state = {"mime": "audio/L16;codec=pcm;rate=24000", "data": PCM, "fail": []}
 
@@ -944,6 +1037,41 @@ if HAVE_NARRATION:
         code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
                        provider=prov, log=quiet)
         check(code == 1 and len(gm.requests) - n_before == 1, "a Gemini 403 stops the run after one request")
+
+        slow = {"sleep": 0}
+        real_handler = gemini_handler
+
+        def slow_gemini(path, body):
+            delay, slow["sleep"] = slow["sleep"], 0   # only the first request is slow
+            if delay:
+                time.sleep(delay)
+            return real_handler(path, body)
+
+        gs = Mock(slow_gemini)
+        try:
+            gfast = tts.make_provider("gemini", api_key="g-test", base_url=gs.url, time_limit=1.0)
+            slow["sleep"] = 3
+            t0 = time.monotonic()
+            try:
+                gfast.synthesize("x")
+                outcome = "no error"
+            except tts.TTSTimeout as exc:
+                outcome = str(exc)
+            took = time.monotonic() - t0
+            check(outcome == "no complete reply within 1 s" and took < 2.5,
+                  f"a Gemini reply slower than the limit is abandoned ({took:.1f} s)")
+            check(gs.requests[-1][1].get("X-Server-Timeout") == "1",
+                  "Gemini also sends the limit to the server as a deadline (X-Server-Timeout)")
+            slow["sleep"] = 3
+            r = TMP / "runs" / "gemini_time_limit"
+            code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
+                           provider=gfast, log=quiet)
+            c0 = manifest_of(r)["clips"][0]
+            check(code == 0 and c0["transient_retries"] == 1 and c0["transient_errors"][0]["type"] == "TTSTimeout"
+                  and c0["first_audio_seconds"] is not None and c0["request_id"] == "resp_mock456",
+                  "Gemini end to end: a slow reply is abandoned and retried; timing and response id recorded")
+        finally:
+            gs.close()
     except _SkipGemini:
         print("     (Gemini mock checks skipped until google-genai is upgraded)")
     finally:

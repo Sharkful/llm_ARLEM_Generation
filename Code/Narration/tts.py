@@ -12,6 +12,14 @@ group.
 
 The SDK clients never retry on their own (OpenAI ``max_retries=0``, Gemini one
 attempt): retries are the caller's job, transient errors only, counted.
+
+Every request has a hard time limit (``REQUEST_TIME_LIMIT``, 90 s; the longest
+wave-2 clip normally takes under 12 s). Past it the request is abandoned with
+``TTSTimeout``, which the caller retries. OpenAI streams its audio, so a watchdog
+closes a stream that is still open at the limit, whether it has gone silent or is
+trickling; the client timeout covers the wait for the stream to start. Gemini
+answers in one piece, so its SDK timeout (also sent to the server as a deadline)
+is the limit.
 """
 
 from __future__ import annotations
@@ -21,10 +29,14 @@ import importlib.metadata
 import io
 import json
 import re
+import threading
+import time
 import wave
 from dataclasses import dataclass
 
 from bundle import WAV_CHANNELS, WAV_SAMPLE_RATE, WAV_SAMPLE_WIDTH
+
+REQUEST_TIME_LIMIT = 90.0   # seconds per request, start to last byte
 
 STYLE_INSTRUCTION = (
     "Speak as a clear, friendly science instructor guiding a student through a "
@@ -95,10 +107,28 @@ class Synthesis:
     output_tokens: int | None     # audio tokens billed (None: not reported)
     served_model: str | None      # model the provider says answered (None: not reported)
     request_id: str | None = None # the provider's id for the request, to match billing records
+    first_audio_seconds: float | None = None  # request start to the first audio received
+    max_gap_seconds: float | None = None      # longest wait between audio pieces (OpenAI)
 
     @property
     def seconds(self) -> float:
         return len(self.pcm) / (WAV_SAMPLE_WIDTH * WAV_CHANNELS * WAV_SAMPLE_RATE)
+
+
+class TTSTimeout(Exception):
+    """The request passed ``REQUEST_TIME_LIMIT`` and was abandoned (retryable)."""
+
+
+def _is_timeout(exc: BaseException) -> bool:
+    """True if an httpx timeout is the error or one of its causes (SDKs may wrap it)."""
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        if type(exc).__name__ in ("ReadTimeout", "WriteTimeout", "ConnectTimeout",
+                                  "PoolTimeout", "TimeoutException"):
+            return True
+        exc = exc.__cause__ or exc.__context__
+    return False
 
 
 class TTSFormatError(RuntimeError):
@@ -132,36 +162,59 @@ def pcm_from_audio(data: bytes, mime_type: str | None) -> bytes:
 # ── OpenAI ────────────────────────────────────────────────────────────
 
 
-def parse_openai_sse(body: bytes) -> tuple[bytes, int | None, int | None]:
-    """(pcm, input_tokens, output_tokens) from a /v1/audio/speech SSE body:
-    ``speech.audio.delta`` events carry base64 audio, and the closing
-    ``speech.audio.done`` event carries the token usage."""
-    pcm = bytearray()
-    usage = None
-    saw_event = False
-    for line in body.decode("utf-8", errors="replace").splitlines():
+class SpeechEvents:
+    """Reads a /v1/audio/speech SSE stream line by line: ``speech.audio.delta``
+    events carry base64 audio, and the closing ``speech.audio.done`` event carries
+    the token usage. Also notes when audio first arrived and the longest gap."""
+
+    def __init__(self, t0: float | None = None):
+        self.t0 = time.monotonic() if t0 is None else t0
+        self.pcm = bytearray()
+        self.usage = None
+        self.saw_event = False
+        self.first_audio = None
+        self.max_gap = 0.0
+        self._last = None
+
+    def feed(self, line: str) -> None:
         if not line.startswith("data:"):
-            continue
+            return
         payload = line[5:].strip()
         if not payload or payload == "[DONE]":
-            continue
+            return
         try:
             event = json.loads(payload)
         except ValueError as exc:
             raise TTSFormatError(f"malformed speech event ({exc})") from exc
-        saw_event = True
+        self.saw_event = True
         kind = event.get("type")
         if kind == "speech.audio.delta":
-            pcm += base64.b64decode(event.get("audio") or "")
+            now = time.monotonic()
+            if self.first_audio is None:
+                self.first_audio = now - self.t0
+            else:
+                self.max_gap = max(self.max_gap, now - self._last)
+            self._last = now
+            self.pcm += base64.b64decode(event.get("audio") or "")
         elif kind == "speech.audio.done":
-            usage = event.get("usage") or {}
-    if not saw_event:
-        raise TTSFormatError("expected server-sent speech events, got none")
-    if usage is None:
-        raise TTSFormatError("the speech stream ended without speech.audio.done")
-    if len(pcm) % WAV_SAMPLE_WIDTH:
-        raise TTSFormatError("speech audio has an odd number of bytes")
-    return bytes(pcm), usage.get("input_tokens"), usage.get("output_tokens")
+            self.usage = event.get("usage") or {}
+
+    def result(self) -> tuple[bytes, int | None, int | None]:
+        if not self.saw_event:
+            raise TTSFormatError("expected server-sent speech events, got none")
+        if self.usage is None:
+            raise TTSFormatError("the speech stream ended without speech.audio.done")
+        if len(self.pcm) % WAV_SAMPLE_WIDTH:
+            raise TTSFormatError("speech audio has an odd number of bytes")
+        return bytes(self.pcm), self.usage.get("input_tokens"), self.usage.get("output_tokens")
+
+
+def parse_openai_sse(body: bytes) -> tuple[bytes, int | None, int | None]:
+    """(pcm, input_tokens, output_tokens) from a whole /v1/audio/speech SSE body."""
+    events = SpeechEvents()
+    for line in body.decode("utf-8", errors="replace").splitlines():
+        events.feed(line)
+    return events.result()
 
 
 class OpenAITTS:
@@ -169,27 +222,64 @@ class OpenAITTS:
     mono) and ``stream_format="sse"``, the format that reports token usage."""
 
     def __init__(self, spec: ProviderSpec, voice: str, style: str,
-                 api_key: str | None = None, base_url: str | None = None):
+                 api_key: str | None = None, base_url: str | None = None,
+                 time_limit: float = REQUEST_TIME_LIMIT):
+        import httpx
         from openai import OpenAI
 
-        self.spec, self.voice, self.style = spec, voice, style
-        self.client = OpenAI(api_key=api_key, base_url=base_url, max_retries=0)
+        self.spec, self.voice, self.style, self.time_limit = spec, voice, style, time_limit
+        # The timeout bounds the wait for the stream to start; the watchdog in
+        # synthesize() bounds the whole request.
+        self.client = OpenAI(api_key=api_key, base_url=base_url, max_retries=0,
+                             timeout=httpx.Timeout(time_limit, connect=min(10.0, time_limit)))
 
     def synthesize(self, text: str) -> Synthesis:
-        raw = self.client.audio.speech.with_raw_response.create(
+        t0 = time.monotonic()
+        with self.client.audio.speech.with_streaming_response.create(
             model=self.spec.model,
             voice=self.voice,
             input=text,
             instructions=self.style,
             response_format="pcm",
             stream_format="sse",
-        )
-        pcm, tokens_in, tokens_out = parse_openai_sse(raw.content)
-        # The speech endpoint reports no model (no body field, and no openai-model header
-        # in the 2026-10-27 live run); keep the header in case it is ever sent.
-        served = raw.headers.get("openai-model") or None
-        request_id = raw.request_id or raw.headers.get("x-request-id") or None
-        return Synthesis(pcm, tokens_in, tokens_out, served, request_id)
+        ) as resp:
+            expired = threading.Event()
+
+            def expire():
+                expired.set()
+                resp.close()   # unblocks a read that is waiting on a stalled stream
+
+            watchdog = threading.Timer(max(0.0, self.time_limit - (time.monotonic() - t0)), expire)
+            watchdog.daemon = True
+            watchdog.start()
+            events = SpeechEvents(t0)
+            try:
+                for line in resp.iter_lines():
+                    if expired.is_set():
+                        break
+                    events.feed(line)
+            except Exception as exc:
+                if not expired.is_set():
+                    raise
+                raise self._timeout(events) from exc
+            finally:
+                watchdog.cancel()
+            if expired.is_set():
+                raise self._timeout(events)
+            # The speech endpoint reports no model (no body field, and no openai-model
+            # header in the 2026-10-27 live run); keep the header in case it is ever sent.
+            served = resp.headers.get("openai-model") or None
+            request_id = resp.request_id or resp.headers.get("x-request-id") or None
+        pcm, tokens_in, tokens_out = events.result()
+        return Synthesis(pcm, tokens_in, tokens_out, served, request_id,
+                         first_audio_seconds=round(events.first_audio, 3)
+                         if events.first_audio is not None else None,
+                         max_gap_seconds=round(events.max_gap, 3))
+
+    def _timeout(self, events: SpeechEvents) -> TTSTimeout:
+        got = (f"first audio after {events.first_audio:.1f} s, {len(events.pcm)} bytes so far"
+               if events.first_audio is not None else "no audio yet")
+        return TTSTimeout(f"no complete reply within {self.time_limit:g} s ({got})")
 
 
 # ── Gemini ────────────────────────────────────────────────────────────
@@ -200,7 +290,8 @@ class GeminiTTS:
     ``speech_metadata.style``, so it is never read aloud as part of the text."""
 
     def __init__(self, spec: ProviderSpec, voice: str, style: str,
-                 api_key: str | None = None, base_url: str | None = None):
+                 api_key: str | None = None, base_url: str | None = None,
+                 time_limit: float = REQUEST_TIME_LIMIT):
         problem = sdk_problem(spec)
         if problem:
             raise RuntimeError(problem)
@@ -208,24 +299,25 @@ class GeminiTTS:
         from google.genai import types
 
         self.spec, self.voice, self.style, self.types = spec, voice, style, types
+        self.time_limit = time_limit
         http_options = types.HttpOptions(
             base_url=base_url,
             retry_options=types.HttpRetryOptions(attempts=1),  # no SDK retries
+            # Milliseconds; the SDK also sends it to the server as a deadline. The
+            # reply comes in one piece, so this is the whole request's limit.
+            timeout=int(time_limit * 1000),
         )
         self.client = genai.Client(api_key=api_key, http_options=http_options)
 
     def synthesize(self, text: str) -> Synthesis:
-        t = self.types
-        resp = self.client.models.generate_content(
-            model=self.spec.model,
-            contents=[t.Content(role="user", parts=[
-                t.Part(text=text, speech_metadata=t.SpeechMetadata(style=self.style)),
-            ])],
-            config=t.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-                speech_config=t.SpeechConfig(voice_config=t.VoiceConfig(voice=self.voice)),
-            ),
-        )
+        t0 = time.monotonic()
+        try:
+            resp = self._generate(text)
+        except Exception as exc:
+            if _is_timeout(exc):
+                raise TTSTimeout(f"no complete reply within {self.time_limit:g} s") from exc
+            raise
+        first_audio = round(time.monotonic() - t0, 3)
         inline = next(
             (p.inline_data for c in (resp.candidates or [])
              for p in ((c.content.parts if c.content else None) or [])
@@ -244,11 +336,27 @@ class GeminiTTS:
             getattr(um, "candidates_token_count", None) if um else None,
             served,
             getattr(resp, "response_id", None) or None,
+            first_audio_seconds=first_audio,   # the whole reply arrives at once
+        )
+
+    def _generate(self, text: str):
+        t = self.types
+        return self.client.models.generate_content(
+            model=self.spec.model,
+            contents=[t.Content(role="user", parts=[
+                t.Part(text=text, speech_metadata=t.SpeechMetadata(style=self.style)),
+            ])],
+            config=t.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+                speech_config=t.SpeechConfig(voice_config=t.VoiceConfig(voice=self.voice)),
+            ),
         )
 
 
 def make_provider(name: str, voice: str | None = None, style: str = STYLE_INSTRUCTION,
-                  api_key: str | None = None, base_url: str | None = None):
+                  api_key: str | None = None, base_url: str | None = None,
+                  time_limit: float = REQUEST_TIME_LIMIT):
     spec = PROVIDERS[name]
     cls = {"openai": OpenAITTS, "gemini": GeminiTTS}[name]
-    return cls(spec, voice or spec.voice, style, api_key=api_key, base_url=base_url)
+    return cls(spec, voice or spec.voice, style, api_key=api_key, base_url=base_url,
+               time_limit=time_limit)
