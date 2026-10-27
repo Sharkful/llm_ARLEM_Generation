@@ -122,26 +122,98 @@ The **working folder** goes under
 
 ```
 <run name>/
-  audio/<audioClip>.<ext>     one file per narrated clip
-  lab.json                    the bundled lab (renames/drops applied)
   narration_manifest.json     run record + per-clip records (below)
-  <labId>.zip                 the resources zip (layout: #92)
+  <Name>Lab/                  exactly what the zip contains (see "Resources zip")
+    Audios/<audioClip>.wav
+    Textures/
+    Videos/
+    <Lab_Name>.json           the bundled lab (renames/drops applied)
+  <Name>Lab.zip               the resources zip, built from <Name>Lab/
 ```
 
 - The manifest is rewritten after every clip. An interrupted run can be
   resumed, and finished clips are not paid for twice.
-- The zip is built from the folder at the end of a run, and is rebuilt on any
-  later run. It is never edited by hand.
-- Audio is encoded **once**: request uncompressed audio (PCM/WAV) where the
-  provider offers it, then write the target format. mp3 and wav are both
-  acceptable; #92 picks the default.
+- The zip is built from the `<Name>Lab/` folder at the end of a run, and is
+  rebuilt on any later run. It is never edited by hand.
+- Audio is never lossy-encoded: request raw PCM from the provider and write it
+  as WAV in the bundle format below. Both providers return that format
+  natively, so nothing is resampled.
 
 **What is committed:**
-- Committed: `narration_manifest.json` and the bundled `lab.json`.
-- Not committed: `audio/` and the zip, which contains the audio. Both are
+- Committed: `narration_manifest.json` and the bundled `<Lab_Name>.json`.
+- Not committed: the `.wav` files and the zip, which contains them. Both are
   covered by `.gitignore` rules.
 - Hand-picked example audio can be committed later, under a path with an
   explicit `.gitignore` exception, decided when we pick the examples.
+
+### Resources zip (#92)
+
+The headset downloads `<lab id>.zip`, unpacks it into `lab_resources/`, opens
+`lab_resources/<lab id>/` and takes the first `.json` it finds there
+(`LoginManager.cs` / `LabManager.cs` on `jw-expermiments`). So the zip holds
+one top-level folder with the zip's own name:
+
+```
+<Name>Lab.zip
+  <Name>Lab/
+    Audios/<audioClip>.wav     one per narrated clip; flat, .wav only
+    Textures/                  present, empty for now
+    Videos/                    present, empty for now
+    <Lab_Name>.json            the lab, json_lab v2.0 format
+```
+
+- **Names come from `labId`.** Split on any non-alphanumeric run, drop
+  standalone "lab" words so names never end in `LabLab`, and capitalize each
+  word's first letter only, so acronyms survive.
+  - `dna_structure_replication` → `DnaStructureReplicationLab.zip`, folder
+    `DnaStructureReplicationLab/`, and `Dna_Structure_Replication.json`.
+  - `GP1-AR-Vectors-Projectile-01` → `GP1ARVectorsProjectile01Lab`.
+  - `--bundle-name` replaces the zip and folder name, e.g. to match the lab's
+    id on the server. The zip, its folder and the server id must all match.
+  - A labId with no usable words needs `--bundle-name`.
+- **Audio files** are named after each clip's `audioClip` value, which is how
+  the headset looks them up, not after `clipName`. The name is used exactly
+  as written, never trimmed, and the extension is a lowercase `.wav`, because
+  the headset's filesystem is case-sensitive. Format: **WAV, 24 kHz, 16-bit
+  PCM, mono**.
+- **The lab JSON ships in our v2.0 format as is,** with the clip renames and
+  drops above applied. The headset currently reads the older Transmission
+  format, so it needs a matching update to read v2.0; that work is outside this
+  repo. `prototype_json_patcher.revert_lab()` converts v2.0 to Transmission if
+  that is ever needed.
+- **Zips are reproducible:** entries are sorted with a fixed timestamp, so the
+  same contents give the same bytes. Every folder has its own entry, so empty
+  `Textures/` and `Videos/` survive unpacking. The zip is readable by everyone
+  (0644), so a web server can serve it.
+- **`Code/Narration/bundle.py`** implements the names, the layout, zipping and
+  a validator:
+
+  ```
+  python "Code/Narration/bundle.py" names    <lab.json> [--bundle-name NAME]
+  python "Code/Narration/bundle.py" zip      <Name>Lab/
+  python "Code/Narration/bundle.py" validate <Name>Lab.zip | <Name>Lab/
+  ```
+
+  The validator returns errors for:
+  - a damaged zip: corrupted contents, or an entry the headset can't unpack
+    (unsupported compression, encryption). A download cut off partway has no
+    zip index, so it is reported as "not a zip file" instead
+  - a file in a bundle folder that can't be read (e.g. a broken symlink)
+  - a top-level folder that doesn't match the zip name, or more than one
+    top-level entry (e.g. `__MACOSX/`)
+  - a missing `Audios/`, `Textures/` or `Videos/`, or anything else at the top
+  - not exactly one lab JSON (the extension must be a lowercase `.json`), a
+    JSON that isn't a valid json_lab `Lab`, or modules, clips or `audioClip`
+    values of the wrong type
+  - files other than lowercase `.wav`, or subfolders, in `Audios/`, or a WAV
+    that isn't 24 kHz, 16-bit, mono PCM with some audio in it
+  - a clip `audioClip` that isn't a safe file name (spaces included) or has no
+    matching `Audios/<name>.wav`
+
+  It returns warnings for audio files no clip uses, and for sound effects
+  (`audioClipSuccess`) with no file. `validate` exits 1 if there are any
+  errors. `Code/Narration/smoke_test.py` checks all of this offline,
+  including all 104 wave-2 labs.
 
 ### `narration_manifest.json`
 

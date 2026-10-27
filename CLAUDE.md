@@ -280,11 +280,20 @@ schema text and output casing (wave 2 is unaffected).
 
 ### Narration (`Code/Narration/`, milestone "Narration Generation", #90)
 
-Spec only so far: `NARRATION.md` (#91). It describes turning a finished lab's existing
-`Clip.narration` into one audio file per clip, named `<audioClip>`, bundled into the lab
-resources zip. Output goes to `Artifacts/Data/Narration/` (audio and zips are gitignored;
-manifests are tracked). JW's `narration_generator/`
-(branch `jw-expermiments`) was reviewed in the spec, not reused.
+`NARRATION.md` (#91) is the spec: turn a finished lab's existing `Clip.narration` into
+one audio file per clip, named `<audioClip>`, and bundle it into the lab resources zip.
+Output goes to `Artifacts/Data/Narration/` (`.wav` files and zips are gitignored; the
+manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (branch
+`jw-expermiments`) was reviewed in the spec, not reused.
+
+- **`bundle.py`** (#92): the resources zip. `<Name>Lab.zip` holds one folder `<Name>Lab/`
+  (the headset opens the folder named after the zip) with `Audios/<audioClip>.wav`
+  (24 kHz, 16-bit PCM, mono), `Textures/`, `Videos/` and `<Lab_Name>.json` (v2.0 as is).
+  Names come from `labId` (`bundle_names()`; `--bundle-name` overrides). It also builds
+  reproducible zips (`zip_bundle()`) and validates zips or folders
+  (`validate_bundle()`, `bundle.py validate`).
+- **`smoke_test.py`**: offline (`python "Code/Narration/smoke_test.py"`), including all
+  wave-2 labs.
 
 ### Analysis System (`Code/Analysis/`)
 
