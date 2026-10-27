@@ -502,7 +502,7 @@ check(code == 0 and names.zip_file in out.getvalue(), "names prints the derived 
 
 # ══ Part 2: the narration CLI with a fake voice service (#93) ═════════
 
-print("\n── Part 2: narration CLI")
+print("\n-- Part 2: narration CLI")
 try:
     import narrate_lab  # noqa: E402  (first: it puts Code/Benchmark on the path)
     import benchmark  # noqa: E402  (the transient retryer and error helpers)
@@ -743,7 +743,7 @@ if HAVE_NARRATION:
 # ══ Part 3: real clients against local mock servers ═══════════════════
 
 if HAVE_NARRATION:
-    print("\n── Part 3: OpenAI and Gemini clients against mock servers")
+    print("\n-- Part 3: OpenAI and Gemini clients against mock servers")
     import base64
     import threading
     from http.server import BaseHTTPRequestHandler, HTTPServer
