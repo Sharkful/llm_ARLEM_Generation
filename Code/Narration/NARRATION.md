@@ -1,8 +1,8 @@
 # Narration generation: goals spec
 
-Status: **agreed** (#91). No code yet. This spec decides what the
-narration tool produces. The CLI (#93), spoken-form pass (#94) and zip layout
-(#92) are built to it.
+Status: **agreed** (#91). This spec decides what the narration tool produces.
+Built so far: the zip layout (#92, `bundle.py`) and the narration CLI (#93,
+`narrate_lab.py` + `tts.py`). The spoken-form pass (#94) is next.
 
 ## Why
 
@@ -231,7 +231,12 @@ one top-level folder with the zip's own name:
 **Per clip:** module and clip index; `clipName`; final audio name (and why it
 changed, if it did); display text; spoken text; characters; audio seconds;
 cost; wall time; served model; status (`generated` / `skipped` / `failed` /
-`silent` / `dropped`); error; and a **source hash**.
+`silent` / `dropped`, plus `shared` for a clip that reuses another clip's file);
+error; and a **source hash**. The run record also keeps a `runs` list (one
+entry per run of the folder) and an overall `status`: `complete`, `incomplete`
+(some clips failed; resume it), `failed` (stopped early) or `invalid` (the zip
+failed validation). Totals cover every clip with audio, so a resumed lab's cost
+stays whole; `cost_usd_this_run` is the part this run paid for.
 
 The source hash covers the spoken text, provider, model, voice, style
 instruction, format and sample rate. A rerun skips a clip when the hash
@@ -246,6 +251,58 @@ source model and level.
 
 Quality is judged by listening checks; there is no automatic transcription
 metric.
+
+## Narration CLI (#93)
+
+```
+python "Code/Narration/narrate_lab.py" <lab_output.json> --provider {openai,gemini} [--dry-run]
+    [--voice NAME] [--topic NAME] [--bundle-name NAME] [--run-group NAME] [--overwrite]
+python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
+```
+
+- `--dry-run` prints the clip plan (names and any name changes) and a character
+  count, and sends nothing. It needs no API key.
+- A run writes the working folder, narrates clip by clip (rewriting the manifest
+  after each), then zips and validates the bundle. Exit 0 means complete and
+  valid; 1 means incomplete, failed or invalid (resume it); 2 means bad input or
+  environment.
+- `--resume` reruns a folder with the settings in its manifest. Only clips whose
+  audio is missing or whose source hash changed are sent; `--overwrite` sends
+  all of them.
+- `--spoken-form` only offers `none` until #94 adds `rules` and `llm`.
+- **Failures:**
+  - A clip that fails is recorded and the run continues. No zip is built until
+    every narrated clip has audio, and a stale zip is removed.
+  - HTTP 401/403/404, or audio in an unexpected format, stops the run at once,
+    since every clip would fail and unusable audio is still billed.
+  - Transient errors (429/5xx/connection) are retried up to 3 attempts with
+    `benchmark._transient_retryer()` and counted. The SDK clients never retry
+    on their own.
+  - A clip longer than the provider's limit (OpenAI 4,096 characters, our Gemini
+    cap 4,000) fails without a request.
+- **OpenAI:** `/v1/audio/speech` with `gpt-4o-mini-tts-2025-12-15`, voice
+  `marin`, the style sentence as `instructions`, `response_format="pcm"` and
+  `stream_format="sse"`. The SSE stream is used because its closing
+  `speech.audio.done` event reports token usage, which the plain audio response
+  doesn't. The served model comes from the `openai-model` response header, when
+  it is sent.
+- **Gemini:** `generateContent` on `gemini-3.8-flash-tts` with audio output,
+  `speech_config.voice_config.voice = "Charon"`, and the style sentence in the
+  part's `speech_metadata.style`, so it is never read aloud. Raw PCM
+  (`audio/L16;rate=24000`) and WAV responses are both accepted. Anything not
+  24 kHz, 16-bit, mono is a format error, never resampled.
+- **To confirm on the first live run.** This session had no API keys and could
+  not reach the provider docs; the request shapes come from the installed SDKs
+  and OpenAI's published API spec.
+  - Gemini 3.8 Flash TTS accepts the flat `voice` field and honours
+    `speech_metadata.style`.
+  - OpenAI sends `openai-model` on speech responses.
+  - The prices in `tracking/pricing.py` (from secondary sources) match the
+    providers' pricing pages.
+
+  The #93 listening check covers the first item. The offline smoke test
+  (`smoke_test.py` parts 2 and 3: a fake service, then mock OpenAI and Gemini
+  servers) covers everything else.
 
 ## Engineering rules (from the repo, not from JW's code)
 

@@ -1,11 +1,10 @@
 """
-Offline smoke test for the lab resources zip (#92): no API keys, no audio
-services.
+Offline smoke test for narration: no API keys, no paid calls.
 
     python "Code/Narration/smoke_test.py"
 
-Builds bundles from committed wave-2 labs with short generated tones in place
-of narration. Checks:
+Part 1 (the lab resources zip, #92) builds bundles from committed wave-2 labs with
+short generated tones in place of narration. Checks:
 - names derived from messy labIds
 - the folder layout, and a zip that is byte-for-byte reproducible
 - unpacking the way the headset does (lab_resources/<zip stem>/, first .json)
@@ -17,6 +16,17 @@ of narration. Checks:
   by everyone (0644; not checked on Windows)
 - every wave-2 json_lab lab bundles and validates
 - the CLI exit codes
+
+Part 2 (the narration CLI, #93) runs narrate_lab.py with a fake voice service:
+clip names (generated, sanitized, deduplicated, shared, dropped), the bundled lab,
+cost from token usage, reruns that skip unchanged clips, voice changes and
+--overwrite, transient retries, failures and --resume, fail-fast errors, the
+length limit, served-model warnings, unsupported inputs and the CLI flags.
+
+Part 3 runs the real OpenAI and Gemini clients against local mock servers and
+checks the requests we send (model, voice, style, PCM/SSE formats, no SDK retries)
+and how responses are parsed (SSE audio and usage; raw PCM and WAV inline audio).
+Part 2 and 3 need the project venv (pip install -r requirements.txt).
 
 Outputs go to a temp dir that is removed afterwards. Exit code 1 on any failure.
 """
@@ -489,6 +499,404 @@ out = io.StringIO()
 with contextlib.redirect_stdout(out):
     code = bundle.main(["names", str(SAMPLE_LAB)])
 check(code == 0 and names.zip_file in out.getvalue(), "names prints the derived zip name")
+
+# ══ Part 2: the narration CLI with a fake voice service (#93) ═════════
+
+print("\n── Part 2: narration CLI")
+try:
+    import narrate_lab  # noqa: E402  (first: it puts Code/Benchmark on the path)
+    import benchmark  # noqa: E402  (the transient retryer and error helpers)
+    import tenacity  # noqa: E402
+    import tts  # noqa: E402
+    HAVE_NARRATION = True
+except ImportError as exc:
+    HAVE_NARRATION = False
+    check(False, f"narration modules import (run in the project venv): {exc}")
+
+if HAVE_NARRATION:
+    benchmark._TRANSIENT_WAIT = tenacity.wait_none()   # no real back-off in tests
+    from narrate_lab import Settings, plan_clips, bundled_lab, run as narrate
+
+    class HTTPError(Exception):
+        def __init__(self, status):
+            super().__init__(f"HTTP {status}")
+            self.status_code = status
+
+    class FakeTTS:
+        """Returns a 0.2 s tone with fixed usage; ``script(n, text)`` may return an
+        exception to raise for call n (0-based)."""
+        def __init__(self, script=None, served="gpt-4o-mini-tts-2025-12-15", usage=(50, 1000)):
+            self.calls, self.script, self.served, self.usage = [], script, served, usage
+
+        def synthesize(self, text):
+            n = len(self.calls)
+            self.calls.append(text)
+            exc = self.script(n, text) if self.script else None
+            if exc:
+                raise exc
+            tin, tout = self.usage if self.usage else (None, None)
+            return tts.Synthesis(PCM, tin, tout, self.served)
+
+    def settings_for(path, voice="marin", provider="openai"):
+        return Settings(input_path=Path(path), provider=provider, voice=voice,
+                        style=tts.STYLE_INSTRUCTION, spoken_form="none", topic=None,
+                        bundle_name=None)
+
+    quiet = lambda *a, **k: None  # noqa: E731
+    COST_PER_CLIP = 50 * 0.60 / 1e6 + 1000 * 12.00 / 1e6   # gpt-4o-mini-tts rates
+
+    def manifest_of(run_dir):
+        return json.loads((Path(run_dir) / "narration_manifest.json").read_text())
+
+    # ── Planning edge cases ──────────────────────────────────────────
+    edge = json.loads(SAMPLE_LAB.read_text(encoding="utf-8"))
+    m1, m2 = edge["modules"][0]["clips"], edge["modules"][1]["clips"]
+    first_name = m1[0]["audioClip"]
+    m1[1]["audioClip"] = None                              # narration, no name -> generated
+    m2[0]["audioClip"] = "  Helix Twist.mp3 "              # unsafe -> sanitized
+    m2[1]["audioClip"] = first_name                        # same name, other words -> deduplicated
+    edge["modules"][2]["clips"][0]["audioClip"] = first_name
+    edge["modules"][2]["clips"][0]["narration"] = m1[0]["narration"]   # same name + words -> shared
+    edge["modules"][2]["clips"][1]["narration"] = "   "    # name, no narration -> dropped
+    edge["modules"][3]["clips"][0].pop("audioClip", None)
+    edge["modules"][3]["clips"][0]["narration"] = None     # neither -> silent
+    edge_path = fresh("edge_input") / "edge_json_lab_L4_x_output.json"
+    edge_path.write_text(json.dumps(edge, indent=2), encoding="utf-8")
+    plans = plan_clips(edge)
+    by_pos = {(p.module, p.clip): p for p in plans}
+    check(by_pos[(1, 2)].name == f"m01_{m1[1]['clipName']}" and by_pos[(1, 2)].name_change == "generated",
+          "a clip with narration but no audioClip gets m{module:02d}_{clipName}")
+    check(by_pos[(2, 1)].name == "Helix_Twist" and by_pos[(2, 1)].name_change == "sanitized",
+          "an unsafe audioClip ('  Helix Twist.mp3 ') is sanitized to Helix_Twist")
+    check(by_pos[(2, 2)].name == f"{first_name}_2" and by_pos[(2, 2)].name_change == "deduplicated",
+          "a reused name with different narration gets a _2 suffix")
+    check(by_pos[(3, 1)].action == "shared" and by_pos[(3, 1)].name == first_name,
+          "a reused name with the same narration shares one file")
+    check(by_pos[(3, 2)].action == "dropped" and by_pos[(3, 2)].name is None,
+          "a name on a clip with blank narration is dropped")
+    check(by_pos[(4, 1)].action == "silent", "a clip with neither is silent")
+    b = bundled_lab(edge, plans)
+    check(b["modules"][0]["clips"][1]["audioClip"] == by_pos[(1, 2)].name
+          and "audioClip" not in b["modules"][2]["clips"][1]
+          and edge["modules"][2]["clips"][1]["audioClip"] is not None,
+          "renames and drops apply to the bundled copy only")
+
+    fake = FakeTTS()
+    edge_run = TMP / "runs" / "edge"
+    code = narrate(settings_for(edge_path), edge_run, provider=fake, log=quiet)
+    em = manifest_of(edge_run)
+    zip_ok = em["bundle"]["validation"] and em["bundle"]["validation"]["ok"]
+    check(code == 0 and em["status"] == "complete" and zip_ok,
+          "the edge-case lab narrates, and its zip validates (dropped names removed)")
+    check(len(fake.calls) == sum(p.action == "narrate" for p in plans),
+          "each name is synthesized once (a shared clip makes no extra request)")
+    check(json.loads(edge_path.read_text()) == edge, "the input lab file is never modified")
+    check(em["counts"]["names"] == {"generated": 1, "sanitized": 1, "deduplicated": 1, "dropped": 1}
+          and em["counts"]["shared"] == 1 and em["counts"]["silent"] == 1,
+          "the manifest counts every name change")
+
+    # ── A real lab, end to end ───────────────────────────────────────
+    real_run = TMP / "runs" / "real"
+    fake = FakeTTS()
+    sample_bytes = SAMPLE_LAB.read_bytes()
+    code = narrate(settings_for(SAMPLE_LAB), real_run, provider=fake, log=quiet)
+    rm = manifest_of(real_run)
+    zip_file = real_run / rm["bundle"]["zip_file"]
+    check(code == 0 and rm["status"] == "complete" and validate_bundle(zip_file).ok,
+          f"a wave-2 lab narrates into a valid {rm['bundle']['zip_file']}")
+    check(rm["counts"]["generated"] == len(refs) == len(fake.calls),
+          f"one request per narrated clip ({len(refs)})")
+    check(abs(rm["totals"]["cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9
+          and rm["totals"]["input_tokens"] == 50 * len(refs),
+          "cost comes from reported token usage at the tracking/pricing.py rates")
+    check(abs(rm["totals"]["audio_seconds"] - 0.2 * len(refs)) < 1e-6, "audio seconds are recorded")
+    check(rm["source"]["lab_name"] == "dna_structure_and_replication" and rm["source"]["level"] == "L4"
+          and rm["source"]["source_model"] == "claude-sonnet-5",
+          "topic, level and source model come from the paired metrics file")
+    check(rm["voice_service"]["model"] == "gpt-4o-mini-tts-2025-12-15"
+          and rm["voice_service"]["served_models"] == ["gpt-4o-mini-tts-2025-12-15"]
+          and rm["voice_service"]["sample_rate"] == 24000 and not rm["warnings"],
+          "the manifest records model, served model and audio format; no warnings")
+    check(rm["provenance"]["git_commit"] and rm["runs"][0]["finished_at"],
+          "provenance (git commit) and run timestamps are recorded")
+    check(SAMPLE_LAB.read_bytes() == sample_bytes, "the committed wave-2 output is untouched")
+    check(fake.calls[0] == lab["modules"][0]["clips"][0]["narration"].strip(),
+          "--spoken-form none sends the narration as written")
+
+    fake = FakeTTS()
+    code = narrate(settings_for(SAMPLE_LAB), real_run, provider=fake, log=quiet)
+    rm2 = manifest_of(real_run)
+    check(code == 0 and not fake.calls and rm2["counts"]["skipped"] == len(refs)
+          and rm2["totals"]["cost_usd_this_run"] == 0
+          and abs(rm2["totals"]["cost_usd"] - rm["totals"]["cost_usd"]) < 1e-9
+          and len(rm2["runs"]) == 2,
+          "a rerun skips every unchanged clip, keeps the lab's cost, and logs a second run")
+    orphan = real_run / rm["bundle"]["folder"] / "Audios" / "no_longer_used.wav"
+    write_wav(orphan, PCM)
+    fake = FakeTTS()
+    narrate(settings_for(SAMPLE_LAB, voice="cedar"), real_run, provider=fake, log=quiet)
+    check(len(fake.calls) == len(refs), "changing the voice regenerates every clip (source hash)")
+    check(not orphan.exists() and any("no_longer_used.wav" in w for w in manifest_of(real_run)["warnings"])
+          and not validate_bundle(real_run / rm["bundle"]["zip_file"]).warnings,
+          "audio for a name no clip uses any more is removed before zipping")
+    fake = FakeTTS()
+    narrate(settings_for(SAMPLE_LAB, voice="cedar"), real_run, overwrite=True, provider=fake, log=quiet)
+    check(len(fake.calls) == len(refs), "--overwrite regenerates every clip")
+
+    # ── Retries, failures, resume ────────────────────────────────────
+    fake = FakeTTS(script=lambda n, t: HTTPError(503) if n == 0 else None)
+    r = TMP / "runs" / "transient"
+    code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    tm = manifest_of(r)
+    check(code == 0 and tm["clips"][0]["transient_retries"] == 1 and tm["totals"]["transient_retries"] == 1,
+          "a 503 is retried and counted as a transient retry")
+
+    target_text = lab["modules"][1]["clips"][0]["narration"].strip()
+    fake = FakeTTS(script=lambda n, t: ValueError("boom") if t == target_text else None)
+    r = TMP / "runs" / "failed"
+    (r).mkdir(parents=True)
+    stale = r / rm["bundle"]["zip_file"]
+    stale.write_bytes(b"stale")
+    code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    fm = manifest_of(r)
+    check(code == 1 and fm["status"] == "incomplete" and fm["counts"]["failed"] == 1
+          and fm["counts"]["generated"] == len(refs) - 1,
+          "one failing clip leaves the run incomplete; the other clips still narrate")
+    check(not stale.exists() and fm["bundle"]["validation"] is None,
+          "an incomplete run builds no zip and removes a stale one")
+    fake = FakeTTS()
+    code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    check(code == 0 and fake.calls == [target_text] and manifest_of(r)["status"] == "complete",
+          "rerunning the same folder narrates only the failed clip and completes")
+
+    for status in (401, 403, 404):
+        fake = FakeTTS(script=lambda n, t, s=status: HTTPError(s))
+        r = TMP / "runs" / f"fatal_{status}"
+        code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+        fm = manifest_of(r)
+        check(code == 1 and len(fake.calls) == 1 and fm["status"] == "failed"
+              and fm["clips"][1]["error"].startswith("not attempted"),
+              f"HTTP {status} stops the run after one request")
+    fake = FakeTTS(script=lambda n, t: tts.TTSFormatError("odd audio"))
+    r = TMP / "runs" / "fatal_format"
+    narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    check(len(fake.calls) == 1 and manifest_of(r)["status"] == "failed",
+          "audio in an unexpected format stops the run (it would be billed for every clip)")
+
+    long_lab = json.loads(SAMPLE_LAB.read_text(encoding="utf-8"))
+    long_lab["modules"][0]["clips"][0]["narration"] = "word " * 1000
+    long_path = fresh("long_input") / "long_json_lab_L4_x_output.json"
+    long_path.write_text(json.dumps(long_lab), encoding="utf-8")
+    fake = FakeTTS()
+    r = TMP / "runs" / "long"
+    narrate(settings_for(long_path), r, provider=fake, log=quiet)
+    lm = manifest_of(r)
+    check(lm["clips"][0]["status"] == "failed" and "never split" in lm["clips"][0]["error"]
+          and len(fake.calls) == len(refs) - 1,
+          "a clip over the provider's character limit fails without a request")
+
+    fake = FakeTTS(served="gpt-4o-tts-other")
+    r = TMP / "runs" / "served"
+    narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    check(any("served by gpt-4o-tts-other" in w for w in manifest_of(r)["warnings"]),
+          "a different served model is a warning")
+    fake = FakeTTS(usage=None)
+    r = TMP / "runs" / "nousage"
+    narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    nm = manifest_of(r)
+    check(nm["clips"][0]["cost_usd"] is None and "no token usage" in " ".join(nm["clips"][0]["warnings"]),
+          "missing usage gives no cost and a warning, not a guess")
+
+    # ── Unsupported inputs and CLI flags ─────────────────────────────
+    l1 = next(iter(sorted(glob(str(OUTPUTS / "*json_lab_L1_*_output.json")))), None)
+    try:
+        narrate_lab.load_lab(Path(l1))
+        ok = False
+    except narrate_lab.InputError as exc:
+        ok = "not a full json_lab Lab" in str(exc)
+    check(l1 is not None and ok, "an L1 outline is rejected with a clear message")
+
+    def cli(*argv):
+        out, errs = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(errs):
+            code = narrate_lab.main(list(argv))
+        return code, out.getvalue() + errs.getvalue()
+
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--dry-run")
+    check(code == 0 and "No requests sent" in text and "gemini-3.8-flash-tts / Charon" in text,
+          "--dry-run prints the plan with the frozen Gemini defaults and sends nothing")
+    code, text = cli(str(l1), "--provider", "openai", "--dry-run")
+    check(code == 2 and "not a full json_lab Lab" in text, "an unsupported input exits 2")
+    code, text = cli("--resume", str(real_run), "--provider", "gemini")
+    check(code == 2 and "--provider" in text, "--resume refuses settings that the manifest owns")
+    saved = {k: os.environ.pop(k, None) for k in ("OPENAI_API_KEY",)}
+    try:
+        import dotenv
+        real_load = dotenv.load_dotenv
+        dotenv.load_dotenv = lambda *a, **k: False      # ignore any local .env here
+        code, text = cli(str(SAMPLE_LAB), "--provider", "openai")
+    finally:
+        dotenv.load_dotenv = real_load
+        os.environ.update({k: v for k, v in saved.items() if v is not None})
+    check(code == 2 and "OPENAI_API_KEY" in text, "a missing API key exits 2 before any request")
+
+# ══ Part 3: real clients against local mock servers ═══════════════════
+
+if HAVE_NARRATION:
+    print("\n── Part 3: OpenAI and Gemini clients against mock servers")
+    import base64
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class Mock:
+        """A local HTTP server: ``handler(path, body_json) -> (status, headers, bytes)``."""
+        def __init__(self, handler):
+            self.requests = []
+            mock = self
+
+            class H(BaseHTTPRequestHandler):
+                def do_POST(self):
+                    n = int(self.headers.get("content-length") or 0)
+                    body = json.loads(self.rfile.read(n) or b"{}")
+                    mock.requests.append((self.path, dict(self.headers), body))
+                    status, headers, data = handler(self.path, body)
+                    self.send_response(status)
+                    for k, v in headers.items():
+                        self.send_header(k, v)
+                    self.send_header("content-length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+
+                def log_message(self, *a):
+                    pass
+
+            self.server = HTTPServer(("127.0.0.1", 0), H)
+            threading.Thread(target=self.server.serve_forever, daemon=True).start()
+            self.url = f"http://127.0.0.1:{self.server.server_port}"
+
+        def close(self):
+            self.server.shutdown()
+
+    half = len(PCM) // 2 // 2 * 2
+
+    def sse(*events):
+        return b"".join(b"data: " + json.dumps(e).encode() + b"\n\n" for e in events)
+
+    openai_state = {"fail": []}
+
+    def openai_handler(path, body):
+        if openai_state["fail"]:
+            code = openai_state["fail"].pop(0)
+            return code, {"content-type": "application/json"}, json.dumps(
+                {"error": {"message": f"mock {code}", "type": "x"}}).encode()
+        return 200, {"content-type": "text/event-stream", "openai-model": body.get("model", "")}, sse(
+            {"type": "speech.audio.delta", "audio": base64.b64encode(PCM[:half]).decode()},
+            {"type": "speech.audio.delta", "audio": base64.b64encode(PCM[half:]).decode()},
+            {"type": "speech.audio.done", "usage": {"input_tokens": 14, "output_tokens": 101,
+                                                    "total_tokens": 115}},
+        )
+
+    om = Mock(openai_handler)
+    try:
+        prov = tts.make_provider("openai", api_key="sk-test", base_url=om.url + "/v1")
+        syn = prov.synthesize("Hello there.")
+        path, headers, req = om.requests[-1]
+        check(path == "/v1/audio/speech" and req == {
+                  "model": "gpt-4o-mini-tts-2025-12-15", "voice": "marin", "input": "Hello there.",
+                  "instructions": tts.STYLE_INSTRUCTION, "response_format": "pcm",
+                  "stream_format": "sse"},
+              "OpenAI request: pinned snapshot, marin, style as instructions, PCM over SSE")
+        check(syn.pcm == PCM and (syn.input_tokens, syn.output_tokens) == (14, 101)
+              and syn.served_model == "gpt-4o-mini-tts-2025-12-15",
+              "OpenAI SSE: audio deltas joined, usage from speech.audio.done, served model from the header")
+
+        openai_state["fail"] = [503]
+        r = TMP / "runs" / "openai_mock"
+        n_before = len(om.requests)
+        code = narrate(settings_for(SAMPLE_LAB), r, provider=prov, log=quiet)
+        om_m = manifest_of(r)
+        check(code == 0 and om_m["status"] == "complete" and om_m["totals"]["transient_retries"] == 1
+              and len(om.requests) - n_before == len(refs) + 1,
+              "end to end over HTTP: a 503 is retried once by our retryer (the SDK makes no retries)")
+        check(abs(om_m["totals"]["cost_usd"] - len(refs) * (14 * 0.60 + 101 * 12.00) / 1e6) < 1e-9,
+              "OpenAI cost from the reported usage")
+
+        openai_state["fail"] = [401]
+        r = TMP / "runs" / "openai_401"
+        n_before = len(om.requests)
+        code = narrate(settings_for(SAMPLE_LAB), r, provider=prov, log=quiet)
+        check(code == 1 and len(om.requests) - n_before == 1 and manifest_of(r)["status"] == "failed",
+              "an OpenAI 401 stops the run after one request")
+    finally:
+        om.close()
+
+    gem_state = {"mime": "audio/L16;codec=pcm;rate=24000", "data": PCM, "fail": []}
+
+    def gemini_handler(path, body):
+        if gem_state["fail"]:
+            code = gem_state["fail"].pop(0)
+            return code, {"content-type": "application/json"}, json.dumps(
+                {"error": {"code": code, "message": f"mock {code}", "status": "X"}}).encode()
+        return 200, {"content-type": "application/json"}, json.dumps({
+            "candidates": [{"content": {"role": "model", "parts": [{"inlineData": {
+                "mimeType": gem_state["mime"], "data": base64.b64encode(gem_state["data"]).decode()}}]},
+                "finishReason": "STOP"}],
+            "usageMetadata": {"promptTokenCount": 12, "candidatesTokenCount": 125, "totalTokenCount": 137},
+            "modelVersion": "gemini-3.8-flash-tts",
+        }).encode()
+
+    gm = Mock(gemini_handler)
+    try:
+        prov = tts.make_provider("gemini", api_key="g-test", base_url=gm.url)
+        syn = prov.synthesize("Hello there.")
+        path, headers, req = gm.requests[-1]
+        part = req["contents"][0]["parts"][0]
+        gen = req.get("generationConfig", {})
+        check(path.endswith("/models/gemini-3.8-flash-tts:generateContent")
+              and part == {"text": "Hello there.", "speechMetadata": {"style": tts.STYLE_INSTRUCTION}}
+              and gen.get("responseModalities") == ["AUDIO"]
+              # google-genai sends voice_config in snake_case; Google's JSON APIs accept both.
+              and (gen.get("speechConfig") or {}).get("voiceConfig",
+                   (gen.get("speechConfig") or {}).get("voice_config")) == {"voice": "Charon"},
+              "Gemini request: gemini-3.8-flash-tts, Charon, style in speechMetadata (not in the text)")
+        check(syn.pcm == PCM and (syn.input_tokens, syn.output_tokens) == (12, 125)
+              and syn.served_model == "gemini-3.8-flash-tts",
+              "Gemini raw PCM: audio, usage and model version parsed")
+
+        wav_buf = io.BytesIO()
+        with wave.open(wav_buf, "wb") as w:
+            w.setnchannels(1); w.setsampwidth(2); w.setframerate(24000); w.writeframes(PCM)
+        gem_state.update(mime="audio/wav", data=wav_buf.getvalue())
+        check(prov.synthesize("x").pcm == PCM, "Gemini WAV inline audio: PCM extracted from the WAV")
+        gem_state.update(mime="audio/L16;codec=pcm;rate=16000", data=PCM)
+        try:
+            prov.synthesize("x")
+            ok = False
+        except tts.TTSFormatError:
+            ok = True
+        check(ok, "Gemini audio at another sample rate is a format error (never resampled)")
+        gem_state.update(mime="audio/L16;codec=pcm;rate=24000", data=PCM)
+
+        gem_state["fail"] = [500]
+        r = TMP / "runs" / "gemini_mock"
+        n_before = len(gm.requests)
+        code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
+                       provider=prov, log=quiet)
+        gmm = manifest_of(r)
+        check(code == 0 and gmm["status"] == "complete" and gmm["totals"]["transient_retries"] == 1
+              and len(gm.requests) - n_before == len(refs) + 1
+              and validate_bundle(r / gmm["bundle"]["zip_file"]).ok,
+              "Gemini end to end: a 500 is retried once (no SDK retries) and the zip validates")
+        check(abs(gmm["totals"]["cost_usd"] - len(refs) * (12 * 1.00 + 125 * 18.00) / 1e6) < 1e-9,
+              "Gemini cost from the reported usage at the gemini-3.8-flash-tts rates")
+        gem_state["fail"] = [403]
+        r = TMP / "runs" / "gemini_403"
+        n_before = len(gm.requests)
+        code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
+                       provider=prov, log=quiet)
+        check(code == 1 and len(gm.requests) - n_before == 1, "a Gemini 403 stops the run after one request")
+    finally:
+        gm.close()
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("\nALL PASSED" if not FAILED else "\nSOME FAILED")
