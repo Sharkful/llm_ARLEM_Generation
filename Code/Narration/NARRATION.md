@@ -69,7 +69,7 @@ JSON that goes into the zip; **the input file is never modified.**
 | Case | Seen in wave 2 | Handling |
 |---|---|---|
 | `narration` and `audioClip` both set | 95% of clips | Narrate as `<audioClip>.<ext>`. |
-| `narration` set, `audioClip` empty | Gemini 3.1 Pro: only 20–49% of clips named | Generate the name `m{m:02d}_{clipName}` (e.g. `m03_clip4`). `clipName` repeats across modules, hence the module number. Add `_2`, `_3`… on collision. Write the name into the bundled lab only, and mark it `generated_name` in the manifest. |
+| `narration` set, `audioClip` empty | Gemini 3.1 Pro: only 20–49% of clips named | Generate the name from `clipName`, used alone when no other clip in the lab has that `clipName` and no clip uses it as an audio name, otherwise prefixed `m{m:02d}_` (e.g. `m03_clip4`; `clipName` often repeats across modules). Add `_2`, `_3`… on collision. Write the name into the bundled lab only, and record it as `name_change: generated` in the manifest. |
 | `audioClip` set, `narration` empty or blank | GPT-5.4 nano L4: 25% of clips | No audio. Remove `audioClip` from the bundled lab so the headset doesn't ask for a missing file. Report it as `dropped_name`. |
 | Neither set | rare | Nothing to do; counted as `silent`. |
 | Duplicate `audioClip` within a lab | 0 labs | Same narration: one shared file. Different narration: keep the first and rename the later ones with `_2`, `_3`… in the bundled lab. Reported. |
@@ -230,9 +230,13 @@ one top-level folder with the zip's own name:
 
 **Per clip:** module and clip index; `clipName`; final audio name (and why it
 changed, if it did); display text; spoken text; characters; audio seconds;
-cost; wall time; served model; status (`generated` / `skipped` / `failed` /
-`silent` / `dropped`, plus `shared` for a clip that reuses another clip's file);
-error; and a **source hash**. The run record also keeps a `runs` list (one
+cost; wall time; served model; the provider's request id (to match billing
+records); status (`generated` / `skipped` / `failed` / `silent` / `dropped`,
+plus `shared` for a clip that reuses another clip's file); `transient_errors`,
+one entry per retried attempt with its HTTP status, exception type, a short
+readable `reason` (e.g. "the provider was temporarily unavailable (HTTP 503)")
+and the trimmed message; `error` and `error_reason` for a clip that failed; and
+a **source hash**. The run record also keeps a `runs` list (one
 entry per run of the folder) and an overall `status`: `complete`, `incomplete`
 (some clips failed; resume it), `failed` (stopped early) or `invalid` (the zip
 failed validation). Totals cover every clip with audio, so a resumed lab's cost
@@ -273,8 +277,9 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
 - **Failures:**
   - A clip that fails is recorded and the run continues. No zip is built until
     every narrated clip has audio, and a stale zip is removed.
-  - HTTP 401/403/404, or audio in an unexpected format, stops the run at once,
-    since every clip would fail and unusable audio is still billed.
+  - HTTP 401/402/403/404 (key, billing such as used-up prepaid credits,
+    permission, unknown model), or audio in an unexpected format, stops the run
+    at once, since every clip would fail and unusable audio is still billed.
   - Transient errors (429/5xx/connection) are retried up to 3 attempts with
     `benchmark._transient_retryer()` and counted. The SDK clients never retry
     on their own.
@@ -284,23 +289,24 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
   `marin`, the style sentence as `instructions`, `response_format="pcm"` and
   `stream_format="sse"`. The SSE stream is used because its closing
   `speech.audio.done` event reports token usage, which the plain audio response
-  doesn't. The served model comes from the `openai-model` response header, when
-  it is sent.
+  doesn't. The speech endpoint doesn't say which model answered: the
+  2026-10-27 live run got no `openai-model` header, so OpenAI's served model is
+  recorded as unknown. Each clip records the request id (`x-request-id`)
+  instead.
 - **Gemini:** `generateContent` on `gemini-3.8-flash-tts` with audio output,
   `speech_config.voice_config.voice = "Charon"`, and the style sentence in the
   part's `speech_metadata.style`, so it is never read aloud. Raw PCM
   (`audio/L16;rate=24000`) and WAV responses are both accepted. Anything not
   24 kHz, 16-bit, mono is a format error, never resampled.
-- **To confirm on the first live run.** This session had no API keys and could
-  not reach the provider docs; the request shapes come from the installed SDKs
-  and OpenAI's published API spec.
-  - Gemini 3.8 Flash TTS accepts the flat `voice` field and honours
-    `speech_metadata.style`.
-  - OpenAI sends `openai-model` on speech responses.
-  - The prices in `tracking/pricing.py` (from secondary sources) match the
-    providers' pricing pages.
-
-  The #93 listening check covers the first item. The offline smoke test
+- **Live run, 2026-10-27** (`Artifacts/Data/Narration/live-check/`):
+  - Both providers narrated the DNA lab into valid zips, and Gemini 3.8 Flash
+    TTS accepted the flat `voice` field and `speech_metadata.style`.
+  - Gemini returned 25.0 audio tokens per second of audio and OpenAI 24.6.
+  - Still open: whether Gemini follows the style without ever reading it aloud
+    (the #93 listening check), and whether the prices in `tracking/pricing.py`
+    match what was billed (#101).
+  - Some OpenAI requests stalled for 2–4 minutes before succeeding; a
+    per-request time limit is still to be decided. The offline smoke test
   (`smoke_test.py` parts 2 and 3: a fake service, then mock OpenAI and Gemini
   servers) covers everything else.
 

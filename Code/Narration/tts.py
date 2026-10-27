@@ -94,6 +94,7 @@ class Synthesis:
     input_tokens: int | None      # text tokens billed (None: not reported)
     output_tokens: int | None     # audio tokens billed (None: not reported)
     served_model: str | None      # model the provider says answered (None: not reported)
+    request_id: str | None = None # the provider's id for the request, to match billing records
 
     @property
     def seconds(self) -> float:
@@ -184,9 +185,11 @@ class OpenAITTS:
             stream_format="sse",
         )
         pcm, tokens_in, tokens_out = parse_openai_sse(raw.content)
-        # The speech endpoint has no model field in its body; use the header when sent.
+        # The speech endpoint reports no model (no body field, and no openai-model header
+        # in the 2026-10-27 live run); keep the header in case it is ever sent.
         served = raw.headers.get("openai-model") or None
-        return Synthesis(pcm, tokens_in, tokens_out, served)
+        request_id = raw.request_id or raw.headers.get("x-request-id") or None
+        return Synthesis(pcm, tokens_in, tokens_out, served, request_id)
 
 
 # ── Gemini ────────────────────────────────────────────────────────────
@@ -240,6 +243,7 @@ class GeminiTTS:
             getattr(um, "prompt_token_count", None) if um else None,
             getattr(um, "candidates_token_count", None) if um else None,
             served,
+            getattr(resp, "response_id", None) or None,
         )
 
 

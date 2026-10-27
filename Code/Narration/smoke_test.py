@@ -560,12 +560,19 @@ if HAVE_NARRATION:
     edge["modules"][2]["clips"][1]["narration"] = "   "    # name, no narration -> dropped
     edge["modules"][3]["clips"][0].pop("audioClip", None)
     edge["modules"][3]["clips"][0]["narration"] = None     # neither -> silent
+    for i in (4, 5):                                       # a clipName used twice, no names
+        edge["modules"][i]["clips"][0].update(clipName="recap", audioClip=None)
+    edge["modules"][6]["clips"][0].update(clipName=first_name, audioClip=None)  # = another's name
     edge_path = fresh("edge_input") / "edge_json_lab_L4_x_output.json"
     edge_path.write_text(json.dumps(edge, indent=2), encoding="utf-8")
     plans = plan_clips(edge)
     by_pos = {(p.module, p.clip): p for p in plans}
-    check(by_pos[(1, 2)].name == f"m01_{m1[1]['clipName']}" and by_pos[(1, 2)].name_change == "generated",
-          "a clip with narration but no audioClip gets m{module:02d}_{clipName}")
+    check(by_pos[(1, 2)].name == m1[1]["clipName"] and by_pos[(1, 2)].name_change == "generated",
+          "a missing name is the clipName alone when no other clip uses that clipName")
+    check(by_pos[(5, 1)].name == "m05_recap" and by_pos[(6, 1)].name == "m06_recap",
+          "a clipName used by two clips gets the module prefix (m05_recap, m06_recap)")
+    check(by_pos[(7, 1)].name == f"m07_{first_name}",
+          "a clipName equal to another clip's audio name gets the module prefix")
     check(by_pos[(2, 1)].name == "Helix_Twist" and by_pos[(2, 1)].name_change == "sanitized",
           "an unsafe audioClip ('  Helix Twist.mp3 ') is sanitized to Helix_Twist")
     check(by_pos[(2, 2)].name == f"{first_name}_2" and by_pos[(2, 2)].name_change == "deduplicated",
@@ -591,7 +598,7 @@ if HAVE_NARRATION:
     check(len(fake.calls) == sum(p.action == "narrate" for p in plans),
           "each name is synthesized once (a shared clip makes no extra request)")
     check(json.loads(edge_path.read_text()) == edge, "the input lab file is never modified")
-    check(em["counts"]["names"] == {"generated": 1, "sanitized": 1, "deduplicated": 1, "dropped": 1}
+    check(em["counts"]["names"] == {"generated": 4, "sanitized": 1, "deduplicated": 1, "dropped": 1}
           and em["counts"]["shared"] == 1 and em["counts"]["silent"] == 1,
           "the manifest counts every name change")
 
@@ -650,6 +657,23 @@ if HAVE_NARRATION:
     tm = manifest_of(r)
     check(code == 0 and tm["clips"][0]["transient_retries"] == 1 and tm["totals"]["transient_retries"] == 1,
           "a 503 is retried and counted as a transient retry")
+    te = tm["clips"][0]["transient_errors"]
+    check(len(te) == 1 and te[0]["status"] == 503 and te[0]["type"] == "HTTPError"
+          and te[0]["reason"] == "the provider was temporarily unavailable (HTTP 503)",
+          "each retried error is recorded with its status, type and a readable reason")
+    fake = FakeTTS(script=lambda n, t: HTTPError(429) if n < 2 else None)
+    r = TMP / "runs" / "transient_twice"
+    narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    te = manifest_of(r)["clips"][0]["transient_errors"]
+    check([e["reason"] for e in te] == ["rate limit or quota reached: too many requests for now (HTTP 429)"] * 2,
+          "two retries on one clip record both reasons")
+    fake = FakeTTS(script=lambda n, t: HTTPError(503))
+    r = TMP / "runs" / "transient_exhausted"
+    narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    c0 = manifest_of(r)["clips"][0]
+    check(c0["status"] == "failed" and c0["transient_retries"] == 2 and len(c0["transient_errors"]) == 2
+          and c0["error_reason"] == "the provider was temporarily unavailable (HTTP 503)",
+          "when retries run out, the retried errors and the final reason are both recorded")
 
     target_text = lab["modules"][1]["clips"][0]["narration"].strip()
     fake = FakeTTS(script=lambda n, t: ValueError("boom") if t == target_text else None)
@@ -662,6 +686,9 @@ if HAVE_NARRATION:
     check(code == 1 and fm["status"] == "incomplete" and fm["counts"]["failed"] == 1
           and fm["counts"]["generated"] == len(refs) - 1,
           "one failing clip leaves the run incomplete; the other clips still narrate")
+    failed_clip = next(c for c in fm["clips"] if c["status"] == "failed")
+    check(failed_clip["error_reason"] == "unexpected error" and failed_clip["error"] == "ValueError: boom",
+          "a failed clip records the error and a reason")
     check(not stale.exists() and fm["bundle"]["validation"] is None,
           "an incomplete run builds no zip and removes a stale one")
     fake = FakeTTS()
@@ -669,7 +696,7 @@ if HAVE_NARRATION:
     check(code == 0 and fake.calls == [target_text] and manifest_of(r)["status"] == "complete",
           "rerunning the same folder narrates only the failed clip and completes")
 
-    for status in (401, 403, 404):
+    for status in (401, 402, 403, 404):
         fake = FakeTTS(script=lambda n, t, s=status: HTTPError(s))
         r = TMP / "runs" / f"fatal_{status}"
         code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
@@ -792,7 +819,8 @@ if HAVE_NARRATION:
             code = openai_state["fail"].pop(0)
             return code, {"content-type": "application/json"}, json.dumps(
                 {"error": {"message": f"mock {code}", "type": "x"}}).encode()
-        return 200, {"content-type": "text/event-stream", "openai-model": body.get("model", "")}, sse(
+        return 200, {"content-type": "text/event-stream", "openai-model": body.get("model", ""),
+                     "x-request-id": "req_mock123"}, sse(
             {"type": "speech.audio.delta", "audio": base64.b64encode(PCM[:half]).decode()},
             {"type": "speech.audio.delta", "audio": base64.b64encode(PCM[half:]).decode()},
             {"type": "speech.audio.done", "usage": {"input_tokens": 14, "output_tokens": 101,
@@ -810,8 +838,8 @@ if HAVE_NARRATION:
                   "stream_format": "sse"},
               "OpenAI request: pinned snapshot, marin, style as instructions, PCM over SSE")
         check(syn.pcm == PCM and (syn.input_tokens, syn.output_tokens) == (14, 101)
-              and syn.served_model == "gpt-4o-mini-tts-2025-12-15",
-              "OpenAI SSE: audio deltas joined, usage from speech.audio.done, served model from the header")
+              and syn.served_model == "gpt-4o-mini-tts-2025-12-15" and syn.request_id == "req_mock123",
+              "OpenAI SSE: audio deltas joined, usage from speech.audio.done, served model and request id from headers")
 
         openai_state["fail"] = [503]
         r = TMP / "runs" / "openai_mock"
@@ -846,6 +874,7 @@ if HAVE_NARRATION:
                 "finishReason": "STOP"}],
             "usageMetadata": {"promptTokenCount": 12, "candidatesTokenCount": 125, "totalTokenCount": 137},
             "modelVersion": "gemini-3.8-flash-tts",
+            "responseId": "resp_mock456",
         }).encode()
 
     import dataclasses
@@ -880,8 +909,8 @@ if HAVE_NARRATION:
                    (gen.get("speechConfig") or {}).get("voice_config")) == {"voice": "Charon"},
               "Gemini request: gemini-3.8-flash-tts, Charon, style in speechMetadata (not in the text)")
         check(syn.pcm == PCM and (syn.input_tokens, syn.output_tokens) == (12, 125)
-              and syn.served_model == "gemini-3.8-flash-tts",
-              "Gemini raw PCM: audio, usage and model version parsed")
+              and syn.served_model == "gemini-3.8-flash-tts" and syn.request_id == "resp_mock456",
+              "Gemini raw PCM: audio, usage, model version and response id parsed")
 
         wav_buf = io.BytesIO()
         with wave.open(wav_buf, "wb") as w:

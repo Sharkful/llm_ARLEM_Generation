@@ -10,10 +10,11 @@ folder and bundled into the lab resources zip (bundle.py, #92).
 Spec: NARRATION.md. In short:
 - The input is a complete json_lab ``Lab`` (one-shot or hierarchical output). It is
   never modified; renames and drops apply to the bundled copy only.
-- Each clip with narration becomes ``Audios/<audioClip>.wav``. Missing names are
-  generated (``m{module:02d}_{clipName}``), unsafe ones sanitized, clashing ones
-  suffixed, and a name on a clip with no narration is dropped. Every change is
-  recorded.
+- Each clip with narration becomes ``Audios/<audioClip>.wav``. A missing name is
+  generated from the clip's ``clipName`` (prefixed ``m{module:02d}_`` only when that
+  clipName repeats in the lab or is another clip's audio name), unsafe names are
+  sanitized, clashing ones suffixed, and a name on a clip with no narration is
+  dropped. Every change is recorded.
 - One request per clip, one voice and one style for the lab (the frozen defaults in
   tts.py). A clip longer than the provider's limit fails; it is never split.
 - The manifest is rewritten after every clip. ``--resume`` reruns only clips whose
@@ -39,6 +40,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -58,7 +60,7 @@ MANIFEST_SCHEMA = "narration_manifest/1"
 AUDIO_FORMAT = {"format": "wav", "sample_rate": bundle.WAV_SAMPLE_RATE,
                 "sample_width_bits": 8 * bundle.WAV_SAMPLE_WIDTH, "channels": bundle.WAV_CHANNELS}
 SPOKEN_FORM_MODES = ("none",)   # "rules" and "llm" arrive with #94
-FATAL_STATUS = {401, 403, 404}  # auth, permission, unknown model: every clip would fail
+FATAL_STATUS = {401, 402, 403, 404}  # key, billing, permission, unknown model: every clip would fail
 SHORT_TEXT, LONG_TEXT = 20, 1500  # characters; per-clip warnings only
 
 _AUDIO_EXT = re.compile(r"\.(wav|mp3|ogg|m4a|aac|flac|opus)$", re.IGNORECASE)
@@ -95,6 +97,12 @@ def plan_clips(lab: dict) -> list[ClipPlan]:
     "Clip handling"). The first clip to use a name keeps it."""
     plans: list[ClipPlan] = []
     text_of: dict[str, str] = {}   # audio name -> the narration it holds
+    clip_name_counts = Counter(
+        _safe(str(clip.get("clipName") or f"clip{c}"))
+        for module in lab["modules"] for c, clip in enumerate(module["clips"], 1))
+    explicit_names = {
+        _safe(clip["audioClip"]) for module in lab["modules"] for clip in module["clips"]
+        if isinstance(clip.get("audioClip"), str) and clip["audioClip"].strip()}
 
     def unique(base: str) -> str:
         n = 2
@@ -122,7 +130,11 @@ def plan_clips(lab: dict) -> list[ClipPlan]:
             if raw and name != raw:
                 change = "sanitized"
             if not name:
-                name = f"m{m:02d}_{_safe(clip_name) or f'clip{c}'}"
+                # The clipName alone when it names one clip in the lab and isn't another
+                # clip's audio name; otherwise prefixed with the module.
+                base = _safe(clip_name) or f"clip{c}"
+                plain = clip_name_counts[base] == 1 and base not in explicit_names
+                name = base if plain else f"m{m:02d}_{base}"
                 change = "generated"
             action = "narrate"
             if name in text_of:
@@ -236,7 +248,8 @@ def provenance() -> dict:
             packages[pkg] = importlib.metadata.version(pkg)
         except importlib.metadata.PackageNotFoundError:
             packages[pkg] = None
-    status = git("status", "--porcelain")
+    # Changes to tracked files only: local untracked files don't change what ran.
+    status = git("status", "--porcelain", "--untracked-files=no")
     return {"git_commit": git("rev-parse", "HEAD") or None,
             "git_dirty": bool(status) if status is not None else None,
             "packages": packages, "python": sys.version.split()[0]}
@@ -282,6 +295,46 @@ def _bundle_names(lab: dict, settings: Settings) -> bundle.BundleNames:
 
 def _served_ok(served: str | None, model: str) -> bool:
     return served is None or served == model or served.startswith(model + "-")
+
+
+_STATUS_REASONS = {
+    400: "the provider rejected the request as invalid",
+    401: "the API key was rejected",
+    402: "billing: prepaid credits are used up or payment is required",
+    403: "permission denied for this key or model",
+    404: "the model or endpoint was not found",
+    408: "the provider timed out waiting for the request",
+    429: "rate limit or quota reached: too many requests for now",
+    500: "the provider had an internal error",
+    502: "a gateway between us and the provider failed",
+    503: "the provider was temporarily unavailable",
+    504: "the provider took too long to answer",
+    529: "the provider was overloaded",
+}
+_NAME_REASONS = (
+    ("Timeout", "the request timed out"),
+    ("RemoteProtocol", "the provider closed the connection mid-response"),
+    ("Connect", "could not connect to the provider"),
+)
+
+
+def describe_error(exc: BaseException) -> dict:
+    """An error as recorded in the manifest: HTTP status (if any), exception type, a
+    short human-readable reason, and the message, trimmed."""
+    from benchmark import exception_chain, status_of
+    chain = list(exception_chain(exc))
+    status = next((s for e in chain if (s := status_of(e)) is not None), None)
+    if isinstance(exc, tts.TTSFormatError):
+        reason = "the provider's audio was not in the format we asked for"
+    elif status in _STATUS_REASONS:
+        reason = _STATUS_REASONS[status]
+    else:
+        reason = next((r for e in chain for key, r in _NAME_REASONS if key in type(e).__name__),
+                      "unexpected error")
+    if status is not None:
+        reason += f" (HTTP {status})"
+    return {"status": status, "type": type(exc).__name__, "reason": reason,
+            "detail": " ".join(str(exc).split())[:300]}
 
 
 def _is_fatal(exc: BaseException) -> bool:
@@ -389,7 +442,9 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
         elif not overwrite and prev and prev.get("source_hash") == h and wav.is_file():
             rec.update({k: prev.get(k) for k in ("audio_seconds", "input_tokens", "output_tokens",
                                                   "cost_usd", "wall_seconds", "served_model",
-                                                  "transient_retries", "generated_at")})
+                                                  "request_id", "transient_retries",
+                                                  "transient_errors", "generated_at")})
+            rec["transient_errors"] = rec["transient_errors"] or []
             rec["status"] = "skipped"
             log(f"  skip  {p.name} (unchanged)")
         elif len(text) > spec.max_chars:
@@ -399,9 +454,18 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
             log(f"  FAIL  {p.name}: too long ({len(text)} characters)")
         else:
             retryer = _transient_retryer()
+            errors: list[BaseException] = []   # every failed attempt, in order
+
+            def attempt(text=text, errors=errors):
+                try:
+                    return provider.synthesize(text)
+                except Exception as exc:
+                    errors.append(exc)
+                    raise
+
             t0 = time.monotonic()
             try:
-                syn = retryer(provider.synthesize, text)
+                syn = retryer(attempt)
                 bundle.write_wav(wav, syn.pcm)
                 cost = None
                 if syn.input_tokens is not None and syn.output_tokens is not None:
@@ -410,7 +474,8 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
                         total_tokens=syn.input_tokens + syn.output_tokens))
                 rec.update(status="generated", audio_seconds=round(syn.seconds, 3),
                            input_tokens=syn.input_tokens, output_tokens=syn.output_tokens,
-                           cost_usd=cost, served_model=syn.served_model, generated_at=_now())
+                           cost_usd=cost, served_model=syn.served_model,
+                           request_id=syn.request_id, generated_at=_now())
                 if syn.seconds == 0:
                     rec["warnings"].append("the provider returned no audio")
                 if cost is None:
@@ -418,15 +483,22 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
                 log(f"  ok    {p.name} ({syn.seconds:.1f} s audio"
                     + (f", ${cost:.4f}" if cost is not None else "") + ")")
             except Exception as exc:  # noqa: BLE001 - recorded per clip, run continues
-                rec.update(status="failed", error=f"{type(exc).__name__}: {exc}")
-                log(f"  FAIL  {p.name}: {type(exc).__name__}: {exc}")
+                why = describe_error(exc)
+                rec.update(status="failed", error=f"{type(exc).__name__}: {exc}",
+                           error_reason=why["reason"])
+                log(f"  FAIL  {p.name}: {why['reason']} - {why['detail'][:160]}")
                 if _is_fatal(exc):
                     fatal = True
                     manifest["warnings"].append(
-                        f"stopped at {p.name}: {type(exc).__name__} means every clip would fail "
-                        "(authentication, permission, unknown model or unusable audio)")
+                        f"stopped at {p.name}: {why['reason']}; every other clip would fail "
+                        "the same way")
             rec["wall_seconds"] = round(time.monotonic() - t0, 3)
-            rec["transient_retries"] = (retryer.statistics.get("attempt_number", 1) or 1) - 1
+            # Retried attempts: all failed ones, except the last when the clip failed.
+            retried = errors if rec["status"] == "generated" else errors[:-1]
+            rec["transient_retries"] = len(retried)
+            rec["transient_errors"] = [describe_error(e) for e in retried]
+            for e in rec["transient_errors"]:
+                log(f"        retried {p.name}: {e['reason']}")
         save()
 
     served = sorted({r["served_model"] for r in records if r.get("served_model")})
@@ -479,8 +551,9 @@ def _plan_record(p: ClipPlan) -> dict:
         "status": {"silent": "silent", "dropped": "dropped"}.get(p.action, "pending"),
         "audio_seconds": None, "input_tokens": None, "output_tokens": None,
         "cost_usd": None, "wall_seconds": None, "served_model": None,
-        "transient_retries": None, "generated_at": None, "source_hash": None,
-        "error": None, "warnings": [],
+        "request_id": None, "transient_retries": None, "transient_errors": [],
+        "generated_at": None, "source_hash": None,
+        "error": None, "error_reason": None, "warnings": [],
     }
 
 

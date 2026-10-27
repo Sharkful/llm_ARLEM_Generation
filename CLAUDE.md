@@ -303,14 +303,15 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   Names come from `labId` (`bundle_names()`; `--bundle-name` overrides). It also builds
   reproducible zips (`zip_bundle()`) and validates zips or folders
   (`validate_bundle()`, `bundle.py validate`).
-- **`narrate_lab.py`** (#93): the CLI. It plans clip names (generated
-  `m{module:02d}_{clipName}`, sanitized, deduplicated, shared, dropped; applied to the
-  bundled copy only), synthesizes one request per clip, and rewrites
-  `narration_manifest.json` after every clip. `--resume` skips clips whose source hash
-  matches. It zips and validates only when every clip has audio. Transient errors are
-  retried with `benchmark._transient_retryer()`; 401/403/404 and unusable audio stop
-  the run. Cost comes from reported tokens via `tracking/pricing.py` (TTS entries are
-  from secondary sources: re-check before paper runs).
+- **`narrate_lab.py`** (#93): the CLI. It plans clip names (generated from `clipName`,
+  prefixed `m{module:02d}_` only when it repeats; sanitized, deduplicated, shared,
+  dropped; applied to the bundled copy only), synthesizes one request per clip, and
+  rewrites `narration_manifest.json` after every clip. `--resume` skips clips whose
+  source hash matches. It zips and validates only when every clip has audio. Transient
+  errors are retried with `benchmark._transient_retryer()` and recorded per clip with a
+  readable reason (`transient_errors`); 401/402/403/404 and unusable audio stop the run.
+  Cost comes from reported tokens via `tracking/pricing.py` (TTS entries are from
+  secondary sources; checking them against billing is #101).
 - **`tts.py`**: the providers and the frozen paper defaults (`PROVIDERS`,
   `STYLE_INSTRUCTION`).
   - OpenAI `gpt-4o-mini-tts-2025-12-15`/`marin`: PCM over SSE, because only the
