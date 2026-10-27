@@ -110,36 +110,22 @@ def bundle_names(lab_id: str, override: str | None = None) -> BundleNames:
 # ── Lab references ────────────────────────────────────────────────────
 
 
-def _clips(lab):
-    """Every clip dict in the lab, in module and clip order. Wrong shapes are
-    skipped here and reported by ``audio_clip_problems``."""
-    modules = lab.get("modules") if isinstance(lab, dict) else None
-    if not isinstance(modules, list):
-        return
-    for module in modules:
-        clips = module.get("clips") if isinstance(module, dict) else None
-        if isinstance(clips, list):
-            yield from (c for c in clips if isinstance(c, dict))
+def _audio_entries(lab) -> tuple[list[str], list[str]]:
+    """One walk over the lab's modules and clips, giving
 
-
-def audio_clip_refs(lab: dict) -> list[str]:
-    """Every ``Clip.audioClip`` in the lab, in module and clip order, exactly as
-    written: the headset looks up that raw string, so names are not trimmed.
-    ``None`` and ``""`` mean no audio."""
-    return [
-        clip["audioClip"] for clip in _clips(lab)
-        if isinstance(clip.get("audioClip"), str) and clip["audioClip"] != ""
-    ]
-
-
-def audio_clip_problems(lab) -> list[str]:
-    """Shape problems that stop clips' audio from being checked, one message each."""
+    - every ``Clip.audioClip`` in module and clip order, exactly as written: the
+      headset looks up that raw string, so names are not trimmed, and ``None``
+      and ``""`` mean no audio
+    - the shape problems that stop a clip's audio from being checked, one
+      message each (wrong-typed modules, clips or ``audioClip``)
+    """
     if not isinstance(lab, dict):
-        return [f"the lab JSON is a {type(lab).__name__}, not an object"]
+        return [], [f"the lab JSON is a {type(lab).__name__}, not an object"]
     modules = lab.get("modules")
     if not isinstance(modules, list):
-        return [f"'modules' is a {type(modules).__name__}, not a list"]
-    problems = []
+        return [], [f"'modules' is a {type(modules).__name__}, not a list"]
+    refs: list[str] = []
+    problems: list[str] = []
     for m, module in enumerate(modules, 1):
         if not isinstance(module, dict):
             problems.append(f"module {m} is a {type(module).__name__}, not an object")
@@ -151,10 +137,25 @@ def audio_clip_problems(lab) -> list[str]:
         for c, clip in enumerate(clips, 1):
             if not isinstance(clip, dict):
                 problems.append(f"module {m} clip {c} is a {type(clip).__name__}, not an object")
-            elif clip.get("audioClip") is not None and not isinstance(clip["audioClip"], str):
+                continue
+            name = clip.get("audioClip")
+            if isinstance(name, str):
+                if name != "":
+                    refs.append(name)
+            elif name is not None:
                 problems.append(f"module {m} clip {c} audioClip is a "
-                                f"{type(clip['audioClip']).__name__}, not a string")
-    return problems
+                                f"{type(name).__name__}, not a string")
+    return refs, problems
+
+
+def audio_clip_refs(lab) -> list[str]:
+    """Every ``Clip.audioClip`` in the lab, exactly as written (see ``_audio_entries``)."""
+    return _audio_entries(lab)[0]
+
+
+def audio_clip_problems(lab) -> list[str]:
+    """Shape problems that stop clips' audio from being checked (see ``_audio_entries``)."""
+    return _audio_entries(lab)[1]
 
 
 def sound_effect_refs(lab: dict) -> list[str]:
@@ -206,11 +207,12 @@ def zip_bundle(folder: Path, zip_path: Path | None = None) -> Path:
     moved into place, so a crash never leaves a half-written zip. The finished
     zip is readable by everyone (0644), so a web server can serve it.
     """
-    # Resolve so '.' or '..' still give the folder's real name.
-    folder = Path(folder).resolve()
+    # abspath, not resolve(): '.' and '..' still give the folder's real name, and
+    # a symlinked folder keeps the link's name (the name the headset needs).
+    folder = Path(os.path.abspath(folder))
     if not folder.is_dir():
         raise FileNotFoundError(f"bundle folder not found: {folder}")
-    zip_path = Path(zip_path).resolve() if zip_path else folder.parent / f"{folder.name}.zip"
+    zip_path = Path(os.path.abspath(zip_path)) if zip_path else folder.parent / f"{folder.name}.zip"
     if zip_path.stem != folder.name:
         raise ValueError(
             f"zip name {zip_path.name!r} must match its folder {folder.name!r}; "
@@ -296,6 +298,11 @@ def _listing(path: Path) -> tuple[set[str], set[str], dict]:
     return dirs, files, reader
 
 
+def _describe(exc: BaseException) -> str:
+    """An exception's message, or its type name when it has none."""
+    return str(exc) or type(exc).__name__
+
+
 def _check_wav(data: bytes) -> str | None:
     try:
         with wave.open(io.BytesIO(data), "rb") as w:
@@ -325,8 +332,9 @@ def validate_bundle(path: Path | str) -> Report:
     (``audioClipSuccess``) with no file in Audios/.
     """
     report = Report(str(path))
-    # Resolve so '.' or '..' still give the folder's real name.
-    path = Path(path).resolve()
+    # abspath, not resolve(): '.' and '..' still give the real name, and a
+    # symlinked zip or folder is checked by the link's name, not its target's.
+    path = Path(os.path.abspath(path))
     err, warn = report.errors.append, report.warnings.append
 
     if not path.exists():
@@ -338,10 +346,22 @@ def validate_bundle(path: Path | str) -> Report:
 
     try:
         dirs, files, reader = _listing(path)
-    except (zipfile.BadZipFile, zlib.error, EOFError, OSError) as exc:
+    except (zipfile.BadZipFile, zlib.error, EOFError, OSError,
+            NotImplementedError, RuntimeError) as exc:
+        # NotImplementedError: unsupported compression method; RuntimeError:
+        # an encrypted entry. Either way the headset can't unpack it.
         what = "zip is damaged" if path.is_file() else "cannot read the bundle folder"
-        err(f"{what} ({exc or type(exc).__name__})")
+        err(f"{what} ({_describe(exc)})")
         return report
+
+    def read(name: str) -> bytes | None:
+        """An entry's bytes, or None after recording why it couldn't be read
+        (folder files are read lazily, so e.g. a broken symlink fails here)."""
+        try:
+            return reader[name]()
+        except OSError as exc:
+            err(f"{name} cannot be read ({_describe(exc)})")
+            return None
     tops = {n.split("/")[0] for n in dirs | files}
     if len(tops) != 1:
         err(f"needs exactly one top-level folder, found {sorted(tops) or 'none'}")
@@ -359,9 +379,14 @@ def validate_bundle(path: Path | str) -> Report:
 
     # Directly inside the root: the one lab JSON and nothing else.
     top_files = sorted(f for f in files if f.count("/") == 1)
-    jsons = [f for f in top_files if f.lower().endswith(".json")]
+    # Exactly '.json': the headset looks for that extension on a case-sensitive filesystem.
+    jsons = [f for f in top_files if f.endswith(".json")]
     for f in top_files:
-        if f not in jsons:
+        if f in jsons:
+            continue
+        if f.lower().endswith(".json"):
+            err(f"unexpected file {f} (the lab JSON's extension must be lowercase .json)")
+        else:
             err(f"unexpected file {f} (only the lab JSON belongs at the top)")
     extra_dirs = sorted(d for d in dirs if d.count("/") == 1 and d.split("/")[1] not in SUBDIRS)
     for d in extra_dirs:
@@ -386,7 +411,8 @@ def validate_bundle(path: Path | str) -> Report:
             err(f"{f}: file name must use only letters, digits, '_' and '-'")
         else:
             wav_names.add(stem)
-            problem = _check_wav(reader[f]())
+            data = read(f)
+            problem = _check_wav(data) if data is not None else None
             if problem:
                 err(f"{f} {problem}")
     for d in sorted(dirs):
@@ -395,8 +421,11 @@ def validate_bundle(path: Path | str) -> Report:
 
     if len(jsons) != 1:
         return report
+    raw = read(jsons[0])
+    if raw is None:
+        return report
     try:
-        lab = json.loads(reader[jsons[0]]())
+        lab = json.loads(raw)
     except (ValueError, UnicodeDecodeError) as exc:
         err(f"{jsons[0]} is not valid JSON ({exc})")
         return report
@@ -411,9 +440,9 @@ def validate_bundle(path: Path | str) -> Report:
         first = str(exc).splitlines()
         err(f"{jsons[0]} is not a valid json_lab Lab: " + " ".join(first[:3]))
 
-    for problem in audio_clip_problems(lab):
+    refs, problems = _audio_entries(lab)
+    for problem in problems:
         err(f"{jsons[0]}: {problem}")
-    refs = audio_clip_refs(lab)
     for name in dict.fromkeys(refs):
         if not SAFE_NAME.match(name):
             err(f"clip audioClip {name!r} is not a safe file name "

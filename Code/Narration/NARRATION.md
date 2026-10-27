@@ -195,12 +195,16 @@ one top-level folder with the zip's own name:
   ```
 
   The validator returns errors for:
-  - a damaged zip (e.g. a partial download)
+  - a damaged zip: corrupted contents, or an entry the headset can't unpack
+    (unsupported compression, encryption). A download cut off partway has no
+    zip index, so it is reported as "not a zip file" instead
+  - a file in a bundle folder that can't be read (e.g. a broken symlink)
   - a top-level folder that doesn't match the zip name, or more than one
     top-level entry (e.g. `__MACOSX/`)
   - a missing `Audios/`, `Textures/` or `Videos/`, or anything else at the top
-  - not exactly one lab JSON, a JSON that isn't a valid json_lab `Lab`, or
-    modules, clips or `audioClip` values of the wrong type
+  - not exactly one lab JSON (the extension must be a lowercase `.json`), a
+    JSON that isn't a valid json_lab `Lab`, or modules, clips or `audioClip`
+    values of the wrong type
   - files other than lowercase `.wav`, or subfolders, in `Audios/`, or a WAV
     that isn't 24 kHz, 16-bit, mono PCM with some audio in it
   - a clip `audioClip` that isn't a safe file name (spaces included) or has no

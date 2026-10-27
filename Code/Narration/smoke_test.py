@@ -10,9 +10,11 @@ of narration. Checks:
 - the folder layout, and a zip that is byte-for-byte reproducible
 - unpacking the way the headset does (lab_resources/<zip stem>/, first .json)
 - one deliberate break per validator check, each caught
-- malformed lab JSON, damaged zips, `.` paths, names with stray spaces and
-  upper-case extensions are reported as errors rather than crashing or passing,
-  and finished zips are readable by everyone (0644)
+- malformed lab JSON, damaged zips (bad data, unsupported compression,
+  encryption), unreadable folder files, `.` paths, symlinked zips and folders,
+  names with stray spaces and upper-case extensions are reported as errors
+  (or handled) rather than crashing or passing, and finished zips are readable
+  by everyone (0644; not checked on Windows)
 - every wave-2 json_lab lab bundles and validates
 - the CLI exit codes
 
@@ -23,12 +25,14 @@ import contextlib
 import io
 import json
 import math
+import os
 import shutil
 import struct
 import sys
 import tempfile
 import wave
 import zipfile
+import zlib
 from glob import glob
 from pathlib import Path
 
@@ -304,7 +308,7 @@ def flip_byte_in(zip_file: Path, entry: str) -> None:
     off = info.header_offset
     name_len, extra_len = struct.unpack("<HH", raw[off + 26: off + 30])
     start = off + 30 + name_len + extra_len
-    raw[start + max(info.compress_size // 2, 0)] ^= 0xFF
+    raw[start + info.compress_size // 2] ^= 0xFF
     zip_file.write_bytes(bytes(raw))
 
 
@@ -318,8 +322,8 @@ check(not isinstance(rep, Exception) and has_error(rep, "damaged"),
 dot_work = fresh("dot")
 dot_folder = build(lab, dot_work)
 here = Path.cwd()
+dot_rep = dot_zip = None
 try:
-    import os
     os.chdir(dot_folder)
     dot_rep = safe_validate(Path("."))
     try:
@@ -328,9 +332,9 @@ try:
         dot_zip = exc
 finally:
     os.chdir(here)
-check(not isinstance(dot_rep, Exception) and dot_rep.ok,
+check(isinstance(dot_rep, bundle.Report) and dot_rep.ok,
       "validate '.' from inside the bundle folder works"
-      + (f": {dot_rep.errors[:1]}" if not isinstance(dot_rep, Exception) else f" (raised {type(dot_rep).__name__})"))
+      + (f": {dot_rep.errors[:1]}" if isinstance(dot_rep, bundle.Report) else f" (got {dot_rep!r})"))
 check(isinstance(dot_zip, Path) and dot_zip == dot_work.resolve() / names.zip_file,
       f"zip '.' from inside the bundle folder writes {names.zip_file} beside it")
 
@@ -350,8 +354,109 @@ def upper_ext(f):
 rep = broken("upper_ext", upper_ext)
 check(has_error(rep, "lowercase") and has_error(rep, f"has no Audios/{refs[0]}.wav"),
       "an upper-case .WAV is an error and doesn't count as the clip's file")
-check(zpath.stat().st_mode & 0o777 == 0o644,
-      f"the finished zip is readable by everyone (mode {oct(zpath.stat().st_mode & 0o777)})")
+if os.name == "nt":
+    # Windows has no Unix permission bits: st_mode reads 0o666 whatever chmod sets.
+    check(True, "the finished zip's 0644 mode is not checked on Windows")
+else:
+    check(zpath.stat().st_mode & 0o777 == 0o644,
+          f"the finished zip is readable by everyone (mode {oct(zpath.stat().st_mode & 0o777)})")
+
+
+def set_method(zip_file: Path, entry: str, method: int | None = None, encrypt=False) -> None:
+    """Rewrite one entry's compression method or encryption flag in both its local
+    header and its central-directory record."""
+    with zipfile.ZipFile(zip_file) as zf:
+        info = zf.getinfo(entry)
+    raw = bytearray(zip_file.read_bytes())
+    headers = [info.header_offset]
+    i = 0
+    while (i := raw.find(b"PK\x01\x02", i)) >= 0:
+        n = struct.unpack("<H", raw[i + 28: i + 30])[0]
+        if raw[i + 46: i + 46 + n].decode() == entry:
+            headers.append(i + 2)  # central fields sit 2 bytes later than local ones
+        i += 4
+    for h in headers:
+        if method is not None:
+            raw[h + 8: h + 10] = struct.pack("<H", method)
+        if encrypt:
+            flags = struct.unpack("<H", raw[h + 6: h + 8])[0] | 0x1
+            raw[h + 6: h + 8] = struct.pack("<H", flags)
+    zip_file.write_bytes(bytes(raw))
+
+
+json_entry = f"{names.folder}/{names.json_file}"
+z = zip_bundle(build(lab, fresh("method99")))
+set_method(z, json_entry, method=99)
+rep = safe_validate(z)
+check(isinstance(rep, bundle.Report) and has_error(rep, "damaged"),
+      "an entry with an unsupported compression method is reported as damaged, not a crash"
+      + ("" if isinstance(rep, bundle.Report) else f" (raised {type(rep).__name__})"))
+z = zip_bundle(build(lab, fresh("encrypted")))
+set_method(z, json_entry, encrypt=True)
+rep = safe_validate(z)
+check(isinstance(rep, bundle.Report) and has_error(rep, "damaged"),
+      "an encrypted entry is reported as damaged, not a crash"
+      + ("" if isinstance(rep, bundle.Report) else f" (raised {type(rep).__name__})"))
+
+real_listing = bundle._listing
+bundle._listing = lambda path: (_ for _ in ()).throw(zlib.error())
+try:
+    rep = safe_validate(zpath)
+finally:
+    bundle._listing = real_listing
+check(isinstance(rep, bundle.Report) and any(e.rstrip().endswith("(error)") for e in rep.errors),
+      "an error with no message still names its type (e.g. 'zip is damaged (error)')"
+      + (f": {rep.errors[:1]}" if isinstance(rep, bundle.Report) else ""))
+
+link_work = fresh("symlinks")
+try:
+    os.symlink(link_work / "missing.wav", link_work / "probe")
+    (link_work / "probe").unlink()
+    can_link = True
+except (OSError, NotImplementedError):
+    can_link = False
+if can_link:
+    f = build(lab, link_work / "broken")
+    os.symlink(link_work / "missing.wav", f / "Audios" / "zzz.wav")
+    rep = safe_validate(f)
+    check(isinstance(rep, bundle.Report) and has_error(rep, "cannot be read"),
+          "an unreadable file in a bundle folder (broken symlink) is an error, not a crash"
+          + ("" if isinstance(rep, bundle.Report) else f" (raised {type(rep).__name__})"))
+
+    z = zip_bundle(build(lab, link_work / "zip"))
+    target = z.with_name("cache.zip")
+    z.rename(target)
+    os.symlink(target, z)
+    rep = safe_validate(z)
+    check(isinstance(rep, bundle.Report) and rep.ok,
+          f"a symlink named {names.zip_file} pointing at cache.zip validates by the link's name"
+          + (f": {rep.errors[:1]}" if isinstance(rep, bundle.Report) else ""))
+
+    target_dir = build(lab, link_work / "build_123")
+    moved = target_dir.rename(target_dir.parent / "built")
+    link = link_work / names.folder
+    os.symlink(moved, link)
+    try:
+        made = zip_bundle(link)
+    except Exception as exc:  # noqa: BLE001
+        made = exc
+    with zipfile.ZipFile(made) if isinstance(made, Path) else contextlib.nullcontext() as zf:
+        tops = {n.split("/")[0] for n in zf.namelist()} if zf else set()
+    check(isinstance(made, Path) and made.name == names.zip_file and tops == {names.folder},
+          f"zipping a symlinked folder {names.folder} -> built/ is named after the link"
+          + (f" (got {made.name}, top folders {sorted(tops)})" if isinstance(made, Path) else f" (raised {made!r})"))
+else:
+    check(True, "symlink checks skipped: this system can't create symlinks")
+
+
+def upper_json(f):
+    p = f / names.json_file
+    p.rename(p.with_suffix(".JSON"))
+
+
+rep = broken("upper_json", upper_json, as_zip=False)
+check(has_error(rep, "exactly one lab JSON") and has_error(rep, ".JSON"),
+      "an upper-case .JSON lab file is an error (the headset looks for .json)")
 
 # ── Every wave-2 json_lab lab bundles and validates ───────────────────
 
