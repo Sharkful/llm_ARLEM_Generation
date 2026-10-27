@@ -10,6 +10,9 @@ of narration. Checks:
 - the folder layout, and a zip that is byte-for-byte reproducible
 - unpacking the way the headset does (lab_resources/<zip stem>/, first .json)
 - one deliberate break per validator check, each caught
+- malformed lab JSON, damaged zips, `.` paths, names with stray spaces and
+  upper-case extensions are reported as errors rather than crashing or passing,
+  and finished zips are readable by everyone (0644)
 - every wave-2 json_lab lab bundles and validates
 - the CLI exit codes
 
@@ -241,20 +244,133 @@ junk = fresh("junk") / "NotAZipLab.zip"
 junk.write_bytes(b"not a zip")
 check(has_error(validate_bundle(junk), "not a zip file"), "a non-zip file is an error")
 
+# ── Review fixes: report problems instead of crashing or passing ──────
+
+
+def safe_validate(p):
+    """validate_bundle, but an exception becomes a failed check instead of a crash."""
+    try:
+        return validate_bundle(p)
+    except Exception as exc:  # noqa: BLE001 - the point is to catch anything
+        return exc
+
+
+def with_json(tag, edit):
+    """A bundle folder whose lab JSON has been changed by ``edit(dict)``."""
+    d = fresh(tag)
+    f = build(lab, d)
+    p = f / bundle_names(lab["labId"]).json_file
+    data = json.loads(p.read_text())
+    edit(data)
+    p.write_text(json.dumps(data))
+    return f
+
+
+def set_first_audio(value):
+    def edit(data):
+        data["modules"][0]["clips"][0]["audioClip"] = value
+    return edit
+
+
+malformed = {
+    "audioClip is a number": set_first_audio(3),
+    "modules is an object": lambda data: data.__setitem__("modules", {"a": 1}),
+    "a module is a string": lambda data: data["modules"].__setitem__(0, "module"),
+    "a clip is a string": lambda data: data["modules"][0]["clips"].__setitem__(0, "clip"),
+}
+for i, (what, edit) in enumerate(malformed.items()):
+    rep = safe_validate(with_json(f"malformed_{i}", edit))
+    check(not isinstance(rep, Exception) and not rep.ok,
+          f"malformed lab JSON ({what}) is an error, not a crash"
+          + (f" (raised {type(rep).__name__})" if isinstance(rep, Exception) else ""))
+
+bad_shape_zip = zip_bundle(with_json("malformed_cli", set_first_audio(3)))
+out = io.StringIO()
+try:
+    with contextlib.redirect_stdout(out):
+        code = bundle.main(["validate", str(bad_shape_zip), str(zpath)])
+    reported = out.getvalue()
+except Exception as exc:  # noqa: BLE001
+    code, reported = f"raised {type(exc).__name__}", ""
+check(code == 1 and str(bad_shape_zip) in reported and str(zpath) in reported,
+      f"validate on a malformed bundle plus a good one still reports both (exit {code})")
+
+
+def flip_byte_in(zip_file: Path, entry: str) -> None:
+    """Corrupt one byte in the middle of an entry's stored data."""
+    with zipfile.ZipFile(zip_file) as zf:
+        info = zf.getinfo(entry)
+    raw = bytearray(zip_file.read_bytes())
+    off = info.header_offset
+    name_len, extra_len = struct.unpack("<HH", raw[off + 26: off + 30])
+    start = off + 30 + name_len + extra_len
+    raw[start + max(info.compress_size // 2, 0)] ^= 0xFF
+    zip_file.write_bytes(bytes(raw))
+
+
+dmg = zip_bundle(build(lab, fresh("damaged")))
+flip_byte_in(dmg, f"{names.folder}/Audios/{refs[0]}.wav")
+rep = safe_validate(dmg)
+check(not isinstance(rep, Exception) and has_error(rep, "damaged"),
+      "a damaged zip (one flipped byte) is reported as damaged, not a crash"
+      + (f" (raised {type(rep).__name__})" if isinstance(rep, Exception) else ""))
+
+dot_work = fresh("dot")
+dot_folder = build(lab, dot_work)
+here = Path.cwd()
+try:
+    import os
+    os.chdir(dot_folder)
+    dot_rep = safe_validate(Path("."))
+    try:
+        dot_zip = zip_bundle(Path("."))
+    except Exception as exc:  # noqa: BLE001
+        dot_zip = exc
+finally:
+    os.chdir(here)
+check(not isinstance(dot_rep, Exception) and dot_rep.ok,
+      "validate '.' from inside the bundle folder works"
+      + (f": {dot_rep.errors[:1]}" if not isinstance(dot_rep, Exception) else f" (raised {type(dot_rep).__name__})"))
+check(isinstance(dot_zip, Path) and dot_zip == dot_work.resolve() / names.zip_file,
+      f"zip '.' from inside the bundle folder writes {names.zip_file} beside it")
+
+rep = safe_validate(with_json("trailing_space", set_first_audio(refs[0] + " ")))
+check(not isinstance(rep, Exception) and has_error(rep, "not a safe file name"),
+      "an audioClip with a stray space is an error even when the trimmed name has a file")
+rep = safe_validate(with_json("blank_name", set_first_audio("   ")))
+check(not isinstance(rep, Exception) and has_error(rep, "not a safe file name"),
+      "a whitespace-only audioClip is an error (the headset would look it up)")
+
+
+def upper_ext(f):
+    p = f / "Audios" / f"{refs[0]}.wav"
+    p.rename(p.with_suffix(".WAV"))
+
+
+rep = broken("upper_ext", upper_ext)
+check(has_error(rep, "lowercase") and has_error(rep, f"has no Audios/{refs[0]}.wav"),
+      "an upper-case .WAV is an error and doesn't count as the clip's file")
+check(zpath.stat().st_mode & 0o777 == 0o644,
+      f"the finished zip is readable by everyone (mode {oct(zpath.stat().st_mode & 0o777)})")
+
 # ── Every wave-2 json_lab lab bundles and validates ───────────────────
 
 labs = sorted(glob(str(OUTPUTS / "*json_lab_L[34]_*_output.json")))
-bad = []
+bad, skipped, bundled = [], [], 0
 for i, path in enumerate(labs):
     d = json.loads(Path(path).read_text(encoding="utf-8"))
     if "modules" not in d:
+        skipped.append(Path(path).name)
         continue
     names_i = BundleNames(f"Wave2Lab{i:03d}", bundle_names(d["labId"]).json_file)
     rep = validate_bundle(zip_bundle(build(d, fresh(f"wave2_{i:03d}"), names=names_i)))
+    bundled += 1
     if not rep.ok:
         bad.append((Path(path).name, rep.errors[:2]))
-check(not bad and len(labs) >= 100,
-      f"all {len(labs)} wave-2 json_lab labs bundle and validate" + (f": {bad[:3]}" if bad else ""))
+check(not bad and not skipped and bundled >= 100,
+      f"{bundled}/{len(labs)} wave-2 json_lab labs bundle and validate"
+      + (f"; skipped (no modules): {skipped[:3]}" if skipped else "")
+      + (f"; failed: {bad[:3]}" if bad else ""))
 
 # ── CLI ───────────────────────────────────────────────────────────────
 

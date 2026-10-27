@@ -32,6 +32,7 @@ import sys
 import tempfile
 import wave
 import zipfile
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -109,15 +110,51 @@ def bundle_names(lab_id: str, override: str | None = None) -> BundleNames:
 # ── Lab references ────────────────────────────────────────────────────
 
 
+def _clips(lab):
+    """Every clip dict in the lab, in module and clip order. Wrong shapes are
+    skipped here and reported by ``audio_clip_problems``."""
+    modules = lab.get("modules") if isinstance(lab, dict) else None
+    if not isinstance(modules, list):
+        return
+    for module in modules:
+        clips = module.get("clips") if isinstance(module, dict) else None
+        if isinstance(clips, list):
+            yield from (c for c in clips if isinstance(c, dict))
+
+
 def audio_clip_refs(lab: dict) -> list[str]:
-    """Every non-empty ``Clip.audioClip`` in the lab, in module and clip order."""
-    refs = []
-    for module in lab.get("modules") or []:
-        for clip in module.get("clips") or []:
-            name = (clip.get("audioClip") or "").strip()
-            if name:
-                refs.append(name)
-    return refs
+    """Every ``Clip.audioClip`` in the lab, in module and clip order, exactly as
+    written: the headset looks up that raw string, so names are not trimmed.
+    ``None`` and ``""`` mean no audio."""
+    return [
+        clip["audioClip"] for clip in _clips(lab)
+        if isinstance(clip.get("audioClip"), str) and clip["audioClip"] != ""
+    ]
+
+
+def audio_clip_problems(lab) -> list[str]:
+    """Shape problems that stop clips' audio from being checked, one message each."""
+    if not isinstance(lab, dict):
+        return [f"the lab JSON is a {type(lab).__name__}, not an object"]
+    modules = lab.get("modules")
+    if not isinstance(modules, list):
+        return [f"'modules' is a {type(modules).__name__}, not a list"]
+    problems = []
+    for m, module in enumerate(modules, 1):
+        if not isinstance(module, dict):
+            problems.append(f"module {m} is a {type(module).__name__}, not an object")
+            continue
+        clips = module.get("clips")
+        if not isinstance(clips, list):
+            problems.append(f"module {m} 'clips' is a {type(clips).__name__}, not a list")
+            continue
+        for c, clip in enumerate(clips, 1):
+            if not isinstance(clip, dict):
+                problems.append(f"module {m} clip {c} is a {type(clip).__name__}, not an object")
+            elif clip.get("audioClip") is not None and not isinstance(clip["audioClip"], str):
+                problems.append(f"module {m} clip {c} audioClip is a "
+                                f"{type(clip['audioClip']).__name__}, not a string")
+    return problems
 
 
 def sound_effect_refs(lab: dict) -> list[str]:
@@ -127,8 +164,8 @@ def sound_effect_refs(lab: dict) -> list[str]:
     def walk(obj):
         if isinstance(obj, dict):
             value = obj.get("audioClipSuccess")
-            if isinstance(value, str) and value.strip():
-                found.append(value.strip())
+            if isinstance(value, str) and value != "":
+                found.append(value)
             for v in obj.values():
                 walk(v)
         elif isinstance(obj, list):
@@ -166,12 +203,14 @@ def zip_bundle(folder: Path, zip_path: Path | None = None) -> Path:
     Entries are sorted and carry a fixed timestamp, so the same contents always
     give the same bytes. Every directory gets its own entry, so empty
     ``Textures/`` and ``Videos/`` survive. The zip is written to a temp file and
-    moved into place, so a crash never leaves a half-written zip.
+    moved into place, so a crash never leaves a half-written zip. The finished
+    zip is readable by everyone (0644), so a web server can serve it.
     """
-    folder = Path(folder)
+    # Resolve so '.' or '..' still give the folder's real name.
+    folder = Path(folder).resolve()
     if not folder.is_dir():
         raise FileNotFoundError(f"bundle folder not found: {folder}")
-    zip_path = Path(zip_path) if zip_path else folder.parent / f"{folder.name}.zip"
+    zip_path = Path(zip_path).resolve() if zip_path else folder.parent / f"{folder.name}.zip"
     if zip_path.stem != folder.name:
         raise ValueError(
             f"zip name {zip_path.name!r} must match its folder {folder.name!r}; "
@@ -193,6 +232,7 @@ def zip_bundle(folder: Path, zip_path: Path | None = None) -> Path:
                     info.compress_type = zipfile.ZIP_DEFLATED
                     info.external_attr = 0o644 << 16
                     zf.writestr(info, p.read_bytes())
+        os.chmod(tmp, 0o644)  # mkstemp creates the file owner-only (0600)
         os.replace(tmp, zip_path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
@@ -276,15 +316,17 @@ def _check_wav(data: bytes) -> str | None:
 def validate_bundle(path: Path | str) -> Report:
     """Check a resources zip (or the folder it is built from) against the layout.
 
-    Errors: a wrong top-level folder, missing subfolders, not exactly one lab
-    JSON, a JSON that isn't a valid json_lab ``Lab``, stray files, files in
-    Audios/ that aren't flat ``.wav``, a WAV in the wrong format, and a clip
-    ``audioClip`` with no matching ``Audios/<name>.wav``.
+    Errors: a damaged zip, a wrong top-level folder, missing subfolders, not
+    exactly one lab JSON, a JSON that isn't a valid json_lab ``Lab`` (or whose
+    modules/clips have the wrong shape), stray files, files in Audios/ that
+    aren't flat lowercase ``.wav``, a WAV in the wrong format, and a clip
+    ``audioClip`` (exactly as written) with no matching ``Audios/<name>.wav``.
     Warnings: audio files no clip refers to, and sound effects
     (``audioClipSuccess``) with no file in Audios/.
     """
-    path = Path(path)
     report = Report(str(path))
+    # Resolve so '.' or '..' still give the folder's real name.
+    path = Path(path).resolve()
     err, warn = report.errors.append, report.warnings.append
 
     if not path.exists():
@@ -294,7 +336,12 @@ def validate_bundle(path: Path | str) -> Report:
         err("not a zip file")
         return report
 
-    dirs, files, reader = _listing(path)
+    try:
+        dirs, files, reader = _listing(path)
+    except (zipfile.BadZipFile, zlib.error, EOFError, OSError) as exc:
+        what = "zip is damaged" if path.is_file() else "cannot read the bundle folder"
+        err(f"{what} ({exc or type(exc).__name__})")
+        return report
     tops = {n.split("/")[0] for n in dirs | files}
     if len(tops) != 1:
         err(f"needs exactly one top-level folder, found {sorted(tops) or 'none'}")
@@ -332,8 +379,9 @@ def validate_bundle(path: Path | str) -> Report:
         stem, dot, ext = rel.rpartition(".")
         if "/" in rel:
             err(f"{f}: Audios/ must be flat (no subfolders)")
-        elif ext.lower() != "wav" or not dot:
-            err(f"{f}: Audios/ holds only .wav files")
+        elif ext != "wav" or not dot:
+            # Exactly '.wav': the headset's filesystem is case-sensitive.
+            err(f"{f}: Audios/ holds only .wav files (lowercase extension)")
         elif not SAFE_NAME.match(stem):
             err(f"{f}: file name must use only letters, digits, '_' and '-'")
         else:
@@ -363,13 +411,16 @@ def validate_bundle(path: Path | str) -> Report:
         first = str(exc).splitlines()
         err(f"{jsons[0]} is not a valid json_lab Lab: " + " ".join(first[:3]))
 
-    refs = audio_clip_refs(lab) if isinstance(lab, dict) else []
+    for problem in audio_clip_problems(lab):
+        err(f"{jsons[0]}: {problem}")
+    refs = audio_clip_refs(lab)
     for name in dict.fromkeys(refs):
         if not SAFE_NAME.match(name):
-            err(f"clip audioClip {name!r} is not a safe file name")
+            err(f"clip audioClip {name!r} is not a safe file name "
+                "(letters, digits, '_' and '-' only; no spaces or extension)")
         elif name not in wav_names:
             err(f"clip audioClip {name!r} has no {AUDIO_DIR}/{name}.wav")
-    effects = sound_effect_refs(lab) if isinstance(lab, dict) else []
+    effects = sound_effect_refs(lab)
     for name in sorted(wav_names - set(refs) - set(effects)):
         warn(f"{AUDIO_DIR}/{name}.wav is not used by any clip")
     for name in dict.fromkeys(effects):

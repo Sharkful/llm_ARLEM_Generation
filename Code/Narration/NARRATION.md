@@ -172,8 +172,10 @@ one top-level folder with the zip's own name:
     id on the server. The zip, its folder and the server id must all match.
   - A labId with no usable words needs `--bundle-name`.
 - **Audio files** are named after each clip's `audioClip` value, which is how
-  the headset looks them up, not after `clipName`. Format: **WAV, 24 kHz,
-  16-bit PCM, mono**.
+  the headset looks them up, not after `clipName`. The name is used exactly
+  as written, never trimmed, and the extension is a lowercase `.wav`, because
+  the headset's filesystem is case-sensitive. Format: **WAV, 24 kHz, 16-bit
+  PCM, mono**.
 - **The lab JSON ships in our v2.0 format as is,** with the clip renames and
   drops above applied. The headset currently reads the older Transmission
   format, so it needs a matching update to read v2.0; that work is outside this
@@ -181,7 +183,8 @@ one top-level folder with the zip's own name:
   that is ever needed.
 - **Zips are reproducible:** entries are sorted with a fixed timestamp, so the
   same contents give the same bytes. Every folder has its own entry, so empty
-  `Textures/` and `Videos/` survive unpacking.
+  `Textures/` and `Videos/` survive unpacking. The zip is readable by everyone
+  (0644), so a web server can serve it.
 - **`Code/Narration/bundle.py`** implements the names, the layout, zipping and
   a validator:
 
@@ -192,13 +195,16 @@ one top-level folder with the zip's own name:
   ```
 
   The validator returns errors for:
+  - a damaged zip (e.g. a partial download)
   - a top-level folder that doesn't match the zip name, or more than one
     top-level entry (e.g. `__MACOSX/`)
   - a missing `Audios/`, `Textures/` or `Videos/`, or anything else at the top
-  - not exactly one lab JSON, or a JSON that isn't a valid json_lab `Lab`
-  - non-`.wav` files or subfolders in `Audios/`, or a WAV that isn't 24 kHz,
-    16-bit, mono PCM with some audio in it
-  - a clip `audioClip` with no matching `Audios/<name>.wav`
+  - not exactly one lab JSON, a JSON that isn't a valid json_lab `Lab`, or
+    modules, clips or `audioClip` values of the wrong type
+  - files other than lowercase `.wav`, or subfolders, in `Audios/`, or a WAV
+    that isn't 24 kHz, 16-bit, mono PCM with some audio in it
+  - a clip `audioClip` that isn't a safe file name (spaces included) or has no
+    matching `Audios/<name>.wav`
 
   It returns warnings for audio files no clip uses, and for sound effects
   (`audioClipSuccess`) with no file. `validate` exits 1 if there are any
