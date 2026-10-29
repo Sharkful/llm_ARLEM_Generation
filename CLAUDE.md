@@ -83,6 +83,17 @@ python "Code/Hierarchical/generate_hierarchical.py" --resume "Artifacts/Data/Hie
 python "Code/Hierarchical/smoke_test.py"   # offline check, no API keys (fake LLM + mock OpenAI/Anthropic)
 ```
 
+Narration (finished lab -> one WAV per clip -> lab resources zip; json_lab only):
+
+```bash
+# --dry-run prints the clip plan and sends nothing; --run-group NAME -> Artifacts/Data/Narration/NAME/
+python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider gemini --dry-run
+python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider openai --run-group testing
+python "Code/Narration/narrate_lab.py" --resume "Artifacts/Data/Narration/testing/<run name>"
+python "Code/Narration/bundle.py" validate "<Name>Lab.zip"
+python "Code/Narration/smoke_test.py"   # offline check, no API keys (fake TTS + mock OpenAI/Gemini)
+```
+
 Analysis and reporting (reads saved run artifacts, no LLM calls):
 
 ```bash
@@ -292,8 +303,33 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   Names come from `labId` (`bundle_names()`; `--bundle-name` overrides). It also builds
   reproducible zips (`zip_bundle()`) and validates zips or folders
   (`validate_bundle()`, `bundle.py validate`).
-- **`smoke_test.py`**: offline (`python "Code/Narration/smoke_test.py"`), including all
-  wave-2 labs.
+- **`narrate_lab.py`** (#93): the CLI. It plans clip names (generated from `clipName`,
+  prefixed `m{module:02d}_` only when it repeats; sanitized, deduplicated, shared,
+  dropped; compared ignoring case; applied to the bundled copy only), synthesizes one
+  request per clip, and rewrites `narration_manifest.json` after every clip. `--resume`
+  skips clips whose source hash matches, also after a stop-the-run error or a crash
+  (unreached clips keep their previous records). It zips and validates only when every clip has audio. Transient
+  errors, and requests abandoned at the 90 s per-request limit, are retried with
+  `benchmark._transient_retryer()`'s policy and recorded per clip with a readable reason
+  (`transient_errors`); 401/402/403/404 and unusable audio stop the run.
+  Cost comes from reported tokens via `tracking/pricing.py` (TTS entries are from
+  secondary sources; checking them against billing is #101).
+- **`tts.py`**: the providers and the frozen paper defaults (`PROVIDERS`,
+  `STYLE_INSTRUCTION`).
+  - OpenAI `gpt-4o-mini-tts-2025-12-15`/`marin`: PCM over SSE, because only the
+    `speech.audio.done` event reports usage.
+  - Gemini `gemini-3.8-flash-tts`/`Charon`: style in `Part.speech_metadata.style`;
+    raw PCM or WAV accepted, never resampled. Needs `google-genai>=2.25.0` (pinned as a
+    floor in `requirements.txt`, because instructor's extra allows >=1.5.0); the CLI
+    checks it.
+  - The SDK clients never retry. Every request has a 90 s limit (`REQUEST_TIME_LIMIT`,
+    raising `TTSTimeout`): a hard watchdog for OpenAI's streamed reply; for Gemini's
+    one-piece reply, the SDK timeout (per wait, not a strict total) plus a server
+    deadline. A reply with no audio raises `TTSNoAudio` (retried; fails only its clip).
+    Clips record `first_audio_seconds` (and OpenAI `max_gap_seconds`).
+- **`smoke_test.py`**: offline (`python "Code/Narration/smoke_test.py"`; parts 2 and 3
+  need the venv). Covers the bundle (all wave-2 labs), the CLI with a fake TTS, and the
+  real clients against mock OpenAI and Gemini servers.
 
 ### Analysis System (`Code/Analysis/`)
 

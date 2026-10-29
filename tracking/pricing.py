@@ -94,6 +94,19 @@ DEFAULT_PRICING: Dict[str, Dict[str, float]] = {
     "gemini-1.5-pro":         {"input": 1.25,  "output":  5.00},
     "gemini-1.5-flash":       {"input": 0.075, "output":  0.30},
 
+    # ── Text-to-speech (narration, Code/Narration/, #93) ─────────────────
+    # "input" prices the text tokens sent and "output" the audio tokens returned,
+    # using the usage each provider reports. Checked 2026-10 against secondary
+    # sources only: the official pricing pages could not be reached from the session
+    # that added these, so re-check them on the provider pages before paper runs.
+    # gpt-4o-mini-tts: about $0.015 per minute of audio.
+    "gpt-4o-mini-tts-2025-12-15": {"input": 0.60, "output": 12.00},
+    "gpt-4o-mini-tts":            {"input": 0.60, "output": 12.00},
+    # gemini-3.8-flash-tts: introductory $0.50 / $9.00 until 2026-12-31. Stored at the
+    # rate that applies from 2027-01-01, like the Gemini text models above. Audio is
+    # 25 tokens per second.
+    "gemini-3.8-flash-tts":       {"input": 1.00, "output": 18.00},
+
     # ── Mistral ───────────────────────────────────────────────────────────
     "mistral-large":  {"input": 2.00, "output": 6.00},
     "mistral-medium": {"input": 2.70, "output": 8.10},
