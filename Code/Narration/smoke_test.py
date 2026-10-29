@@ -734,6 +734,103 @@ if HAVE_NARRATION:
     check(nm["clips"][0]["cost_usd"] is None and "no token usage" in " ".join(nm["clips"][0]["warnings"]),
           "missing usage gives no cost and a warning, not a guess")
 
+    # ── Reruns keep valid audio, even after a stop or a crash ────────
+    def edited_lab(tag, clip_index=1):
+        """The sample lab with one clip's narration changed (module 1, clip clip_index)."""
+        d = json.loads(SAMPLE_LAB.read_text(encoding="utf-8"))
+        d["modules"][0]["clips"][clip_index]["narration"] += " (edited)"
+        path = fresh(tag) / SAMPLE_LAB.name
+        path.write_text(json.dumps(d), encoding="utf-8")
+        return path, d["modules"][0]["clips"][clip_index]["narration"].strip()
+
+    def full_run(tag):
+        r = TMP / "runs" / tag
+        narrate(settings_for(SAMPLE_LAB), r, provider=FakeTTS(), log=quiet)
+        return r
+
+    r = full_run("fatal_keeps")
+    edited, edited_text = edited_lab("fatal_keeps_input")
+    fake = FakeTTS(script=lambda n, t: HTTPError(402) if t == edited_text else None)
+    code = narrate(settings_for(edited), r, provider=fake, log=quiet)
+    fk = manifest_of(r)
+    check(code == 1 and fk["status"] == "failed" and len(fake.calls) == 1
+          and fk["counts"]["skipped"] == len(refs) - 1 and fk["counts"]["failed"] == 1,
+          "after a stop-the-run error, unchanged clips are still skipped, not marked 'not attempted'")
+    fake = FakeTTS()
+    narrate(settings_for(edited), r, provider=fake, log=quiet)
+    check(fake.calls == [edited_text] and manifest_of(r)["status"] == "complete",
+          "the next resume narrates only the clip that failed")
+
+    r = full_run("crash_keeps")
+    edited, edited_text = edited_lab("crash_keeps_input")
+    fake = FakeTTS(script=lambda n, t: KeyboardInterrupt() if t == edited_text else None)
+    try:
+        narrate(settings_for(edited), r, provider=fake, log=quiet)
+        crashed = False
+    except KeyboardInterrupt:
+        crashed = True
+    ck = manifest_of(r)
+    later = [c for c in ck["clips"] if c["module"] > 1]
+    check(crashed and later and all(c["status"] in ("generated", "skipped") and c["source_hash"]
+                                    for c in later),
+          "a run killed mid-way keeps the earlier records of the clips it never reached")
+    fake = FakeTTS()
+    narrate(settings_for(edited), r, provider=fake, log=quiet)
+    check(fake.calls == [edited_text] and manifest_of(r)["status"] == "complete",
+          "after a crash, the next resume narrates only the unfinished clip")
+
+    # ── Names that differ only in case ───────────────────────────────
+    case_lab = json.loads(SAMPLE_LAB.read_text(encoding="utf-8"))
+    cm = [m["clips"] for m in case_lab["modules"]]
+    cm[0][0]["audioClip"] = "Intro"
+    cm[0][1]["audioClip"] = "intro"                        # other words -> must not share a file
+    cm[1][0].update(audioClip="INTRO", narration=cm[0][0]["narration"])   # same words -> shared
+    cm[1][1].update(audioClip=None, clipName="Recap")
+    cm[2][0]["audioClip"] = "recap"                        # a generated "Recap" would clash
+    case_plans = {(q.module, q.clip): q for q in plan_clips(case_lab)}
+    check(case_plans[(1, 2)].name == "intro_2" and case_plans[(1, 2)].name_change == "deduplicated",
+          "a name that differs from an earlier one only in case gets a _2 suffix (Windows/macOS safe)")
+    check(case_plans[(2, 1)].action == "shared" and case_plans[(2, 1)].name == "Intro",
+          "same words under a different-case name share the first file, under its exact name")
+    check(case_plans[(2, 2)].name == "m02_Recap",
+          "a generated name that matches another clip's audio name in any case gets the module prefix")
+    lowered = [q.name.casefold() for q in case_plans.values() if q.name and q.action == "narrate"]
+    check(len(lowered) == len(set(lowered)), "no two narrated files differ only in case")
+    case_path = fresh("case_input") / "case_json_lab_L4_x_output.json"
+    case_path.write_text(json.dumps(case_lab), encoding="utf-8")
+    r = TMP / "runs" / "case"
+    code = narrate(settings_for(case_path), r, provider=FakeTTS(), log=quiet)
+    check(code == 0 and validate_bundle(r / manifest_of(r)["bundle"]["zip_file"]).ok,
+          "the case-clash lab narrates into a valid zip")
+
+    # ── No audio in a reply ──────────────────────────────────────────
+    class EmptyFirst(FakeTTS):
+        def __init__(self, empty_for):
+            super().__init__()
+            self.empty_for = empty_for
+
+        def synthesize(self, text):
+            syn = super().synthesize(text)
+            if self.empty_for(len(self.calls) - 1, text):
+                syn.pcm = b""
+            return syn
+
+    fake = EmptyFirst(lambda n, t: n == 0)
+    r = TMP / "runs" / "empty_once"
+    code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    c0 = manifest_of(r)["clips"][0]
+    check(code == 0 and c0["status"] == "generated" and c0["transient_retries"] == 1
+          and c0["audio_seconds"] > 0 and "no audio" in c0["transient_errors"][0]["reason"],
+          "a reply with no audio is retried, not saved as an empty clip")
+    first_text = lab["modules"][0]["clips"][0]["narration"].strip()
+    fake = EmptyFirst(lambda n, t: t == first_text)
+    r = TMP / "runs" / "empty_always"
+    code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    em2 = manifest_of(r)
+    check(code == 1 and em2["status"] == "incomplete" and em2["clips"][0]["status"] == "failed"
+          and em2["counts"]["generated"] == len(refs) - 1,
+          "a clip that never gets audio fails on its own (resumable); the run doesn't stop")
+
     # ── Unsupported inputs and CLI flags ─────────────────────────────
     l1 = next(iter(sorted(glob(str(OUTPUTS / "*json_lab_L1_*_output.json")))), None)
     try:
@@ -954,9 +1051,43 @@ if HAVE_NARRATION:
     finally:
         sm.close()
 
+    # A watchdog that fires in the instant between the last line and cancel(): the
+    # complete reply must be kept, not thrown away as a timeout.
+    class LateTimer:
+        def __init__(self, interval, fn):
+            self.fn = fn
+            self.daemon = True
+
+        def start(self):
+            pass
+
+        def cancel(self):
+            self.fn()
+
+    rm_ = Mock(openai_handler)
+    real_timer = tts.threading.Timer
+    try:
+        tts.threading.Timer = LateTimer
+        racy = tts.make_provider("openai", api_key="sk-test", base_url=rm_.url + "/v1")
+        try:
+            got = racy.synthesize("x")
+            race_ok = got.pcm == PCM
+        except tts.TTSTimeout:
+            race_ok = False
+        check(race_ok, "a reply that completed as the time limit hit is kept, not retried and re-billed")
+    finally:
+        tts.threading.Timer = real_timer
+        rm_.close()
+
     gem_state = {"mime": "audio/L16;codec=pcm;rate=24000", "data": PCM, "fail": []}
 
     def gemini_handler(path, body):
+        if gem_state.get("no_audio"):
+            gem_state["no_audio"] -= 1
+            return 200, {"content-type": "application/json"}, json.dumps({
+                "candidates": [{"content": {"role": "model", "parts": []}, "finishReason": "OTHER"}],
+                "usageMetadata": {"promptTokenCount": 12, "totalTokenCount": 12},
+                "modelVersion": "gemini-3.8-flash-tts"}).encode()
         if gem_state["fail"]:
             code = gem_state["fail"].pop(0)
             return code, {"content-type": "application/json"}, json.dumps(
@@ -1037,6 +1168,16 @@ if HAVE_NARRATION:
         code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
                        provider=prov, log=quiet)
         check(code == 1 and len(gm.requests) - n_before == 1, "a Gemini 403 stops the run after one request")
+        gem_state["no_audio"] = 1
+        r = TMP / "runs" / "gemini_no_audio"
+        code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
+                       provider=prov, log=quiet)
+        gna = manifest_of(r)
+        c0 = gna["clips"][0]
+        check(code == 0 and gna["status"] == "complete" and c0["transient_retries"] == 1
+              and "no audio" in c0["transient_errors"][0]["reason"]
+              and "OTHER" in c0["transient_errors"][0]["detail"],
+              "a Gemini reply with no audio (finish reason OTHER) is retried; it doesn't stop the run")
 
         slow = {"sleep": 0}
         real_handler = gemini_handler

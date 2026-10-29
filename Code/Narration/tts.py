@@ -18,8 +18,11 @@ wave-2 clip normally takes under 12 s). Past it the request is abandoned with
 ``TTSTimeout``, which the caller retries. OpenAI streams its audio, so a watchdog
 closes a stream that is still open at the limit, whether it has gone silent or is
 trickling; the client timeout covers the wait for the stream to start. Gemini
-answers in one piece, so its SDK timeout (also sent to the server as a deadline)
-is the limit.
+answers in one piece. Its limit is the SDK timeout, which httpx applies to each
+wait (connect, each read) rather than to the whole request, plus the same 90 s
+sent to the server as a deadline (``X-Server-Timeout``). A Gemini reply that
+trickled in could in principle run past 90 s, but its one-piece replies make that
+unlikely.
 """
 
 from __future__ import annotations
@@ -117,6 +120,10 @@ class Synthesis:
 
 class TTSTimeout(Exception):
     """The request passed ``REQUEST_TIME_LIMIT`` and was abandoned (retryable)."""
+
+
+class TTSNoAudio(Exception):
+    """The provider answered this clip without any audio (retryable, clip-specific)."""
 
 
 def _is_timeout(exc: BaseException) -> bool:
@@ -255,16 +262,20 @@ class OpenAITTS:
             events = SpeechEvents(t0)
             try:
                 for line in resp.iter_lines():
+                    events.feed(line)
+                    if events.usage is not None:   # speech.audio.done ends the reply
+                        break
                     if expired.is_set():
                         break
-                    events.feed(line)
             except Exception as exc:
-                if not expired.is_set():
+                if events.usage is None:
+                    if expired.is_set():
+                        raise self._timeout(events) from exc
                     raise
-                raise self._timeout(events) from exc
             finally:
                 watchdog.cancel()
-            if expired.is_set():
+            # A reply that completed is kept even if the watchdog fired in the same instant.
+            if events.usage is None and expired.is_set():
                 raise self._timeout(events)
             # The speech endpoint reports no model (no body field, and no openai-model
             # header in the 2026-10-27 live run); keep the header in case it is ever sent.
@@ -303,8 +314,8 @@ class GeminiTTS:
         http_options = types.HttpOptions(
             base_url=base_url,
             retry_options=types.HttpRetryOptions(attempts=1),  # no SDK retries
-            # Milliseconds; the SDK also sends it to the server as a deadline. The
-            # reply comes in one piece, so this is the whole request's limit.
+            # Milliseconds. httpx applies it to each wait, not the whole request; the
+            # SDK also sends it to the server as a deadline (X-Server-Timeout).
             timeout=int(time_limit * 1000),
         )
         self.client = genai.Client(api_key=api_key, http_options=http_options)
@@ -325,8 +336,9 @@ class GeminiTTS:
             None,
         )
         if inline is None:
+            # Clip-specific (e.g. finish reason OTHER or SAFETY), so retried, not fatal.
             reason = resp.candidates[0].finish_reason if resp.candidates else None
-            raise TTSFormatError(f"no audio in the response (finish reason: {reason})")
+            raise TTSNoAudio(f"no audio in the response (finish reason: {reason})")
         pcm = pcm_from_audio(inline.data, inline.mime_type)
         um = resp.usage_metadata
         served = (resp.model_version or "").removeprefix("models/") or None

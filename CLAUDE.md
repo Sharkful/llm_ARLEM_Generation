@@ -305,9 +305,10 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   (`validate_bundle()`, `bundle.py validate`).
 - **`narrate_lab.py`** (#93): the CLI. It plans clip names (generated from `clipName`,
   prefixed `m{module:02d}_` only when it repeats; sanitized, deduplicated, shared,
-  dropped; applied to the bundled copy only), synthesizes one request per clip, and
-  rewrites `narration_manifest.json` after every clip. `--resume` skips clips whose
-  source hash matches. It zips and validates only when every clip has audio. Transient
+  dropped; compared ignoring case; applied to the bundled copy only), synthesizes one
+  request per clip, and rewrites `narration_manifest.json` after every clip. `--resume`
+  skips clips whose source hash matches, also after a stop-the-run error or a crash
+  (unreached clips keep their previous records). It zips and validates only when every clip has audio. Transient
   errors, and requests abandoned at the 90 s per-request limit, are retried with
   `benchmark._transient_retryer()`'s policy and recorded per clip with a readable reason
   (`transient_errors`); 401/402/403/404 and unusable audio stop the run.
@@ -321,10 +322,11 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
     raw PCM or WAV accepted, never resampled. Needs `google-genai>=2.25.0` (pinned as a
     floor in `requirements.txt`, because instructor's extra allows >=1.5.0); the CLI
     checks it.
-  - The SDK clients never retry. Every request has a hard 90 s limit
-    (`REQUEST_TIME_LIMIT`, raising `TTSTimeout`): a watchdog for OpenAI's streamed reply,
-    and the SDK timeout plus a server deadline for Gemini's one-piece reply. Clips record
-    `first_audio_seconds` (and OpenAI `max_gap_seconds`).
+  - The SDK clients never retry. Every request has a 90 s limit (`REQUEST_TIME_LIMIT`,
+    raising `TTSTimeout`): a hard watchdog for OpenAI's streamed reply; for Gemini's
+    one-piece reply, the SDK timeout (per wait, not a strict total) plus a server
+    deadline. A reply with no audio raises `TTSNoAudio` (retried; fails only its clip).
+    Clips record `first_audio_seconds` (and OpenAI `max_gap_seconds`).
 - **`smoke_test.py`**: offline (`python "Code/Narration/smoke_test.py"`; parts 2 and 3
   need the venv). Covers the bundle (all wave-2 labs), the CLI with a fake TTS, and the
   real clients against mock OpenAI and Gemini servers.

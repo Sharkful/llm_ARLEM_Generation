@@ -69,10 +69,10 @@ JSON that goes into the zip; **the input file is never modified.**
 | Case | Seen in wave 2 | Handling |
 |---|---|---|
 | `narration` and `audioClip` both set | 95% of clips | Narrate as `<audioClip>.<ext>`. |
-| `narration` set, `audioClip` empty | Gemini 3.1 Pro: only 20–49% of clips named | Generate the name from `clipName`, used alone when no other clip in the lab has that `clipName` and no clip uses it as an audio name, otherwise prefixed `m{m:02d}_` (e.g. `m03_clip4`; `clipName` often repeats across modules). Add `_2`, `_3`… on collision. Write the name into the bundled lab only, and record it as `name_change: generated` in the manifest. |
+| `narration` set, `audioClip` empty | Gemini 3.1 Pro: only 20–49% of clips named | Generate the name from `clipName`, used alone when no other clip in the lab has that `clipName` and no clip uses it as an audio name, otherwise prefixed `m{m:02d}_` (e.g. `m03_clip4`; `clipName` often repeats across modules). Add `_2`, `_3`… on collision. Names are compared ignoring case throughout, because `Intro.wav` and `intro.wav` are one file on Windows and macOS. Write the name into the bundled lab only, and record it as `name_change: generated` in the manifest. |
 | `audioClip` set, `narration` empty or blank | GPT-5.4 nano L4: 25% of clips | No audio. Remove `audioClip` from the bundled lab so the headset doesn't ask for a missing file. Report it as `dropped_name`. |
 | Neither set | rare | Nothing to do; counted as `silent`. |
-| Duplicate `audioClip` within a lab | 0 labs | Same narration: one shared file. Different narration: keep the first and rename the later ones with `_2`, `_3`… in the bundled lab. Reported. |
+| Duplicate `audioClip` within a lab, including names that differ only in case | 0 labs | Same narration: one shared file, used under the first clip's exact name. Different narration: keep the first and rename the later ones with `_2`, `_3`… in the bundled lab. Reported. |
 | `audioClip` has unsafe characters or an extension | 0 clips | Remove the extension and make the name file-safe. If that changes the name, write the new name into the bundled lab. Reported. |
 | `CheckAngleComponent.audioClipSuccess` | 10 references | A sound effect, not narration. Left as is and listed in the report only. |
 | `autoAdvance: true` on a clip with no audio | 34 of 623 auto-advance clips | Left as is and reported. How the headset advances a clip with no audio is unverified. |
@@ -273,26 +273,35 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
   environment.
 - `--resume` reruns a folder with the settings in its manifest. Only clips whose
   audio is missing or whose source hash changed are sent; `--overwrite` sends
-  all of them.
+  all of them. Valid audio is never paid for twice: unchanged clips are skipped
+  even after a stop-the-run error, and a run killed part-way keeps the records
+  of the clips it never reached.
 - `--spoken-form` only offers `none` until #94 adds `rules` and `llm`.
 - **Failures:**
   - A clip that fails is recorded and the run continues. No zip is built until
     every narrated clip has audio, and a stale zip is removed.
+  - A reply with no audio (an empty stream, or Gemini with a finish reason such
+    as OTHER) is retried like a transient error. It only fails its own clip,
+    never the run.
   - HTTP 401/402/403/404 (key, billing such as used-up prepaid credits,
     permission, unknown model), or audio in an unexpected format, stops the run
     at once, since every clip would fail and unusable audio is still billed.
   - Transient errors (429/5xx/connection) are retried up to 3 attempts, with
     the same policy as `benchmark._transient_retryer()`, and counted. The SDK
     clients never retry on their own.
-  - **Every request has a hard 90 s limit** (`tts.REQUEST_TIME_LIMIT`; a clip
+  - **Every request has a 90 s limit** (`tts.REQUEST_TIME_LIMIT`; a clip
     normally takes under 12 s). At the limit the request is abandoned and retried
     like a transient error, recorded as "no complete reply within the
     per-request time limit".
     - OpenAI streams its audio. A watchdog closes a stream still open at 90 s,
       whether it has gone silent or is trickling, and the client timeout covers
-      the wait for the stream to start.
-    - Gemini answers in one piece, so its SDK timeout is the limit; it is also
-      sent to the server as a deadline (`X-Server-Timeout`).
+      the wait for the stream to start. This is a hard limit. A reply that
+      finishes in the instant the watchdog fires is kept.
+    - Gemini answers in one piece. Its limit is the SDK timeout, which applies
+      to each wait (connecting, each read) rather than to the whole request,
+      plus the same 90 s sent to the server as a deadline (`X-Server-Timeout`).
+      So it isn't strictly a hard total: a reply trickling in could run longer,
+      though one-piece replies make that unlikely.
     - Each clip records `first_audio_seconds` and, for OpenAI,
       `max_gap_seconds`, which show whether a slow request waited before
       starting or stalled partway.

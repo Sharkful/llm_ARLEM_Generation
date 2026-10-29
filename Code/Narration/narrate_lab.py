@@ -96,17 +96,19 @@ def plan_clips(lab: dict) -> list[ClipPlan]:
     """Decide every clip's audio name, in module then clip order (NARRATION.md,
     "Clip handling"). The first clip to use a name keeps it."""
     plans: list[ClipPlan] = []
-    text_of: dict[str, str] = {}   # audio name -> the narration it holds
+    # Names are compared ignoring case: on Windows and macOS "Intro.wav" and
+    # "intro.wav" are one file. Keyed by casefold -> (the name as first used, narration).
+    taken: dict[str, tuple[str, str]] = {}
     clip_name_counts = Counter(
-        _safe(str(clip.get("clipName") or f"clip{c}"))
+        _safe(str(clip.get("clipName") or f"clip{c}")).casefold()
         for module in lab["modules"] for c, clip in enumerate(module["clips"], 1))
     explicit_names = {
-        _safe(clip["audioClip"]) for module in lab["modules"] for clip in module["clips"]
+        _safe(clip["audioClip"]).casefold() for module in lab["modules"] for clip in module["clips"]
         if isinstance(clip.get("audioClip"), str) and clip["audioClip"].strip()}
 
     def unique(base: str) -> str:
         n = 2
-        while f"{base}_{n}" in text_of:
+        while f"{base}_{n}".casefold() in taken:
             n += 1
         return f"{base}_{n}"
 
@@ -133,17 +135,21 @@ def plan_clips(lab: dict) -> list[ClipPlan]:
                 # The clipName alone when it names one clip in the lab and isn't another
                 # clip's audio name; otherwise prefixed with the module.
                 base = _safe(clip_name) or f"clip{c}"
-                plain = clip_name_counts[base] == 1 and base not in explicit_names
+                plain = (clip_name_counts[base.casefold()] == 1
+                         and base.casefold() not in explicit_names)
                 name = base if plain else f"m{m:02d}_{base}"
                 change = "generated"
             action = "narrate"
-            if name in text_of:
-                if text_of[name] == text:
-                    action = "shared"          # same words, same file
+            if name.casefold() in taken:
+                first_name, first_text = taken[name.casefold()]
+                if first_text == text:
+                    action = "shared"          # same words, same file, under its exact name
+                    if name != first_name:
+                        name, change = first_name, "deduplicated"
                 else:
                     name, change = unique(name), "deduplicated"
             if action == "narrate":
-                text_of[name] = text
+                taken[name.casefold()] = (name, text)
             plans.append(ClipPlan(m, c, clip_name, raw, name, change, text, action))
     return plans
 
@@ -326,6 +332,8 @@ def describe_error(exc: BaseException) -> dict:
     status = next((s for e in chain if (s := status_of(e)) is not None), None)
     if isinstance(exc, tts.TTSFormatError):
         reason = "the provider's audio was not in the format we asked for"
+    elif isinstance(exc, tts.TTSNoAudio):
+        reason = "the provider returned no audio for this clip"
     elif isinstance(exc, tts.TTSTimeout):
         reason = "no complete reply within the per-request time limit, so it was abandoned"
     elif status in _STATUS_REASONS:
@@ -341,12 +349,14 @@ def describe_error(exc: BaseException) -> dict:
 
 def _retryer():
     """``benchmark._transient_retryer()``'s policy (same attempts and back-off), also
-    retrying a request abandoned at the time limit (``tts.TTSTimeout``)."""
+    retrying a request abandoned at the time limit (``tts.TTSTimeout``) and a reply
+    with no audio (``tts.TTSNoAudio``)."""
     import benchmark
     import tenacity
     return tenacity.Retrying(
         retry=tenacity.retry_if_exception(
-            lambda e: isinstance(e, tts.TTSTimeout) or benchmark._is_transient_api_error(e)),
+            lambda e: isinstance(e, (tts.TTSTimeout, tts.TTSNoAudio))
+            or benchmark._is_transient_api_error(e)),
         stop=tenacity.stop_after_attempt(benchmark._TRANSIENT_ATTEMPTS),
         wait=(benchmark._TRANSIENT_WAIT if benchmark._TRANSIENT_WAIT is not None
               else tenacity.wait_exponential(multiplier=2, min=2, max=20)),
@@ -435,7 +445,10 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
     fatal = False
 
     def save():
-        manifest["clips"] = records + [_plan_record(p) for p in plans[len(records):]]
+        # Clips not reached yet keep their previous record, so a run that is killed
+        # part-way doesn't lose the fingerprints of audio already on disk.
+        manifest["clips"] = records + [dict(previous[p.name]) if p.name in previous
+                                       else _plan_record(p) for p in plans[len(records):]]
         _fill_counts(manifest)
         write_json_atomic(manifest_path, manifest)
 
@@ -454,9 +467,7 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
         wav = audio_dir / f"{p.name}.wav"
         prev = previous.get(p.name)
 
-        if fatal:
-            rec.update(status="failed", error="not attempted: the run stopped on an earlier error")
-        elif not overwrite and prev and prev.get("source_hash") == h and wav.is_file():
+        if not overwrite and prev and prev.get("source_hash") == h and wav.is_file():
             rec.update({k: prev.get(k) for k in ("audio_seconds", "input_tokens", "output_tokens",
                                                   "cost_usd", "wall_seconds", "served_model",
                                                   "request_id", "first_audio_seconds",
@@ -465,6 +476,8 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
             rec["transient_errors"] = rec["transient_errors"] or []
             rec["status"] = "skipped"
             log(f"  skip  {p.name} (unchanged)")
+        elif fatal:
+            rec.update(status="failed", error="not attempted: the run stopped on an earlier error")
         elif len(text) > spec.max_chars:
             rec.update(status="failed",
                        error=f"{len(text)} characters is over the {spec.name} limit of "
@@ -476,7 +489,10 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
 
             def attempt(text=text, errors=errors):
                 try:
-                    return provider.synthesize(text)
+                    syn = provider.synthesize(text)
+                    if not syn.pcm:
+                        raise tts.TTSNoAudio("the reply had no audio")
+                    return syn
                 except Exception as exc:
                     errors.append(exc)
                     raise
@@ -496,8 +512,6 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
                            request_id=syn.request_id,
                            first_audio_seconds=syn.first_audio_seconds,
                            max_gap_seconds=syn.max_gap_seconds, generated_at=_now())
-                if syn.seconds == 0:
-                    rec["warnings"].append("the provider returned no audio")
                 if cost is None:
                     rec["warnings"].append("the provider reported no token usage, so no cost")
                 log(f"  ok    {p.name} ({syn.seconds:.1f} s audio"
