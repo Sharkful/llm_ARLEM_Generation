@@ -52,6 +52,7 @@ for _p in (HERE, PROJECT_ROOT, PROJECT_ROOT / "Code" / "Schemas", PROJECT_ROOT /
         sys.path.insert(0, str(_p))
 
 import bundle  # noqa: E402
+import spoken_form  # noqa: E402
 import tts  # noqa: E402
 
 NARRATION_ROOT = PROJECT_ROOT / "Artifacts" / "Data" / "Narration"
@@ -59,7 +60,7 @@ MANIFEST = "narration_manifest.json"
 MANIFEST_SCHEMA = "narration_manifest/1"
 AUDIO_FORMAT = {"format": "wav", "sample_rate": bundle.WAV_SAMPLE_RATE,
                 "sample_width_bits": 8 * bundle.WAV_SAMPLE_WIDTH, "channels": bundle.WAV_CHANNELS}
-SPOKEN_FORM_MODES = ("none",)   # "rules" and "llm" arrive with #94
+SPOKEN_FORM_MODES = spoken_form.MODES   # "rules" arrives with #94's glossary
 FATAL_STATUS = {401, 402, 403, 404}  # key, billing, permission, unknown model: every clip would fail
 SHORT_TEXT, LONG_TEXT = 20, 1500  # characters; per-clip warnings only
 
@@ -166,12 +167,7 @@ def bundled_lab(lab: dict, plans: list[ClipPlan]) -> dict:
     return out
 
 
-def spoken_text(display_text: str, mode: str) -> str:
-    """The text sent to the voice service. ``none`` sends the narration as written
-    (trimmed); the rules and llm modes are #94."""
-    if mode != "none":
-        raise InputError(f"--spoken-form {mode} is not available yet (#94)")
-    return display_text.strip()
+# The spoken-form pass (spoken_form.py) decides each clip's spoken text up front.
 
 
 def source_hash(text: str, provider: str, model: str, voice: str, style: str) -> str:
@@ -234,6 +230,25 @@ def check_environment(spec: tts.ProviderSpec) -> str:
     raise InputError(f"no API key for {spec.name}: set {' or '.join(spec.api_key_env)} in .env")
 
 
+_LLM_KEY_ENV = {"openai": ("OPENAI_API_KEY",), "anthropic": ("ANTHROPIC_API_KEY",),
+                "google": ("GEMINI_API_KEY", "GOOGLE_API_KEY")}
+
+
+def check_spoken_form_environment(model_key: str) -> None:
+    """The spoken-form model's SDK (via the benchmark's check) and API key."""
+    from benchmark import check_environment as benchmark_check
+    from benchmark_config import MODELS as REGISTRY
+    mc = REGISTRY[model_key]
+    errors, _ = benchmark_check([mc])
+    if errors:
+        raise InputError("; ".join(errors) + " (needed for --spoken-form llm). "
+                         "Activate the project venv and run: pip install -r requirements.txt")
+    names = _LLM_KEY_ENV.get(mc.provider.value, ())
+    if names and not any(os.environ.get(v) for v in names):
+        raise InputError(f"no API key for the spoken-form model {model_key}: "
+                         f"set {' or '.join(names)} in .env")
+
+
 def _rel(path: Path) -> str:
     try:
         return path.resolve().relative_to(PROJECT_ROOT).as_posix()
@@ -290,6 +305,7 @@ class Settings:
     spoken_form: str
     topic: str | None
     bundle_name: str | None
+    spoken_form_model: str | None = None   # registry key, for --spoken-form llm
 
 
 def _bundle_names(lab: dict, settings: Settings) -> bundle.BundleNames:
@@ -379,9 +395,10 @@ def _clip_warnings(text: str) -> list[str]:
 
 
 def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=None,
-        api_key: str | None = None, log=print) -> int:
+        api_key: str | None = None, spoken_call=None, log=print) -> int:
     """Narrate ``settings.input_path`` into ``run_dir``. ``provider`` (anything with
-    ``synthesize(text) -> tts.Synthesis``) replaces the real client in tests."""
+    ``synthesize(text) -> tts.Synthesis``) and ``spoken_call`` (see
+    ``spoken_form.run_pass``) replace the real clients in tests."""
     from tracking.metrics import TokenUsage
     from tracking.pricing import PricingCalculator
 
@@ -441,6 +458,23 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
         "clips": [],
     }
 
+    model_key = settings.spoken_form_model if settings.spoken_form == "llm" else None
+    narrated = [(p.name, p.display_text) for p in plans if p.action == "narrate"]
+    spoken, sf = spoken_form.run_pass(settings.spoken_form, model_key, lab, topic, narrated,
+                                      run_dir, write_json_atomic, call_fn=spoken_call, log=log)
+    prev_sf_cost = ((old or {}).get("spoken_form") or {}).get("cost_usd_all_runs") or 0.0
+    manifest["spoken_form"] = {
+        "mode": settings.spoken_form, "model": sf.model, "model_id": sf.model_id,
+        "prompt_version": spoken_form.PROMPT_VERSION if settings.spoken_form == "llm" else None,
+        "glossary_version": None, "served_models": sf.served_models, "calls": sf.calls,
+        "clips_sent": sf.clips_sent, "clips_cached": sf.clips_cached,
+        "input_tokens": sf.input_tokens, "output_tokens": sf.output_tokens,
+        "cost_usd": sf.cost_usd, "cost_usd_all_runs": prev_sf_cost + sf.cost_usd,
+        "retries": sf.retries,
+        "transient_retries": sf.transient_retries, "error": sf.error,
+        "cache_file": spoken_form.CACHE_FILE if settings.spoken_form == "llm" else None,
+    }
+
     records: list[dict] = []
     fatal = False
 
@@ -460,10 +494,12 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
                 rec["status"] = "shared"
             save()
             continue
-        text = spoken_text(p.display_text, settings.spoken_form)
+        sp = spoken[p.name]
+        text = sp.spoken_text
         h = source_hash(text, spec.name, spec.model, settings.voice, settings.style)
         rec.update(spoken_text=text, characters=len(text), source_hash=h,
-                   warnings=_clip_warnings(text))
+                   warnings=_clip_warnings(text),
+                   spoken_form={"source": sp.source, "flags": sp.flags, "changes": sp.changes})
         wav = audio_dir / f"{p.name}.wav"
         prev = previous.get(p.name)
 
@@ -588,7 +624,7 @@ def _plan_record(p: ClipPlan) -> dict:
         "request_id": None, "first_audio_seconds": None, "max_gap_seconds": None,
         "transient_retries": None, "transient_errors": [],
         "generated_at": None, "source_hash": None,
-        "error": None, "error_reason": None, "warnings": [],
+        "error": None, "error_reason": None, "warnings": [], "spoken_form": None,
     }
 
 
@@ -613,8 +649,12 @@ def _fill_counts(manifest: dict) -> None:
         "cost_usd_this_run": total(this_run, "cost_usd"),
         "wall_seconds": round(total(audio, "wall_seconds"), 3),
         "transient_retries": sum(c.get("transient_retries") or 0 for c in clips),
-        "spoken_form_cost_usd": 0.0,
+        "spoken_form_cost_usd": (manifest.get("spoken_form") or {}).get("cost_usd_all_runs", 0.0),
     }
+    manifest["totals"]["total_cost_usd"] = (manifest["totals"]["cost_usd"]
+                                            + manifest["totals"]["spoken_form_cost_usd"])
+    manifest["counts"]["spoken_form_flagged"] = sum(
+        1 for c in clips if (c.get("spoken_form") or {}).get("flags"))
 
 
 # ── CLI ───────────────────────────────────────────────────────────────
@@ -626,14 +666,16 @@ def _dry_run(settings: Settings) -> int:
     plans = plan_clips(lab)
     names = _bundle_names(lab, settings)
     narrate = [p for p in plans if p.action == "narrate"]
-    chars = sum(len(spoken_text(p.display_text, settings.spoken_form)) for p in narrate)
-    too_long = [p.name for p in narrate
-                if len(spoken_text(p.display_text, settings.spoken_form)) > spec.max_chars]
+    chars = sum(len(p.display_text.strip()) for p in narrate)
+    too_long = [p.name for p in narrate if len(p.display_text.strip()) > spec.max_chars]
     print(f"{names.zip_file}: {len(plans)} clips, {len(narrate)} to narrate with "
           f"{spec.model} / {settings.voice}")
     for p in plans:
         change = f"  [{p.name_change}]" if p.name_change else ""
         print(f"  m{p.module:02d} {p.clip_name:<12} {p.action:<8} {p.name or '-'}{change}")
+    if settings.spoken_form == "llm":
+        print(f"Spoken form: llm with {settings.spoken_form_model} (not run in a dry run; "
+              "counts below are for the narration as written).")
     print(f"{chars} characters, roughly {chars / 15 / 60:.1f} min of audio. No requests sent.")
     if too_long:
         print(f"Over the {spec.max_chars}-character limit (would fail): {too_long}")
@@ -646,7 +688,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--provider", choices=sorted(tts.PROVIDERS))
     ap.add_argument("--voice", help="override the provider's frozen default voice")
     ap.add_argument("--spoken-form", choices=SPOKEN_FORM_MODES, default="none",
-                    help="text sent to the voice service (rules/llm: #94)")
+                    help="text sent to the voice service: none (as written) or llm "
+                         "(symbols, numbers, formulas spelled out; flagged, never rejected)")
+    ap.add_argument("--spoken-form-model", choices=spoken_form.MODELS,
+                    help=f"model for --spoken-form llm (default {spoken_form.DEFAULT_MODEL})")
     ap.add_argument("--topic", help="lab YAML topic name (default: from the paired metrics file)")
     ap.add_argument("--bundle-name", help="zip/folder name, e.g. to match the server's lab id")
     ap.add_argument("--run-group", help="Artifacts/Data/Narration/<run group>/")
@@ -660,7 +705,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.resume:
             given = [f"--{k.replace('_', '-')}" for k in
-                     ("lab", "provider", "voice", "topic", "bundle_name", "run_group")
+                     ("lab", "provider", "voice", "topic", "bundle_name", "run_group",
+                      "spoken_form_model")
                      if getattr(args, k)]
             if given or args.spoken_form != "none" or args.dry_run:
                 raise InputError(f"--resume takes its settings from the manifest; drop "
@@ -675,7 +721,8 @@ def main(argv: list[str] | None = None) -> int:
                 provider=m["voice_service"]["provider"], voice=m["voice_service"]["voice"],
                 style=m["voice_service"]["style_instruction"], spoken_form=m["spoken_form"]["mode"],
                 topic=m["source"].get("topic"),
-                bundle_name=m["bundle"].get("bundle_name_override"))
+                bundle_name=m["bundle"].get("bundle_name_override"),
+                spoken_form_model=m["spoken_form"].get("model"))
         else:
             if not args.lab or not args.provider:
                 raise InputError("give a lab file and --provider (or --resume <run folder>)")
@@ -683,7 +730,11 @@ def main(argv: list[str] | None = None) -> int:
             settings = Settings(input_path=args.lab, provider=args.provider,
                                 voice=args.voice or spec.voice, style=tts.STYLE_INSTRUCTION,
                                 spoken_form=args.spoken_form, topic=args.topic,
-                                bundle_name=args.bundle_name)
+                                bundle_name=args.bundle_name,
+                                spoken_form_model=(args.spoken_form_model or spoken_form.DEFAULT_MODEL)
+                                if args.spoken_form == "llm" else None)
+            if args.spoken_form_model and args.spoken_form != "llm":
+                raise InputError("--spoken-form-model only applies with --spoken-form llm")
             if args.dry_run:
                 return _dry_run(settings)
             stem = args.lab.name.removesuffix(".json").removesuffix("_output")
@@ -691,6 +742,8 @@ def main(argv: list[str] | None = None) -> int:
             base = NARRATION_ROOT / args.run_group if args.run_group else NARRATION_ROOT
             run_dir = base / f"{stem}_{args.provider}_{stamp}"
         api_key = check_environment(tts.PROVIDERS[settings.provider])
+        if settings.spoken_form == "llm":
+            check_spoken_form_environment(settings.spoken_form_model)
         load_lab(settings.input_path)  # fail before creating a run folder
         print(f"Narrating {_rel(settings.input_path)} -> {_rel(run_dir)}")
         return run(settings, run_dir, overwrite=args.overwrite, api_key=api_key)

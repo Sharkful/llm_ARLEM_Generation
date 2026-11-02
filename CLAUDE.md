@@ -89,6 +89,7 @@ Narration (finished lab -> one WAV per clip -> lab resources zip; json_lab only)
 # --dry-run prints the clip plan and sends nothing; --run-group NAME -> Artifacts/Data/Narration/NAME/
 python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider gemini --dry-run
 python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider openai --run-group testing
+python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider gemini --spoken-form llm
 python "Code/Narration/narrate_lab.py" --resume "Artifacts/Data/Narration/testing/<run name>"
 python "Code/Narration/bundle.py" validate "<Name>Lab.zip"
 python "Code/Narration/smoke_test.py"   # offline check, no API keys (fake TTS + mock OpenAI/Gemini)
@@ -314,6 +315,16 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   (`transient_errors`); 401/402/403/404 and unusable audio stop the run.
   Cost comes from reported tokens via `tracking/pricing.py` (TTS entries are from
   secondary sources; checking them against billing is #101).
+- **`spoken_form.py`** (#94): the text each clip sends to the voice service
+  (`--spoken-form {none,llm}`; rules mode and a glossary to follow). LLM mode is one
+  call per lab to a cheap registry model (`--spoken-form-model`, default
+  `claude-haiku-5.5`, provisional) through `create_instructor_client` +
+  `provider_create_kwargs`, with the `LabSpokenForms` response matched back by audio
+  name. `check_spoken()` compares the spoken text with the narration word by word in
+  code and **flags, never rejects**: a flagged clip is narrated with the model's text,
+  and a missing clip or a failed call falls back to the narration. Results are cached
+  in the run folder's `spoken_forms.json`, so reruns don't re-bill audio; a reviewer can
+  edit `spoken_text` there and `--resume` redoes only that clip.
 - **`tts.py`**: the providers and the frozen paper defaults (`PROVIDERS`,
   `STYLE_INSTRUCTION`).
   - OpenAI `gpt-4o-mini-tts-2025-12-15`/`marin`: PCM over SSE, because only the

@@ -1,8 +1,9 @@
 # Narration generation: goals spec
 
 Status: **agreed** (#91). This spec decides what the narration tool produces.
-Built so far: the zip layout (#92, `bundle.py`) and the narration CLI (#93,
-`narrate_lab.py` + `tts.py`). The spoken-form pass (#94) is next.
+Built so far: the zip layout (#92, `bundle.py`), the narration CLI (#93,
+`narrate_lab.py` + `tts.py`) and the spoken-form pass's LLM mode (#94,
+`spoken_form.py`). Rules mode and its glossary (#94) are next.
 
 ## Why
 
@@ -57,8 +58,7 @@ languages other than English.
   2. `lab_name` in the paired `*_metrics.json` beside the input, if present
   3. none, which means the shared glossary only
 
-  The LLM spoken-form mode also gets `courseName`, `labId` and `objectives`
-  as context.
+  The LLM spoken-form mode also gets `labId` and `courseName` as context.
 
 ## Clip handling (edge cases)
 
@@ -84,10 +84,10 @@ compared with the original.
 
 - **Display text stays put.** `Clip.narration` is never changed; it stays the
   subtitle and display text.
-- **Spoken text** is produced by the spoken-form pass (#94):
-  `--spoken-form {llm,rules,none}`. It may only expand symbols, numbers, units,
-  formulas and acronyms in context (DNA `5'` → "five-prime"). It never rewords.
-  The default is chosen by measured cost (#94).
+- **Spoken text** is produced by the spoken-form pass (#94; see "Spoken-form
+  pass" below): `--spoken-form {none,llm}`, with `rules` to follow. It may only
+  expand symbols, numbers, units, formulas and acronyms in context (DNA `5'` →
+  "five prime"). The default is chosen by measured cost (#94).
 - **One request per clip.** The whole clip's spoken text goes in one request,
   for natural flow across sentences. There is no segment splitting and no
   inserted silences. The longest wave-2 clip (966 characters) fits every
@@ -276,7 +276,8 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
   all of them. Valid audio is never paid for twice: unchanged clips are skipped
   even after a stop-the-run error, and a run killed part-way keeps the records
   of the clips it never reached.
-- `--spoken-form` only offers `none` until #94 adds `rules` and `llm`.
+- `--spoken-form {none,llm}` and `--spoken-form-model` choose the spoken-form
+  pass (below). `rules` arrives with the glossary.
 - **Failures:**
   - A clip that fails is recorded and the run continues. No zip is built until
     every narrated clip has audio, and a stale zip is removed.
@@ -332,6 +333,60 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
     per-request limit above. The offline smoke test
   (`smoke_test.py` parts 2 and 3: a fake service, then mock OpenAI and Gemini
   servers) covers everything else.
+
+## Spoken-form pass (#94, `spoken_form.py`)
+
+```
+python "Code/Narration/narrate_lab.py" <lab_output.json> --provider gemini --spoken-form llm \
+    [--spoken-form-model {claude-haiku-5.5,gpt-6-luna,gemini-3.5-flash-lite}]
+```
+
+- **One call per lab.** Every narrated clip goes in one prompt, tagged with its
+  audio name, together with the lab's id, course and topic.
+  - The reply is a structured `LabSpokenForms` (a list of `audio_name`,
+    `spoken_text`) and is matched back to clips by name, never by position.
+  - The models are the three cheapest in the benchmark registry. The default
+    (`claude-haiku-5.5`) is provisional until the #94 measurement.
+  - The call goes through `create_instructor_client` + `provider_create_kwargs`,
+    is tracked by `tracking/`, and uses transient-only retries.
+- **What the model may change**, per the prompt:
+  - symbols and arrows (`5'→3'` → "five prime to three prime")
+  - numbers with units (`109.5°`, `1.52 AU`, `150-200`)
+  - formulas as letters and numbers (`XeF4` → "X e F four", `CH₄` → "C H four")
+  - acronyms ("D N A", or "vesper" when said as a word)
+  - math (`vx = v cosθ` → "v x equals v cos theta")
+  - letter sequences (`TACGGTCA` → "T, A, C, G…")
+  - emphasis capitals (`press NEXT` → "press next")
+
+  Nothing else may change.
+- **The word check flags; it never rejects** (`check_spoken`). Code compares each
+  clip's spoken text with its narration word by word.
+  - Allowed: replacing tokens with digits, symbols, subscripts, Greek letters or
+    all-caps acronyms; spelling a short word out letter by letter (`vx` →
+    "v x"); and punctuation and case changes.
+  - Flagged: an ordinary word changed, dropped or reordered, words added where
+    nothing was replaced, or an empty reply.
+  - A flagged clip is still narrated with the model's text. The run carries on,
+    and the flag is left for a reviewer.
+  - A clip the model didn't return, or every clip when the call itself fails,
+    falls back to the narration as written, flagged.
+- **Cache: `spoken_forms.json`** in the run folder, written straight after the
+  call.
+  - It holds per audio name: the narration, the model's text, the text to
+    speak, the flags, and the mode, model and prompt version.
+  - A rerun reuses a clip's entry while all of those match, so the model's
+    run-to-run wording differences never re-bill audio. Only clips whose
+    narration changed are sent again, and changing the model or prompt version
+    refreshes everything.
+  - **Reviewer edits:** change a clip's `spoken_text` and rerun with `--resume`.
+    The edit is kept (source `edited`, still word-checked), and since the spoken
+    text is part of the clip's source hash, only that clip's audio is redone.
+- **Recorded:** the manifest's `spoken_form` block holds mode, model and model
+  id, prompt version, served models, calls, clips sent and cached, tokens, cost
+  (this run and `cost_usd_all_runs`), retries and any call error. Each clip
+  records `spoken_form` {`source`: none / llm / cache / edited / fallback,
+  `flags`, `changes` (original → spoken)}. `counts.spoken_form_flagged` and
+  `totals.total_cost_usd` (TTS plus spoken form) sum them up.
 
 ## Engineering rules (from the repo, not from JW's code)
 
