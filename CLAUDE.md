@@ -90,6 +90,9 @@ Narration (finished lab -> one WAV per clip -> lab resources zip; json_lab only)
 python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider gemini --dry-run
 python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider openai --run-group testing
 python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider gemini --spoken-form llm
+python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider gemini --spoken-form rules
+python "Code/Narration/spoken_rules.py" preview "Artifacts/Data/Benchmark/Outputs/<run>_output.json"   # rules before/after
+python "Code/Narration/spoken_rules.py" terms "Artifacts/Data/Benchmark/Outputs"   # terms the glossary doesn't cover
 python "Code/Narration/narrate_lab.py" --resume "Artifacts/Data/Narration/testing/<run name>"
 python "Code/Narration/bundle.py" validate "<Name>Lab.zip"
 python "Code/Narration/smoke_test.py"   # offline check, no API keys (fake TTS + mock OpenAI/Gemini)
@@ -320,7 +323,7 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   Cost comes from reported tokens via `tracking/pricing.py` (TTS entries are from
   secondary sources; checking them against billing is #101).
 - **`spoken_form.py`** (#94): the text each clip sends to the voice service
-  (`--spoken-form {none,llm}`; rules mode and a glossary to follow). LLM mode is one
+  (`--spoken-form {none,rules,llm}`). LLM mode is one
   call per lab to a cheap registry model (`--spoken-form-model`, default
   `claude-haiku-5.5`, provisional) through `create_instructor_client` +
   `provider_create_kwargs`, with the `LabSpokenForms` response matched back by audio
@@ -331,6 +334,16 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   brackets, spaces and case, and a failed call's tokens are still recorded. Results are
   cached in the run folder's `spoken_forms.json`, so reruns don't re-bill audio; a
   reviewer can edit `spoken_text` there and `--resume` redoes only that clip.
+- **`spoken_rules.py`** + **`glossary/`** (#94, rules mode): no LLM. General notation rules
+  (formulas by element-symbol parsing, number + unit, degrees, decimals "104 point 5", ranges,
+  Greek, operators, letter chains and sequences); digits otherwise stay. Ambiguous notation
+  (`5'`: prime / feet / arcminutes) is decided by clue words found anywhere in the lab
+  (`senses`), strong local patterns first; what can't be decided (an unknown acronym, a prime
+  with no clues, a symbol with no rule) is left as written and flagged. Glossary layers, last
+  wins: `glossary/shared.yaml` (pronunciation only) → `glossary/topics/<topic>.yaml` →
+  `--glossary FILE` → the run folder's `glossary.yaml` (also on `--resume`). The manifest records
+  `glossary_version` (content hash), the layers and `unresolved_terms`. `preview` and `terms`
+  subcommands review it without any request. The seed glossary awaits review.
 - **`tts.py`**: the providers and the frozen paper defaults (`PROVIDERS`,
   `STYLE_INSTRUCTION`).
   - OpenAI `gpt-4o-mini-tts-2025-12-15`/`marin`: PCM over SSE, because only the

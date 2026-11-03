@@ -17,6 +17,11 @@ short generated tones in place of narration. Checks:
 - every wave-2 json_lab lab bundles and validates
 - the CLI exit codes
 
+Part 1b (the spoken-form rules and glossary, #94): rule-by-rule cases, cases from
+topics we have no lab for, what must be left alone, flags for undecided terms,
+glossary layers, versions and errors, and the whole wave-2 corpus (no ordinary
+word changed, a second pass changes nothing).
+
 Part 2 (the narration CLI, #93) runs narrate_lab.py with a fake voice service:
 clip names (generated, sanitized, deduplicated, shared, dropped), the bundled lab,
 cost from token usage, reruns that skip unchanged clips, voice changes and
@@ -499,6 +504,180 @@ out = io.StringIO()
 with contextlib.redirect_stdout(out):
     code = bundle.main(["names", str(SAMPLE_LAB)])
 check(code == 0 and names.zip_file in out.getvalue(), "names prints the derived zip name")
+
+# ══ Part 1b: spoken-form rules and glossary (#94) ═════════════════════
+
+print("\n-- Part 1b: spoken-form rules and glossary")
+try:
+    import spoken_rules  # noqa: E402
+    import spoken_form  # noqa: E402
+    import yaml  # noqa: E402
+    HAVE_RULES = True
+except ImportError as exc:
+    HAVE_RULES = False
+    check(False, f"spoken-form rules import (run in the project venv): {exc}")
+
+if HAVE_RULES:
+    SHARED = spoken_rules.load_glossary()
+
+    def say(text, *context, topic=None, glossary=None):
+        """The rules' output for text, in a lab whose narration is text plus context."""
+        g = glossary or (spoken_rules.load_glossary(topic) if topic else SHARED)
+        ctx = spoken_rules.LabContext.from_texts([text, *context], topic)
+        return spoken_rules.apply_rules(text, g, ctx)
+
+    # Each case: (narration, expected spoken text, other narration in the same lab).
+    # Grouped by rule; the second group is written from topics we have no lab for,
+    # to show the rules carry over.
+    CASES = {
+        "wave-2 notation": [
+            ("The H-O-H bond angle is 104.5°.", "The H O H bond angle is 104 point 5 degrees.", ()),
+            ("Methane, CH₄, and XeF4 both apply VSEPR.", "Methane, C H 4, and X e F 4 both apply vesper.", ()),
+            ("Read the strand 5' to 3': A-T-G-C-C.", "Read the strand 5 prime to 3 prime: A, T, G, C, C.", ()),
+            ("It reads 3'-TACGGTCA-5'.", "It reads 3 prime, T, A, C, G, G, T, C, A, 5 prime.", ()),
+            ("Polymerase moves 5'→3' and adds to the 3' end.",
+             "Polymerase moves 5 prime to 3 prime and adds to the 3 prime end.", ()),
+            ("It travels in the 3'-to-5' direction.", "It travels in the 3 prime to 5 prime direction.", ()),
+            ("Mars orbits at 1.52 AU; Earth at 1 AU.",
+             "Mars orbits at 1 point 5 2 astronomical units; Earth at 1 astronomical unit.", ()),
+            ("Press NEXT to go on.", "Press next to go on.", ("Then the next step.",)),
+            ("The heart beats 150-200 times.", "The heart beats 150 to 200 times.", ()),
+            ("So vx = v cosθ and vy = 0.", "So v x equals v cos theta and v y equals 0.",
+             ("Each vector has an x component.",)),
+            ("At maximum height, Vy is zero. By symmetry it falls back.",
+             "At maximum height, V y is zero. By symmetry it falls back.", ("the vertical component",)),
+            ("the 45° result and a 180° turn, at 45°", "the 45 degree result and a 180 degree turn, at 45 degrees", ()),
+            ("Track the pulmonary trunk/arteries and/or veins.",
+             "Track the pulmonary trunk or arteries and or veins.", ()),
+            ("Earth’s orbit doesn’t change.", "Earth’s orbit doesn’t change.", ()),
+        ],
+        "other topics": [
+            ("A 9 V battery drives 0.5 A through a 220 Ω resistor.",
+             "A 9 volt battery drives 0 point 5 amps through a 220 ohm resistor.", ("in the circuit",)),
+            ("Gravity accelerates it at 9.8 m/s² near the surface.",
+             "Gravity accelerates it at 9 point 8 meters per second squared near the surface.", ()),
+            ("Speed is measured in m/s.", "Speed is measured in meters per second.", ()),
+            ("Glucose, C6H12O6, burns in O2: 2H2 + O2 → 2H2O.",
+             "Glucose, C 6 H 12 O 6, burns in O 2: 2 H 2 plus O 2 to 2 H 2 O.", ()),
+            ("The 5' cap and the 3' end protect the mRNA.",
+             "The 5 prime cap and the 3 prime end protect the mRNA.", ()),
+            ("Its 5' and 3' untranslated regions differ.", "Its 5 prime and 3 prime untranslated regions differ.",
+             ("This RNA is spliced.",)),
+            ("The doorway is 7' high and she is 5'10\".", "The doorway is 7 feet high and she is 5 feet 10 inches.",
+             ("How tall is it?",)),
+            ("Polaris sits at a declination of 89°15'.", "Polaris sits at a declination of 89 degrees 15 arcminutes.", ()),
+            ("The result is significant if p < 0.05.", "The result is significant if p is less than 0 point 0 5.", ()),
+            ("Water boils at 100 °C and it was -40°F outside.",
+             "Water boils at 100 degrees Celsius and it was minus 40 degrees Fahrenheit outside.", ()),
+            ("Expect 10–15% growth.", "Expect 10 to 15 percent growth.", ()),
+            ("Do NOT touch the probe.", "Do not touch the probe.", ("It is not hot.",)),
+            ("The ball leaves with speed v0, then v₀ halves.", "The ball leaves with speed v zero, then v zero halves.", ()),
+            ("Leave a 5mm gap; it is 1 mm wide.", "Leave a 5 millimeter gap; it is 1 millimeter wide.", ()),
+            ("The change Δx is small.", "The change delta x is small.", ()),
+            ("Its pH is 7.4.", "Its P H is 7 point 4.", ()),
+        ],
+        "left alone": [
+            ("In the 1990's and the 1990s, 3D models came in.", "In the 1990's and the 1990s, 3D models came in.", ()),
+            ("He said it is in Iron Age tools, as we saw.", "He said it is in Iron Age tools, as we saw.", ()),
+            ("It moves by itself, an ox and my ax.", "It moves by itself, an ox and my ax.", ("the x component",)),
+            ("Take 2 C atoms and 3 H atoms.", "Take 2 C atoms and 3 H atoms.", ()),
+            ("A T-shirt, an X-ray and a U-turn.", "A T-shirt, an X-ray and a U-turn.", ()),
+            ("The year 2024 had 365 days.", "The year 2024 had 365 days.", ()),
+            ("Jupiter at 5.2.", "Jupiter at 5 point 2.", ()),
+        ],
+    }
+    for group, cases in CASES.items():
+        bad = []
+        for text, expected, context in cases:
+            r = say(text, *context)
+            if r.spoken_text != expected:
+                bad.append(f"{text!r} -> {r.spoken_text!r} (expected {expected!r})")
+        check(not bad, f"rules, {group}: {len(cases) - len(bad)}/{len(cases)} cases"
+              + ("".join(f"\n       {b}" for b in bad)))
+
+    r = say("The CMB is ancient light.")
+    check(r.spoken_text == "The CMB is ancient light." and r.unresolved == ["CMB"] and "CMB" in r.flags[0],
+          "an acronym not in the glossary is left for the voice and flagged")
+    r = say("Set it to 5' first.")
+    check(r.spoken_text == "Set it to 5' first." and r.unresolved == ["5'"] and "no clues" in r.flags[0],
+          "a prime with no clues in the lab is left as written and flagged")
+    r = say("It points AWAY from the fork.")
+    check(r.spoken_text == "It points AWAY from the fork." and r.unresolved == ["AWAY"],
+          "a capitalized word never written in lowercase in the lab is flagged, not guessed")
+    r = say("The angle ∡ is shown.")
+    check(r.unresolved == ["∡"] and "no rule" in r.flags[0], "a symbol with no rule is flagged")
+    r = say("Set it to 5' first.", topic="dna_structure_and_replication")
+    check(r.spoken_text == "Set it to 5 prime first." and not r.flags,
+          "a topic glossary pin decides a prime the lab's own words don't")
+    r = say("Then 5'-ATGC-3' and the 3' end.", topic="vsepr_molecular_geometry")
+    check(r.spoken_text == "Then 5 prime, A, T, G, C, 3 prime and the 3 prime end.",
+          "local patterns (strand ends, 'the 3' end') are primes in any lab")
+    changes = say("XeF4 has 109.5° angles.").changes
+    check([c["rule"] for c in changes] == ["degrees", "formula", "decimal"]
+          and changes[1] == {"rule": "formula", "original": "XeF4", "spoken": "X e F 4"},
+          "every change records its rule, the original and the spoken text")
+
+    # Glossary layers, versions and errors.
+    gdir = fresh("glossary")
+    extra = gdir / "extra.yaml"
+    extra.write_text("terms:\n  CMB: C M B\npins:\n  number_prime: feet\n", encoding="utf-8")
+    run_folder = gdir / "run"
+    run_folder.mkdir()
+    (run_folder / spoken_rules.RUN_GLOSSARY).write_text("terms:\n  CMB: cosmic microwave background\n",
+                                                        encoding="utf-8")
+    g1 = spoken_rules.load_glossary(None, [extra])
+    g2 = spoken_rules.load_glossary(None, [extra], run_folder)
+    check(say("The CMB at 5'.", glossary=g1).spoken_text == "The C M B at 5 feet."
+          and say("The CMB.", glossary=g2).spoken_text == "The cosmic microwave background."
+          and len(g2.files) == 3 and g2.files[-1].endswith("glossary.yaml"),
+          "glossary layers: an extra file adds terms and pins, a run folder's glossary.yaml wins")
+    check(g1.version != SHARED.version and spoken_rules.load_glossary(None, [extra]).version == g1.version
+          and spoken_rules.load_glossary("dna_structure_and_replication").version != SHARED.version,
+          "the glossary version is a content hash: same files same version, any change a new one")
+    errors = []
+    for body in ("- just a list\n", "terms:\n  X: [1, 2]\n", "units:\n  q: {say: 5}\n",
+                 "pins:\n  number_prime: furlongs\n", "colours: {}\n", "terms: {a: b\n"):
+        (gdir / "bad.yaml").write_text(body, encoding="utf-8")
+        try:
+            spoken_rules.load_glossary(None, [gdir / "bad.yaml"])
+            errors.append(f"accepted: {body!r}")
+        except spoken_rules.GlossaryError:
+            pass
+    check(not errors, "a malformed glossary is a clear GlossaryError, not a crash" + "".join(errors))
+    for path in sorted((spoken_rules.GLOSSARY_DIR / "topics").glob("*.yaml")):
+        spoken_rules.load_glossary(path.stem)
+    check(True, "every committed topic glossary loads")
+
+    # The whole wave-2 corpus: no crash, no ordinary word changed, stable on a rerun.
+    n_clips, word_flags, unstable, flagged, changed = 0, [], [], 0, 0
+    for path, lab_ in spoken_rules._labs([OUTPUTS]):
+        topic = spoken_rules._topic_of(path)
+        g = spoken_rules.load_glossary(topic)
+        ctx = spoken_rules.LabContext.from_lab(lab_, topic)
+        for c in spoken_rules._clips(lab_):
+            n_clips += 1
+            r = spoken_rules.apply_rules(c["narration"], g, ctx)
+            changed += bool(r.changes)
+            flagged += bool(r.flags)
+            f, _ = spoken_form.check_spoken(c["narration"], r.spoken_text)
+            if f:
+                word_flags.append((c["narration"][:80], f))
+            if spoken_rules.apply_rules(r.spoken_text, g, ctx).spoken_text != r.spoken_text:
+                unstable.append(r.spoken_text[:80])
+    check(n_clips > 1700 and not word_flags and not unstable and flagged <= 5,
+          f"all {n_clips} wave-2 clips: {changed} changed, no ordinary word changed, running the rules "
+          f"twice changes nothing, {flagged} flagged" + "".join(f"\n       {w}" for w in word_flags[:5]))
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = spoken_rules.main(["preview", str(SAMPLE_LAB)])
+    check(code == 0 and "5 prime to 3 prime" in out.getvalue() and "number prime -> prime" in out.getvalue(),
+          "spoken_rules.py preview shows the written and spoken text")
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = spoken_rules.main(["terms", str(OUTPUTS), "--json"])
+    report = json.loads(out.getvalue())
+    check(code == 0 and report["clips"] == n_clips and report["rules"]["formula"] > 0,
+          "spoken_rules.py terms reports rule counts and the terms to review")
 
 # ══ Part 2: the narration CLI with a fake voice service (#93) ═════════
 
@@ -1125,6 +1304,72 @@ if HAVE_NARRATION:
     finally:
         os.environ.update({k: v for k, v in saved.items() if v is not None})
     check(ok, "a missing key for the spoken-form model is caught before any request")
+
+    # ── Spoken form: rules mode ──────────────────────────────────────
+    def rules_settings(path=SAMPLE_LAB, glossary=None):
+        st = settings_for(path)
+        st.spoken_form, st.glossary = "rules", glossary
+        return st
+
+    r = TMP / "runs" / "rules"
+    tts_fake = FakeTTS()
+    code = narrate(rules_settings(), r, provider=tts_fake, log=quiet)
+    rl = manifest_of(r)
+    sfr = rl["spoken_form"]
+    by_name = {c["audio_name"]: c for c in rl["clips"]}
+    strand = next(c for c in rl["clips"] if c["display_text"] and "5' to 3'" in c["display_text"])
+    check(code == 0 and rl["status"] == "complete" and sfr["mode"] == "rules" and sfr["calls"] == 0
+          and sfr["glossary_version"] and len(sfr["glossary_files"]) == 2
+          and sfr["glossary_files"][1].endswith("topics/dna_structure_and_replication.yaml")
+          and not [x for x in rl["calls"] if x["step"] == "spoken_form"]
+          and rl["totals"]["spoken_form_cost_usd"] == 0,
+          "rules mode: no LLM call, and the manifest records the glossary version and its layers")
+    check("5 prime to 3 prime" in strand["spoken_text"] and strand["spoken_text"] in tts_fake.calls
+          and strand["spoken_form"]["source"] == "rules"
+          and any(ch["rule"] == "prime" for ch in strand["spoken_form"]["changes"])
+          and strand["display_text"] != strand["spoken_text"],
+          "rules mode: the voice receives the rules' text, and each clip records its rule changes")
+    check(isinstance(sfr["unresolved_terms"], dict) and rl["counts"]["spoken_form_flagged"]
+          == sum(1 for c in rl["clips"] if (c.get("spoken_form") or {}).get("flags")),
+          "rules mode: undecided terms are listed for the lab and flagged per clip")
+
+    with_ssb = [c["audio_name"] for c in rl["clips"] if c["display_text"] and "SSB" in c["display_text"]]
+    (r / spoken_rules.RUN_GLOSSARY).write_text("terms:\n  SSB: single-strand binding protein\n",
+                                               encoding="utf-8")
+    tts_fake = FakeTTS()
+    narrate(rules_settings(), r, provider=tts_fake, log=quiet)
+    rl2 = manifest_of(r)
+    ssb_clip = {c["audio_name"]: c for c in rl2["clips"]}[with_ssb[0]]
+    check(with_ssb and len(tts_fake.calls) == len(with_ssb)
+          and "single-strand binding proteins" in ssb_clip["spoken_text"]
+          and rl2["spoken_form"]["glossary_version"] != sfr["glossary_version"]
+          and rl2["spoken_form"]["glossary_files"][-1].endswith("glossary.yaml"),
+          f"a term added in the run folder's glossary.yaml redoes only the {len(with_ssb)} clip(s) it changes")
+
+    gdir = fresh("cli_glossary")
+    good_g, bad_g = gdir / "extra.yaml", gdir / "bad.yaml"
+    good_g.write_text("terms:\n  SSB: S S B\n", encoding="utf-8")
+    bad_g.write_text("pins:\n  number_prime: furlongs\n", encoding="utf-8")
+    r = TMP / "runs" / "rules_extra"
+    narrate(rules_settings(glossary=[str(good_g)]), r, provider=FakeTTS(), log=quiet)
+    rx_ = manifest_of(r)
+    check(rx_["spoken_form"]["glossary_extra"] == [str(good_g)] and len(rx_["spoken_form"]["glossary_files"]) == 3
+          and any("S S Bs" in (c["spoken_text"] or "") for c in rx_["clips"]),
+          "--glossary FILE adds a layer, and the manifest keeps it for --resume")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "rules", "--dry-run")
+    check(code == 0 and "Spoken form: rules, glossary" in text and "clips changed" in text,
+          "--spoken-form rules --dry-run reports what the rules would change, sending nothing")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--glossary", str(good_g), "--dry-run")
+    check(code == 2 and "only applies with --spoken-form rules" in text, "--glossary without rules mode is an error")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "rules",
+                     "--glossary", str(gdir / "missing.yaml"), "--dry-run")
+    check(code == 2 and "no glossary file" in text, "a missing --glossary file exits 2")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "rules",
+                     "--glossary", str(bad_g), "--dry-run")
+    check(code == 2 and "furlongs" in text, "a bad glossary exits 2 with the reason, before any request")
+    code, text = cli("--resume", str(TMP / "runs" / "rules"), "--glossary", str(good_g))
+    check(code == 2 and "--glossary" in text,
+          "--resume refuses --glossary (the run folder's glossary.yaml is the way to add terms)")
 
 # ══ Part 3: real clients against local mock servers ═══════════════════
 

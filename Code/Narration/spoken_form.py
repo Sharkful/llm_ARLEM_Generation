@@ -9,6 +9,8 @@ changed; only what is spoken is.
 Modes (``narrate_lab.py --spoken-form``):
 
 - ``none``: the narration as written.
+- ``rules``: deterministic rules and a layered glossary, no LLM (``spoken_rules.py``).
+  Notation the rules can't decide is left as written and flagged.
 - ``llm``: one call per lab to a cheap model (``MODELS``), through the same
   guarded client path as every LLM entry point (``create_instructor_client`` +
   ``provider_create_kwargs``, tracked by ``tracking/``). Every narrated clip goes
@@ -39,7 +41,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-MODES = ("none", "llm")
+MODES = ("none", "llm", "rules")
 # Benchmark registry keys (benchmark_config.MODELS) allowed for the LLM mode.
 MODELS = ("claude-haiku-5.5", "gpt-6-luna", "gemini-3.5-flash-lite")
 DEFAULT_MODEL = "claude-haiku-5.5"   # provisional; the #94 measurement picks the default
@@ -104,7 +106,8 @@ def build_prompt(lab: dict, topic: str | None, clips: list[tuple[str, str]]) -> 
 # ── The word check (flags, never rejects) ─────────────────────────────
 
 _WORD = re.compile(r"^[A-Za-z]+(?:['’][A-Za-z]+)?$")
-_EDGE = re.compile(r"^[^\w']+|[^\w']+$")   # punctuation around a token (keeps 5', θ)
+# Punctuation around a token. Symbols (5', θ, 45°, +) stay: they are what may change.
+_EDGE = re.compile(r"^[.,;:!?()\[\]{}\"“”‘’—–…*-]+|[.,;:!?()\[\]{}\"“”‘’—–…*-]+$")
 
 
 def _tokens(text: str) -> list[str]:
@@ -218,11 +221,16 @@ class PassReport:
     error: str | None = None
     # One record per request sent: first attempt, instructor reasks, transient re-sends.
     attempts: list[dict] = field(default_factory=list)
+    # Rules mode: the merged glossary's hash and layers, and the terms it couldn't decide.
+    glossary_version: str | None = None
+    glossary_files: list[str] = field(default_factory=list)
+    unresolved: dict[str, int] = field(default_factory=dict)
 
 
 def run_pass(mode: str, model_key: str | None, lab: dict, topic: str | None,
              clips: list[tuple[str, str]], run_dir: Path, write_json,
-             call_fn=None, log=print) -> tuple[dict[str, SpokenResult], PassReport]:
+             call_fn=None, log=print, glossary_files: list | None = None,
+             ) -> tuple[dict[str, SpokenResult], PassReport]:
     """Spoken text for each ``(audio_name, display_text)``.
 
     ``call_fn(prompt) -> (LabSpokenForms, usage_dict)`` replaces the real LLM call in
@@ -233,6 +241,8 @@ def run_pass(mode: str, model_key: str | None, lab: dict, topic: str | None,
     report = PassReport(mode=mode)
     if mode == "none":
         return {n: SpokenResult(t.strip(), "none") for n, t in clips}, report
+    if mode == "rules":
+        return _rules_pass(lab, topic, clips, run_dir, glossary_files, report, log)
 
     report.model = model_key
     key = _cache_key(mode, model_key)
@@ -309,6 +319,29 @@ def run_pass(mode: str, model_key: str | None, lab: dict, topic: str | None,
     if mode == "llm":
         log(f"  spoken form ({model_key}): {report.clips_sent} sent, {report.clips_cached} cached, "
             f"{flagged} flagged for review" + (f", ${report.cost_usd:.4f}" if report.calls else ""))
+    return results, report
+
+
+def _rules_pass(lab, topic, clips, run_dir, glossary_files, report, log):
+    """Rules mode: free and deterministic, so nothing is cached; changing the glossary
+    and rerunning redoes only the clips whose spoken text changed (source hash)."""
+    import spoken_rules
+    g = spoken_rules.load_glossary(topic, glossary_files, run_dir)
+    ctx = spoken_rules.LabContext.from_lab(lab, topic)
+    report.glossary_version, report.glossary_files = g.version, g.files
+    results = {}
+    for name, text in clips:
+        r = spoken_rules.apply_rules(text, g, ctx)
+        # The word check is a safety net: a rule that changed an ordinary word is a bug.
+        check_flags, _ = check_spoken(text, r.spoken_text)
+        results[name] = SpokenResult(r.spoken_text, "rules", r.flags + check_flags, r.changes)
+        for term in r.unresolved:
+            report.unresolved[term] = report.unresolved.get(term, 0) + 1
+    changed = sum(1 for r in results.values() if r.changes)
+    flagged = sum(1 for r in results.values() if r.flags)
+    log(f"  spoken form (rules, glossary {g.version}): {changed} of {len(clips)} clips changed, "
+        f"{flagged} flagged for review"
+        + (f" ({', '.join(sorted(report.unresolved))})" if report.unresolved else ""))
     return results, report
 
 

@@ -3,7 +3,8 @@ Narrate a finished lab (#93): one WAV per narrated clip, written to a working
 folder and bundled into the lab resources zip (bundle.py, #92).
 
     python "Code/Narration/narrate_lab.py" <lab_output.json> --provider {openai,gemini}
-        [--voice NAME] [--spoken-form none] [--topic NAME] [--bundle-name NAME]
+        [--voice NAME] [--spoken-form {none,rules,llm}] [--glossary FILE] [--topic NAME]
+        [--bundle-name NAME]
         [--run-group NAME] [--overwrite] [--dry-run]
     python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
 
@@ -53,6 +54,7 @@ for _p in (HERE, PROJECT_ROOT, PROJECT_ROOT / "Code" / "Schemas", PROJECT_ROOT /
 
 import bundle  # noqa: E402
 import spoken_form  # noqa: E402
+import spoken_rules  # noqa: E402
 import tts  # noqa: E402
 
 NARRATION_ROOT = PROJECT_ROOT / "Artifacts" / "Data" / "Narration"
@@ -60,7 +62,7 @@ MANIFEST = "narration_manifest.json"
 MANIFEST_SCHEMA = "narration_manifest/1"
 AUDIO_FORMAT = {"format": "wav", "sample_rate": bundle.WAV_SAMPLE_RATE,
                 "sample_width_bits": 8 * bundle.WAV_SAMPLE_WIDTH, "channels": bundle.WAV_CHANNELS}
-SPOKEN_FORM_MODES = spoken_form.MODES   # "rules" arrives with #94's glossary
+SPOKEN_FORM_MODES = spoken_form.MODES
 FATAL_STATUS = {401, 402, 403, 404}  # key, billing, permission, unknown model: every clip would fail
 SHORT_TEXT, LONG_TEXT = 20, 1500  # characters; per-clip warnings only
 
@@ -256,6 +258,12 @@ def _rel(path: Path) -> str:
         return str(path.resolve())
 
 
+def _abs(path: str | Path) -> Path:
+    """A path as given on the command line, or relative to the project (from a manifest)."""
+    p = Path(path)
+    return p if p.is_absolute() or p.exists() else PROJECT_ROOT / p
+
+
 def provenance() -> dict:
     def git(*args):
         try:
@@ -306,6 +314,7 @@ class Settings:
     topic: str | None
     bundle_name: str | None
     spoken_form_model: str | None = None   # registry key, for --spoken-form llm
+    glossary: list[str] | None = None      # extra glossary files, for --spoken-form rules
 
 
 def _bundle_names(lab: dict, settings: Settings) -> bundle.BundleNames:
@@ -499,14 +508,20 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
 
     model_key = settings.spoken_form_model if settings.spoken_form == "llm" else None
     narrated = [(p.name, p.display_text) for p in plans if p.action == "narrate"]
-    spoken, sf = spoken_form.run_pass(settings.spoken_form, model_key, lab, topic, narrated,
-                                      run_dir, write_json_atomic, call_fn=spoken_call, log=log)
+    try:
+        spoken, sf = spoken_form.run_pass(settings.spoken_form, model_key, lab, topic, narrated,
+                                          run_dir, write_json_atomic, call_fn=spoken_call, log=log,
+                                          glossary_files=[_abs(p) for p in settings.glossary or []])
+    except spoken_rules.GlossaryError as exc:
+        raise InputError(str(exc)) from exc
     calls += [_call(run=run_no, step="spoken_form", **a) for a in sf.attempts]
     manifest["spoken_form"] = {
         "mode": settings.spoken_form, "model": sf.model, "model_id": sf.model_id,
         "reasoning_effort": sf.reasoning_effort,
         "prompt_version": spoken_form.PROMPT_VERSION if settings.spoken_form == "llm" else None,
-        "glossary_version": None, "served_models": sf.served_models, "calls": sf.calls,
+        "glossary_version": sf.glossary_version, "glossary_files": sf.glossary_files,
+        "glossary_extra": list(settings.glossary or []), "unresolved_terms": sf.unresolved,
+        "served_models": sf.served_models, "calls": sf.calls,
         "clips_sent": sf.clips_sent, "clips_cached": sf.clips_cached,
         "input_tokens": sf.input_tokens, "output_tokens": sf.output_tokens,
         "cost_usd": sf.cost_usd,
@@ -756,6 +771,19 @@ def _dry_run(settings: Settings) -> int:
     if settings.spoken_form == "llm":
         print(f"Spoken form: llm with {settings.spoken_form_model} (not run in a dry run; "
               "counts below are for the narration as written).")
+    elif settings.spoken_form == "rules":
+        topic = settings.topic or (paired_metrics(settings.input_path) or {}).get("lab_name")
+        try:
+            g = spoken_rules.load_glossary(topic, [_abs(p) for p in settings.glossary or []])
+        except spoken_rules.GlossaryError as exc:
+            raise InputError(str(exc)) from exc
+        ctx = spoken_rules.LabContext.from_lab(lab, topic)
+        results = [spoken_rules.apply_rules(p.display_text, g, ctx) for p in narrate]
+        terms = sorted({t for r in results for t in r.unresolved})
+        print(f"Spoken form: rules, glossary {g.version} ({', '.join(g.files)}): "
+              f"{sum(1 for r in results if r.changes)} clips changed, "
+              f"{sum(1 for r in results if r.flags)} flagged" + (f": {terms}" if terms else "")
+              + '. See them with: python "Code/Narration/spoken_rules.py" preview <lab>')
     print(f"{chars} characters, roughly {chars / 15 / 60:.1f} min of audio. No requests sent.")
     if too_long:
         print(f"Over the {spec.max_chars}-character limit (would fail): {too_long}")
@@ -768,8 +796,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--provider", choices=sorted(tts.PROVIDERS))
     ap.add_argument("--voice", help="override the provider's frozen default voice")
     ap.add_argument("--spoken-form", choices=SPOKEN_FORM_MODES, default="none",
-                    help="text sent to the voice service: none (as written) or llm "
-                         "(symbols, numbers, formulas spelled out; flagged, never rejected)")
+                    help="text sent to the voice service: none (as written), rules (glossary "
+                         "and notation rules, no LLM) or llm (one cheap-model call per lab); "
+                         "both flag what they change beyond notation, never reject")
+    ap.add_argument("--glossary", action="append",
+                    help="an extra glossary file for --spoken-form rules (repeatable); a run "
+                         "folder's glossary.yaml is also used, and is how to add terms on --resume")
     ap.add_argument("--spoken-form-model", choices=spoken_form.MODELS,
                     help=f"model for --spoken-form llm (default {spoken_form.DEFAULT_MODEL})")
     ap.add_argument("--topic", help="lab YAML topic name (default: from the paired metrics file)")
@@ -786,7 +818,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.resume:
             given = [f"--{k.replace('_', '-')}" for k in
                      ("lab", "provider", "voice", "topic", "bundle_name", "run_group",
-                      "spoken_form_model")
+                      "spoken_form_model", "glossary")
                      if getattr(args, k)]
             if given or args.spoken_form != "none" or args.dry_run:
                 raise InputError(f"--resume takes its settings from the manifest; drop "
@@ -802,7 +834,8 @@ def main(argv: list[str] | None = None) -> int:
                 style=m["voice_service"]["style_instruction"], spoken_form=m["spoken_form"]["mode"],
                 topic=m["source"].get("topic"),
                 bundle_name=m["bundle"].get("bundle_name_override"),
-                spoken_form_model=m["spoken_form"].get("model"))
+                spoken_form_model=m["spoken_form"].get("model"),
+                glossary=m["spoken_form"].get("glossary_extra") or None)
         else:
             if not args.lab or not args.provider:
                 raise InputError("give a lab file and --provider (or --resume <run folder>)")
@@ -815,6 +848,12 @@ def main(argv: list[str] | None = None) -> int:
                                 if args.spoken_form == "llm" else None)
             if args.spoken_form_model and args.spoken_form != "llm":
                 raise InputError("--spoken-form-model only applies with --spoken-form llm")
+            if args.glossary and args.spoken_form != "rules":
+                raise InputError("--glossary only applies with --spoken-form rules")
+            for f in args.glossary or []:
+                if not Path(f).is_file():
+                    raise InputError(f"no glossary file {f}")
+            settings.glossary = [_rel(Path(f)) for f in args.glossary or []] or None
             if args.dry_run:
                 return _dry_run(settings)
             stem = args.lab.name.removesuffix(".json").removesuffix("_output")
@@ -825,6 +864,12 @@ def main(argv: list[str] | None = None) -> int:
         if settings.spoken_form == "llm":
             check_spoken_form_environment(settings.spoken_form_model)
         load_lab(settings.input_path)  # fail before creating a run folder
+        if settings.spoken_form == "rules":
+            topic = settings.topic or (paired_metrics(settings.input_path) or {}).get("lab_name")
+            try:
+                spoken_rules.load_glossary(topic, [_abs(p) for p in settings.glossary or []])
+            except spoken_rules.GlossaryError as exc:
+                raise InputError(str(exc)) from exc
         print(f"Narrating {_rel(settings.input_path)} -> {_rel(run_dir)}")
         return run(settings, run_dir, overwrite=args.overwrite, api_key=api_key)
     except InputError as exc:

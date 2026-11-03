@@ -2,8 +2,10 @@
 
 Status: **agreed** (#91). This spec decides what the narration tool produces.
 Built so far: the zip layout (#92, `bundle.py`), the narration CLI (#93,
-`narrate_lab.py` + `tts.py`) and the spoken-form pass's LLM mode (#94,
-`spoken_form.py`). Rules mode and its glossary (#94) are next.
+`narrate_lab.py` + `tts.py`) and the spoken-form pass (#94): LLM mode
+(`spoken_form.py`) and rules mode with its glossary (`spoken_rules.py`,
+`glossary/`; the glossary awaits review). The measurement that picks the default
+mode is next.
 
 ## Why
 
@@ -85,7 +87,7 @@ compared with the original.
 - **Display text stays put.** `Clip.narration` is never changed; it stays the
   subtitle and display text.
 - **Spoken text** is produced by the spoken-form pass (#94; see "Spoken-form
-  pass" below): `--spoken-form {none,llm}`, with `rules` to follow. It may only
+  pass" below): `--spoken-form {none,rules,llm}`. It may only
   expand symbols, numbers, units, formulas and acronyms in context (DNA `5'` →
   "five prime"). The default is chosen by measured cost (#94).
 - **One request per clip.** The whole clip's spoken text goes in one request,
@@ -223,7 +225,7 @@ one top-level folder with the zip's own name:
 |---|---|
 | Source | input path; `labId`; source model and level; `lab_name` (from the paired metrics file, if any) |
 | Voice service | provider; requested model; served model(s); voice; style instruction; audio format and sample rate |
-| Spoken form | mode; LLM model, tokens and cost (llm mode); glossary version (rules mode) |
+| Spoken form | mode; LLM model, tokens and cost (llm mode); glossary version, layers, extra files and undecided terms (rules mode) |
 | Counts | clips narrated, skipped (unchanged), failed, silent; generated, dropped and renamed names |
 | Totals | characters; audio seconds; money spent (total, TTS, spoken form, this run); cost of the audio kept in the bundle; requests, failed requests, requests of unknown cost; wall time; transient retries |
 | Calls | one record per request sent, in every run (below) |
@@ -301,8 +303,8 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
   all of them. Valid audio is never paid for twice: unchanged clips are skipped
   even after a stop-the-run error, and a run killed part-way keeps the records
   of the clips it never reached.
-- `--spoken-form {none,llm}` and `--spoken-form-model` choose the spoken-form
-  pass (below). `rules` arrives with the glossary.
+- `--spoken-form {none,rules,llm}`, `--spoken-form-model` (llm) and
+  `--glossary FILE` (rules) choose the spoken-form pass (below).
 - **Failures:**
   - A clip that fails is recorded and the run continues. No zip is built until
     every narrated clip has audio, and a stale zip is removed.
@@ -425,6 +427,68 @@ python "Code/Narration/narrate_lab.py" <lab_output.json> --provider gemini --spo
   cache / edited / fallback, `flags`, `changes` (original → spoken)}.
   `counts.spoken_form_flagged` and `totals.spoken_form_cost_usd` (every run) sum
   them up.
+
+### Rules mode (`spoken_rules.py`, `glossary/`)
+
+```
+python "Code/Narration/narrate_lab.py" <lab_output.json> --provider gemini --spoken-form rules \
+    [--glossary FILE]
+python "Code/Narration/spoken_rules.py" preview <lab_output.json>     # before/after, no requests
+python "Code/Narration/spoken_rules.py" terms <labs or folders...>     # terms to review
+```
+
+Deterministic and free: no LLM, no cache. It is built for topics we have no lab
+for, on four principles:
+
+1. **Rules cover notation, not topics.** Each rule is general:
+   - chemical formulas, found by checking a token splits into real element symbols
+     plus digits (`XeF4` → "X e F 4", `C6H12O6`, `2H2O`); a token with no digits is
+     never treated as a formula (`HeLa`, `CNS`)
+   - number + unit from a general unit table (`9.8 m/s²` → "9 point 8 meters per
+     second squared", `220 Ω`, `5mm`); singular for 1 and after an article
+     ("a 180 degree turn")
+   - degrees (`°`, `°C`, `°F`), percent, ranges (`150-200` → "150 to 200"),
+     signs, and decimals ("104.5" → "104 point 5"; digits after the point one by
+     one). Other numbers keep their digits: the cloud voices read them fine.
+   - Greek letters, math operators (`=`, `+`, `<`, `±`, `√`, powers), arrows,
+     `v0` / `v₀` → "v zero", and axis subscripts (`Vx` → "V x") in a lab with
+     vector clues
+   - letter chains (`A-T-G-C` → "A, T, G, C"; `H-O-H` → "H O H") and long runs of
+     a few capital letters (`TACGGTCA`), read letter by letter
+   - `word/word` → "word or word"
+2. **Ambiguous notation is decided by evidence in the lab.** `5'` can be prime,
+   feet or arcminutes. Each meaning lists clue words (`senses` in the glossary);
+   the one with strictly the most clue words anywhere in the lab (id, course,
+   object names, narration) wins. Strong local patterns always win: `5'10"` is
+   feet and inches, `23°26'` is arcminutes, `5'→3'`, `3'-to-5'`, `5'-ATGC-3'` and
+   "the 3' end" are primes. A topic glossary can pin a meaning.
+3. **When unsure, leave it and flag it.** An acronym the glossary doesn't know is
+   left for the voice and flagged; a capitalized word the lab also writes in
+   lowercase is emphasis (`press NEXT` → "press next"); a prime with no clues and
+   a symbol with no rule are left and flagged. On a new topic the worst case is
+   the narration as written plus a list of terms to review.
+4. **The glossary is layered**, most specific last (it wins):
+   `glossary/shared.yaml` → `glossary/topics/<topic>.yaml` → `--glossary FILE`
+   (repeatable) → `glossary.yaml` in the run folder (also read on `--resume`,
+   which is how to add terms to an existing run). Sections: `terms` (pronunciation;
+   empty = known, read as written, never flagged), `units`, `symbols`, `senses`,
+   `pins`. The shared file holds pronunciation only; topic files exist for the
+   five wave-2 topics and are near-empty, because the shared rules already cover
+   them.
+
+- **Recorded:** each clip's `spoken_form` has source `rules`, the rule changes
+  (`{rule, original, spoken}`) and its flags; the word check still runs as a
+  safety net (a rule that changes an ordinary word is a bug). The manifest's
+  `spoken_form` block has `glossary_version` (a content hash of the merged
+  layers), `glossary_files`, `glossary_extra` and `unresolved_terms` (term →
+  clips).
+- **Rerunning after a glossary edit** redoes only the clips whose spoken text
+  changed (source hash).
+- **On wave 2** (1,790 clips): 244 clips changed, 1 flagged (`AWAY`, written only
+  in capitals in its lab), no ordinary word changed, and a second pass changes
+  nothing. Every rule also has test cases from topics we have no lab for
+  (circuits, kinematics, RNA, heights, sky coordinates, statistics, temperature).
+- **Glossary review:** the seed is awaiting @Sharkful's sign-off (#94).
 
 ## Engineering rules (from the repo, not from JW's code)
 
