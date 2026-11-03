@@ -309,7 +309,11 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   dropped; compared ignoring case; applied to the bundled copy only), synthesizes one
   request per clip, and rewrites `narration_manifest.json` after every clip. `--resume`
   skips clips whose source hash matches, also after a stop-the-run error or a crash
-  (unreached clips keep their previous records). It zips and validates only when every clip has audio. Transient
+  (unreached clips keep their previous records). It zips and validates only when every clip has audio. The manifest's `calls` list logs every
+  request in every run (TTS attempts and retries, spoken-form first attempt, reasks and re-sends)
+  with its own cost; `totals.total_cost_usd` is that spend, all of it, beside
+  `kept_audio_cost_usd` (what the bundled audio cost). An HTTP error reply costs $0; a request
+  with no reply and no usage is `null` (`calls_cost_unknown`), never guessed. Transient
   errors, and requests abandoned at the 90 s per-request limit, are retried with
   `benchmark._transient_retryer()`'s policy and recorded per clip with a readable reason
   (`transient_errors`); 401/402/403/404 and unusable audio stop the run.

@@ -386,6 +386,36 @@ def _is_fatal(exc: BaseException) -> bool:
         status_of(e) in FATAL_STATUS for e in exception_chain(exc))
 
 
+# One record per request sent, in every run (manifest "calls"): what each attempt
+# cost, including the ones that failed or were thrown away.
+CALL_KEYS = ("run", "step", "clip", "attempt", "kind", "status", "error_type", "error_reason",
+             "error", "input_tokens", "output_tokens", "cost_usd", "seconds", "served_model",
+             "request_id", "started_at")
+
+
+def _call(**fields) -> dict:
+    return {k: fields.get(k) for k in CALL_KEYS}
+
+
+def _legacy_calls(old: dict) -> list[dict]:
+    """Calls rebuilt from a manifest written before the call log existed: one per
+    clip that had audio, plus the spoken-form total. Failed attempts weren't kept."""
+    note = "rebuilt from a manifest without a call log; failed attempts unknown"
+    out = [_call(run=0, step="tts", clip=c["audio_name"], attempt=1, kind="first",
+                 status="ok", error=note, input_tokens=c.get("input_tokens"),
+                 output_tokens=c.get("output_tokens"), cost_usd=c.get("cost_usd"),
+                 seconds=c.get("wall_seconds"), served_model=c.get("served_model"),
+                 request_id=c.get("request_id"), started_at=c.get("generated_at"))
+           for c in old.get("clips", []) if c.get("status") in ("generated", "skipped")]
+    sf = old.get("spoken_form") or {}
+    if sf.get("cost_usd_all_runs") or sf.get("calls"):
+        out.append(_call(run=0, step="spoken_form", attempt=1, kind="first",
+                         status="error" if sf.get("error") else "ok", error=note,
+                         input_tokens=sf.get("input_tokens"), output_tokens=sf.get("output_tokens"),
+                         cost_usd=sf.get("cost_usd_all_runs", sf.get("cost_usd"))))
+    return out
+
+
 def _clip_warnings(text: str) -> list[str]:
     if len(text) < SHORT_TEXT:
         return [f"very short narration ({len(text)} characters)"]
@@ -421,11 +451,19 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
                     if c.get("audio_name") and c.get("status") in ("generated", "skipped")}
 
     write_json_atomic(folder / names.json_file, bundled_lab(lab, plans))
+    calls: list[dict] = (old.get("calls") if "calls" in old else _legacy_calls(old)) if old else []
 
     if provider is None:
         provider = tts.make_provider(settings.provider, settings.voice, settings.style,
                                      api_key=api_key)
     pricing = PricingCalculator(model=spec.model)
+
+    def tts_cost(input_tokens, output_tokens):
+        if input_tokens is None or output_tokens is None:
+            return None
+        return pricing.calculate_cost(TokenUsage(
+            prompt_tokens=input_tokens, completion_tokens=output_tokens,
+            total_tokens=input_tokens + output_tokens))
 
     started = _now()
     manifest = {
@@ -455,13 +493,15 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
         "provenance": provenance(),
         "warnings": [],
         "clips": [],
+        "calls": calls,
     }
+    run_no = len(manifest["runs"])
 
     model_key = settings.spoken_form_model if settings.spoken_form == "llm" else None
     narrated = [(p.name, p.display_text) for p in plans if p.action == "narrate"]
     spoken, sf = spoken_form.run_pass(settings.spoken_form, model_key, lab, topic, narrated,
                                       run_dir, write_json_atomic, call_fn=spoken_call, log=log)
-    prev_sf_cost = ((old or {}).get("spoken_form") or {}).get("cost_usd_all_runs") or 0.0
+    calls += [_call(run=run_no, step="spoken_form", **a) for a in sf.attempts]
     manifest["spoken_form"] = {
         "mode": settings.spoken_form, "model": sf.model, "model_id": sf.model_id,
         "reasoning_effort": sf.reasoning_effort,
@@ -469,7 +509,7 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
         "glossary_version": None, "served_models": sf.served_models, "calls": sf.calls,
         "clips_sent": sf.clips_sent, "clips_cached": sf.clips_cached,
         "input_tokens": sf.input_tokens, "output_tokens": sf.output_tokens,
-        "cost_usd": sf.cost_usd, "cost_usd_all_runs": prev_sf_cost + sf.cost_usd,
+        "cost_usd": sf.cost_usd,
         "retries": sf.retries,
         "transient_retries": sf.transient_retries, "error": sf.error,
         "cache_file": spoken_form.CACHE_FILE if settings.spoken_form == "llm" else None,
@@ -523,25 +563,47 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
             retryer = _retryer()
             errors: list[BaseException] = []   # every failed attempt, in order
 
-            def attempt(text=text, errors=errors):
+            def attempt(text=text, errors=errors, name=p.name):
+                n = len(errors) + 1           # every earlier attempt failed
+                record = dict(run=run_no, step="tts", clip=name, attempt=n,
+                              kind="first" if n == 1 else "retry", started_at=_now())
+                t = time.monotonic()
+                syn = None
                 try:
                     syn = provider.synthesize(text)
                     if not syn.pcm:
                         raise tts.TTSNoAudio("the reply had no audio")
-                    return syn
                 except Exception as exc:
                     errors.append(exc)
+                    why = describe_error(exc)
+                    # Usage when the reply came back without audio (still billed).
+                    u = getattr(exc, "usage", None) or (
+                        {"input_tokens": syn.input_tokens, "output_tokens": syn.output_tokens,
+                         "request_id": syn.request_id, "served_model": syn.served_model}
+                        if syn else {})
+                    cost = tts_cost(u.get("input_tokens"), u.get("output_tokens"))
+                    if cost is None and why["status"] is not None:
+                        cost = 0.0            # an HTTP error reply isn't billed
+                    calls.append(_call(**record, status="error", error_type=why["type"],
+                                       error_reason=why["reason"], error=why["detail"],
+                                       input_tokens=u.get("input_tokens"),
+                                       output_tokens=u.get("output_tokens"), cost_usd=cost,
+                                       seconds=round(time.monotonic() - t, 3),
+                                       served_model=u.get("served_model"),
+                                       request_id=u.get("request_id")))
                     raise
+                calls.append(_call(**record, status="ok", input_tokens=syn.input_tokens,
+                                   output_tokens=syn.output_tokens,
+                                   cost_usd=tts_cost(syn.input_tokens, syn.output_tokens),
+                                   seconds=round(time.monotonic() - t, 3),
+                                   served_model=syn.served_model, request_id=syn.request_id))
+                return syn
 
             t0 = time.monotonic()
             try:
                 syn = retryer(attempt)
                 bundle.write_wav(wav, syn.pcm)
-                cost = None
-                if syn.input_tokens is not None and syn.output_tokens is not None:
-                    cost = pricing.calculate_cost(TokenUsage(
-                        prompt_tokens=syn.input_tokens, completion_tokens=syn.output_tokens,
-                        total_tokens=syn.input_tokens + syn.output_tokens))
+                cost = tts_cost(syn.input_tokens, syn.output_tokens)
                 rec.update(status="generated", audio_seconds=round(syn.seconds, 3),
                            input_tokens=syn.input_tokens, output_tokens=syn.output_tokens,
                            cost_usd=cost, served_model=syn.served_model,
@@ -606,9 +668,12 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
     for w in manifest["warnings"]:
         log(f"  WARNING: {w}")
     t = manifest["totals"]
+    unknown = (f", {t['calls_cost_unknown']} with unknown cost"
+               if t.get("calls_cost_unknown") else "")
     log(f"{manifest['counts'].get('with_audio', 0)} clips with audio, "
-        f"{t.get('audio_seconds', 0):.0f} s, ${t.get('cost_usd', 0):.4f} "
-        f"(this run ${t.get('cost_usd_this_run', 0):.4f}); manifest: {_rel(manifest_path)}")
+        f"{t.get('audio_seconds', 0):.0f} s; spent ${t.get('total_cost_usd', 0):.4f} on "
+        f"{t.get('calls', 0)} requests, {t.get('calls_failed', 0)} failed{unknown} "
+        f"(this run ${t.get('this_run_cost_usd', 0):.4f}); manifest: {_rel(manifest_path)}")
     return 0 if manifest["status"] == "complete" else 1
 
 
@@ -623,6 +688,7 @@ def _plan_record(p: ClipPlan) -> dict:
         "cost_usd": None, "wall_seconds": None, "served_model": None,
         "request_id": None, "first_audio_seconds": None, "max_gap_seconds": None,
         "transient_retries": None, "transient_errors": [],
+        "calls": 0, "calls_failed": 0, "spend_usd": 0.0,
         "generated_at": None, "source_hash": None,
         "error": None, "error_reason": None, "warnings": [], "spoken_form": None,
     }
@@ -635,8 +701,17 @@ def _fill_counts(manifest: dict) -> None:
     changes = {k: sum(c["name_change"] == k for c in clips)
                for k in ("generated", "sanitized", "deduplicated", "dropped")}
     audio = [c for c in clips if c["status"] in ("generated", "skipped")]
-    this_run = [c for c in clips if c["status"] == "generated"]
     total = lambda rows, k: sum(c.get(k) or 0 for c in rows)  # noqa: E731  (unrounded)
+    calls = manifest.get("calls") or []
+    this_run = len(manifest.get("runs") or [])
+    by_clip: dict[str, list[dict]] = {}
+    for call in calls:
+        if call["step"] == "tts":
+            by_clip.setdefault(call["clip"], []).append(call)
+    for c in clips:   # every request for this clip's audio name, in every run
+        mine = by_clip.get(c["audio_name"], []) if c["status"] != "shared" else []
+        c.update(calls=len(mine), calls_failed=sum(x["status"] != "ok" for x in mine),
+                 spend_usd=total(mine, "cost_usd"))
     manifest["counts"] = {**by, "clips": len(clips),
                           "with_audio": by["generated"] + by["skipped"] + by["shared"],
                           "names": changes}
@@ -645,14 +720,19 @@ def _fill_counts(manifest: dict) -> None:
         "audio_seconds": round(total(audio, "audio_seconds"), 3),
         "input_tokens": sum(c.get("input_tokens") or 0 for c in audio),
         "output_tokens": sum(c.get("output_tokens") or 0 for c in audio),
-        "cost_usd": total(audio, "cost_usd"),
-        "cost_usd_this_run": total(this_run, "cost_usd"),
         "wall_seconds": round(total(audio, "wall_seconds"), 3),
         "transient_retries": sum(c.get("transient_retries") or 0 for c in clips),
-        "spoken_form_cost_usd": (manifest.get("spoken_form") or {}).get("cost_usd_all_runs", 0.0),
+        # Money spent: every request in every run, failed and replaced ones included.
+        "total_cost_usd": total(calls, "cost_usd"),
+        "tts_cost_usd": total([x for x in calls if x["step"] == "tts"], "cost_usd"),
+        "spoken_form_cost_usd": total([x for x in calls if x["step"] == "spoken_form"], "cost_usd"),
+        "this_run_cost_usd": total([x for x in calls if x["run"] == this_run], "cost_usd"),
+        # What the audio in the bundle cost when it was made (a clean run's cost).
+        "kept_audio_cost_usd": total(audio, "cost_usd"),
+        "calls": len(calls),
+        "calls_failed": sum(x["status"] != "ok" for x in calls),
+        "calls_cost_unknown": sum(x["cost_usd"] is None for x in calls),
     }
-    manifest["totals"]["total_cost_usd"] = (manifest["totals"]["cost_usd"]
-                                            + manifest["totals"]["spoken_form_cost_usd"])
     manifest["counts"]["spoken_form_flagged"] = sum(
         1 for c in clips if (c.get("spoken_form") or {}).get("flags"))
 

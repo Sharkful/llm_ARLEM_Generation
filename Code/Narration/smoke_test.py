@@ -613,9 +613,18 @@ if HAVE_NARRATION:
           f"a wave-2 lab narrates into a valid {rm['bundle']['zip_file']}")
     check(rm["counts"]["generated"] == len(refs) == len(fake.calls),
           f"one request per narrated clip ({len(refs)})")
-    check(abs(rm["totals"]["cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9
+    check(abs(rm["totals"]["kept_audio_cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9
+          and abs(rm["totals"]["total_cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9
           and rm["totals"]["input_tokens"] == 50 * len(refs),
           "cost comes from reported token usage at the tracking/pricing.py rates")
+    rc = rm["calls"]
+    check(len(rc) == len(refs) == rm["totals"]["calls"] and rm["totals"]["calls_failed"] == 0
+          and all(x["step"] == "tts" and x["run"] == 1 and x["status"] == "ok" and x["kind"] == "first"
+                  and abs(x["cost_usd"] - COST_PER_CLIP) < 1e-12 and x["started_at"] for x in rc)
+          and sorted(x["clip"] for x in rc) == sorted(refs)
+          and all(c["calls"] == 1 and abs(c["spend_usd"] - COST_PER_CLIP) < 1e-12
+                  for c in rm["clips"] if c["status"] == "generated"),
+          "every request is logged with its run, clip and cost, and each clip counts its requests")
     check(abs(rm["totals"]["audio_seconds"] - 0.2 * len(refs)) < 1e-6, "audio seconds are recorded")
     check(rm["source"]["lab_name"] == "dna_structure_and_replication" and rm["source"]["level"] == "L4"
           and rm["source"]["source_model"] == "claude-sonnet-5",
@@ -634,10 +643,10 @@ if HAVE_NARRATION:
     code = narrate(settings_for(SAMPLE_LAB), real_run, provider=fake, log=quiet)
     rm2 = manifest_of(real_run)
     check(code == 0 and not fake.calls and rm2["counts"]["skipped"] == len(refs)
-          and rm2["totals"]["cost_usd_this_run"] == 0
-          and abs(rm2["totals"]["cost_usd"] - rm["totals"]["cost_usd"]) < 1e-9
+          and rm2["totals"]["this_run_cost_usd"] == 0 and rm2["calls"] == rm["calls"]
+          and rm2["totals"]["total_cost_usd"] == rm["totals"]["total_cost_usd"]
           and len(rm2["runs"]) == 2,
-          "a rerun skips every unchanged clip, keeps the lab's cost, and logs a second run")
+          "a rerun skips every unchanged clip, spends nothing, keeps the call log, and logs a second run")
     orphan = real_run / rm["bundle"]["folder"] / "Audios" / "no_longer_used.wav"
     write_wav(orphan, PCM)
     fake = FakeTTS()
@@ -649,6 +658,11 @@ if HAVE_NARRATION:
     fake = FakeTTS()
     narrate(settings_for(SAMPLE_LAB, voice="cedar"), real_run, overwrite=True, provider=fake, log=quiet)
     check(len(fake.calls) == len(refs), "--overwrite regenerates every clip")
+    ot = manifest_of(real_run)["totals"]
+    check(ot["calls"] == 3 * len(refs) and abs(ot["total_cost_usd"] - 3 * len(refs) * COST_PER_CLIP) < 1e-9
+          and abs(ot["this_run_cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9
+          and abs(ot["kept_audio_cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9,
+          "regenerated audio still counts: the total is every run's spend, beside the kept audio's cost")
 
     # ── Retries, failures, resume ────────────────────────────────────
     fake = FakeTTS(script=lambda n, t: HTTPError(503) if n == 0 else None)
@@ -661,6 +675,14 @@ if HAVE_NARRATION:
     check(len(te) == 1 and te[0]["status"] == 503 and te[0]["type"] == "HTTPError"
           and te[0]["reason"] == "the provider was temporarily unavailable (HTTP 503)",
           "each retried error is recorded with its status, type and a readable reason")
+    c0 = tm["clips"][0]
+    mine = [x for x in tm["calls"] if x["clip"] == c0["audio_name"]]
+    check([(x["attempt"], x["kind"], x["status"]) for x in mine] == [(1, "first", "error"), (2, "retry", "ok")]
+          and mine[0]["cost_usd"] == 0.0 and mine[0]["error_type"] == "HTTPError"
+          and "HTTP 503" in mine[0]["error_reason"]
+          and c0["calls"] == 2 and c0["calls_failed"] == 1 and abs(c0["spend_usd"] - COST_PER_CLIP) < 1e-12
+          and tm["totals"]["calls_failed"] == 1 and tm["totals"]["calls_cost_unknown"] == 0,
+          "a retried clip logs both requests; an HTTP error reply costs $0 (not billed)")
     fake = FakeTTS(script=lambda n, t: HTTPError(429) if n < 2 else None)
     r = TMP / "runs" / "transient_twice"
     narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
@@ -689,12 +711,22 @@ if HAVE_NARRATION:
     failed_clip = next(c for c in fm["clips"] if c["status"] == "failed")
     check(failed_clip["error_reason"] == "unexpected error" and failed_clip["error"] == "ValueError: boom",
           "a failed clip records the error and a reason")
+    check(fm["totals"]["calls_cost_unknown"] == 1
+          and next(x for x in fm["calls"] if x["status"] == "error")["cost_usd"] is None
+          and abs(fm["totals"]["total_cost_usd"] - (len(refs) - 1) * COST_PER_CLIP) < 1e-9,
+          "a failure with no reply and no usage has unknown cost (null), counted, never guessed")
     check(not stale.exists() and fm["bundle"]["validation"] is None,
           "an incomplete run builds no zip and removes a stale one")
     fake = FakeTTS()
     code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
-    check(code == 0 and fake.calls == [target_text] and manifest_of(r)["status"] == "complete",
+    fm2 = manifest_of(r)
+    check(code == 0 and fake.calls == [target_text] and fm2["status"] == "complete",
           "rerunning the same folder narrates only the failed clip and completes")
+    fc = next(c for c in fm2["clips"] if c["spoken_text"] == target_text)
+    check(len(fm2["calls"]) == len(refs) + 1 and [x["run"] for x in fm2["calls"]][-1] == 2
+          and fc["calls"] == 2 and fc["calls_failed"] == 1
+          and abs(fm2["totals"]["total_cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9,
+          "a resume appends to the call log: the failed clip shows both runs' requests")
 
     for status in (401, 402, 403, 404):
         fake = FakeTTS(script=lambda n, t, s=status: HTTPError(s))
@@ -731,7 +763,8 @@ if HAVE_NARRATION:
     r = TMP / "runs" / "nousage"
     narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
     nm = manifest_of(r)
-    check(nm["clips"][0]["cost_usd"] is None and "no token usage" in " ".join(nm["clips"][0]["warnings"]),
+    check(nm["clips"][0]["cost_usd"] is None and "no token usage" in " ".join(nm["clips"][0]["warnings"])
+          and nm["totals"]["calls_cost_unknown"] == len(refs) and nm["totals"]["total_cost_usd"] == 0,
           "missing usage gives no cost and a warning, not a guess")
 
     # ── Reruns keep valid audio, even after a stop or a crash ────────
@@ -822,6 +855,11 @@ if HAVE_NARRATION:
     check(code == 0 and c0["status"] == "generated" and c0["transient_retries"] == 1
           and c0["audio_seconds"] > 0 and "no audio" in c0["transient_errors"][0]["reason"],
           "a reply with no audio is retried, not saved as an empty clip")
+    mine = [x for x in manifest_of(r)["calls"] if x["clip"] == c0["audio_name"]]
+    check(len(mine) == 2 and mine[0]["error_type"] == "TTSNoAudio"
+          and abs(mine[0]["cost_usd"] - COST_PER_CLIP) < 1e-12
+          and abs(c0["spend_usd"] - 2 * COST_PER_CLIP) < 1e-12,
+          "a reply that came back without audio was still billed: its cost is counted")
     first_text = lab["modules"][0]["clips"][0]["narration"].strip()
     fake = EmptyFirst(lambda n, t: t == first_text)
     r = TMP / "runs" / "empty_always"
@@ -930,8 +968,10 @@ if HAVE_NARRATION:
     sfm = lm_["spoken_form"]
     check(sfm["mode"] == "llm" and sfm["model"] == "claude-haiku-5.5" and sfm["calls"] == 1
           and sfm["clips_sent"] == len(refs) and sfm["input_tokens"] == 900 and sfm["cost_usd"] == 0.0005
-          and lm_["counts"]["spoken_form_flagged"] == 2
-          and abs(lm_["totals"]["total_cost_usd"] - (lm_["totals"]["cost_usd"] + 0.0005)) < 1e-12,
+          and lm_["counts"]["spoken_form_flagged"] == 2 and lm_["totals"]["spoken_form_cost_usd"] == 0.0005
+          and abs(lm_["totals"]["total_cost_usd"] - (lm_["totals"]["tts_cost_usd"] + 0.0005)) < 1e-12
+          and [x["step"] for x in lm_["calls"]].count("spoken_form") == 1
+          and lm_["calls"][0]["step"] == "spoken_form" and lm_["calls"][0]["clip"] is None,
           "the manifest records the spoken-form model, tokens, cost, flagged count and total cost")
     cache = json.loads((r / spoken_form.CACHE_FILE).read_text())["clips"]
     check(set(cache) == set(refs) and cache[second]["flags"] and cache[first]["prompt_version"] == spoken_form.PROMPT_VERSION,
@@ -943,7 +983,7 @@ if HAVE_NARRATION:
     third_rec = {c["audio_name"]: c for c in lm2["clips"]}[third]
     check(fake_sp2.calls == [[third]] and third_rec["spoken_form"]["source"] == "llm"
           and lm2["spoken_form"]["clips_cached"] == len(refs) - 1
-          and abs(lm2["spoken_form"]["cost_usd_all_runs"] - 0.0010) < 1e-12,
+          and abs(lm2["totals"]["spoken_form_cost_usd"] - 0.0010) < 1e-12,
           "a rerun reuses every cached spoken form; only the clip that fell back is sent again"
           " (its audio is redone only if the model's text differs)")
     fake_sp2b, tts_fake = FakeSpoken(), FakeTTS()
@@ -1183,8 +1223,11 @@ if HAVE_NARRATION:
         check(code == 0 and om_m["status"] == "complete" and om_m["totals"]["transient_retries"] == 1
               and len(om.requests) - n_before == len(refs) + 1,
               "end to end over HTTP: a 503 is retried once by our retryer (the SDK makes no retries)")
-        check(abs(om_m["totals"]["cost_usd"] - len(refs) * (14 * 0.60 + 101 * 12.00) / 1e6) < 1e-9,
-              "OpenAI cost from the reported usage")
+        check(abs(om_m["totals"]["kept_audio_cost_usd"] - len(refs) * (14 * 0.60 + 101 * 12.00) / 1e6) < 1e-9
+              and om_m["totals"]["total_cost_usd"] == om_m["totals"]["kept_audio_cost_usd"]
+              and om_m["totals"]["calls"] == len(refs) + 1 and om_m["totals"]["calls_failed"] == 1
+              and all(x["request_id"] == "req_mock123" for x in om_m["calls"] if x["status"] == "ok"),
+              "OpenAI cost from the reported usage; the 503 is a logged request that cost $0")
 
         openai_state["fail"] = [401]
         r = TMP / "runs" / "openai_401"
@@ -1382,7 +1425,7 @@ if HAVE_NARRATION:
               and len(gm.requests) - n_before == len(refs) + 1
               and validate_bundle(r / gmm["bundle"]["zip_file"]).ok,
               "Gemini end to end: a 500 is retried once (no SDK retries) and the zip validates")
-        check(abs(gmm["totals"]["cost_usd"] - len(refs) * (12 * 1.00 + 125 * 18.00) / 1e6) < 1e-9,
+        check(abs(gmm["totals"]["kept_audio_cost_usd"] - len(refs) * (12 * 1.00 + 125 * 18.00) / 1e6) < 1e-9,
               "Gemini cost from the reported usage at the gemini-3.8-flash-tts rates")
         gem_state["fail"] = [403]
         r = TMP / "runs" / "gemini_403"
@@ -1400,6 +1443,12 @@ if HAVE_NARRATION:
               and "no audio" in c0["transient_errors"][0]["reason"]
               and "OTHER" in c0["transient_errors"][0]["detail"],
               "a Gemini reply with no audio (finish reason OTHER) is retried; it doesn't stop the run")
+        na = next(x for x in gna["calls"] if x["status"] == "error")
+        check(na["error_type"] == "TTSNoAudio" and na["input_tokens"] == 12 and na["output_tokens"] == 0
+              and abs(na["cost_usd"] - 12 * 1.00 / 1e6) < 1e-15
+              and na["served_model"] == "gemini-3.8-flash-tts"
+              and abs(gna["totals"]["total_cost_usd"] - gna["totals"]["kept_audio_cost_usd"] - 12e-6) < 1e-15,
+              "the billed tokens of a Gemini reply with no audio are logged and counted in the total")
 
         slow = {"sleep": 0}
         real_handler = gemini_handler
@@ -1445,10 +1494,14 @@ if HAVE_NARRATION:
 # a mock Anthropic server.
 if HAVE_NARRATION:
     anth_reqs = []
-    anth_state = {"bad": False}
+    anth_state = {"bad": False, "fail": []}
 
     def anthropic_handler(path, body):
         anth_reqs.append(body)
+        if anth_state["fail"]:
+            code = anth_state["fail"].pop(0)
+            return code, {"content-type": "application/json"}, json.dumps(
+                {"type": "error", "error": {"type": "overloaded_error", "message": "mock"}}).encode()
         if anth_state["bad"]:   # a reply that never fits LabSpokenForms
             tool = body["tools"][0]["name"]
             return 200, {"content-type": "application/json"}, json.dumps({
@@ -1488,6 +1541,12 @@ if HAVE_NARRATION:
               and la["spoken_form"]["served_models"] == ["claude-haiku-5-5"]
               and la["spoken_form"]["model_id"] == "claude-haiku-5-5",
               "its tokens, cost (Claude Haiku 5.5 rates) and served model are tracked")
+        sfc = [x for x in la["calls"] if x["step"] == "spoken_form"]
+        check(len(sfc) == 1 and sfc[0]["status"] == "ok" and sfc[0]["kind"] == "first"
+              and sfc[0]["input_tokens"] == 1200 and sfc[0]["served_model"] == "claude-haiku-5-5"
+              and abs(sfc[0]["cost_usd"] - la["spoken_form"]["cost_usd"]) < 1e-15
+              and abs(la["totals"]["spoken_form_cost_usd"] - la["spoken_form"]["cost_usd"]) < 1e-15,
+              "the spoken-form request is in the call log with its own cost")
         check(any("D N A" in c["spoken_text"] for c in la["clips"] if c.get("spoken_text")),
               "the model's spoken text reaches the clips")
         check(req.get("output_config") == {"effort": "low"} and la["spoken_form"]["reasoning_effort"] == "low",
@@ -1502,7 +1561,25 @@ if HAVE_NARRATION:
               and lb["spoken_form"]["input_tokens"] == 1200 * attempts
               and abs(lb["spoken_form"]["cost_usd"] - attempts * (1200 * 0.10 + 1000 * 0.50) / 1e6) < 1e-12,
               "a spoken-form call that fails after its reasks still records the tokens and cost it used")
+        sfc = [x for x in lb["calls"] if x["step"] == "spoken_form"]
+        one = (1200 * 0.10 + 1000 * 0.50) / 1e6
+        check([x["kind"] for x in sfc] == ["first"] + ["reask"] * spoken_form.MAX_RETRIES
+              and all(x["status"] == "error" and x["error_type"] and abs(x["cost_usd"] - one) < 1e-15
+                      for x in sfc)
+              and abs(lb["totals"]["spoken_form_cost_usd"] - attempts * one) < 1e-12
+              and abs(lb["totals"]["total_cost_usd"]
+                      - lb["totals"]["tts_cost_usd"] - attempts * one) < 1e-12,
+              "each reask is its own logged request with its cost, and all of them count in the total")
         anth_state["bad"] = False
+        anth_state["fail"] = [529]
+        r = TMP / "runs" / "llm_anthropic_529"
+        code = narrate(st, r, provider=FakeTTS(), log=quiet)
+        l5 = manifest_of(r)
+        sfc = [x for x in l5["calls"] if x["step"] == "spoken_form"]
+        check(code == 0 and not l5["spoken_form"]["error"] and l5["spoken_form"]["transient_retries"] == 1
+              and [(x["kind"], x["status"]) for x in sfc] == [("first", "error"), ("transient re-send", "ok")]
+              and sfc[0]["cost_usd"] == 0.0 and abs(sfc[1]["cost_usd"] - one) < 1e-15,
+              "a spoken-form request rejected with HTTP 529 is logged at $0, then the re-send with its cost")
     finally:
         am.close()
         for k, v in saved_env.items():

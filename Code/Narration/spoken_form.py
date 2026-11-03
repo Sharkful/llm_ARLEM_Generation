@@ -216,6 +216,8 @@ class PassReport:
     retries: int = 0
     reasoning_effort: str | None = None
     error: str | None = None
+    # One record per request sent: first attempt, instructor reasks, transient re-sends.
+    attempts: list[dict] = field(default_factory=list)
 
 
 def run_pass(mode: str, model_key: str | None, lab: dict, topic: str | None,
@@ -258,8 +260,15 @@ def run_pass(mode: str, model_key: str | None, lab: dict, topic: str | None,
         try:
             forms, usage = (call_fn or _make_llm_call(model_key, report))(prompt)
             _add_usage(report, usage)
+            report.attempts += (usage["attempts"] if "attempts" in usage
+                                else [_one_attempt(usage, "ok", None)])
         except Exception as exc:  # noqa: BLE001 - the run continues with the narration as written
-            _add_usage(report, getattr(exc, "spoken_form_usage", None) or {})
+            usage = getattr(exc, "spoken_form_usage", None) or {}
+            _add_usage(report, usage)
+            # Real calls list their attempts (none if nothing was sent); a caller
+            # that reported nothing counts as one failed request of unknown cost.
+            report.attempts += (usage["attempts"] if "attempts" in usage else [
+                _one_attempt(usage, "error", exc, cost_known="cost_usd" in usage)])
             report.error = f"{type(exc).__name__}: {' '.join(str(exc).split())[:300]}"
             log(f"  spoken form: the {model_key} call failed ({report.error}); "
                 "using the narration as written for these clips")
@@ -310,6 +319,18 @@ def _match_tag(tag: str, sent: dict[str, str]) -> str | None:
     return sent.get(t.casefold())
 
 
+def _one_attempt(usage: dict, status: str, exc, cost_known: bool = True) -> dict:
+    """An attempt record when the caller reported only totals (tests, or a failure
+    before any request was tracked)."""
+    return {"attempt": 1, "kind": "first", "status": status,
+            "error_type": type(exc).__name__ if exc else None,
+            "error": " ".join(str(exc).split())[:300] if exc else None,
+            "input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens"),
+            "cost_usd": usage.get("cost_usd", 0.0) if cost_known else None,
+            "seconds": None, "served_model": (usage.get("served_models") or [None])[0],
+            "started_at": None}
+
+
 def _add_usage(report: PassReport, usage: dict) -> None:
     for k in ("input_tokens", "output_tokens", "cost_usd", "transient_retries", "retries"):
         setattr(report, k, getattr(report, k) + (usage.get(k) or 0))
@@ -318,8 +339,8 @@ def _add_usage(report: PassReport, usage: dict) -> None:
 
 def _make_llm_call(model_key: str, report: PassReport):
     """The real call: guarded client, tracked, transient-only retries."""
-    from benchmark import (_transient_retryer, create_instructor_client,
-                           provider_create_kwargs)
+    from benchmark import (_transient_retryer, create_instructor_client, exception_chain,
+                           provider_create_kwargs, status_of)
     from benchmark_config import MODELS as REGISTRY, SpecType
     from tracking import InstructorTracker
 
@@ -328,7 +349,8 @@ def _make_llm_call(model_key: str, report: PassReport):
     report.model_id = mc.model_id
     report.reasoning_effort = REASONING_EFFORT
     tracker = InstructorTracker(model=mc.model_id, provider=mc.provider.value,
-                                pricing_config=mc.pricing_config)
+                                pricing_config=mc.pricing_config,
+                                store_raw_responses=True)   # keeps each error's exception
     client = tracker.wrap(create_instructor_client(mc, SpecType.JSON_LAB))
 
     def call(prompt: str):
@@ -337,9 +359,42 @@ def _make_llm_call(model_key: str, report: PassReport):
         kwargs.update(provider_create_kwargs(mc, LabSpokenForms))
         retryer = _transient_retryer()
 
+        def unanswered_cost(err):
+            # No response: an HTTP error reply was not billed ($0); a request cut off
+            # mid-reply reported no usage, so its cost is unknown (None).
+            raw = err.raw_exception if err else None
+            if raw is not None and any(status_of(e) is not None for e in exception_chain(raw)):
+                return 0.0
+            return None
+
+        def attempts() -> list[dict]:
+            # Each create() is one tracked call (a transient re-send is a new call);
+            # each instructor attempt inside it is one request (attempt 2+ = a reask).
+            out = []
+            for ci, tc in enumerate(tracker.aggregate.calls):
+                for att in tc.attempts:
+                    kind = ("reask" if att.attempt_number > 1
+                            else "first" if ci == 0 else "transient re-send")
+                    err = att.error
+                    out.append({
+                        "attempt": len(out) + 1, "kind": kind,
+                        "status": "ok" if att.success else "error",
+                        "error_type": err.exception_class if err else None,
+                        "error": " ".join(err.message.split())[:300] if err else None,
+                        "input_tokens": att.usage.prompt_tokens,
+                        "output_tokens": att.usage.completion_tokens,
+                        "cost_usd": (tracker.pricing.calculate_cost(att.usage)
+                                     if att.responded else unanswered_cost(err)),
+                        "seconds": round(att.duration_ms / 1000, 3) if att.duration_ms else None,
+                        "served_model": att.served_model,
+                        "started_at": att.timestamp.isoformat(timespec="seconds"),
+                    })
+            return out
+
         def usage() -> dict:
             agg = tracker.aggregate
             return {
+                "attempts": attempts(),
                 "input_tokens": agg.total_usage.prompt_tokens,
                 "output_tokens": agg.total_usage.completion_tokens,
                 "cost_usd": tracker.pricing.calculate_cost(agg.total_usage),

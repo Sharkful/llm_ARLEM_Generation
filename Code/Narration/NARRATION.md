@@ -225,7 +225,8 @@ one top-level folder with the zip's own name:
 | Voice service | provider; requested model; served model(s); voice; style instruction; audio format and sample rate |
 | Spoken form | mode; LLM model, tokens and cost (llm mode); glossary version (rules mode) |
 | Counts | clips narrated, skipped (unchanged), failed, silent; generated, dropped and renamed names |
-| Totals | characters; audio seconds; TTS cost; spoken-form cost; total cost; wall time; transient retries |
+| Totals | characters; audio seconds; money spent (total, TTS, spoken form, this run); cost of the audio kept in the bundle; requests, failed requests, requests of unknown cost; wall time; transient retries |
+| Calls | one record per request sent, in every run (below) |
 | Provenance | tool git commit; package versions; timestamps |
 
 **Per clip:** module and clip index; `clipName`; final audio name (and why it
@@ -237,11 +238,35 @@ plus `shared` for a clip that reuses another clip's file); `transient_errors`,
 one entry per retried attempt with its HTTP status, exception type, a short
 readable `reason` (e.g. "the provider was temporarily unavailable (HTTP 503)")
 and the trimmed message; `error` and `error_reason` for a clip that failed; and
-a **source hash**. The run record also keeps a `runs` list (one
-entry per run of the folder) and an overall `status`: `complete`, `incomplete`
-(some clips failed; resume it), `failed` (stopped early) or `invalid` (the zip
-failed validation). Totals cover every clip with audio, so a resumed lab's cost
-stays whole; `cost_usd_this_run` is the part this run paid for.
+`calls`, `calls_failed` and `spend_usd`, the requests made for this clip's
+audio in every run and what they cost; and a **source hash**. The run record
+also keeps a `runs` list (one entry per run of the folder) and an overall
+`status`: `complete`, `incomplete` (some clips failed; resume it), `failed`
+(stopped early) or `invalid` (the zip failed validation).
+
+**Call log and cost.** Every request sent is billed, so every request is
+recorded and counted, not only the one whose output was kept. The manifest's
+`calls` list has one record per request, in every run of the folder: `run`
+(1-based), `step` (`tts` or `spoken_form`), `clip` (audio name; none for the
+spoken-form call), `attempt` and `kind` (`first`, `retry` for TTS; `first`,
+`reask`, `transient re-send` for the spoken form), `status` (`ok` / `error`),
+the error's type, reason and message, tokens, `cost_usd`, seconds, served model,
+request id and start time. A resume appends to it.
+
+- `totals.total_cost_usd` is the money spent: the sum of every request's cost,
+  failed attempts, reasks, regenerated audio (a voice change, `--overwrite`)
+  and earlier runs included. `tts_cost_usd`, `spoken_form_cost_usd` and
+  `this_run_cost_usd` split it.
+- `totals.kept_audio_cost_usd` is what the audio now in the bundle cost when it
+  was made: a clean run's cost, for comparison.
+- A request's cost comes from the usage the provider reported. A reply that
+  came back without audio still reports usage and is counted. An HTTP error
+  reply (429, 5xx) is recorded at $0: providers don't bill rejected requests. A
+  request with no reply and no usage (time limit, dropped connection) has
+  `cost_usd: null`, counted in `totals.calls_cost_unknown`, never guessed.
+- A manifest written before the call log existed gets one rebuilt record per
+  clip with audio (and one for the spoken-form total), as run 0; its failed
+  attempts are unknown.
 
 The source hash covers the spoken text, provider, model, voice, style
 instruction, format and sample rate. A rerun skips a clip when the hash
@@ -393,11 +418,13 @@ python "Code/Narration/narrate_lab.py" <lab_output.json> --provider gemini --spo
     text is part of the clip's source hash, only that clip's audio is redone.
 - **Recorded:** the manifest's `spoken_form` block holds mode, model and model
   id, reasoning effort, prompt version, served models, calls, clips sent and
-  cached, tokens, cost (this run and `cost_usd_all_runs`), retries and any call
-  error. A call that fails after its reasks still records the tokens it used. Each clip
-  records `spoken_form` {`source`: none / llm / cache / edited / fallback,
-  `flags`, `changes` (original → spoken)}. `counts.spoken_form_flagged` and
-  `totals.total_cost_usd` (TTS plus spoken form) sum them up.
+  cached, tokens, this run's cost, retries and any call error. Each request
+  (first attempt, every reask, every transient re-send) is its own entry in the
+  manifest's call log with its cost, so a call that fails after its reasks still
+  counts all of them. Each clip records `spoken_form` {`source`: none / llm /
+  cache / edited / fallback, `flags`, `changes` (original → spoken)}.
+  `counts.spoken_form_flagged` and `totals.spoken_form_cost_usd` (every run) sum
+  them up.
 
 ## Engineering rules (from the repo, not from JW's code)
 
