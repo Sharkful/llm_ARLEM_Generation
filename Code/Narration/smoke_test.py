@@ -858,6 +858,13 @@ if HAVE_NARRATION:
     ]
     check(all(any(k in f for f in check_spoken(o, sp)[0]) for o, sp, k in flagged_cases),
           "the word check flags a reworded, added, dropped or missing word")
+    check(check_spoken("It is here.", "This is here.")[0] and check_spoken("In a cell.", "Inside a cell.")[0],
+          "a changed two-letter capitalized word (It, In) is flagged, not taken for an acronym")
+    check(check_spoken("Add a cell and a membrane.", "Add one cell and a membrane.")[0],
+          "a dropped one-letter word is flagged even when the same letter appears nearby")
+    check(not check_spoken("Xenon, Xe, has eight.", "Xenon, X e, has eight.")[0]
+          and not check_spoken("The DNA's backbone.", "The D N A's backbone.")[0],
+          "element symbols and possessive acronyms may still be spelled out")
     ch = check_spoken("Mars orbits at 1.52 AU.", "Mars orbits at one point five two A U.")[1]
     check(ch == [{"original": "1.52 AU", "spoken": "one point five two A U"}],
           "each change is recorded as original -> spoken")
@@ -933,9 +940,16 @@ if HAVE_NARRATION:
     fake_sp2, tts_fake = FakeSpoken(), FakeTTS()
     narrate(llm_settings(), r, provider=tts_fake, spoken_call=fake_sp2, log=quiet)
     lm2 = manifest_of(r)
-    check(not fake_sp2.calls and not tts_fake.calls and lm2["spoken_form"]["clips_cached"] == len(refs)
-          and lm2["counts"]["skipped"] == len(refs) and lm2["spoken_form"]["cost_usd_all_runs"] == 0.0005,
-          "a rerun reuses every cached spoken form: no LLM call, no audio regenerated")
+    third_rec = {c["audio_name"]: c for c in lm2["clips"]}[third]
+    check(fake_sp2.calls == [[third]] and third_rec["spoken_form"]["source"] == "llm"
+          and lm2["spoken_form"]["clips_cached"] == len(refs) - 1
+          and abs(lm2["spoken_form"]["cost_usd_all_runs"] - 0.0010) < 1e-12,
+          "a rerun reuses every cached spoken form; only the clip that fell back is sent again"
+          " (its audio is redone only if the model's text differs)")
+    fake_sp2b, tts_fake = FakeSpoken(), FakeTTS()
+    narrate(llm_settings(), r, provider=tts_fake, spoken_call=fake_sp2b, log=quiet)
+    check(not fake_sp2b.calls and not tts_fake.calls and manifest_of(r)["counts"]["skipped"] == len(refs),
+          "once every clip has the model's text, a rerun makes no LLM call and redoes no audio")
 
     data = json.loads((r / spoken_form.CACHE_FILE).read_text())
     data["clips"][first]["spoken_text"] = "Reviewer's fixed wording for D N A."
@@ -967,6 +981,51 @@ if HAVE_NARRATION:
           and all(c["spoken_form"]["source"] == "fallback" for c in lf["clips"] if c["spoken_form"])
           and tts_fake.calls[0] == lab["modules"][0]["clips"][0]["narration"].strip(),
           "if the spoken-form call fails, every clip falls back to its narration, flagged, and the run completes")
+
+    # A failed call's fallback is retried next time, not cached as the model's answer.
+    r = TMP / "runs" / "llm_fail_then_ok"
+    narrate(llm_settings(), r, provider=FakeTTS(), spoken_call=FakeSpoken(fail=True), log=quiet)
+    retry_sp = FakeSpoken()
+    narrate(llm_settings(), r, provider=FakeTTS(), spoken_call=retry_sp, log=quiet)
+    lr = manifest_of(r)
+    check(len(retry_sp.calls) == 1 and len(retry_sp.calls[0]) == len(refs)
+          and all(c["spoken_form"]["source"] == "llm" for c in lr["clips"] if c["spoken_form"]),
+          "after a failed spoken-form call, the next run sends every clip to the model again")
+    r = TMP / "runs" / "llm_fallback_edit"
+    narrate(llm_settings(), r, provider=FakeTTS(), spoken_call=FakeSpoken(omit=first), log=quiet)
+    data = json.loads((r / spoken_form.CACHE_FILE).read_text())
+    data["clips"][first]["spoken_text"] = "A reviewer's text."
+    (r / spoken_form.CACHE_FILE).write_text(json.dumps(data))
+    edit_sp = FakeSpoken()
+    narrate(llm_settings(), r, provider=FakeTTS(), spoken_call=edit_sp, log=quiet)
+    c_first = {c["audio_name"]: c for c in manifest_of(r)["clips"]}[first]
+    check(not edit_sp.calls and c_first["spoken_text"] == "A reviewer's text."
+          and c_first["spoken_form"]["source"] == "edited",
+          "a reviewer's edit of a fallback clip is kept and not sent to the model again")
+
+    class OddReplies(FakeSpoken):
+        """Echoes tags with brackets, spaces or other case, and returns one empty text."""
+        def __call__(self, prompt):
+            forms, usage = super().__call__(prompt)
+            for i, c in enumerate(forms.clips):
+                # clip 0: [bracketed], 1: exact tag but empty text, 2: spaces, 3: upper case
+                c.audio_name = [f"[{c.audio_name}]", c.audio_name, f"  {c.audio_name} ",
+                                c.audio_name.upper()][i % 4]
+                if i == 1:
+                    c.spoken_text = "   "
+            return forms, usage
+
+    r = TMP / "runs" / "llm_odd"
+    tts_fake = FakeTTS()
+    narrate(llm_settings(), r, provider=tts_fake, spoken_call=OddReplies(), log=quiet)
+    lo = {c["audio_name"]: c for c in manifest_of(r)["clips"]}
+    fourth = names_in_order[3]
+    check(all(lo[n]["spoken_form"]["source"] == "llm" for n in (first, third, fourth)),
+          "tags echoed with brackets, extra spaces or other case are still matched to their clips")
+    check(lo[second]["spoken_form"]["source"] == "fallback"
+          and lo[second]["spoken_text"] == lo[second]["display_text"].strip()
+          and "" not in tts_fake.calls and lo[second]["spoken_form"]["flags"],
+          "an empty spoken text falls back to the narration (flagged) instead of reaching the voice")
 
     r = TMP / "runs" / "none_mode"
     narrate(settings_for(SAMPLE_LAB), r, provider=FakeTTS(), log=quiet)
@@ -1386,9 +1445,17 @@ if HAVE_NARRATION:
 # a mock Anthropic server.
 if HAVE_NARRATION:
     anth_reqs = []
+    anth_state = {"bad": False}
 
     def anthropic_handler(path, body):
         anth_reqs.append(body)
+        if anth_state["bad"]:   # a reply that never fits LabSpokenForms
+            tool = body["tools"][0]["name"]
+            return 200, {"content-type": "application/json"}, json.dumps({
+                "id": "msg_mock", "type": "message", "role": "assistant", "model": body["model"],
+                "content": [{"type": "tool_use", "id": "toolu_bad", "name": tool, "input": {"oops": 1}}],
+                "stop_reason": "tool_use", "stop_sequence": None,
+                "usage": {"input_tokens": 1200, "output_tokens": 1000}}).encode()
         prompt = body["messages"][0]["content"]
         if isinstance(prompt, list):
             prompt = " ".join(block.get("text", "") for block in prompt)
@@ -1423,6 +1490,19 @@ if HAVE_NARRATION:
               "its tokens, cost (Claude Haiku 5.5 rates) and served model are tracked")
         check(any("D N A" in c["spoken_text"] for c in la["clips"] if c.get("spoken_text")),
               "the model's spoken text reaches the clips")
+        check(req.get("output_config") == {"effort": "low"} and la["spoken_form"]["reasoning_effort"] == "low",
+              "the spoken-form call asks for low reasoning effort, and the manifest records it")
+        anth_state["bad"] = True
+        r = TMP / "runs" / "llm_anthropic_bad"
+        n_before = len(anth_reqs)
+        code = narrate(st, r, provider=FakeTTS(), log=quiet)
+        lb = manifest_of(r)
+        attempts = len(anth_reqs) - n_before
+        check(code == 0 and attempts == spoken_form.MAX_RETRIES + 1 and lb["spoken_form"]["error"]
+              and lb["spoken_form"]["input_tokens"] == 1200 * attempts
+              and abs(lb["spoken_form"]["cost_usd"] - attempts * (1200 * 0.10 + 1000 * 0.50) / 1e6) < 1e-12,
+              "a spoken-form call that fails after its reasks still records the tokens and cost it used")
+        anth_state["bad"] = False
     finally:
         am.close()
         for k, v in saved_env.items():

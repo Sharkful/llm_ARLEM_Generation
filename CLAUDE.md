@@ -322,9 +322,11 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   `provider_create_kwargs`, with the `LabSpokenForms` response matched back by audio
   name. `check_spoken()` compares the spoken text with the narration word by word in
   code and **flags, never rejects**: a flagged clip is narrated with the model's text,
-  and a missing clip or a failed call falls back to the narration. Results are cached
-  in the run folder's `spoken_forms.json`, so reruns don't re-bill audio; a reviewer can
-  edit `spoken_text` there and `--resume` redoes only that clip.
+  and a missing or empty clip, or a failed call, falls back to the narration (re-sent on
+  the next run). The call uses low reasoning effort, tags are matched after trimming
+  brackets, spaces and case, and a failed call's tokens are still recorded. Results are
+  cached in the run folder's `spoken_forms.json`, so reruns don't re-bill audio; a
+  reviewer can edit `spoken_text` there and `--resume` redoes only that clip.
 - **`tts.py`**: the providers and the frozen paper defaults (`PROVIDERS`,
   `STYLE_INSTRUCTION`).
   - OpenAI `gpt-4o-mini-tts-2025-12-15`/`marin`: PCM over SSE, because only the

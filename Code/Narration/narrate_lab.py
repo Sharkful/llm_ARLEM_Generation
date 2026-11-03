@@ -448,7 +448,6 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
                           "voice": settings.voice, "style_instruction": settings.style,
                           "request_time_limit_seconds": getattr(provider, "time_limit", None),
                           **AUDIO_FORMAT},
-        "spoken_form": {"mode": settings.spoken_form, "model": None, "glossary_version": None},
         "counts": {},
         "totals": {},
         "runs": (old or {}).get("runs", []) + [{"started_at": started, "finished_at": None,
@@ -465,6 +464,7 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
     prev_sf_cost = ((old or {}).get("spoken_form") or {}).get("cost_usd_all_runs") or 0.0
     manifest["spoken_form"] = {
         "mode": settings.spoken_form, "model": sf.model, "model_id": sf.model_id,
+        "reasoning_effort": sf.reasoning_effort,
         "prompt_version": spoken_form.PROMPT_VERSION if settings.spoken_form == "llm" else None,
         "glossary_version": None, "served_models": sf.served_models, "calls": sf.calls,
         "clips_sent": sf.clips_sent, "clips_cached": sf.clips_cached,

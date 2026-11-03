@@ -349,6 +349,10 @@ python "Code/Narration/narrate_lab.py" <lab_output.json> --provider gemini --spo
     (`claude-haiku-5.5`) is provisional until the #94 measurement.
   - The call goes through `create_instructor_client` + `provider_create_kwargs`,
     is tracked by `tracking/`, and uses transient-only retries.
+  - It asks for **low** reasoning effort (`spoken_form.REASONING_EFFORT`), not
+    the roster's medium, since expanding symbols needs no deliberation.
+  - Returned tags are matched after trimming brackets, quotes and spaces and
+    ignoring case, so a model that echoes `[name]` still lines up.
 - **What the model may change**, per the prompt:
   - symbols and arrows (`5'→3'` → "five prime to three prime")
   - numbers with units (`109.5°`, `1.52 AU`, `150-200`)
@@ -368,8 +372,12 @@ python "Code/Narration/narrate_lab.py" <lab_output.json> --provider gemini --spo
     nothing was replaced, or an empty reply.
   - A flagged clip is still narrated with the model's text. The run carries on,
     and the flag is left for a reviewer.
-  - A clip the model didn't return, or every clip when the call itself fails,
-    falls back to the narration as written, flagged.
+  - A clip the model didn't return or returned empty, or every clip when the
+    call itself fails, falls back to the narration as written, flagged.
+  - The word check treats only all-caps tokens as acronyms (`DNA`, `SSBs`,
+    `DNA's`, `NEXT`), so capitalized short words like "It" or "In" are still
+    checked. Spelling a word out is only allowed for words of 2–4 letters, so a
+    dropped "a" is flagged.
 - **Cache: `spoken_forms.json`** in the run folder, written straight after the
   call.
   - It holds per audio name: the narration, the model's text, the text to
@@ -378,12 +386,15 @@ python "Code/Narration/narrate_lab.py" <lab_output.json> --provider gemini --spo
     run-to-run wording differences never re-bill audio. Only clips whose
     narration changed are sent again, and changing the model or prompt version
     refreshes everything.
+  - A fallback entry is not the model's answer, so the next run sends that clip
+    again, unless a reviewer has edited it.
   - **Reviewer edits:** change a clip's `spoken_text` and rerun with `--resume`.
     The edit is kept (source `edited`, still word-checked), and since the spoken
     text is part of the clip's source hash, only that clip's audio is redone.
 - **Recorded:** the manifest's `spoken_form` block holds mode, model and model
-  id, prompt version, served models, calls, clips sent and cached, tokens, cost
-  (this run and `cost_usd_all_runs`), retries and any call error. Each clip
+  id, reasoning effort, prompt version, served models, calls, clips sent and
+  cached, tokens, cost (this run and `cost_usd_all_runs`), retries and any call
+  error. A call that fails after its reasks still records the tokens it used. Each clip
   records `spoken_form` {`source`: none / llm / cache / edited / fallback,
   `flags`, `changes` (original → spoken)}. `counts.spoken_form_flagged` and
   `totals.total_cost_usd` (TTS plus spoken form) sum them up.

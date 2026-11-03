@@ -46,6 +46,10 @@ DEFAULT_MODEL = "claude-haiku-5.5"   # provisional; the #94 measurement picks th
 PROMPT_VERSION = 1                   # bump when the prompt changes, so caches refresh
 CACHE_FILE = "spoken_forms.json"
 MAX_RETRIES = 2                      # instructor reasks for a malformed reply (schema only)
+# Expanding symbols needs no deliberation, so the call asks for "low" reasoning instead
+# of the roster's "medium" (#72). Every provider accepts "low" (Anthropic effort, OpenAI
+# reasoning.effort, Gemini thinking_level).
+REASONING_EFFORT = "low"
 
 
 # ── Response model ────────────────────────────────────────────────────
@@ -113,13 +117,15 @@ def _tokens(text: str) -> list[str]:
 
 
 def is_ordinary(token: str) -> bool:
-    """A plain word that should reach the voice unchanged: letters only, not an
-    all-caps acronym (``DNA``, ``SSBs`` and emphasis caps may change)."""
+    """A plain word that should reach the voice unchanged: letters only, and not an
+    all-caps acronym or emphasis word (``DNA``, ``SSBs``, ``DNA's``, ``NEXT`` may
+    change). Capitalized words like ``It`` or ``In`` are ordinary."""
     if not _WORD.match(token):
         return False
-    letters = token.replace("'", "").replace("’", "")
-    upper = sum(ch.isupper() for ch in letters)
-    return not (len(letters) >= 2 and upper >= len(letters) - 1)
+    core = token.replace("'", "").replace("’", "")
+    if len(core) > 2 and core.endswith("s"):   # plural or possessive: SSBs, DNA's
+        core = core[:-1]
+    return not (len(core) >= 2 and core.isupper())
 
 
 def _subsequence(needles: list[str], hay: list[str]) -> bool:
@@ -146,7 +152,7 @@ def check_spoken(original: str, spoken: str) -> tuple[list[str], list[dict]]:
         # variable or an acronym being read, not a reworded word.
         near = " " + " ".join(fb[max(0, j1 - 4): j2 + 8]) + " "
         ordinary = [fa[i] for i in range(i1, i2) if is_ordinary(a[i])
-                    and not (len(a[i]) <= 4 and f" {' '.join(fa[i])} " in near)]
+                    and not (2 <= len(a[i]) <= 4 and f" {' '.join(fa[i])} " in near)]
         if op == "insert":
             flags.append(f"added words: '{after}'")
         elif not _subsequence(ordinary, fb[j1:j2]):
@@ -208,6 +214,7 @@ class PassReport:
     cost_usd: float = 0.0
     transient_retries: int = 0
     retries: int = 0
+    reasoning_effort: str | None = None
     error: str | None = None
 
 
@@ -232,8 +239,11 @@ def run_pass(mode: str, model_key: str | None, lab: dict, topic: str | None,
     todo: list[tuple[str, str]] = []
     for name, text in clips:
         hit = cache.get(name)
-        if hit and hit.get("display_text") == text and all(hit.get(k) == v for k, v in key.items()):
-            edited = hit.get("spoken_text") != hit.get("llm_text")
+        edited = bool(hit) and hit.get("spoken_text") != hit.get("llm_text")
+        # A fallback (failed call, missing clip, empty reply) is not the model's answer:
+        # send that clip again, unless a reviewer has written its text by hand.
+        usable = hit and (hit.get("source") != "fallback" or edited)
+        if usable and hit.get("display_text") == text and all(hit.get(k) == v for k, v in key.items()):
             flags, changes = check_spoken(text, hit["spoken_text"])
             results[name] = SpokenResult(hit["spoken_text"], "edited" if edited else "cache",
                                          flags, changes)
@@ -244,34 +254,40 @@ def run_pass(mode: str, model_key: str | None, lab: dict, topic: str | None,
     if todo:
         report.clips_sent = len(todo)
         prompt = build_prompt(lab, topic, todo)
+        report.calls += 1
         try:
             forms, usage = (call_fn or _make_llm_call(model_key, report))(prompt)
-            report.calls += 1
-            for k in ("input_tokens", "output_tokens", "cost_usd", "transient_retries", "retries"):
-                setattr(report, k, getattr(report, k) + (usage.get(k) or 0))
-            report.served_models = sorted(set(report.served_models) | set(usage.get("served_models") or []))
+            _add_usage(report, usage)
         except Exception as exc:  # noqa: BLE001 - the run continues with the narration as written
+            _add_usage(report, getattr(exc, "spoken_form_usage", None) or {})
             report.error = f"{type(exc).__name__}: {' '.join(str(exc).split())[:300]}"
             log(f"  spoken form: the {model_key} call failed ({report.error}); "
                 "using the narration as written for these clips")
             forms = LabSpokenForms(clips=[])
 
         returned: dict[str, str] = {}
-        extra = []
+        extra, normalized = [], 0
+        sent = {name.casefold(): name for name, _ in todo}
         for c in forms.clips:
-            if c.audio_name in returned:
-                extra.append(f"{c.audio_name} (returned twice; first kept)")
-            elif c.audio_name not in dict(todo):
-                extra.append(f"{c.audio_name} (not in the prompt)")
+            name = _match_tag(c.audio_name, sent)
+            if name is None:
+                extra.append(f"{c.audio_name!r} (not in the prompt)")
+            elif name in returned:
+                extra.append(f"{c.audio_name!r} (returned twice; first kept)")
             else:
-                returned[c.audio_name] = c.spoken_text
+                normalized += name != c.audio_name
+                returned[name] = c.spoken_text
+        if normalized:
+            log(f"  spoken form: matched {normalized} tag(s) after trimming brackets, spaces or case")
         for name, text in todo:
-            if name in returned:
-                spoken = returned[name].strip()
+            spoken = returned.get(name, "").strip()
+            if spoken:
                 flags, changes = check_spoken(text, spoken)
                 results[name] = SpokenResult(spoken, "llm", flags, changes)
             else:
-                why = "the spoken-form call failed" if report.error else "the model didn't return this clip"
+                why = ("the spoken-form call failed" if report.error
+                       else "the model returned an empty text" if name in returned
+                       else "the model didn't return this clip")
                 results[name] = SpokenResult(text.strip(), "fallback", [f"{why}; narration used as written"])
             cache[name] = {**key, "display_text": text, "llm_text": results[name].spoken_text,
                            "spoken_text": results[name].spoken_text,
@@ -287,6 +303,19 @@ def run_pass(mode: str, model_key: str | None, lab: dict, topic: str | None,
     return results, report
 
 
+def _match_tag(tag: str, sent: dict[str, str]) -> str | None:
+    """The prompt's audio name for a returned tag, trimming what a model may add when
+    copying it: surrounding brackets, quotes or spaces, and a change of case."""
+    t = tag.strip().strip("[]\"'`").strip()
+    return sent.get(t.casefold())
+
+
+def _add_usage(report: PassReport, usage: dict) -> None:
+    for k in ("input_tokens", "output_tokens", "cost_usd", "transient_retries", "retries"):
+        setattr(report, k, getattr(report, k) + (usage.get(k) or 0))
+    report.served_models = sorted(set(report.served_models) | set(usage.get("served_models") or []))
+
+
 def _make_llm_call(model_key: str, report: PassReport):
     """The real call: guarded client, tracked, transient-only retries."""
     from benchmark import (_transient_retryer, create_instructor_client,
@@ -294,8 +323,10 @@ def _make_llm_call(model_key: str, report: PassReport):
     from benchmark_config import MODELS as REGISTRY, SpecType
     from tracking import InstructorTracker
 
-    mc = REGISTRY[model_key]
+    import dataclasses
+    mc = dataclasses.replace(REGISTRY[model_key], reasoning_effort=REASONING_EFFORT)
     report.model_id = mc.model_id
+    report.reasoning_effort = REASONING_EFFORT
     tracker = InstructorTracker(model=mc.model_id, provider=mc.provider.value,
                                 pricing_config=mc.pricing_config)
     client = tracker.wrap(create_instructor_client(mc, SpecType.JSON_LAB))
@@ -305,17 +336,24 @@ def _make_llm_call(model_key: str, report: PassReport):
                       messages=[{"role": "user", "content": prompt}])
         kwargs.update(provider_create_kwargs(mc, LabSpokenForms))
         retryer = _transient_retryer()
+
+        def usage() -> dict:
+            agg = tracker.aggregate
+            return {
+                "input_tokens": agg.total_usage.prompt_tokens,
+                "output_tokens": agg.total_usage.completion_tokens,
+                "cost_usd": tracker.pricing.calculate_cost(agg.total_usage),
+                "retries": agg.total_retries,
+                "transient_retries": (retryer.statistics.get("attempt_number", 1) or 1) - 1,
+                "served_models": tracker.served_models(),
+            }
+
         try:
             forms = retryer(client.create, **kwargs)
-        finally:
-            report.transient_retries += (retryer.statistics.get("attempt_number", 1) or 1) - 1
-        agg = tracker.aggregate
-        return forms, {
-            "input_tokens": agg.total_usage.prompt_tokens,
-            "output_tokens": agg.total_usage.completion_tokens,
-            "cost_usd": tracker.pricing.calculate_cost(agg.total_usage),
-            "retries": agg.total_retries,
-            "served_models": tracker.served_models(),
-        }
+        except Exception as exc:
+            # The attempts were billed even though no answer came back.
+            exc.spoken_form_usage = usage()
+            raise
+        return forms, usage()
 
     return call
