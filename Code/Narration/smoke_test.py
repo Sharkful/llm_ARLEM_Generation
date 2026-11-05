@@ -37,6 +37,7 @@ Outputs go to a temp dir that is removed afterwards. Exit code 1 on any failure.
 """
 
 import contextlib
+import csv
 import io
 import json
 import math
@@ -1370,6 +1371,63 @@ if HAVE_NARRATION:
     code, text = cli("--resume", str(TMP / "runs" / "rules"), "--glossary", str(good_g))
     check(code == 2 and "--glossary" in text,
           "--resume refuses --glossary (the run folder's glossary.yaml is the way to add terms)")
+
+    # ── Text-only runs and the mode comparison (#94 measurement) ─────
+    r = TMP / "runs" / "measure" / "rules_text"
+    code = narrate(rules_settings(), r, provider=None, text_only=True, log=quiet)
+    tm_ = manifest_of(r)
+    check(code == 0 and tm_["status"] == "text_only" and tm_["counts"]["text_only"] == len(refs)
+          and not list(r.rglob("*.wav")) and not list(r.glob("*.zip"))
+          and all(c["spoken_text"] for c in tm_["clips"] if c["status"] == "text_only")
+          and tm_["runs"][0]["text_only"] and tm_["runs"][0]["spoken_form_seconds"] is not None
+          and not tm_["calls"],
+          "--text-only records every clip's spoken text with no voice service, audio or zip")
+    tts_fake = FakeTTS()
+    code = narrate(rules_settings(), r, provider=tts_fake, log=quiet)
+    check(code == 0 and manifest_of(r)["status"] == "complete" and len(tts_fake.calls) == len(refs),
+          "running a text-only folder again narrates it")
+
+    r_llm = TMP / "runs" / "measure" / "llm_text"
+    sp_fake = FakeSpoken()
+    narrate(llm_settings(), r_llm, provider=None, spoken_call=sp_fake, text_only=True, log=quiet)
+    tts_fake = FakeTTS()
+    narrate(llm_settings(), r_llm, provider=tts_fake, spoken_call=sp_fake, log=quiet)
+    lt = manifest_of(r_llm)
+    check(len(sp_fake.calls) == 1 and len(tts_fake.calls) == len(refs) and lt["status"] == "complete"
+          and [x["run"] for x in lt["calls"] if x["step"] == "spoken_form"] == [1],
+          "narrating a text-only LLM folder reuses its spoken forms: the model is paid once")
+    narrate(settings_for(SAMPLE_LAB), TMP / "runs" / "measure" / "none_text", provider=None,
+            text_only=True, log=quiet)
+
+    import compare_runs  # noqa: E402
+    out_md = TMP / "runs" / "measure_report" / "report.md"
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = compare_runs.main([str(TMP / "runs" / "measure"), "--out", str(out_md)])
+    md = out_md.read_text(encoding="utf-8") if out_md.exists() else ""
+    rows = list(csv.DictReader(open(out_md.with_suffix(".csv"), encoding="utf-8"))) if out_md.exists() else []
+    check(code == 0 and {r_["mode"] for r_ in rows} == {"none", "rules", "llm claude-haiku-5.5"}
+          and "| rules | 1 |" in md and "| llm claude-haiku-5.5 | 1 |" in md and "$0.0005" in md,
+          "compare_runs.py tabulates each mode's clips changed, flags, spoken-form cost and time")
+    check("## Clips whose spoken text differs" in md and "**5 prime" in md and "🔊" in md
+          and "*none*" in md and "*Written:*" in md,
+          "compare_runs.py lists each clip whose spoken text differs, with every mode's text and changes in bold")
+    saved = {k: os.environ.pop(k, None) for k in ("OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")}
+    real_root = narrate_lab.NARRATION_ROOT
+    narrate_lab.NARRATION_ROOT = TMP / "cli_root"
+    try:
+        import dotenv
+        real_load = dotenv.load_dotenv
+        dotenv.load_dotenv = lambda *a, **k: False
+        code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "rules",
+                         "--text-only", "--run-group", "g")
+    finally:
+        dotenv.load_dotenv = real_load
+        narrate_lab.NARRATION_ROOT = real_root
+        os.environ.update({k: v for k, v in saved.items() if v is not None})
+    made = [p.name for p in (TMP / "cli_root" / "g").glob("*")] if (TMP / "cli_root" / "g").exists() else []
+    check(code == 0 and len(made) == 1 and "_gemini_rules_" in made[0],
+          "--text-only needs no voice-service key, and the run folder is named after the mode")
 
 # ══ Part 3: real clients against local mock servers ═══════════════════
 

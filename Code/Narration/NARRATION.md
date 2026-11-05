@@ -120,7 +120,8 @@ chance to swap a voice.
 The **working folder** goes under
 `Artifacts/Data/Narration/[<run group>/]<run name>/`. Like `OneShot/` and
 `Hierarchical/`, it is never pooled with `Benchmark/`. The run name is
-`<input stem>_<provider>_<timestamp>`.
+`<input stem>_<provider>_<mode>_<timestamp>`, where mode is `none`, `rules` or
+`llm-<model>`.
 
 ```
 <run name>/
@@ -305,6 +306,15 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
   of the clips it never reached.
 - `--spoken-form {none,rules,llm}`, `--spoken-form-model` (llm) and
   `--glossary FILE` (rules) choose the spoken-form pass (below).
+- `--text-only` runs only the spoken-form pass and records each clip's spoken
+  text (status `text_only`), with no audio, no zip and no voice-service key.
+  `--resume` on that folder narrates it, reusing the spoken text, so an LLM pass
+  is paid once. Each run records `spoken_form_seconds`, the pass's wall time.
+- `compare_runs.py <run folders or a group folder>` compares runs of the same
+  labs across modes (no requests): per mode, clips changed and flagged and the
+  pass's added cost and time; per lab, every clip whose spoken text differs
+  between modes, with each mode's changes in bold, which is the list to listen
+  to. It writes `spoken_form_comparison.md` and `.csv` next to the runs.
 - **Failures:**
   - A clip that fails is recorded and the run continues. No zip is built until
     every narrated clip has audio, and a stale zip is removed.

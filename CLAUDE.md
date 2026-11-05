@@ -93,6 +93,8 @@ python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_o
 python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider gemini --spoken-form rules
 python "Code/Narration/spoken_rules.py" preview "Artifacts/Data/Benchmark/Outputs/<run>_output.json"   # rules before/after
 python "Code/Narration/spoken_rules.py" terms "Artifacts/Data/Benchmark/Outputs"   # terms the glossary doesn't cover
+python "Code/Narration/narrate_lab.py" "<lab>_output.json" --provider gemini --spoken-form llm --text-only   # spoken text only, no audio; --resume narrates it
+python "Code/Narration/compare_runs.py" "Artifacts/Data/Narration/<run group>"   # modes side by side: cost, time, changed clips
 python "Code/Narration/narrate_lab.py" --resume "Artifacts/Data/Narration/testing/<run name>"
 python "Code/Narration/bundle.py" validate "<Name>Lab.zip"
 python "Code/Narration/smoke_test.py"   # offline check, no API keys (fake TTS + mock OpenAI/Gemini)
@@ -312,7 +314,11 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   dropped; compared ignoring case; applied to the bundled copy only), synthesizes one
   request per clip, and rewrites `narration_manifest.json` after every clip. `--resume`
   skips clips whose source hash matches, also after a stop-the-run error or a crash
-  (unreached clips keep their previous records). It zips and validates only when every clip has audio. The manifest's `calls` list logs every
+  (unreached clips keep their previous records). It zips and validates only when every clip has audio.
+  `--text-only` runs just the spoken-form pass (no audio, no voice key); resuming that folder
+  narrates it with the cached spoken text. Run folders are named `<stem>_<provider>_<mode>_<stamp>`.
+  **`compare_runs.py`** tabulates runs of the same labs by spoken-form mode (cost, time, changed
+  and flagged clips) and lists the clips whose spoken text differs, to listen to. The manifest's `calls` list logs every
   request in every run (TTS attempts and retries, spoken-form first attempt, reasks and re-sends)
   with its own cost; `totals.total_cost_usd` is that spend, all of it, beside
   `kept_audio_cost_usd` (what the bundled audio cost). An HTTP error reply costs $0; a request

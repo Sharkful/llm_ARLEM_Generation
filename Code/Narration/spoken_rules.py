@@ -303,7 +303,13 @@ class _Rules:
         rx = re.compile(r"(?<![\w'])(" + "|".join(re.escape(k) for k in
                                                   sorted(said, key=len, reverse=True))
                         + r")(?=(?:'s|s)?(?![\w]))")
-        return self.sub("glossary", rx, lambda m: said[m.group(1)], t)
+        def term(m):
+            out = said[m.group(1)]
+            # Keep a sentence's capital: "VSEPR takes" -> "Vesper takes".
+            if re.search(r"(?:^|[.!?]\s+)$", t[:m.start()]):
+                out = out[:1].upper() + out[1:]
+            return out
+        return self.sub("glossary", rx, term, t)
 
     def _prime_word(self, meaning: str, n: str) -> str:
         return self.g.senses["number_prime"][meaning]["say"][0 if n in ("1", "-1") else 1]

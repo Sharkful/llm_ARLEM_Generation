@@ -4,8 +4,7 @@ folder and bundled into the lab resources zip (bundle.py, #92).
 
     python "Code/Narration/narrate_lab.py" <lab_output.json> --provider {openai,gemini}
         [--voice NAME] [--spoken-form {none,rules,llm}] [--glossary FILE] [--topic NAME]
-        [--bundle-name NAME]
-        [--run-group NAME] [--overwrite] [--dry-run]
+        [--bundle-name NAME] [--run-group NAME] [--overwrite] [--dry-run] [--text-only]
     python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
 
 Spec: NARRATION.md. In short:
@@ -22,7 +21,8 @@ Spec: NARRATION.md. In short:
   audio is missing or whose inputs changed (source hash); ``--overwrite`` redoes all.
 - The zip is built and validated only when every narrated clip has audio.
 
-Output: Artifacts/Data/Narration/[<run group>/]<input stem>_<provider>_<timestamp>/
+Output: Artifacts/Data/Narration/[<run group>/]<input stem>_<provider>_<mode>_<timestamp>/
+(mode: none, rules, or llm-<model>)
 Exit codes: 0 complete and valid; 1 incomplete or invalid (resume it); 2 bad input or
 environment.
 """
@@ -434,10 +434,12 @@ def _clip_warnings(text: str) -> list[str]:
 
 
 def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=None,
-        api_key: str | None = None, spoken_call=None, log=print) -> int:
+        api_key: str | None = None, spoken_call=None, log=print, text_only: bool = False) -> int:
     """Narrate ``settings.input_path`` into ``run_dir``. ``provider`` (anything with
     ``synthesize(text) -> tts.Synthesis``) and ``spoken_call`` (see
-    ``spoken_form.run_pass``) replace the real clients in tests."""
+    ``spoken_form.run_pass``) replace the real clients in tests. ``text_only`` runs
+    the spoken-form pass and records each clip's spoken text, with no audio and no
+    zip; a later run of the same folder narrates it, reusing the spoken forms."""
     from tracking.metrics import TokenUsage
     from tracking.pricing import PricingCalculator
 
@@ -462,7 +464,7 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
     write_json_atomic(folder / names.json_file, bundled_lab(lab, plans))
     calls: list[dict] = (old.get("calls") if "calls" in old else _legacy_calls(old)) if old else []
 
-    if provider is None:
+    if provider is None and not text_only:
         provider = tts.make_provider(settings.provider, settings.voice, settings.style,
                                      api_key=api_key)
     pricing = PricingCalculator(model=spec.model)
@@ -498,7 +500,8 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
         "counts": {},
         "totals": {},
         "runs": (old or {}).get("runs", []) + [{"started_at": started, "finished_at": None,
-                                                "overwrite": overwrite}],
+                                                "overwrite": overwrite, "text_only": text_only,
+                                                "spoken_form_seconds": None}],
         "provenance": provenance(),
         "warnings": [],
         "clips": [],
@@ -508,12 +511,15 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
 
     model_key = settings.spoken_form_model if settings.spoken_form == "llm" else None
     narrated = [(p.name, p.display_text) for p in plans if p.action == "narrate"]
+    t_sf = time.monotonic()
     try:
         spoken, sf = spoken_form.run_pass(settings.spoken_form, model_key, lab, topic, narrated,
                                           run_dir, write_json_atomic, call_fn=spoken_call, log=log,
                                           glossary_files=[_abs(p) for p in settings.glossary or []])
     except spoken_rules.GlossaryError as exc:
         raise InputError(str(exc)) from exc
+    # Wall time of the pass this run (the LLM call, or applying the rules; ~0 when cached).
+    manifest["runs"][-1]["spoken_form_seconds"] = round(time.monotonic() - t_sf, 3)
     calls += [_call(run=run_no, step="spoken_form", **a) for a in sf.attempts]
     manifest["spoken_form"] = {
         "mode": settings.spoken_form, "model": sf.model, "model_id": sf.model_id,
@@ -567,6 +573,8 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
             rec["transient_errors"] = rec["transient_errors"] or []
             rec["status"] = "skipped"
             log(f"  skip  {p.name} (unchanged)")
+        elif text_only:
+            rec["status"] = "text_only"
         elif fatal:
             rec.update(status="failed", error="not attempted: the run stopped on an earlier error")
         elif len(text) > spec.max_chars:
@@ -655,7 +663,11 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
             manifest["warnings"].append(f"served by {s}, not the requested {spec.model}")
 
     failed = [r for r in records if r["status"] == "failed"]
-    if failed:
+    if text_only:
+        manifest["status"] = "text_only"
+        log(f"\nText only: spoken text recorded, no audio. Narrate this folder with:\n"
+            f'  python "Code/Narration/narrate_lab.py" --resume "{_rel(run_dir)}"')
+    elif failed:
         manifest["status"] = "failed" if fatal else "incomplete"
         # A zip from an earlier run no longer matches the folder: don't leave it to ship.
         (run_dir / names.zip_file).unlink(missing_ok=True)
@@ -689,7 +701,7 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
         f"{t.get('audio_seconds', 0):.0f} s; spent ${t.get('total_cost_usd', 0):.4f} on "
         f"{t.get('calls', 0)} requests, {t.get('calls_failed', 0)} failed{unknown} "
         f"(this run ${t.get('this_run_cost_usd', 0):.4f}); manifest: {_rel(manifest_path)}")
-    return 0 if manifest["status"] == "complete" else 1
+    return 0 if manifest["status"] in ("complete", "text_only") else 1
 
 
 def _plan_record(p: ClipPlan) -> dict:
@@ -712,7 +724,8 @@ def _plan_record(p: ClipPlan) -> dict:
 def _fill_counts(manifest: dict) -> None:
     clips = manifest["clips"]
     by = {s: sum(c["status"] == s for c in clips)
-          for s in ("generated", "skipped", "shared", "failed", "silent", "dropped", "pending")}
+          for s in ("generated", "skipped", "shared", "failed", "silent", "dropped", "pending",
+                    "text_only")}
     changes = {k: sum(c["name_change"] == k for c in clips)
                for k in ("generated", "sanitized", "deduplicated", "dropped")}
     audio = [c for c in clips if c["status"] in ("generated", "skipped")]
@@ -810,6 +823,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--resume", type=Path, help="an existing run folder to finish or redo")
     ap.add_argument("--overwrite", action="store_true", help="regenerate every clip")
     ap.add_argument("--dry-run", action="store_true", help="show the plan; send nothing")
+    ap.add_argument("--text-only", action="store_true",
+                    help="run the spoken-form pass and record each clip's spoken text, with no "
+                         "audio (no voice-service key needed); --resume the folder to narrate it")
     args = ap.parse_args(argv)
 
     from dotenv import load_dotenv
@@ -859,8 +875,10 @@ def main(argv: list[str] | None = None) -> int:
             stem = args.lab.name.removesuffix(".json").removesuffix("_output")
             stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             base = NARRATION_ROOT / args.run_group if args.run_group else NARRATION_ROOT
-            run_dir = base / f"{stem}_{args.provider}_{stamp}"
-        api_key = check_environment(tts.PROVIDERS[settings.provider])
+            mode = (f"llm-{settings.spoken_form_model}" if settings.spoken_form == "llm"
+                    else settings.spoken_form)
+            run_dir = base / f"{stem}_{args.provider}_{mode}_{stamp}"
+        api_key = None if args.text_only else check_environment(tts.PROVIDERS[settings.provider])
         if settings.spoken_form == "llm":
             check_spoken_form_environment(settings.spoken_form_model)
         load_lab(settings.input_path)  # fail before creating a run folder
@@ -870,8 +888,10 @@ def main(argv: list[str] | None = None) -> int:
                 spoken_rules.load_glossary(topic, [_abs(p) for p in settings.glossary or []])
             except spoken_rules.GlossaryError as exc:
                 raise InputError(str(exc)) from exc
-        print(f"Narrating {_rel(settings.input_path)} -> {_rel(run_dir)}")
-        return run(settings, run_dir, overwrite=args.overwrite, api_key=api_key)
+        print(f"{'Spoken text for' if args.text_only else 'Narrating'} "
+              f"{_rel(settings.input_path)} -> {_rel(run_dir)}")
+        return run(settings, run_dir, overwrite=args.overwrite, api_key=api_key,
+                   text_only=args.text_only)
     except InputError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
