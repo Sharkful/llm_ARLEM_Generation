@@ -94,6 +94,17 @@ python "Code/Narration/bundle.py" validate "<Name>Lab.zip"
 python "Code/Narration/smoke_test.py"   # offline check, no API keys (fake TTS + mock OpenAI/Gemini)
 ```
 
+Provisioning asset library (models and textures for labs; the provisioning CLI itself is not built yet):
+
+```bash
+# Library folder: --library PATH, else $ARLEM_ASSET_LIBRARY, else Artifacts/Assets/Library/ (gitignored)
+python "Code/Provisioning/library.py" seed       # build/update from seed_assets.json (downloads, checks sha256)
+python "Code/Provisioning/library.py" validate   # every entry and file; exit 1 on errors
+python "Code/Provisioning/library.py" info       # library_id / revision / content_hash: record these when comparing machines
+python "Code/Provisioning/library.py" find 2k_jupiter
+python "Code/Provisioning/smoke_test.py"         # offline check, no network (mock download server, throwaway library)
+```
+
 Analysis and reporting (reads saved run artifacts, no LLM calls):
 
 ```bash
@@ -331,7 +342,31 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   need the venv). Covers the bundle (all wave-2 labs), the CLI with a fake TTS, and the
   real clients against mock OpenAI and Gemini servers.
 
-### Analysis System (`Code/Analysis/`)
+### Provisioning (`Code/Provisioning/`, milestone "3D Model and Texture Provisioning", #103)
+
+`PROVISIONING.md` (#104) is the spec: provide every model and texture a finished lab
+references that the headset doesn't have (reuse → build → search → assemble → needs
+review), routed by the asset's form, not the lab's subject, and bundle them into the lab
+resources zip. JW's `asset_pipeline/` (branch `jw-expermiments`) was reviewed in the spec,
+not reused. Built so far:
+
+- **`library.py`** (#107): the asset library. A **local folder for now** (`LocalFolderStore`
+  behind the `AssetStore` interface, so a server can replace it later); `--library`, else
+  `$ARLEM_ASSET_LIBRARY`, else `Artifacts/Assets/Library/` (gitignored). Asset files never
+  go into git. **Results therefore differ between machines**: every library has a
+  `library_id`, a `revision` and a `content_hash` (download dates excluded, so two libraries
+  seeded from one list match), which runs must record. `put` refuses an entry without an
+  allowed license (CC0, public domain, CC-BY with author/title/source), a known size, or
+  matching files (JPEG textures, GLB models); a write is refused if `library.json` changed
+  since it was read. Names and aliases are compared ignoring case.
+- **`seed_assets.json`**: what git tracks instead of assets. The moon-lab built-ins
+  (descriptions only; matched, never shipped; kept equal to `lab_metrics.KNOWN_PREFABS` /
+  `KNOWN_TEXTURES` by the smoke test) and the 15 real Solar System Scope 2k maps (CC-BY
+  4.0) with pinned sha256. `seed --pin` records a missing checksum only once the asset is
+  accepted; a checksum that changed at the source is always refused.
+- **`smoke_test.py`**: offline (mock download server, throwaway library; never the real one).
+
+
 
 Everything downstream of a run. Reads `Metrics/` + `Outputs/`; never calls an LLM.
 
