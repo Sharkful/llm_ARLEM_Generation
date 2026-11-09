@@ -269,7 +269,10 @@ class OpenAITTS:
                         break
             except Exception as exc:
                 if events.usage is None:
-                    if expired.is_set():
+                    # A stall ends in whichever fires first: the watchdog (closing the
+                    # stream) or httpx's read timeout (the same limit, counted from the
+                    # last chunk). Either way the reply missed the limit.
+                    if expired.is_set() or _is_timeout(exc):
                         raise self._timeout(events) from exc
                     raise
             finally:

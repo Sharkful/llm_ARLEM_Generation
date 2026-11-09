@@ -1583,6 +1583,24 @@ if HAVE_NARRATION:
             check(outcome.startswith("no complete reply within 1 s") and took < 2.5,
                   f"a stream that goes {mode} past the limit is abandoned at the limit "
                   f"({took:.1f} s; {outcome})")
+        # Windows' coarse timers can fire the watchdog after httpx's read timeout (the
+        # same limit, counted from the last chunk); that must still be a TTSTimeout.
+        real_timer = threading.Timer
+
+        class LateTimer(real_timer):
+            def __init__(self, interval, function, *a, **kw):
+                super().__init__(interval + 0.3, function, *a, **kw)
+        stall.update(mode="silent", count=0)
+        threading.Timer = LateTimer
+        try:
+            fast.synthesize("x")
+            outcome = "no error"
+        except Exception as exc:  # noqa: BLE001
+            outcome = type(exc).__name__
+        finally:
+            threading.Timer = real_timer
+        check(outcome == "TTSTimeout",
+              f"a stall caught by httpx's read timeout before the watchdog is still the time limit ({outcome})")
         stall.update(mode="before_headers", count=0)
         t0 = time.monotonic()
         try:
