@@ -357,13 +357,18 @@ not reused. Built so far:
   `library_id`, a `revision` and a `content_hash` (download dates excluded, so two libraries
   seeded from one list match), which runs must record. `put` refuses an entry without an
   allowed license (CC0, public domain, CC-BY with author/title/source), a known size, or
-  matching files (JPEG textures, GLB models); a write is refused if `library.json` changed
-  since it was read. Names and aliases are compared ignoring case.
+  matching files (JPEG textures, GLB models; stored as `model.glb` / `texture.jpg` /
+  `thumbnail.png`). Every write holds `library.lock` and is refused if `library.json`
+  changed since that store read it (the store then reloads, so retry). Names and aliases
+  are compared ignoring case. Downloads use `benchmark._transient_retryer()`'s policy
+  (`benchmark` is imported lazily, only for downloads).
 - **`seed_assets.json`**: what git tracks instead of assets. The moon-lab built-ins
   (descriptions only; matched, never shipped; kept equal to `lab_metrics.KNOWN_PREFABS` /
   `KNOWN_TEXTURES` by the smoke test) and the 15 real Solar System Scope 2k maps (CC-BY
   4.0) with pinned sha256. `seed --pin` records a missing checksum only once the asset is
-  accepted; a checksum that changed at the source is always refused.
+  accepted (saved right away); a checksum that changed at the source is always refused.
+  One entry failing never stops a seed run; a built-in whose file can't be downloaded is
+  still recorded (`partial`).
 - **`smoke_test.py`**: offline (mock download server, throwaway library; never the real one).
 
 

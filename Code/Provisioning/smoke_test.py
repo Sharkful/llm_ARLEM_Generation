@@ -10,15 +10,21 @@ pinned, ids and names are unique, built-ins match the moon-lab sets in
 Part 2 (the asset library, #107), against a local mock download server and a
 throwaway library (never the real one):
 - seeding: built-ins, pinning, a transient 503 retried, a 404 not retried, a
-  non-JPEG rejected and never pinned, disallowed and uncredited licenses refused
+  non-JPEG rejected and never pinned, disallowed and uncredited licenses refused,
+  a cut-off download retried and then failed alone, an unexpected error failing only
+  its entry, a killed run keeping the pins it got, and a built-in recorded without
+  the file it couldn't download
 - reruns download nothing; a damaged local file is re-downloaded; a changed
   source file is refused; ``--pin`` never overwrites an existing pin
 - two libraries seeded from one list share a content hash, not a library id
 - lookups by name and alias ignore case; alias clashes are refused
-- a write is refused when another process wrote in between, and nothing is lost
+- a write is refused when another process wrote in between, and nothing is lost;
+  two simultaneous writers never both succeed; a held lock makes a writer give up,
+  a stale one is cleared
 - ``put`` refuses an entry without a license or size and leaves the library as it was
 - the validator catches missing, altered and wrong-format files, duplicate names,
-  and unlisted files
+  blank aliases and unlisted files; sizes must be real sizes; files of two roles
+  can't collide; library.json is 0644
 - credit lines, the GLB check, library path resolution and the CLI exit codes
 
 Requires the project venv (pydantic, Pillow). Exit code 1 on any failure.
@@ -36,6 +42,7 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -75,6 +82,7 @@ class Server:
     def __init__(self):
         self.files: dict[str, bytes] = {}
         self.fail_once: dict[str, int] = {}  # path -> status returned on the first request
+        self.cut_off: set[str] = set()  # paths whose reply stops short of its Content-Length
         self.hits: dict[str, int] = {}
         server = self
 
@@ -95,9 +103,10 @@ class Server:
                     return
                 self.send_response(200)
                 self.send_header("Content-Type", "image/jpeg")
-                self.send_header("Content-Length", str(len(body)))
+                promised = len(body) + (1000 if self.path in server.cut_off else 0)
+                self.send_header("Content-Length", str(promised))
                 self.end_headers()
-                self.wfile.write(body)
+                self.wfile.write(body)  # then the connection closes (HTTP/1.0)
 
         self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.base = f"http://127.0.0.1:{self.httpd.server_port}"
@@ -154,7 +163,7 @@ def seed_doc(srv: Server) -> dict:
     def tex(asset_id, path, **extra):
         e = {"asset_id": asset_id, "kind": "texture", "name": asset_id, "mapping": "equirectangular",
              "description": f"test texture {asset_id}",
-             "download": {"url": srv.url(path), "filename": "texture.jpg"},
+             "download": {"url": srv.url(path)},
              "provenance": dict(prov)}
         e.update(extra)
         return e
@@ -166,7 +175,9 @@ def seed_doc(srv: Server) -> dict:
     return {"version": 1, "entries": [
         {"asset_id": "box_builtin", "kind": "model", "name": "boxPrefab", "builtin": True,
          "description": "a built-in box", "form": "primitive"},
+        tex("sky_builtin", "/missing_builtin.jpg", builtin=True),
         tex("map_a", "/a.jpg"),
+        tex("cut_off", "/short.jpg"),
         tex("flaky", "/flaky.jpg"),
         tex("missing", "/missing.jpg"),
         tex("not_jpeg", "/png.jpg"),
@@ -184,11 +195,15 @@ def run_seed(store, seed_path, **kw):
 
 def part2(tmp: Path) -> None:
     print("Part 2: the asset library")
-    lib.RETRY_WAITS = (0.0, 0.0)
+    import tenacity
+    bm = lib._benchmark()
+    bm._TRANSIENT_WAIT = tenacity.wait_none()  # benchmark's retry policy, no real back-off
     srv = Server()
     try:
-        srv.files = {"/a.jpg": jpeg_bytes(), "/b.jpg": jpeg_bytes(color=(5, 6, 7)), "/flaky.jpg": jpeg_bytes(color=(1, 2, 3)),
-                     "/png.jpg": png_bytes()}
+        srv.files = {"/a.jpg": jpeg_bytes(), "/b.jpg": jpeg_bytes(color=(5, 6, 7)),
+                     "/flaky.jpg": jpeg_bytes(color=(1, 2, 3)), "/png.jpg": png_bytes(),
+                     "/short.jpg": jpeg_bytes(color=(7, 7, 7))}
+        srv.cut_off = {"/short.jpg"}
         seed_path = tmp / "seed.json"
         lib.write_json_atomic(seed_path, seed_doc(srv))
 
@@ -214,6 +229,18 @@ def part2(tmp: Path) -> None:
               "a CC-BY-NC license is refused")
         check(res["no_author"].status == "failed" and "needs credit" in res["no_author"].detail,
               "a CC-BY asset without an author is refused")
+        check(res["cut_off"].status == "failed" and "IncompleteRead" in res["cut_off"].detail
+              and res["cut_off"].retries == bm._TRANSIENT_ATTEMPTS - 1,
+              "a cut-off download is retried as transient, then fails only its own entry")
+        check(res["flaky"].status == "added", "...and the entries after it still run")
+        sky = store.get("sky_builtin")
+        check(res["sky_builtin"].status == "partial" and sky is not None and sky.builtin
+              and sky.files == [] and sky.pixels is None,
+              "a built-in whose download fails is still recorded, without its file")
+        check(any(r.asset_id == "sky_builtin" for r in rep.failed), "...and is reported as needing attention")
+        if os.name != "nt":
+            check((tmp / "libA" / "library.json").stat().st_mode & 0o777 == 0o644,
+                  "library.json is readable by everyone (0644)")
         pinned = {e["asset_id"]: e["download"].get("sha256")
                   for e in json.loads(seed_path.read_text())["entries"] if "download" in e}
         check(bool(pinned["map_a"]) and bool(pinned["flaky"]), "accepted downloads are pinned")
@@ -244,7 +271,8 @@ def part2(tmp: Path) -> None:
         res, _ = run_seed(store, seed_path, pin=True)
         check(res["map_a"].status == "failed" and "source file changed" in res["map_a"].detail,
               "a changed source file is refused, even with --pin")
-        check(json.loads(seed_path.read_text())["entries"][1]["download"]["sha256"] == pinned["map_a"],
+        check(next(e for e in json.loads(seed_path.read_text())["entries"]
+                   if e["asset_id"] == "map_a")["download"]["sha256"] == pinned["map_a"],
               "...and its pin is kept")
         srv.files["/a.jpg"] = jpeg_bytes()
         run_seed(store, seed_path)
@@ -266,6 +294,52 @@ def part2(tmp: Path) -> None:
             check(False, "an alias already used elsewhere is refused")
         except lib.LibraryError:
             check(True, "an alias already used elsewhere is refused")
+
+        # One entry failing for an unexpected reason, or the run being killed, loses nothing
+        doc = json.loads(seed_path.read_text())
+        doc["entries"] = [dict(e, asset_id=f"extra_{i}", name=f"extra_{i}",
+                               download={"url": srv.url(f"/extra_{i}.jpg")})
+                          for i, e in enumerate(doc["entries"][2:5])]
+        for i in range(3):
+            srv.files[f"/extra_{i}.jpg"] = jpeg_bytes(color=(i, 40, 80))
+        extra_seed = tmp / "extra_seed.json"
+        lib.write_json_atomic(extra_seed, doc)
+        real_thumbnail = lib.make_thumbnail
+        calls = []
+
+        def flaky_thumbnail(src, dest):
+            calls.append(src)
+            if len(calls) == 2:
+                raise OSError("No space left on device")
+            if len(calls) == 3:
+                raise KeyboardInterrupt
+            real_thumbnail(src, dest)
+
+        lib.make_thumbnail = flaky_thumbnail
+        try:
+            run_seed(store, extra_seed, pin=True)
+            check(False, "a killed seed run stops")
+        except KeyboardInterrupt:
+            check(True, "a killed seed run stops")
+        finally:
+            lib.make_thumbnail = real_thumbnail
+        pins = [e["download"].get("sha256") for e in json.loads(extra_seed.read_text())["entries"]]
+        check(bool(pins[0]) and not pins[1] and not pins[2],
+              "pins of entries accepted before the run was killed are already saved")
+        store = lib.LocalFolderStore(tmp / "libA")
+        res, _ = run_seed(store, extra_seed, pin=True)
+        check(res["extra_0"].status == "unchanged" and res["extra_1"].status == "added"
+              and res["extra_2"].status == "added", "...and a rerun picks up where it stopped")
+        lib.make_thumbnail = lambda src, dest: (_ for _ in ()).throw(OSError("No space left on device"))
+        try:
+            doc["entries"] = [dict(doc["entries"][0], asset_id="extra_3", name="extra_3",
+                                   download={"url": srv.url("/extra_0.jpg")})]
+            lib.write_json_atomic(extra_seed, doc)
+            res, _ = run_seed(store, extra_seed, pin=True)
+        finally:
+            lib.make_thumbnail = real_thumbnail
+        check(res["extra_3"].status == "failed" and "OSError" in res["extra_3"].detail,
+              "an unexpected error fails only its own entry, with its type named")
 
         # Concurrent writers
         s1 = lib.LocalFolderStore(tmp / "libA")
@@ -306,6 +380,91 @@ def part2(tmp: Path) -> None:
             check(False, "put refuses a name another entry already uses")
         except lib.LibraryError:
             check(True, "put refuses a name another entry already uses")
+
+        # Two writers at the same moment: one succeeds, the other is refused, nothing is lost
+        s3 = lib.LocalFolderStore(tmp / "libA")
+        s4 = lib.LocalFolderStore(tmp / "libA")
+        barrier = threading.Barrier(2)
+        outcome = {}
+
+        def writer(st, aid):
+            e = good.model_copy(update={"asset_id": aid, "name": aid})
+            barrier.wait()
+            try:
+                st.put(e, {"texture": img})
+                outcome[aid] = "ok"
+            except lib.ConcurrentWriteError:
+                outcome[aid] = "refused"
+
+        threads = [threading.Thread(target=writer, args=(st, aid))
+                   for st, aid in ((s3, "race_one"), (s4, "race_two"))]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        fresh = lib.LocalFolderStore(tmp / "libA")
+        winner = next((a for a, o in outcome.items() if o == "ok"), None)
+        loser = next((a for a, o in outcome.items() if o == "refused"), None)
+        check(winner is not None and loser is not None and fresh.get(winner) is not None
+              and fresh.get(loser) is None and not (tmp / "libA" / loser).exists(),
+              "two simultaneous writers: one is recorded, the other refused, none silently lost")
+        check(not (tmp / "libA" / lib.LOCK_NAME).exists(), "the lock is released after writing")
+
+        # The lock: a live one makes writers wait and then give up; a stale one is cleared
+        store = lib.LocalFolderStore(tmp / "libA")
+        lock = tmp / "libA" / lib.LOCK_NAME
+        lock.write_text("12345 another run")
+        saved_timeout, lib.LOCK_TIMEOUT = lib.LOCK_TIMEOUT, 0.2
+        try:
+            store.add_alias("map_a", "lockedAlias")
+            check(False, "a writer gives up on a lock held by another run")
+        except lib.LibraryError as exc:
+            check("held by another writer" in str(exc) and lock.exists(),
+                  "a writer gives up on a lock held by another run, and leaves it")
+        finally:
+            lib.LOCK_TIMEOUT = saved_timeout
+        old = time.time() - lib.LOCK_STALE - 10
+        os.utime(lock, (old, old))
+        store.add_alias("map_a", "staleLockAlias")
+        check(store.find("staleLockAlias") is not None and not lock.exists(),
+              "a lock left by a crashed run is cleared")
+
+        # Sizes must be real sizes; aliases can't be blank; files can't collide
+        for what, kw in [("one-number bounds", {"bounds": [0.4]}), ("a zero bound", {"bounds": [1, 0, 1]}),
+                         ("negative triangles", {"triangles": -5}), ("zero pixels", {"pixels": [0, 0]}),
+                         ("one-number pixels", {"pixels": [64]})]:
+            try:
+                lib.LibraryEntry(asset_id="sz", kind="model", name="sz", description="x", **kw)
+                check(False, f"an entry with {what} is refused")
+            except lib.ValidationError:
+                check(True, f"an entry with {what} is refused")
+        try:
+            store.get("map_a").pixels = [64]
+            check(False, "assigning a bad size is refused too")
+        except lib.ValidationError:
+            check(True, "assigning a bad size is refused too")
+        store = lib.LocalFolderStore(tmp / "libA")
+        try:
+            store.add_alias("map_a", "   ")
+            check(False, "a blank alias is refused")
+        except lib.LibraryError:
+            check(True, "a blank alias is refused")
+        check(any("alias is empty" in p.message for p in lib.check_entry(
+            store.get("map_a").model_copy(update={"aliases": [" "]}))), "check_entry flags a blank alias")
+        before = store.get("flaky").file("texture").sha256
+        odd = tmp / "odd"
+        odd.mkdir()
+        shutil.copyfile(tmp / "libA" / "flaky" / "thumbnail.png", odd / "texture.jpg")
+        store.put(store.get("flaky"), {"thumbnail": odd / "texture.jpg"})
+        f = store.get("flaky")
+        check(f.file("texture").sha256 == before and f.file("thumbnail").path == "thumbnail.png"
+              and [x.path for x in f.files] == ["texture.jpg", "thumbnail.png"],
+              "a new thumbnail named texture.jpg is stored as thumbnail.png, the texture untouched")
+        try:
+            store.put(store.get("flaky"), {"preview": img})
+            check(False, "an unknown file role is refused")
+        except lib.LibraryError:
+            check(True, "an unknown file role is refused")
 
         # Models: the GLB check
         glb = tmp / "model.glb"
@@ -351,8 +510,9 @@ def part2(tmp: Path) -> None:
 
         # Credits
         line = lib.credit_line(store.get("flaky"))
-        check(line is not None and "A. Author" in line and "CC-BY-4.0" in line and "Changes: none" in line,
-              "a CC-BY asset gets a credit line")
+        check(line == '"Test map" by A. Author, https://example.org/a, CC-BY-4.0 '
+                      '(https://creativecommons.org/licenses/by/4.0/), Changes: none.',
+              "a CC-BY asset gets a complete credit line")
         check(lib.credit_line(store.get("no_license")) is None, "a CC0 asset needs no credit line")
 
         # Paths and the CLI
@@ -377,10 +537,12 @@ def part2(tmp: Path) -> None:
               "CLI: seed with failing entries -> exit 1")
         check(cli("seed", "--library", str(tmp / "libD"), "--seed-file", str(seed_path),
                   "--only", "map_a", "flaky", "box_builtin") == 0, "CLI: seed --only -> exit 0")
-        check(cli("seed", "--library", str(tmp / "libD"), "--seed-file", str(seed_path),
+        check(cli("seed", "--library", str(tmp / "libE"), "--seed-file", str(seed_path),
                   "--only", "unknown_id") == 2, "CLI: seed --only with an unknown id -> exit 2")
-        check(cli("seed", "--library", str(tmp / "libD"), "--seed-file", str(tmp / "nope.json")) == 2,
+        check(cli("seed", "--library", str(tmp / "libF"), "--seed-file", str(tmp / "nope.json")) == 2,
               "CLI: an unreadable seed list -> exit 2")
+        check(not (tmp / "libE").exists() and not (tmp / "libF").exists(),
+              "CLI: a seed that fails its argument checks creates no library")
     finally:
         srv.close()
 

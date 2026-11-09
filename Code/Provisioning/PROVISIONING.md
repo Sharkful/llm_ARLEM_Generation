@@ -216,9 +216,14 @@ changes made, notes, date obtained.
 library as it was):
 
 - a license in the policy, and for CC-BY an author, a title and a source URL;
-- a known size: bounds and triangles for a model, pixels for a texture;
-- files that match their checksums, textures that are JPEG, models that are GLB;
-- no name or alias already used by another entry (compared ignoring case).
+- a known size: bounds (three positive numbers) and triangles (positive) for a
+  model, pixels (two positive numbers) for a texture; malformed sizes can't even be
+  set on an entry;
+- files that match their checksums, textures that are JPEG, models that are GLB,
+  each stored under its role's fixed name (`model.glb`, `texture.jpg`,
+  `thumbnail.png`), so a new file of one role can never overwrite another's;
+- no name or alias already used by another entry (compared ignoring case), and no
+  blank alias.
 
 **License policy (decided):** CC0, public domain and CC-BY. Never NC, ND,
 share-alike, "all rights reserved" or unknown. `credit_line()` gives the credits-file
@@ -231,7 +236,9 @@ silently dropped.
 matched and reused, never shipped. Their descriptions are written from the moon lab
 and should be checked against the Unity prefabs. `2k_earth_daymap`, `2k_moon` and
 `2k_sun` are Solar System Scope maps, so the library also keeps their files, in case
-the headset needs them in the zip (#105).
+the headset needs them in the zip (#105). A built-in is recorded even when its file
+can't be downloaded (it is on the headset either way); seeding reports it as
+`partial`.
 
 **Seed list (in git):** `Code/Provisioning/seed_assets.json` holds metadata only:
 the built-ins, plus the assets we explicitly keep with their download URL, license,
@@ -246,16 +253,25 @@ parameters join it in #109. Seeding:
   disk, not just the index;
 - refuses a download whose checksum changed at the source, and an unpinned one
   unless `--pin` is given; `--pin` records a checksum only once the asset is
-  accepted, and never overwrites an existing pin;
-- retries transient errors (429, 5xx, connection) twice, never 4xx.
+  accepted, saves it to the seed list straight away (so a killed run keeps the pins
+  it got), and never overwrites an existing pin;
+- treats a download that stops short of its `Content-Length` as a dropped
+  connection, never as a complete file;
+- retries transient errors (`benchmark._TRANSIENT_STATUS`, dropped connections,
+  timeouts) with `benchmark._transient_retryer()`'s attempts and back-off, never 4xx;
+- never stops for one entry: any failure fails only that entry, with its reason.
 
 **Aliases** make reuse cheap: each time a lab name is matched to an entry, the name
 is added, so the next lab with that name hits it with no LLM call. Aliases are
 learned from accepted matches (#108), not written by hand for our five lab topics.
 
-**Writers:** one at a time is expected. A write is refused (`ConcurrentWriteError`)
-if `library.json` changed since the store read it, so two runs can't silently
-overwrite each other; rerunning picks up the other run's changes.
+**Writers:** every write holds `library.lock` (created exclusively, so it works on
+every OS) from its check to its finish; another writer waits up to 30 s, and a lock
+older than 5 minutes, left by a crashed run, is cleared. Under the lock, a write is
+refused (`ConcurrentWriteError`) if `library.json` changed since that store read it,
+so two runs can never silently overwrite each other. The refused store then holds the
+current index, so the caller can look again and retry. `library.json` is written
+atomically and readable by everyone (0644).
 
 ```
 python "Code/Provisioning/library.py" seed     [--library PATH] [--only ID ...] [--pin]
@@ -265,8 +281,9 @@ python "Code/Provisioning/library.py" list     [--library PATH] [--kind model|te
 python "Code/Provisioning/library.py" find     NAME [--library PATH]
 ```
 
-Exit codes: 0 ok; 1 validation errors or failed seed entries; 2 bad input (no library,
-unreadable seed list). `validate` never creates a library.
+Exit codes: 0 ok; 1 validation errors, or seed entries that failed or are `partial`;
+2 bad input (no library, unreadable seed list, unknown `--only` id). `validate` never
+creates a library, and `seed` checks its arguments before creating one.
 
 ## Reuse (#108)
 
