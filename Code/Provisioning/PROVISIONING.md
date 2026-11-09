@@ -1,9 +1,9 @@
 # Model and texture provisioning: goals spec
 
-Status: **spec for review** (#104, milestone "3D Model and Texture Provisioning",
-parent #103). It decides what the provisioning tool produces and how. Nothing is
-built yet; the issues that build it are listed at the end. It replaces the research
-plan (`PROVISIONING_PLAN.md`, revision 2), which is folded in here.
+Status: **agreed** (#104, milestone "3D Model and Texture Provisioning", parent
+#103). It decides what the provisioning tool produces and how. Built so far: the
+asset library (#107, `library.py`, `seed_assets.json`, `smoke_test.py`). The issues
+that build the rest are listed at the end.
 
 ## Why
 
@@ -166,44 +166,134 @@ the long side, sRGB.
 Built with `trimesh` and `pygltflib` in Python. Blender is optional, only as a
 converter for formats those can't read (e.g. FBX); no route requires it.
 
-## Asset library
+## Asset library (#107, built)
 
-One shared library, separate from runs (#107).
+One shared library, separate from runs, that grows with every accepted asset
+(`Code/Provisioning/library.py`).
 
-**Location: outside git.** Set by `ARLEM_ASSET_LIBRARY` or `--library`; the default
-`Artifacts/Assets/Library/` is gitignored.
+**Storage: a local folder for now.** Assets build up in that folder over time. Later
+the library may move to an API or web server; everything else talks to it through
+one small interface (`AssetStore`: identity, entries, get, find, put, add_alias,
+path_of, validate), so a server-backed store can replace `LocalFolderStore` without
+changing the rest of the tool.
+
+**Location: outside git.** Chosen by `--library`, else `$ARLEM_ASSET_LIBRARY`, else
+`Artifacts/Assets/Library/` (gitignored):
 
 ```
 <library>/
-  library.json              one entry per asset
+  library.json              the index: library id, revision, one entry per asset
   <asset_id>/model.glb      or texture.jpg
   <asset_id>/thumbnail.png
 ```
 
-**Entry:** `asset_id` (snake_case), kind (`model` / `texture`), form, description,
-tags, **aliases** (the lab names it has matched), bounds and triangle count (models),
-pixel size (textures), how it was made (route, builder, source), review status
-(`auto` / `reviewed` / `builtin`), and provenance: source site, URL, record id,
-author, license, license URL, what we changed, date.
+**Results differ between environments.** Because asset files are not in git, each
+machine's library holds whatever was seeded and provided there. The same lab can
+therefore reuse an asset on one machine and search or build it on another. To keep
+this visible:
+
+- Every library has a random `library_id`, a `revision` that goes up on every write,
+  and a `content_hash` over its entries (file checksums included, download dates
+  left out). Every provisioning run records these in its manifest. Two runs used the
+  same library contents exactly when `library_id` and `content_hash` match; two
+  libraries seeded from the same list on different machines share a `content_hash`.
+- `library.py info` prints them; every library command prints them in its header.
+- Tests never use a real library: the smoke test builds a throwaway one from a test
+  seed list served by a mock server.
+- To reproduce a result elsewhere, start from the seed list (below) and compare the
+  recorded identity.
+
+**Entry:** `asset_id` (snake_case), kind (`model` / `texture`), `name` (the name labs
+use and the file stem it ships under), `builtin`, `reusable` (false for system
+objects such as `demoPrefab`), form, `mapping` (textures: equirectangular, tileable
+or uv), description, tags, **aliases** (other lab names matched to it), files (role,
+name, sha256, bytes), bounds and triangle count (models), pixel size (textures),
+review status (`builtin` / `auto` / `reviewed`), and provenance: method, source
+site, download URL, page URL, record id, author, title, license, license URL,
+changes made, notes, date obtained.
+
+**Acceptance rules** (`put` refuses an entry that breaks them, and leaves the
+library as it was):
+
+- a license in the policy, and for CC-BY an author, a title and a source URL;
+- a known size: bounds (three positive numbers) and triangles (positive) for a
+  model, pixels (two positive numbers) for a texture; malformed sizes can't even be
+  set on an entry;
+- files that match their checksums, textures that are JPEG, models that are GLB,
+  each stored under its role's fixed name (`model.glb`, `texture.jpg`,
+  `thumbnail.png`), so a new file of one role can never overwrite another's;
+- no name or alias already used by another entry (compared ignoring case), and no
+  blank alias.
 
 **License policy (decided):** CC0, public domain and CC-BY. Never NC, ND,
-share-alike, "all rights reserved" or unknown. CC-BY assets carry the author, title
-and source needed for the credits file. Hits outside the policy are counted and
-reported, never silently dropped.
+share-alike, "all rights reserved" or unknown. `credit_line()` gives the credits-file
+line for each CC-BY asset. Hits outside the policy are counted and reported, never
+silently dropped.
 
 **Built-ins:** the moon-lab prefabs `textPrefab`, `demoPrefab`, `clickableSphere`,
 `SunPrefab`, `tinySphere`, `moveableSphere` and `robotIdle`, and textures
-`2k_earth_daymap`, `2k_moon`, `2k_sun` and `balldimpled`, are entries with
-hand-written descriptions and **no file**: they can be matched and reused, and are
-never shipped.
+`2k_earth_daymap`, `2k_moon`, `2k_sun` and `balldimpled`, are `builtin` entries:
+matched and reused, never shipped. Their descriptions are written from the moon lab
+and should be checked against the Unity prefabs. `2k_earth_daymap`, `2k_moon` and
+`2k_sun` are Solar System Scope maps, so the library also keeps their files, in case
+the headset needs them in the zip (#105). A built-in is recorded even when its file
+can't be downloaded (it is on the headset either way), and reported as `partial`: it
+keeps its current file if that file is intact (a failed download never deletes a
+good file) and drops only a missing or damaged one.
 
-**Seed list (in git):** `Code/Provisioning/seed_assets.json` records, for each asset
-we explicitly choose to keep, its source URL, license, author and checksum, plus the
-build parameters of the kit. One command rebuilds a library from it on a new machine.
-Nothing else from the library enters git.
+**Seed list (in git):** `Code/Provisioning/seed_assets.json` holds metadata only:
+the built-ins, plus the assets we explicitly keep with their download URL, license,
+author and sha256. Today that is the 15 real Solar System Scope 2k maps (CC-BY 4.0,
+"based on NASA elevation and imagery data"): Sun, Mercury, Venus surface and
+atmosphere, Earth day, night and clouds, Moon, Mars, Jupiter, Saturn, Uranus,
+Neptune, stars, and stars with the Milky Way. Its `_fictional` dwarf-planet maps,
+the PNG ring map and the TIF normal and specular maps are left out. The kit's build
+parameters join it in #109. Seeding:
+
+- downloads only what is missing or doesn't match its pin, and checks the file on
+  disk, not just the index;
+- refuses a download whose checksum changed at the source, and, before downloading
+  it, an unpinned one unless `--pin` is given; `--pin` records a checksum only once
+  the asset is accepted, saves it to the seed list straight away (so a killed run
+  keeps the pins it got), and never overwrites an existing pin; if the seed list
+  can't be written, the asset is still reported as added, with the pin problem, and
+  the run exits 1;
+- treats a download that stops short of its `Content-Length` as a dropped
+  connection, never as a complete file;
+- retries transient failures with the shared policy in
+  `Code/Benchmark/transient_policy.py` (the attempts, back-off and HTTP statuses
+  LLM calls and narration use): those HTTP statuses, timeouts, refused, reset or
+  cut-off connections, a temporary DNS failure, a proxy answering 429/5xx. A host
+  that doesn't exist, a proxy refusing the host (e.g. 403), a certificate that fails
+  verification and other 4xx fail at once;
+- never stops for one entry: any failure fails only that entry, with its reason. An
+  entry refused because another run wrote to the library meanwhile is retried once
+  against the current library.
 
 **Aliases** make reuse cheap: each time a lab name is matched to an entry, the name
-is added, so the next lab with that name hits it with no LLM call.
+is added, so the next lab with that name hits it with no LLM call. Aliases are
+learned from accepted matches (#108), not written by hand for our five lab topics.
+
+**Writers:** every write holds an OS lock on `library.lock` (`flock`, or `msvcrt`
+on Windows) from its check to its finish; another writer waits up to 30 s. The
+operating system releases the lock if a run dies, so there is never a stale lock to
+clear. Under the lock, a write is
+refused (`ConcurrentWriteError`) if `library.json` changed since that store read it,
+so two runs can never silently overwrite each other. The refused store then holds the
+current index, so the caller can look again and retry. `library.json` is written
+atomically and readable by everyone (0644).
+
+```
+python "Code/Provisioning/library.py" seed     [--library PATH] [--only ID ...] [--pin]
+python "Code/Provisioning/library.py" validate [--library PATH] [--json]
+python "Code/Provisioning/library.py" info     [--library PATH]
+python "Code/Provisioning/library.py" list     [--library PATH] [--kind model|texture] [--json]
+python "Code/Provisioning/library.py" find     NAME [--library PATH]
+```
+
+Exit codes: 0 ok; 1 validation errors, or seed entries that failed or are `partial`;
+2 bad input (no library, unreadable seed list, unknown `--only` id). `validate` never
+creates a library, and `seed` checks its arguments before creating one.
 
 ## Reuse (#108)
 
@@ -349,7 +439,7 @@ either order on the same bundle.
 | Group | Fields |
 |---|---|
 | Source | input path; `labId`; source model and level; `lab_name` (from the paired metrics file, if any) |
-| Settings | LLM model(s) per step; library path and version; license policy; sources used |
+| Settings | LLM model(s) per step; library identity (`store`, `location`, `library_id`, `revision`, `content_hash`, `entries`) at the start and end of the run; license policy; sources used |
 | Counts | assets by route; reused, built, found, assembled, placeholders; aliases added |
 | Totals | LLM cost; wall time; transient retries; download size |
 | Provenance | tool git commit; package versions; timestamps; `runs` list (one entry per run of the folder) |
