@@ -442,7 +442,7 @@ def _retryer():
     import benchmark
     import tenacity
     backoff = (benchmark._TRANSIENT_WAIT if benchmark._TRANSIENT_WAIT is not None
-               else tenacity.wait_exponential(multiplier=2, min=2, max=20))
+               else benchmark.transient_policy.default_wait())
 
     def wait(state):
         asked = server_wait(state.outcome.exception() if state.outcome else None)

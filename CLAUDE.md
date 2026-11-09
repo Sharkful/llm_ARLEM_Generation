@@ -100,6 +100,17 @@ python "Code/Narration/bundle.py" validate "<Name>Lab.zip"
 python "Code/Narration/smoke_test.py"   # offline check, no API keys (fake TTS + mock OpenAI/Gemini)
 ```
 
+Provisioning asset library (models and textures for labs; the provisioning CLI itself is not built yet):
+
+```bash
+# Library folder: --library PATH, else $ARLEM_ASSET_LIBRARY, else Artifacts/Assets/Library/ (gitignored)
+python "Code/Provisioning/library.py" seed       # build/update from seed_assets.json (downloads, checks sha256)
+python "Code/Provisioning/library.py" validate   # every entry and file; exit 1 on errors
+python "Code/Provisioning/library.py" info       # library_id / revision / content_hash: record these when comparing machines
+python "Code/Provisioning/library.py" find 2k_jupiter
+python "Code/Provisioning/smoke_test.py"         # offline check, no network (mock download server, throwaway library)
+```
+
 Analysis and reporting (reads saved run artifacts, no LLM calls):
 
 ```bash
@@ -371,7 +382,39 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   need the venv). Covers the bundle (all wave-2 labs), the CLI with a fake TTS, and the
   real clients against mock OpenAI and Gemini servers.
 
-### Analysis System (`Code/Analysis/`)
+### Provisioning (`Code/Provisioning/`, milestone "3D Model and Texture Provisioning", #103)
+
+`PROVISIONING.md` (#104) is the spec: provide every model and texture a finished lab
+references that the headset doesn't have (reuse → build → search → assemble → needs
+review), routed by the asset's form, not the lab's subject, and bundle them into the lab
+resources zip. JW's `asset_pipeline/` (branch `jw-expermiments`) was reviewed in the spec,
+not reused. Built so far:
+
+- **`library.py`** (#107): the asset library. A **local folder for now** (`LocalFolderStore`
+  behind the `AssetStore` interface, so a server can replace it later); `--library`, else
+  `$ARLEM_ASSET_LIBRARY`, else `Artifacts/Assets/Library/` (gitignored). Asset files never
+  go into git. **Results therefore differ between machines**: every library has a
+  `library_id`, a `revision` and a `content_hash` (download dates excluded, so two libraries
+  seeded from one list match), which runs must record. `put` refuses an entry without an
+  allowed license (CC0, public domain, CC-BY with author/title/source), a known size, or
+  matching files (JPEG textures, GLB models; stored as `model.glb` / `texture.jpg` /
+  `thumbnail.png`). Every write holds an OS lock on `library.lock` (released by the OS if
+  a run dies) and is refused if `library.json` changed since that store read it (the
+  store then reloads, so retry; `seed` retries once itself). Names and aliases are
+  compared ignoring case. Downloads use the shared retry policy
+  (`Code/Benchmark/transient_policy.py`, without importing `benchmark`); a proxy refusal,
+  an unknown host or a bad certificate fails at once.
+- **`seed_assets.json`**: what git tracks instead of assets. The moon-lab built-ins
+  (descriptions only; matched, never shipped; kept equal to `lab_metrics.KNOWN_PREFABS` /
+  `KNOWN_TEXTURES` by the smoke test) and the 15 real Solar System Scope 2k maps (CC-BY
+  4.0) with pinned sha256. `seed --pin` records a missing checksum only once the asset is
+  accepted (saved right away); a checksum that changed at the source is always refused.
+  An unpinned download is refused before downloading. One entry failing never stops a
+  seed run; a built-in whose file can't be downloaded is still recorded (`partial`),
+  keeping its current file if intact.
+- **`smoke_test.py`**: offline (mock download server, throwaway library; never the real one).
+
+
 
 Everything downstream of a run. Reads `Metrics/` + `Outputs/`; never calls an LLM.
 
@@ -379,7 +422,10 @@ Everything downstream of a run. Reads `Metrics/` + `Outputs/`; never calls an LL
 `*_metrics.json` into one tidy DataFrame (one row per run) and re-reads each paired
 `Outputs/*_output.json` for novel-asset counts. It reaches back into
 `Code/Benchmark/` for `benchmark_config.MODELS` and `lab_metrics.analyze_assets`
-via a `sys.path` insert — the only cross-package import in the codebase.
+via a `sys.path` insert. Code/Analysis never imports the other way round; the other
+packages that import from `Code/Benchmark/` are Narration (`benchmark`'s retry policy and
+error helpers), Hierarchical (client factory, provider kwargs, transient retryer) and
+Provisioning (`transient_policy.py` only).
 
 **`reprice_runs.py`** — re-costs a run CSV against current `tracking/pricing.py`
 rates, written as a `_repriced` sibling so originals stay put.
@@ -436,7 +482,7 @@ Use `instructor.from_provider("provider/model-id")` — this is the unified API.
 
 **Gemini limitation (resolved for all specs)**: Gemini's function-calling schema validator rejects discriminated unions (`oneOf` + `discriminator`) and `const` tags. This is now resolved on the models themselves for **every** spec — `json_lab.py`, `arlem_full.py`, and `arlem_simplified.py` all inherit `ConstToEnumSchemaMixin` (`const`→`enum`, shared from `Code/Schemas/_schema_helpers.py`) and carry no field-level discriminated unions, so one provider-agnostic schema per spec runs on every provider via the free-decode `GENAI_TOOLS` path. All Gemini twins (`json_lab_gemini.py`, `arlem_full_gemini.py`, `arlem_simplified_gemini.py`) were retired (issues #26, #29), along with the constrained `GENAI_STRUCTURED_OUTPUTS` path and its response-schema-token estimation. `decode_mode_for()` in `benchmark.py` is the single source of truth for the per-run decode mode (recorded as `decode_mode` in metrics). Shared schema helpers (`ConstToEnumSchemaMixin`, `clamp_number`, `_coerce_number_list`) live in `_schema_helpers.py`.
 
-**Gemini retryability caveat (issue #44)**: the schema story above is resolved, but Gemini *retry* fairness is not intrinsic — it depends on the instructor pin (`requirements.txt`: 1.17.0 since issue #70; wave 2 ran on 1.15.4) plus a monkeypatch. `benchmark.py::_patch_genai_parallel_call_retry()` (applied lazily inside `create_instructor_client`, guarded by `try/except ImportError` so it degrades on other instructor versions) re-raises instructor's `parse_genai_tools` `AssertionError` as a retryable `ResponseParsingError`, restoring retryability for the *text + single-functionCall* response shape only. True ≥2-functionCall responses still hard-fail on reask (upstream bug). Since 1.15.4 instructor no longer blind-retries transient API errors or `max_tokens` truncation; the benchmark restores a bounded, transient-only retry around `create()` (`_transient_retryer`, 429/5xx/529/connection, issue #54) counted separately in `transient_retries` (the only transport retry: `create_instructor_client` builds the OpenAI and Anthropic SDK clients with `max_retries=0`), while truncation stays a hard fail (review F9). Its predicate (`_is_transient_api_error`) walks the exception's cause chain, because instructor 1.17 raises API errors wrapped in `InstructorRetryException`; each re-send is a separate tracked call with a fresh parse-retry budget (a 5xx on a reask restarts the call; hierarchical steps count those re-sends as `reask_restarts`, the field to filter on when comparing self-correction across providers). Any new entry point must build its client through `create_instructor_client` (which applies the patch) *and* the Anthropic `tool_choice` guard (`provider_create_kwargs`), or it reintroduces the Gemini/Anthropic retry-death — the standalone `generate_lab.py` entry point was removed for exactly this reason rather than re-guarded (issue #55). Moving the pin means re-clearing the #44 gates: `Code/Benchmark/probes/probe_tool_schemas.py` (offline; diffs the tool schemas every provider receives between two pins) and `probe_retry_gates.py` (live; a deliberately rejected attempt 1 must be reasked successfully on each model). Both generation CLIs (`benchmark.py` and `generate_hierarchical.py`), and both probes, call `benchmark.require_environment()` before any run: it exits with a fix-it message if a requested model's provider SDK is missing and warns if instructor isn't the `requirements.txt` pin (both usually mean the project venv isn't active).
+**Gemini retryability caveat (issue #44)**: the schema story above is resolved, but Gemini *retry* fairness is not intrinsic — it depends on the instructor pin (`requirements.txt`: 1.17.0 since issue #70; wave 2 ran on 1.15.4) plus a monkeypatch. `benchmark.py::_patch_genai_parallel_call_retry()` (applied lazily inside `create_instructor_client`, guarded by `try/except ImportError` so it degrades on other instructor versions) re-raises instructor's `parse_genai_tools` `AssertionError` as a retryable `ResponseParsingError`, restoring retryability for the *text + single-functionCall* response shape only. True ≥2-functionCall responses still hard-fail on reask (upstream bug). Since 1.15.4 instructor no longer blind-retries transient API errors or `max_tokens` truncation; the benchmark restores a bounded, transient-only retry around `create()` (`_transient_retryer`, 429/5xx/529/connection, issue #54; its attempts, statuses and back-off live in `transient_policy.py`, shared with narration and provisioning) counted separately in `transient_retries` (the only transport retry: `create_instructor_client` builds the OpenAI and Anthropic SDK clients with `max_retries=0`), while truncation stays a hard fail (review F9). Its predicate (`_is_transient_api_error`) walks the exception's cause chain, because instructor 1.17 raises API errors wrapped in `InstructorRetryException`; each re-send is a separate tracked call with a fresh parse-retry budget (a 5xx on a reask restarts the call; hierarchical steps count those re-sends as `reask_restarts`, the field to filter on when comparing self-correction across providers). Any new entry point must build its client through `create_instructor_client` (which applies the patch) *and* the Anthropic `tool_choice` guard (`provider_create_kwargs`), or it reintroduces the Gemini/Anthropic retry-death — the standalone `generate_lab.py` entry point was removed for exactly this reason rather than re-guarded (issue #55). Moving the pin means re-clearing the #44 gates: `Code/Benchmark/probes/probe_tool_schemas.py` (offline; diffs the tool schemas every provider receives between two pins) and `probe_retry_gates.py` (live; a deliberately rejected attempt 1 must be reasked successfully on each model). Both generation CLIs (`benchmark.py` and `generate_hierarchical.py`), and both probes, call `benchmark.require_environment()` before any run: it exits with a fix-it message if a requested model's provider SDK is missing and warns if instructor isn't the `requirements.txt` pin (both usually mean the project venv isn't active).
 
 ## Code Patterns
 

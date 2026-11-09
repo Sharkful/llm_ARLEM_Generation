@@ -229,9 +229,12 @@ def _patch_openai_responses():
 # retry on every provider: create_instructor_client turns the OpenAI and Anthropic
 # SDKs' own retries off (max_retries=0), so they don't stack with it and every
 # re-send is counted in transient_retries (the SDK's were invisible in the metrics).
-_TRANSIENT_ATTEMPTS = 3          # 1 initial try + 2 retries
+# The values are shared with narration and provisioning (transient_policy.py).
+import transient_policy  # noqa: E402
+
+_TRANSIENT_ATTEMPTS = transient_policy.ATTEMPTS   # 1 initial try + 2 retries
 _TRANSIENT_WAIT = None           # tenacity wait override (tests); None = exponential 2-20 s
-_TRANSIENT_STATUS = {429, 500, 502, 503, 504, 529}   # 529: Anthropic "overloaded"
+_TRANSIENT_STATUS = set(transient_policy.STATUS)  # 429, 5xx, 529 (Anthropic "overloaded")
 # Provider-SDK exception class names that denote a transient transport condition
 # with no HTTP status to inspect, plus 5xx/429 name backups. Matched by name so we
 # don't hard-import anthropic/openai/google-genai/httpx just to build a tuple.
@@ -322,7 +325,7 @@ def _transient_retryer():
         retry=tenacity.retry_if_exception(_is_transient_api_error),
         stop=tenacity.stop_after_attempt(_TRANSIENT_ATTEMPTS),
         wait=(_TRANSIENT_WAIT if _TRANSIENT_WAIT is not None
-              else tenacity.wait_exponential(multiplier=2, min=2, max=20)),
+              else transient_policy.default_wait()),
         reraise=True,
     )
 
