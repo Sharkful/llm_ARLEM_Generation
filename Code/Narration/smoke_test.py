@@ -203,9 +203,9 @@ check(has_error(validate_bundle(renamed), "must match the zip name"),
 
 check(has_error(broken("no_videos", lambda f: (f / "Videos").rmdir()), "missing folder"),
       "a missing Videos/ folder is an error")
-check(has_error(broken("two_json", lambda f: (f / "Extra.json").write_text("{}")), "exactly one lab JSON"),
+check(has_error(broken("two_json", lambda f: (f / "Extra.json").write_text("{}", encoding="utf-8")), "exactly one lab JSON"),
       "a second JSON file is an error")
-check(has_error(broken("stray", lambda f: (f / "README.txt").write_text("x")), "unexpected file"),
+check(has_error(broken("stray", lambda f: (f / "README.txt").write_text("x", encoding="utf-8")), "unexpected file"),
       "a stray file at the top is an error")
 check(has_error(broken("stray_dir", lambda f: (f / "Models").mkdir()), "unexpected folder"),
       "an unexpected folder at the top is an error")
@@ -243,14 +243,14 @@ check(r.ok and any("not used by any clip" in w for w in r.warnings),
 
 def drop_modules(f):
     p = f / bundle_names(lab["labId"]).json_file
-    d = json.loads(p.read_text())
+    d = json.loads(p.read_text(encoding="utf-8"))
     del d["modules"]
-    p.write_text(json.dumps(d))
+    p.write_text(json.dumps(d), encoding="utf-8")
 
 
 check(has_error(broken("bad_lab", drop_modules), "not a valid json_lab Lab"),
       "a JSON that isn't a valid json_lab Lab is an error")
-check(has_error(broken("bad_json", lambda f: (f / bundle_names(lab["labId"]).json_file).write_text("{oops")),
+check(has_error(broken("bad_json", lambda f: (f / bundle_names(lab["labId"]).json_file).write_text("{oops", encoding="utf-8")),
                 "not valid JSON"),
       "a malformed JSON file is an error")
 
@@ -280,9 +280,9 @@ def with_json(tag, edit):
     d = fresh(tag)
     f = build(lab, d)
     p = f / bundle_names(lab["labId"]).json_file
-    data = json.loads(p.read_text())
+    data = json.loads(p.read_text(encoding="utf-8"))
     edit(data)
-    p.write_text(json.dumps(data))
+    p.write_text(json.dumps(data), encoding="utf-8")
     return f
 
 
@@ -726,7 +726,7 @@ if HAVE_NARRATION:
     COST_PER_CLIP = 50 * 0.60 / 1e6 + 1000 * 12.00 / 1e6   # gpt-4o-mini-tts rates
 
     def manifest_of(run_dir):
-        return json.loads((Path(run_dir) / "narration_manifest.json").read_text())
+        return json.loads((Path(run_dir) / "narration_manifest.json").read_text(encoding="utf-8"))
 
     # ── Planning edge cases ──────────────────────────────────────────
     edge = json.loads(SAMPLE_LAB.read_text(encoding="utf-8"))
@@ -777,7 +777,7 @@ if HAVE_NARRATION:
           "the edge-case lab narrates, and its zip validates (dropped names removed)")
     check(len(fake.calls) == sum(p.action == "narrate" for p in plans),
           "each name is synthesized once (a shared clip makes no extra request)")
-    check(json.loads(edge_path.read_text()) == edge, "the input lab file is never modified")
+    check(json.loads(edge_path.read_text(encoding="utf-8")) == edge, "the input lab file is never modified")
     check(em["counts"]["names"] == {"generated": 4, "sanitized": 1, "deduplicated": 1, "dropped": 1}
           and em["counts"]["shared"] == 1 and em["counts"]["silent"] == 1,
           "the manifest counts every name change")
@@ -1142,7 +1142,7 @@ if HAVE_NARRATION:
           and "didn't return" in by_name[third]["spoken_form"]["flags"][0],
           "a clip the model left out falls back to its narration as written, flagged")
     check(by_name[first]["display_text"] != by_name[first]["spoken_text"]
-          and json.loads((r / rm["bundle"]["folder"] / bundle_names(lab["labId"]).json_file).read_text())
+          and json.loads((r / rm["bundle"]["folder"] / bundle_names(lab["labId"]).json_file).read_text(encoding="utf-8"))
               ["modules"][0]["clips"][0]["narration"] == lab["modules"][0]["clips"][0]["narration"],
           "the bundled lab keeps the display narration unchanged")
     sfm = lm_["spoken_form"]
@@ -1153,7 +1153,7 @@ if HAVE_NARRATION:
           and [x["step"] for x in lm_["calls"]].count("spoken_form") == 1
           and lm_["calls"][0]["step"] == "spoken_form" and lm_["calls"][0]["clip"] is None,
           "the manifest records the spoken-form model, tokens, cost, flagged count and total cost")
-    cache = json.loads((r / spoken_form.CACHE_FILE).read_text())["clips"]
+    cache = json.loads((r / spoken_form.CACHE_FILE).read_text(encoding="utf-8"))["clips"]
     check(set(cache) == set(refs) and cache[second]["flags"] and cache[first]["prompt_version"] == spoken_form.PROMPT_VERSION,
           "spoken forms are cached in spoken_forms.json with their flags")
 
@@ -1171,9 +1171,9 @@ if HAVE_NARRATION:
     check(not fake_sp2b.calls and not tts_fake.calls and manifest_of(r)["counts"]["skipped"] == len(refs),
           "once every clip has the model's text, a rerun makes no LLM call and redoes no audio")
 
-    data = json.loads((r / spoken_form.CACHE_FILE).read_text())
+    data = json.loads((r / spoken_form.CACHE_FILE).read_text(encoding="utf-8"))
     data["clips"][first]["spoken_text"] = "Reviewer's fixed wording for D N A."
-    (r / spoken_form.CACHE_FILE).write_text(json.dumps(data))
+    (r / spoken_form.CACHE_FILE).write_text(json.dumps(data), encoding="utf-8")
     fake_sp3, tts_fake = FakeSpoken(), FakeTTS()
     narrate(llm_settings(), r, provider=tts_fake, spoken_call=fake_sp3, log=quiet)
     c_first = {c["audio_name"]: c for c in manifest_of(r)["clips"]}[first]
@@ -1213,9 +1213,9 @@ if HAVE_NARRATION:
           "after a failed spoken-form call, the next run sends every clip to the model again")
     r = TMP / "runs" / "llm_fallback_edit"
     narrate(llm_settings(), r, provider=FakeTTS(), spoken_call=FakeSpoken(omit=first), log=quiet)
-    data = json.loads((r / spoken_form.CACHE_FILE).read_text())
+    data = json.loads((r / spoken_form.CACHE_FILE).read_text(encoding="utf-8"))
     data["clips"][first]["spoken_text"] = "A reviewer's text."
-    (r / spoken_form.CACHE_FILE).write_text(json.dumps(data))
+    (r / spoken_form.CACHE_FILE).write_text(json.dumps(data), encoding="utf-8")
     edit_sp = FakeSpoken()
     narrate(llm_settings(), r, provider=FakeTTS(), spoken_call=edit_sp, log=quiet)
     c_first = {c["audio_name"]: c for c in manifest_of(r)["clips"]}[first]
@@ -1467,7 +1467,7 @@ if HAVE_NARRATION:
                             time.sleep(delay)
                             self.wfile.write(piece)
                             self.wfile.flush()
-                    except (BrokenPipeError, ConnectionResetError):
+                    except ConnectionError:   # broken pipe, reset, or Windows' "aborted"
                         pass   # the client gave up (time limit): expected in these tests
 
                 def log_message(self, *a):
