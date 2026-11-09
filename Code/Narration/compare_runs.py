@@ -115,22 +115,24 @@ def build(manifests: list[Path]) -> tuple[list[dict], str]:
            "adds to narrating a lab; audio columns fill in once a run has audio.", "",
            "## By mode", "",
            "| Mode | Labs | Clips changed | Flagged | Spoken-form $ / lab | Spoken-form s / lab "
-           "| Failed requests | Audio $ / lab |",
+           "| Failed requests | Audio $ / lab (complete runs) |",
            "|---|---|---|---|---|---|---|---|"]
     for mode in modes:
         mr = [r for r in rows if r["mode"] == mode]
         n = len(mr)
-        audio = [r for r in mr if r["tts_requests"]]
+        audio = [r for r in mr if r["status"] == "complete"]   # a partial run's cost misleads
         audio_cost = f"${_sum(audio, 'tts_cost_usd') / len(audio):.4f}" if audio else "–"
         out.append(
             f"| {mode} | {n} | {_sum(mr, 'changed')} of {_sum(mr, 'clips')} | {_sum(mr, 'flagged')} "
             f"| ${_sum(mr, 'spoken_form_cost_usd') / n:.4f} | {_sum(mr, 'spoken_form_seconds') / n:.1f} "
             f"| {_sum(mr, 'spoken_form_failed')} | {audio_cost} |")
-    out += ["", "## By lab", "", "| Lab | Mode | Changed | Flagged | Spoken-form $ | Spoken-form s | Run |",
-            "|---|---|---|---|---|---|---|"]
+    out += ["", "## By lab", "",
+            "| Lab | Mode | Changed | Flagged | Spoken-form $ | Spoken-form s | Status | Run |",
+            "|---|---|---|---|---|---|---|---|"]
     for r in sorted(rows, key=lambda r: (r["lab"], modes.index(r["mode"]))):
         out.append(f"| {r['lab']} | {r['mode']} | {r['changed']} of {r['clips']} | {r['flagged']} "
-                   f"| ${r['spoken_form_cost_usd']:.4f} | {r['spoken_form_seconds']:.1f} | `{r['run']}` |")
+                   f"| ${r['spoken_form_cost_usd']:.4f} | {r['spoken_form_seconds']:.1f} | {r['status']} "
+                   f"| `{r['run']}` |")
 
     out += ["", "## Clips whose spoken text differs between modes", "",
             "Bold marks what each mode changed from the written narration. These are the clips "

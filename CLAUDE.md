@@ -325,7 +325,10 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   with no reply and no usage is `null` (`calls_cost_unknown`), never guessed. Transient
   errors, and requests abandoned at the 90 s per-request limit, are retried with
   `benchmark._transient_retryer()`'s policy and recorded per clip with a readable reason
-  (`transient_errors`); 401/402/403/404 and unusable audio stop the run.
+  (`transient_errors`); 401/402/403/404 and unusable audio stop the run. A 429 is read
+  (`rate_limit_info`): a used-up daily quota (Gemini `...PerDay...` QuotaFailure) or balance
+  (OpenAI `insufficient_quota`) stops the run; a rate limit waits the provider's RetryInfo /
+  retry-after (capped at 60 s); 3 clips in a row failing on rate limits stop the run.
   Cost comes from reported tokens via `tracking/pricing.py` (TTS entries are from
   secondary sources; checking them against billing is #101).
 - **`spoken_form.py`** (#94): the text each clip sends to the voice service

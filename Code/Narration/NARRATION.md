@@ -314,7 +314,8 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
   labs across modes (no requests): per mode, clips changed and flagged and the
   pass's added cost and time; per lab, every clip whose spoken text differs
   between modes, with each mode's changes in bold, which is the list to listen
-  to. It writes `spoken_form_comparison.md` and `.csv` next to the runs.
+  to. It writes `spoken_form_comparison.md` and `.csv` next to the runs. Audio cost is averaged over
+  complete runs only.
 - **Failures:**
   - A clip that fails is recorded and the run continues. No zip is built until
     every narrated clip has audio, and a stale zip is removed.
@@ -327,6 +328,16 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
   - Transient errors (429/5xx/connection) are retried up to 3 attempts, with
     the same policy as `benchmark._transient_retryer()`, and counted. The SDK
     clients never retry on their own.
+  - **A 429 is read, not just retried** (`rate_limit_info`). A used-up daily
+    quota (Gemini's `QuotaFailure` names a `...PerDay...` quota) or a used-up
+    balance (OpenAI `insufficient_quota`) stops the run like a 402, with the
+    quota and its limit in the reason; resume after it resets. A rate limit is
+    retried after the wait the provider asks for (Gemini `RetryInfo`, OpenAI
+    `retry-after`; capped at 60 s), else the usual back-off. If 3 clips in a row
+    still fail on rate limits, the run stops (`RATE_LIMITED_IN_A_ROW`), so an
+    unrecognized quota doesn't send three requests for every remaining clip.
+    Found in the #94 measurement: Gemini TTS hit its quota part-way through a
+    15-run sweep.
   - **Every request has a 90 s limit** (`tts.REQUEST_TIME_LIMIT`; a clip
     normally takes under 12 s). At the limit the request is abandoned and retried
     like a transient error, recorded as "no complete reply within the

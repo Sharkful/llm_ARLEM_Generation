@@ -874,6 +874,58 @@ if HAVE_NARRATION:
     te = manifest_of(r)["clips"][0]["transient_errors"]
     check([e["reason"] for e in te] == ["rate limit or quota reached: too many requests for now (HTTP 429)"] * 2,
           "two retries on one clip record both reasons")
+
+    # ── Quotas and rate limits: stop on a used-up quota, wait as asked otherwise ──
+    def gemini_429(quota_id, delay="33s", limit="100"):
+        """A google-genai style 429 (error body in .details, status in .code)."""
+        exc = Exception("429 RESOURCE_EXHAUSTED. You exceeded your current quota")
+        exc.code = 429
+        exc.details = {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED",
+                                 "message": "You exceeded your current quota, please check your plan",
+                                 "details": [
+                                     {"@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                                      "violations": [{"quotaId": quota_id, "quotaValue": limit}]},
+                                     {"@type": "type.googleapis.com/google.rpc.RetryInfo",
+                                      "retryDelay": delay}]}}
+        return exc
+
+    fake = FakeTTS(script=lambda n, t: gemini_429("GenerateRequestsPerDayPerProjectPerModel"))
+    r = TMP / "runs" / "daily_quota"
+    code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    dq = manifest_of(r)
+    check(code == 1 and len(fake.calls) == 1 and dq["status"] == "failed"
+          and "daily request quota" in dq["clips"][0]["error_reason"]
+          and "GenerateRequestsPerDayPerProjectPerModel, limit 100" in dq["clips"][0]["error_reason"]
+          and any("daily request quota" in w for w in dq["warnings"]),
+          "a used-up daily quota (Gemini QuotaFailure ...PerDay...) stops the run after one request")
+    billing = HTTPError(429)
+    billing.body = {"message": "You exceeded your current quota", "type": "insufficient_quota",
+                    "code": "insufficient_quota"}
+    fake = FakeTTS(script=lambda n, t: billing)
+    r = TMP / "runs" / "insufficient_quota"
+    code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    check(code == 1 and len(fake.calls) == 1
+          and "billing" in manifest_of(r)["clips"][0]["error_reason"],
+          "OpenAI's insufficient_quota 429 (no credit left) stops the run after one request")
+    per_minute = gemini_429("GenerateRequestsPerMinutePerProjectPerModel", delay="12.5s")
+    long_wait = gemini_429("GenerateRequestsPerMinutePerProjectPerModel", delay="3600s")
+    with_header = HTTPError(429)
+    with_header.response = type("R", (), {"headers": {"retry-after": "7"}})()
+    check(narrate_lab.server_wait(per_minute) == 12.5 and narrate_lab.server_wait(long_wait) == 60.0
+          and narrate_lab.server_wait(with_header) == 7.0 and narrate_lab.server_wait(HTTPError(429)) is None
+          and not narrate_lab._is_fatal(per_minute)
+          and "asked to wait 12.5 s" in narrate_lab.describe_error(per_minute)["reason"],
+          "a per-minute rate limit is retried after the wait the provider asks for (capped at 60 s)")
+    fake = FakeTTS(script=lambda n, t: HTTPError(429))
+    r = TMP / "runs" / "rate_limited_in_a_row"
+    code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    rr = manifest_of(r)
+    n_tries = narrate_lab.RATE_LIMITED_IN_A_ROW * benchmark._TRANSIENT_ATTEMPTS
+    check(code == 1 and len(fake.calls) == n_tries and rr["status"] == "failed"
+          and any("in a row failed on rate limits" in w for w in rr["warnings"])
+          and rr["clips"][narrate_lab.RATE_LIMITED_IN_A_ROW]["error"].startswith("not attempted"),
+          f"{narrate_lab.RATE_LIMITED_IN_A_ROW} clips in a row failing on rate limits stop the run "
+          f"({n_tries} requests, not one per clip for the whole lab)")
     fake = FakeTTS(script=lambda n, t: HTTPError(503))
     r = TMP / "runs" / "transient_exhausted"
     narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
@@ -1681,8 +1733,10 @@ if HAVE_NARRATION:
                 "modelVersion": "gemini-3.8-flash-tts"}).encode()
         if gem_state["fail"]:
             code = gem_state["fail"].pop(0)
+            code, details = code if isinstance(code, tuple) else (code, [])
             return code, {"content-type": "application/json"}, json.dumps(
-                {"error": {"code": code, "message": f"mock {code}", "status": "X"}}).encode()
+                {"error": {"code": code, "message": f"mock {code}", "status": "X",
+                           "details": details}}).encode()
         return 200, {"content-type": "application/json"}, json.dumps({
             "candidates": [{"content": {"role": "model", "parts": [{"inlineData": {
                 "mimeType": gem_state["mime"], "data": base64.b64encode(gem_state["data"]).decode()}}]},
@@ -1759,6 +1813,27 @@ if HAVE_NARRATION:
         code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
                        provider=prov, log=quiet)
         check(code == 1 and len(gm.requests) - n_before == 1, "a Gemini 403 stops the run after one request")
+        def quota(quota_id, delay):
+            return [{"@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                     "violations": [{"quotaId": quota_id, "quotaValue": "100"}]},
+                    {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": delay}]
+        gem_state["fail"] = [(429, quota("GenerateRequestsPerDayPerProjectPerModel", "40s"))]
+        r = TMP / "runs" / "gemini_daily_quota"
+        n_before = len(gm.requests)
+        code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
+                       provider=prov, log=quiet)
+        check(code == 1 and len(gm.requests) - n_before == 1
+              and "daily request quota" in manifest_of(r)["clips"][0]["error_reason"],
+              "the real Gemini client's 429 for a used-up daily quota stops the run after one request")
+        gem_state["fail"] = [(429, quota("GenerateRequestsPerMinutePerProjectPerModel", "0.4s"))]
+        r = TMP / "runs" / "gemini_per_minute"
+        t0 = time.monotonic()
+        code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
+                       provider=prov, log=quiet)
+        gpm = manifest_of(r)
+        check(code == 0 and gpm["clips"][0]["transient_retries"] == 1 and time.monotonic() - t0 >= 0.4
+              and "asked to wait 0.4 s" in gpm["clips"][0]["transient_errors"][0]["reason"],
+              "the real Gemini client's per-minute 429 waits the RetryInfo delay, then succeeds")
         gem_state["no_audio"] = 1
         r = TMP / "runs" / "gemini_no_audio"
         code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,

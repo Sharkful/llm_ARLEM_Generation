@@ -64,6 +64,8 @@ AUDIO_FORMAT = {"format": "wav", "sample_rate": bundle.WAV_SAMPLE_RATE,
                 "sample_width_bits": 8 * bundle.WAV_SAMPLE_WIDTH, "channels": bundle.WAV_CHANNELS}
 SPOKEN_FORM_MODES = spoken_form.MODES
 FATAL_STATUS = {401, 402, 403, 404}  # key, billing, permission, unknown model: every clip would fail
+MAX_SERVER_WAIT = 60.0      # seconds: the longest wait a provider's "retry after" is honored for
+RATE_LIMITED_IN_A_ROW = 3   # clips that fail on rate limits alone, in a row, before the run stops
 SHORT_TEXT, LONG_TEXT = 20, 1500  # characters; per-clip warnings only
 
 _AUDIO_EXT = re.compile(r"\.(wav|mp3|ogg|m4a|aac|flac|opus)$", re.IGNORECASE)
@@ -349,6 +351,48 @@ _NAME_REASONS = (
 )
 
 
+def rate_limit_info(exc: BaseException) -> dict | None:
+    """What a 429 says, if the error is one: ``kind`` is ``daily_quota`` (a per-day
+    quota is used up), ``billing`` (no credit or quota left on the account) or
+    ``rate_limit`` (too many requests for now); also the quota ids, the quota's limit
+    and the wait the provider asks for, in seconds. Reads Gemini's error body
+    (google.rpc QuotaFailure and RetryInfo) and OpenAI's body and retry-after header."""
+    from benchmark import exception_chain, status_of
+    for e in exception_chain(exc):
+        if status_of(e) != 429:
+            continue
+        info = {"kind": "rate_limit", "quotas": [], "limit": None, "retry_after": None}
+        body = getattr(e, "details", None) or getattr(e, "body", None)
+        err = body.get("error", body) if isinstance(body, dict) else {}
+        err = err if isinstance(err, dict) else {}
+        for d in err.get("details") or []:
+            if not isinstance(d, dict):
+                continue
+            kind = str(d.get("@type", ""))
+            if kind.endswith("QuotaFailure"):
+                for v in d.get("violations") or []:
+                    if isinstance(v, dict) and v.get("quotaId"):
+                        info["quotas"].append(str(v["quotaId"]))
+                        info["limit"] = info["limit"] or v.get("quotaValue")
+            elif kind.endswith("RetryInfo"):
+                m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)s\s*", str(d.get("retryDelay", "")))
+                if m:
+                    info["retry_after"] = float(m.group(1))
+        if "insufficient_quota" in (str(err.get("code")), str(err.get("type"))):
+            info["kind"] = "billing"
+        elif any("PerDay" in q for q in info["quotas"]):
+            info["kind"] = "daily_quota"
+        headers = getattr(getattr(e, "response", None), "headers", None) or {}
+        for name, scale in (("retry-after-ms", 0.001), ("retry-after", 1.0)):
+            try:
+                if info["retry_after"] is None and headers.get(name) is not None:
+                    info["retry_after"] = float(headers.get(name)) * scale
+            except (TypeError, ValueError):
+                pass
+        return info
+    return None
+
+
 def describe_error(exc: BaseException) -> dict:
     """An error as recorded in the manifest: HTTP status (if any), exception type, a
     short human-readable reason, and the message, trimmed."""
@@ -361,8 +405,15 @@ def describe_error(exc: BaseException) -> dict:
         reason = "the provider returned no audio for this clip"
     elif isinstance(exc, tts.TTSTimeout):
         reason = "no complete reply within the per-request time limit, so it was abandoned"
+    elif (rl := rate_limit_info(exc)) and rl["kind"] != "rate_limit":
+        quota = f" ({', '.join(rl['quotas'])}" + (f", limit {rl['limit']}" if rl["limit"] else "") + ")"
+        reason = ("the daily request quota for this model is used up" + quota
+                  + "; resume after it resets") if rl["kind"] == "daily_quota" else (
+                  "billing: the account has no quota or credit left; check the plan and billing")
     elif status in _STATUS_REASONS:
         reason = _STATUS_REASONS[status]
+        if rl and rl["retry_after"] is not None:
+            reason += f"; the provider asked to wait {rl['retry_after']:g} s"
     else:
         reason = next((r for e in chain for key, r in _NAME_REASONS if key in type(e).__name__),
                       "unexpected error")
@@ -372,27 +423,44 @@ def describe_error(exc: BaseException) -> dict:
             "detail": " ".join(str(exc).split())[:300]}
 
 
+def server_wait(exc: BaseException | None) -> float | None:
+    """The wait a rate-limited provider asked for, capped at ``MAX_SERVER_WAIT``."""
+    rl = rate_limit_info(exc) if exc is not None else None
+    if rl and rl["retry_after"] is not None:
+        return min(max(rl["retry_after"], 0.0), MAX_SERVER_WAIT)
+    return None
+
+
 def _retryer():
     """``benchmark._transient_retryer()``'s policy (same attempts and back-off), also
     retrying a request abandoned at the time limit (``tts.TTSTimeout``) and a reply
-    with no audio (``tts.TTSNoAudio``)."""
+    with no audio (``tts.TTSNoAudio``). A rate limit waits as long as the provider
+    asks (capped); a used-up daily quota or balance is not retried (see ``_is_fatal``)."""
     import benchmark
     import tenacity
+    backoff = (benchmark._TRANSIENT_WAIT if benchmark._TRANSIENT_WAIT is not None
+               else tenacity.wait_exponential(multiplier=2, min=2, max=20))
+
+    def wait(state):
+        asked = server_wait(state.outcome.exception() if state.outcome else None)
+        return asked if asked is not None else backoff(state)
     return tenacity.Retrying(
         retry=tenacity.retry_if_exception(
-            lambda e: isinstance(e, (tts.TTSTimeout, tts.TTSNoAudio))
-            or benchmark._is_transient_api_error(e)),
+            lambda e: not _is_fatal(e) and (isinstance(e, (tts.TTSTimeout, tts.TTSNoAudio))
+                                            or benchmark._is_transient_api_error(e))),
         stop=tenacity.stop_after_attempt(benchmark._TRANSIENT_ATTEMPTS),
-        wait=(benchmark._TRANSIENT_WAIT if benchmark._TRANSIENT_WAIT is not None
-              else tenacity.wait_exponential(multiplier=2, min=2, max=20)),
+        wait=wait,
         reraise=True,
     )
 
 
 def _is_fatal(exc: BaseException) -> bool:
+    """Every other clip would fail the same way: stop the run."""
     from benchmark import exception_chain, status_of
-    return isinstance(exc, tts.TTSFormatError) or any(
-        status_of(e) in FATAL_STATUS for e in exception_chain(exc))
+    rl = rate_limit_info(exc)
+    return (isinstance(exc, tts.TTSFormatError)
+            or any(status_of(e) in FATAL_STATUS for e in exception_chain(exc))
+            or bool(rl and rl["kind"] in ("daily_quota", "billing")))
 
 
 # One record per request sent, in every run (manifest "calls"): what each attempt
@@ -538,6 +606,7 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
 
     records: list[dict] = []
     fatal = False
+    rate_limited = 0   # clips in a row whose last error was a rate limit
 
     def save():
         # Clips not reached yet keep their previous record, so a run that is killed
@@ -627,6 +696,7 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
                 syn = retryer(attempt)
                 bundle.write_wav(wav, syn.pcm)
                 cost = tts_cost(syn.input_tokens, syn.output_tokens)
+                rate_limited = 0
                 rec.update(status="generated", audio_seconds=round(syn.seconds, 3),
                            input_tokens=syn.input_tokens, output_tokens=syn.output_tokens,
                            cost_usd=cost, served_model=syn.served_model,
@@ -642,11 +712,17 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
                 rec.update(status="failed", error=f"{type(exc).__name__}: {exc}",
                            error_reason=why["reason"])
                 log(f"  FAIL  {p.name}: {why['reason']} - {why['detail'][:160]}")
+                rate_limited = rate_limited + 1 if rate_limit_info(exc) else 0
                 if _is_fatal(exc):
                     fatal = True
                     manifest["warnings"].append(
                         f"stopped at {p.name}: {why['reason']}; every other clip would fail "
                         "the same way")
+                elif rate_limited >= RATE_LIMITED_IN_A_ROW:
+                    fatal = True
+                    manifest["warnings"].append(
+                        f"stopped at {p.name}: {rate_limited} clips in a row failed on rate "
+                        "limits even after waiting; the quota may be used up. Resume later")
             rec["wall_seconds"] = round(time.monotonic() - t0, 3)
             # Retried attempts: all failed ones, except the last when the clip failed.
             retried = errors if rec["status"] == "generated" else errors[:-1]
