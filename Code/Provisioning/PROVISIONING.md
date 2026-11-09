@@ -2,8 +2,9 @@
 
 Status: **agreed** (#104, milestone "3D Model and Texture Provisioning", parent
 #103). It decides what the provisioning tool produces and how. Built so far: the
-asset library (#107, `library.py`, `seed_assets.json`, `smoke_test.py`). The issues
-that build the rest are listed at the end.
+asset library (#107, `library.py`, `seed_assets.json`) and the plan (#106: the
+audit, describe and route, `provision_lab.py --dry-run`), with `smoke_test.py`.
+The issues that build the rest are listed at the end.
 
 ## Why
 
@@ -146,6 +147,43 @@ means the run itself broke (bad input, an error that stops the run).
 8. **Rewrite and bundle** (§ Output).
 
 The manifest is rewritten after every asset, so a run can resume (§ CLI).
+
+## Describe and route (#106, built)
+
+`audit.py` lists the assets (step 1), with up to 8 uses each (all are counted), up
+to 3 narration sentences that mention the object or asset by its name's words
+(`dnaHelix` → "dna helix"), text shown on the object (also text added by clip
+changes), and the hierarchical `purpose`. On all 104 wave-2 labs it finds exactly
+the invented assets `lab_metrics.analyze_assets` counts.
+
+Each asset is then looked up in the library by name or alias (`find`; a different
+kind or a non-reusable entry such as `demoPrefab` doesn't count). Without a library
+the seed list's built-ins are used, so the headset's own assets are never planned.
+Only what the library doesn't have goes to the LLM.
+
+`routing.py` makes the one call per lab (`LabAssetPlan`): for each asset a
+description, `must_be_right` facts, 2 to 6 search keywords, a form, a route, a
+one-sentence reason, and `same_as` for two names of one object. The prompt lists the
+lab (id, course, objectives, modules), each asset's context, and the forms and
+routes with their descriptions; registered builders (`builders.py`, empty until
+#111) are offered as `builder:<name>` routes by their own descriptions.
+
+| Kind | Forms | Routes |
+|---|---|---|
+| model | `diagram_element`, `ui`, `text`, `textured_primitive`, `structure`, `organism`, `object`, `other` | `kit`, `textured_primitive`, `ui`, `search`, `composite`, `builder:<name>` |
+| texture | `real_surface`, `material`, `diagram`, `other` | `search`, `draw` (drawn by code), `generate` (image model, #118) |
+
+The response is checked under `routing_scope` (a ContextVar, like
+`asset_plan_validation`): every listed asset planned exactly once with its listed
+kind, a form and route allowed for that kind, a non-empty description, keywords, and
+`same_as` pointing at another listed asset of the same kind that isn't itself
+merged. All problems come back in one error, so instructor reasks once. Names and
+`same_as` are returned in the lab's own spelling.
+
+The call uses `create_instructor_client`, `provider_create_kwargs` and
+`_transient_retryer`, tracked by `InstructorTracker`; the default model is Claude
+Haiku 5.5 (`--model`). `routing.check_environment` stops before any call if the SDK
+or API key is missing.
 
 ## Model convention
 
@@ -460,17 +498,45 @@ library grows), auto-pick acceptance in review, cost and time per lab and per as
 and placeholder rate, reported per source model and level, and for the held-out set
 per field (#115).
 
-## Provisioning CLI (#106, #113)
+## Provisioning CLI (#106 built; #113)
 
 ```
-python "Code/Provisioning/provision_lab.py" <lab_output.json> [--dry-run]
-    [--library PATH] [--llm-model ID] [--bundle FOLDER] [--run-group NAME] [--overwrite]
+python "Code/Provisioning/provision_lab.py" <lab_output.json> --dry-run [--no-llm]
+    [--model KEY] [--library PATH] [--metrics PATH] [--run-group NAME]
+```
+
+Built so far (#106): the plan. `--dry-run` is required until #113.
+
+- `--dry-run` audits the lab, looks every asset up in the library, makes the one
+  describe-and-route call for the rest, prints the plan and saves
+  `provisioning_manifest.json` in `Artifacts/Data/Provisioning/[<run group>/]<lab>_<timestamp>/`
+  (a second run in the same second gets its own folder). It downloads and builds
+  nothing.
+- `--no-llm` stops after the audit and the library lookup: no API key needed.
+- `--metrics` names the lab's metrics file; by default the paired `*_metrics.json` is
+  used (beside the output or in the sibling `Metrics/`), for the source model, level
+  and hierarchical purposes.
+- Exit codes: **0** planned (or audited with `--no-llm`); **1** the call failed
+  (recorded in the manifest); **2** bad input or environment (not a lab, bad run
+  group, unknown model, missing SDK or API key).
+- The plan manifest records: `status` (`planned`, `audited`, `failed`); the source
+  (input, `labId`, metrics file, source model, level, lab name, whether
+  hierarchical); the library identity (or a note that there is none); the routing
+  record (model, model id, provider, reasoning effort, `tool_choice`, calls, seconds,
+  transient retries, served models, cost, the tracker summary, any error); the routes
+  offered; counts by status, route and form; and per asset its spellings, uses,
+  narration, purpose, `status` (`available` with the library entry and whether it
+  matched by name or alias, `planned`, `merged` into another, or `unplanned`) and the
+  plan.
+
+Still to come (#113): the full run.
+
+```
+python "Code/Provisioning/provision_lab.py" <lab_output.json>
+    [--library PATH] [--model KEY] [--bundle FOLDER] [--run-group NAME] [--overwrite]
 python "Code/Provisioning/provision_lab.py" --resume <run folder> [--overwrite]
 ```
 
-- `--dry-run` runs the audit and the describe-and-route call, then prints and saves
-  the plan: each asset, its description, route, and any library match. It downloads
-  and builds nothing.
 - `--bundle` adds to an existing bundle folder (e.g. one narration made) instead of
   starting a new one.
 - `--resume` reruns a folder with its saved settings, skipping finished assets and

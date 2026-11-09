@@ -94,7 +94,16 @@ python "Code/Narration/bundle.py" validate "<Name>Lab.zip"
 python "Code/Narration/smoke_test.py"   # offline check, no API keys (fake TTS + mock OpenAI/Gemini)
 ```
 
-Provisioning asset library (models and textures for labs; the provisioning CLI itself is not built yet):
+Provisioning (models and textures for labs; so far the asset library and the plan, #106):
+
+```bash
+# --dry-run: audit + library lookup + one describe-and-route LLM call; builds nothing.
+# --no-llm stops after the audit (no key). Output: Artifacts/Data/Provisioning/[<run group>/]<lab>_<ts>/
+python "Code/Provisioning/provision_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --dry-run
+python "Code/Provisioning/provision_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --dry-run --no-llm
+```
+
+Asset library:
 
 ```bash
 # Library folder: --library PATH, else $ARLEM_ASSET_LIBRARY, else Artifacts/Assets/Library/ (gitignored)
@@ -372,7 +381,22 @@ not reused. Built so far:
   An unpinned download is refused before downloading. One entry failing never stops a
   seed run; a built-in whose file can't be downloaded is still recorded (`partial`),
   keeping its current file if intact.
-- **`smoke_test.py`**: offline (mock download server, throwaway library; never the real one).
+- **`audit.py`** (#106): every `prefab` / `texture` a lab references (grouped ignoring case;
+  `demoPrefab` excluded; clip changes can't set either), with uses, text on the object (also
+  from clip changes, by `target`), narration sentences that mention it and the hierarchical
+  `purpose`. Matches `lab_metrics.analyze_assets` on all wave-2 labs.
+- **`routing.py`** (#106): one LLM call per lab (`LabAssetPlan`) for the assets the library
+  doesn't have: description, `must_be_right`, search keywords, **form** and **route** (chosen
+  by form, never by subject; model routes `kit` / `textured_primitive` / `ui` / `search` /
+  `composite` / `builder:<name>`, texture routes `search` / `draw` / `generate`), `same_as`
+  merges. Checked under a `routing_scope` ContextVar (one error for all problems → one
+  reask). Same client/guards/tracker as every entry point; default model Claude Haiku 5.5.
+  **`builders.py`**: the builder registry, empty until #111.
+- **`provision_lab.py`** (#106): the CLI; only `--dry-run` so far. Without a library it
+  falls back to the seed list's built-ins. Writes `provisioning_manifest.json` (library
+  identity, routing record with cost and served models, per-asset status and plan).
+- **`smoke_test.py`**: offline (mock download server, throwaway library, fake LLM; never the
+  real library).
 
 
 
