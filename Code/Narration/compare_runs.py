@@ -56,7 +56,9 @@ def run_row(path: Path, m: dict) -> dict:
     runs = m.get("runs") or []
     # Time the pass took where it did its work: the LLM requests, or the longest run of
     # the rules (a later run reuses cached text and takes ~0 s).
-    sf_seconds = (_sum(sf_calls, "seconds") if sf_calls
+    # Runs recorded before per-request times have only the run's own timer.
+    timed = sf_calls and all(c.get("seconds") is not None for c in sf_calls)
+    sf_seconds = (_sum(sf_calls, "seconds") if timed
                   else max((r.get("spoken_form_seconds") or 0 for r in runs), default=0))
     totals = m.get("totals") or {}
     source = m.get("source") or {}

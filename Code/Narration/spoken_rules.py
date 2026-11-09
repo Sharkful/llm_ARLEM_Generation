@@ -272,8 +272,8 @@ class _Rules:
 
     def apply(self, text: str) -> str:
         t = text.strip().translate(_CHARS)
-        for sup, rep in _SUPER.items():
-            t = t.replace(sup, rep)
+        for sup, rep in _SUPER.items():   # not before a charge sign: SO4²⁻ stays, flagged
+            t = re.sub(re.escape(sup) + "(?![⁺⁻])", lambda m, rep=rep: rep, t)
         t = re.sub(r"(?<=\d)[’‘]", "'", t)               # 5’ -> 5'
         t = re.sub(r"(?<=\d)[”“]", '"', t)
         t = re.sub(r"(?<=\d)–(?=\d)", "-", t)          # en dash in a number range
@@ -413,18 +413,20 @@ class _Rules:
     def formulas(self, t: str) -> str:
         # XeF4 -> "X e F 4": element symbols said as letters, counts as numbers.
         def formula(m):
-            coef, body = m.group(1) or "", m.group(2)
+            coef, body, charge = m.group(1) or "", m.group(2), m.group(3) or ""
             if body in self.g.terms:
                 return None
             groups = re.findall(r"([A-Z][a-z]?)(\d*)", body)
             if "".join(e + n for e, n in groups) != body or not all(e in ELEMENTS for e, _ in groups):
                 return None
-            if not any(n for _, n in groups):
-                return None              # no counts: may be a word or acronym (HeLa, CNS)
+            if not any(n for _, n in groups) and not charge:
+                return None              # no counts or charge: may be a word (HeLa, CNS)
             said = " ".join(" ".join(e) + (f" {n}" if n else "") for e, n in groups)
-            return f"{coef} {said}".strip()
-        return self.sub("formula", r"(?<![\w'])(\d+)?((?:[A-Z][a-z]?\d*){1,})(?=(?:'s)?(?![\w']))",
-                        formula, t)
+            # An ion's charge as written: I3- -> "I 3 minus", Ca2+ -> "C a 2 plus".
+            sign = {"+": " plus", "-": " minus"}.get(charge, "")
+            return f"{coef} {said}{sign}".strip()
+        return self.sub("formula", r"(?<![\w'])(\d+)?((?:[A-Z][a-z]?\d*){1,})([+-](?![\w+-]))?"
+                                   r"(?=(?:'s)?(?![\w']))", formula, t)
 
     def math_rules(self, t: str) -> str:
         t = self.sub("power", r"\^2\b", " squared", t)
@@ -480,6 +482,7 @@ class _Rules:
         return self.sub("emphasis", r"(?<![\w'])([A-Z][A-Z]+)(?:'s|s)?(?![\w'])", acronym, t)
 
     def leftovers(self, t: str) -> None:
+        # Superscript charges (SO4²⁻) can't be split into count and charge reliably.
         for ch in sorted({c for c in t if c not in _PLAIN and not c.isalnum()}):
             self.flag(ch, "symbol with no rule; left for the voice")
 

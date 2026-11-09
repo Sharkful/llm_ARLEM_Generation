@@ -576,6 +576,8 @@ if HAVE_RULES:
             ("Leave a 5mm gap; it is 1 mm wide.", "Leave a 5 millimeter gap; it is 1 millimeter wide.", ()),
             ("The change Δx is small.", "The change delta x is small.", ()),
             ("Its pH is 7.4.", "Its P H is 7 point 4.", ()),
+            ("ClF3, BrF5 and I3- form; Ca2+ and Na+ ions; Cl- too.",
+             "C l F 3, B r F 5 and I 3 minus form; C a 2 plus and N a plus ions; C l minus too.", ()),
         ],
         "left alone": [
             ("In the 1990's and the 1990s, 3D models came in.", "In the 1990's and the 1990s, 3D models came in.", ()),
@@ -605,6 +607,9 @@ if HAVE_RULES:
     r = say("It points AWAY from the fork.")
     check(r.spoken_text == "It points AWAY from the fork." and r.unresolved == ["AWAY"],
           "a capitalized word never written in lowercase in the lab is flagged, not guessed")
+    r = say("Sulfate, SO4²⁻, then x².")
+    check(r.spoken_text == "Sulfate, SO4²⁻, then x squared." and "⁻" in r.unresolved,
+          "a superscript charge is left as written and flagged; a superscript power is still said")
     r = say("The angle ∡ is shown.")
     check(r.unresolved == ["∡"] and "no rule" in r.flags[0], "a symbol with no rule is flagged")
     r = say("Set it to 5' first.", topic="dna_structure_and_replication")
@@ -1864,10 +1869,11 @@ if HAVE_NARRATION:
               "its tokens, cost (Claude Haiku 5.5 rates) and served model are tracked")
         sfc = [x for x in la["calls"] if x["step"] == "spoken_form"]
         check(len(sfc) == 1 and sfc[0]["status"] == "ok" and sfc[0]["kind"] == "first"
+              and sfc[0]["seconds"] is not None and sfc[0]["seconds"] >= 0
               and sfc[0]["input_tokens"] == 1200 and sfc[0]["served_model"] == "claude-haiku-5-5"
               and abs(sfc[0]["cost_usd"] - la["spoken_form"]["cost_usd"]) < 1e-15
               and abs(la["totals"]["spoken_form_cost_usd"] - la["spoken_form"]["cost_usd"]) < 1e-15,
-              "the spoken-form request is in the call log with its own cost")
+              "the spoken-form request is in the call log with its own cost and time")
         check(any("D N A" in c["spoken_text"] for c in la["clips"] if c.get("spoken_text")),
               "the model's spoken text reaches the clips")
         check(req.get("output_config") == {"effort": "low"} and la["spoken_form"]["reasoning_effort"] == "low",

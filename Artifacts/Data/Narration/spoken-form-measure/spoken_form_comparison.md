@@ -8,9 +8,9 @@
 |---|---|---|---|---|---|---|---|
 | none | 5 | 0 of 110 | 0 | $0.0000 | 0.0 | 0 | – |
 | rules | 5 | 31 of 110 | 0 | $0.0000 | 0.0 | 0 | – |
-| llm claude-haiku-5.5 | 5 | 46 of 110 | 1 | $0.0018 | 0.0 | 0 | – |
-| llm gemini-3.5-flash-lite | 5 | 40 of 110 | 0 | $0.0039 | 0.0 | 0 | – |
-| llm gpt-6-luna | 5 | 44 of 110 | 0 | $0.0008 | 0.0 | 0 | – |
+| llm claude-haiku-5.5 | 5 | 46 of 110 | 1 | $0.0018 | 12.4 | 0 | – |
+| llm gemini-3.5-flash-lite | 5 | 40 of 110 | 0 | $0.0039 | 6.0 | 0 | – |
+| llm gpt-6-luna | 5 | 44 of 110 | 0 | $0.0008 | 11.1 | 0 | – |
 
 ## By lab
 
@@ -18,29 +18,29 @@
 |---|---|---|---|---|---|---|
 | apparent_retrograde_motion | none | 0 of 29 | 0 | $0.0000 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_190347_gemini_none_20261109_150738` |
 | apparent_retrograde_motion | rules | 2 of 29 | 0 | $0.0000 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_190347_gemini_rules_20261109_150739` |
-| apparent_retrograde_motion | llm claude-haiku-5.5 | 7 of 29 | 0 | $0.0021 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_190347_gemini_llm-claude-haiku-5.5_20261109_150739` |
-| apparent_retrograde_motion | llm gemini-3.5-flash-lite | 7 of 29 | 0 | $0.0046 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_190347_gemini_llm-gemini-3.5-flash-lite_20261109_150807` |
-| apparent_retrograde_motion | llm gpt-6-luna | 7 of 29 | 0 | $0.0009 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_190347_gemini_llm-gpt-6-luna_20261109_150754` |
+| apparent_retrograde_motion | llm claude-haiku-5.5 | 7 of 29 | 0 | $0.0021 | 14.2 | `claude-sonnet-5_json_lab_L4_20260710_190347_gemini_llm-claude-haiku-5.5_20261109_150739` |
+| apparent_retrograde_motion | llm gemini-3.5-flash-lite | 7 of 29 | 0 | $0.0046 | 6.4 | `claude-sonnet-5_json_lab_L4_20260710_190347_gemini_llm-gemini-3.5-flash-lite_20261109_150807` |
+| apparent_retrograde_motion | llm gpt-6-luna | 7 of 29 | 0 | $0.0009 | 12.2 | `claude-sonnet-5_json_lab_L4_20260710_190347_gemini_llm-gpt-6-luna_20261109_150754` |
 | dna_structure_and_replication | none | 0 of 18 | 0 | $0.0000 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_190528_gemini_none_20261109_150557` |
 | dna_structure_and_replication | rules | 5 of 18 | 0 | $0.0000 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_190528_gemini_rules_20261109_150557` |
-| dna_structure_and_replication | llm claude-haiku-5.5 | 10 of 18 | 0 | $0.0024 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_190528_gemini_llm-claude-haiku-5.5_20261109_150558` |
-| dna_structure_and_replication | llm gemini-3.5-flash-lite | 6 of 18 | 0 | $0.0039 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_190528_gemini_llm-gemini-3.5-flash-lite_20261109_150629` |
-| dna_structure_and_replication | llm gpt-6-luna | 10 of 18 | 0 | $0.0008 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_190528_gemini_llm-gpt-6-luna_20261109_150615` |
+| dna_structure_and_replication | llm claude-haiku-5.5 | 10 of 18 | 0 | $0.0024 | 16.6 | `claude-sonnet-5_json_lab_L4_20260710_190528_gemini_llm-claude-haiku-5.5_20261109_150558` |
+| dna_structure_and_replication | llm gemini-3.5-flash-lite | 6 of 18 | 0 | $0.0039 | 6.3 | `claude-sonnet-5_json_lab_L4_20260710_190528_gemini_llm-gemini-3.5-flash-lite_20261109_150629` |
+| dna_structure_and_replication | llm gpt-6-luna | 10 of 18 | 0 | $0.0008 | 12.7 | `claude-sonnet-5_json_lab_L4_20260710_190528_gemini_llm-gpt-6-luna_20261109_150615` |
 | heart_anatomy_and_blood_flow | none | 0 of 24 | 0 | $0.0000 | 0.0 | `gpt-5-4-nano_json_lab_L4_20260710_180625_gemini_none_20261109_150814` |
 | heart_anatomy_and_blood_flow | rules | 2 of 24 | 0 | $0.0000 | 0.0 | `gpt-5-4-nano_json_lab_L4_20260710_180625_gemini_rules_20261109_150815` |
-| heart_anatomy_and_blood_flow | llm claude-haiku-5.5 | 3 of 24 | 1 | $0.0012 | 0.0 | `gpt-5-4-nano_json_lab_L4_20260710_180625_gemini_llm-claude-haiku-5.5_20261109_150815` |
-| heart_anatomy_and_blood_flow | llm gemini-3.5-flash-lite | 2 of 24 | 0 | $0.0035 | 0.0 | `gpt-5-4-nano_json_lab_L4_20260710_180625_gemini_llm-gemini-3.5-flash-lite_20261109_150835` |
-| heart_anatomy_and_blood_flow | llm gpt-6-luna | 2 of 24 | 0 | $0.0007 | 0.0 | `gpt-5-4-nano_json_lab_L4_20260710_180625_gemini_llm-gpt-6-luna_20261109_150824` |
+| heart_anatomy_and_blood_flow | llm claude-haiku-5.5 | 3 of 24 | 1 | $0.0012 | 8.1 | `gpt-5-4-nano_json_lab_L4_20260710_180625_gemini_llm-claude-haiku-5.5_20261109_150815` |
+| heart_anatomy_and_blood_flow | llm gemini-3.5-flash-lite | 2 of 24 | 0 | $0.0035 | 5.6 | `gpt-5-4-nano_json_lab_L4_20260710_180625_gemini_llm-gemini-3.5-flash-lite_20261109_150835` |
+| heart_anatomy_and_blood_flow | llm gpt-6-luna | 2 of 24 | 0 | $0.0007 | 9.6 | `gpt-5-4-nano_json_lab_L4_20260710_180625_gemini_llm-gpt-6-luna_20261109_150824` |
 | vectors_and_projectile_motion | none | 0 of 12 | 0 | $0.0000 | 0.0 | `gpt-5-4-nano_json_lab_L3_20260710_151042_gemini_none_20261109_150718` |
 | vectors_and_projectile_motion | rules | 7 of 12 | 0 | $0.0000 | 0.0 | `gpt-5-4-nano_json_lab_L3_20260710_151042_gemini_rules_20261109_150718` |
-| vectors_and_projectile_motion | llm claude-haiku-5.5 | 7 of 12 | 0 | $0.0007 | 0.0 | `gpt-5-4-nano_json_lab_L3_20260710_151042_gemini_llm-claude-haiku-5.5_20261109_150719` |
-| vectors_and_projectile_motion | llm gemini-3.5-flash-lite | 7 of 12 | 0 | $0.0019 | 0.0 | `gpt-5-4-nano_json_lab_L3_20260710_151042_gemini_llm-gemini-3.5-flash-lite_20261109_150733` |
-| vectors_and_projectile_motion | llm gpt-6-luna | 7 of 12 | 0 | $0.0004 | 0.0 | `gpt-5-4-nano_json_lab_L3_20260710_151042_gemini_llm-gpt-6-luna_20261109_150725` |
+| vectors_and_projectile_motion | llm claude-haiku-5.5 | 7 of 12 | 0 | $0.0007 | 5.7 | `gpt-5-4-nano_json_lab_L3_20260710_151042_gemini_llm-claude-haiku-5.5_20261109_150719` |
+| vectors_and_projectile_motion | llm gemini-3.5-flash-lite | 7 of 12 | 0 | $0.0019 | 4.7 | `gpt-5-4-nano_json_lab_L3_20260710_151042_gemini_llm-gemini-3.5-flash-lite_20261109_150733` |
+| vectors_and_projectile_motion | llm gpt-6-luna | 7 of 12 | 0 | $0.0004 | 7.2 | `gpt-5-4-nano_json_lab_L3_20260710_151042_gemini_llm-gpt-6-luna_20261109_150725` |
 | vsepr_molecular_geometry | none | 0 of 27 | 0 | $0.0000 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_191240_gemini_none_20261109_150636` |
 | vsepr_molecular_geometry | rules | 15 of 27 | 0 | $0.0000 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_191240_gemini_rules_20261109_150636` |
-| vsepr_molecular_geometry | llm claude-haiku-5.5 | 19 of 27 | 0 | $0.0028 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_191240_gemini_llm-claude-haiku-5.5_20261109_150637` |
-| vsepr_molecular_geometry | llm gemini-3.5-flash-lite | 18 of 27 | 0 | $0.0056 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_191240_gemini_llm-gemini-3.5-flash-lite_20261109_150710` |
-| vsepr_molecular_geometry | llm gpt-6-luna | 18 of 27 | 0 | $0.0011 | 0.0 | `claude-sonnet-5_json_lab_L4_20260710_191240_gemini_llm-gpt-6-luna_20261109_150655` |
+| vsepr_molecular_geometry | llm claude-haiku-5.5 | 19 of 27 | 0 | $0.0028 | 17.5 | `claude-sonnet-5_json_lab_L4_20260710_191240_gemini_llm-claude-haiku-5.5_20261109_150637` |
+| vsepr_molecular_geometry | llm gemini-3.5-flash-lite | 18 of 27 | 0 | $0.0056 | 7.1 | `claude-sonnet-5_json_lab_L4_20260710_191240_gemini_llm-gemini-3.5-flash-lite_20261109_150710` |
+| vsepr_molecular_geometry | llm gpt-6-luna | 18 of 27 | 0 | $0.0011 | 14.0 | `claude-sonnet-5_json_lab_L4_20260710_191240_gemini_llm-gpt-6-luna_20261109_150655` |
 
 ## Clips whose spoken text differs between modes
 
