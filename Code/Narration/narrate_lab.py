@@ -359,7 +359,7 @@ def _retryer():
             or benchmark._is_transient_api_error(e)),
         stop=tenacity.stop_after_attempt(benchmark._TRANSIENT_ATTEMPTS),
         wait=(benchmark._TRANSIENT_WAIT if benchmark._TRANSIENT_WAIT is not None
-              else tenacity.wait_exponential(multiplier=2, min=2, max=20)),
+              else benchmark.transient_policy.default_wait()),
         reraise=True,
     )
 

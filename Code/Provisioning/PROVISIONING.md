@@ -237,8 +237,9 @@ matched and reused, never shipped. Their descriptions are written from the moon 
 and should be checked against the Unity prefabs. `2k_earth_daymap`, `2k_moon` and
 `2k_sun` are Solar System Scope maps, so the library also keeps their files, in case
 the headset needs them in the zip (#105). A built-in is recorded even when its file
-can't be downloaded (it is on the headset either way); seeding reports it as
-`partial`.
+can't be downloaded (it is on the headset either way), and reported as `partial`: it
+keeps its current file if that file is intact (a failed download never deletes a
+good file) and drops only a missing or damaged one.
 
 **Seed list (in git):** `Code/Provisioning/seed_assets.json` holds metadata only:
 the built-ins, plus the assets we explicitly keep with their download URL, license,
@@ -251,23 +252,32 @@ parameters join it in #109. Seeding:
 
 - downloads only what is missing or doesn't match its pin, and checks the file on
   disk, not just the index;
-- refuses a download whose checksum changed at the source, and an unpinned one
-  unless `--pin` is given; `--pin` records a checksum only once the asset is
-  accepted, saves it to the seed list straight away (so a killed run keeps the pins
-  it got), and never overwrites an existing pin;
+- refuses a download whose checksum changed at the source, and, before downloading
+  it, an unpinned one unless `--pin` is given; `--pin` records a checksum only once
+  the asset is accepted, saves it to the seed list straight away (so a killed run
+  keeps the pins it got), and never overwrites an existing pin; if the seed list
+  can't be written, the asset is still reported as added, with the pin problem, and
+  the run exits 1;
 - treats a download that stops short of its `Content-Length` as a dropped
   connection, never as a complete file;
-- retries transient errors (`benchmark._TRANSIENT_STATUS`, dropped connections,
-  timeouts) with `benchmark._transient_retryer()`'s attempts and back-off, never 4xx;
-- never stops for one entry: any failure fails only that entry, with its reason.
+- retries transient failures with the shared policy in
+  `Code/Benchmark/transient_policy.py` (the attempts, back-off and HTTP statuses
+  LLM calls and narration use): those HTTP statuses, timeouts, refused, reset or
+  cut-off connections, a temporary DNS failure, a proxy answering 429/5xx. A host
+  that doesn't exist, a proxy refusing the host (e.g. 403), a certificate that fails
+  verification and other 4xx fail at once;
+- never stops for one entry: any failure fails only that entry, with its reason. An
+  entry refused because another run wrote to the library meanwhile is retried once
+  against the current library.
 
 **Aliases** make reuse cheap: each time a lab name is matched to an entry, the name
 is added, so the next lab with that name hits it with no LLM call. Aliases are
 learned from accepted matches (#108), not written by hand for our five lab topics.
 
-**Writers:** every write holds `library.lock` (created exclusively, so it works on
-every OS) from its check to its finish; another writer waits up to 30 s, and a lock
-older than 5 minutes, left by a crashed run, is cleared. Under the lock, a write is
+**Writers:** every write holds an OS lock on `library.lock` (`flock`, or `msvcrt`
+on Windows) from its check to its finish; another writer waits up to 30 s. The
+operating system releases the lock if a run dies, so there is never a stale lock to
+clear. Under the lock, a write is
 refused (`ConcurrentWriteError`) if `library.json` changed since that store read it,
 so two runs can never silently overwrite each other. The refused store then holds the
 current index, so the caller can look again and retry. `library.json` is written

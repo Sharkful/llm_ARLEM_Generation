@@ -12,15 +12,19 @@ throwaway library (never the real one):
 - seeding: built-ins, pinning, a transient 503 retried, a 404 not retried, a
   non-JPEG rejected and never pinned, disallowed and uncredited licenses refused,
   a cut-off download retried and then failed alone, an unexpected error failing only
-  its entry, a killed run keeping the pins it got, and a built-in recorded without
-  the file it couldn't download
+  its entry, a killed run keeping the pins it got, an unpinned file never
+  downloaded, an entry retried after another run wrote meanwhile, a pin that can't
+  be saved reported, and a built-in whose download fails keeping an intact file and
+  dropping a damaged one
+- network failures: proxy refusals, unknown hosts and bad certificates fail at once;
+  temporary failures are retried; no benchmark or instructor import
 - reruns download nothing; a damaged local file is re-downloaded; a changed
   source file is refused; ``--pin`` never overwrites an existing pin
 - two libraries seeded from one list share a content hash, not a library id
 - lookups by name and alias ignore case; alias clashes are refused
 - a write is refused when another process wrote in between, and nothing is lost;
-  two simultaneous writers never both succeed; a held lock makes a writer give up,
-  a stale one is cleared
+  two simultaneous writers never both succeed; a held lock makes a writer give up;
+  a run that dies holding the lock doesn't block the next
 - ``put`` refuses an entry without a license or size and leaves the library as it was
 - the validator catches missing, altered and wrong-format files, duplicate names,
   blank aliases and unlisted files; sizes must be real sizes; files of two roles
@@ -39,10 +43,12 @@ import io
 import json
 import os
 import shutil
+import socket
+import ssl
+import subprocess
 import sys
 import tempfile
 import threading
-import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -196,8 +202,8 @@ def run_seed(store, seed_path, **kw):
 def part2(tmp: Path) -> None:
     print("Part 2: the asset library")
     import tenacity
-    bm = lib._benchmark()
-    bm._TRANSIENT_WAIT = tenacity.wait_none()  # benchmark's retry policy, no real back-off
+    lib.TRANSIENT_WAIT = tenacity.wait_none()  # the shared retry policy, no real back-off
+    attempts = lib._policy().ATTEMPTS
     srv = Server()
     try:
         srv.files = {"/a.jpg": jpeg_bytes(), "/b.jpg": jpeg_bytes(color=(5, 6, 7)),
@@ -213,7 +219,8 @@ def part2(tmp: Path) -> None:
         res, rep = run_seed(store, seed_path)
         check(res["map_a"].status == "failed" and "not pinned" in res["map_a"].detail,
               "an unpinned download is refused without --pin")
-        check(store.get("map_a") is None, "...and nothing is added")
+        check(store.get("map_a") is None and srv.hits.get("/a.jpg", 0) == 0,
+              "...before downloading anything, and nothing is added")
         check(res["box_builtin"].status == "added", "a built-in without a file is added")
         srv.fail_once = {"/flaky.jpg": 503}
         res, rep = run_seed(store, seed_path, pin=True)
@@ -222,7 +229,7 @@ def part2(tmp: Path) -> None:
         check(res["flaky"].status == "added" and res["flaky"].retries == 1,
               "a 503 is retried once and then succeeds")
         check(res["missing"].status == "failed" and "404" in res["missing"].detail
-              and srv.hits.get("/missing.jpg") == 2, "a 404 fails without retrying")
+              and srv.hits.get("/missing.jpg") == 1, "a 404 fails without retrying")
         check(res["not_jpeg"].status == "failed" and "not JPEG" in res["not_jpeg"].detail,
               "a PNG served as .jpg is refused")
         check(res["nc_map"].status == "failed" and "not allowed" in res["nc_map"].detail,
@@ -230,7 +237,7 @@ def part2(tmp: Path) -> None:
         check(res["no_author"].status == "failed" and "needs credit" in res["no_author"].detail,
               "a CC-BY asset without an author is refused")
         check(res["cut_off"].status == "failed" and "IncompleteRead" in res["cut_off"].detail
-              and res["cut_off"].retries == bm._TRANSIENT_ATTEMPTS - 1,
+              and res["cut_off"].retries == attempts - 1,
               "a cut-off download is retried as transient, then fails only its own entry")
         check(res["flaky"].status == "added", "...and the entries after it still run")
         sky = store.get("sky_builtin")
@@ -341,6 +348,111 @@ def part2(tmp: Path) -> None:
         check(res["extra_3"].status == "failed" and "OSError" in res["extra_3"].detail,
               "an unexpected error fails only its own entry, with its type named")
 
+        # Another run writing during a seed: the refused entry is retried and succeeds
+        doc["entries"] = [dict(doc["entries"][0], asset_id="extra_4", name="extra_4",
+                               download={"url": srv.url("/extra_0.jpg")})]
+        lib.write_json_atomic(extra_seed, doc)
+        other = lib.LocalFolderStore(tmp / "libA")
+        store = lib.LocalFolderStore(tmp / "libA")
+        logged = []
+
+        def meddle(msg):
+            logged.append(msg)
+            if len(logged) == 1:
+                other.add_alias("map_a", "addedMeanwhile")
+
+        rep4 = lib.seed_library(store, extra_seed, pin=True, log=meddle)
+        r4 = rep4.results[0]
+        fresh = lib.LocalFolderStore(tmp / "libA")
+        check(r4.status == "added" and fresh.get("extra_4") is not None
+              and fresh.find("addedMeanwhile") is not None,
+              "an entry refused because another run wrote meanwhile is retried, keeping both")
+
+        # A pin that can't be saved is reported, not hidden behind 'failed'
+        doc["entries"] = [dict(doc["entries"][0], asset_id="extra_5", name="extra_5",
+                               download={"url": srv.url("/extra_0.jpg")})]
+        lib.write_json_atomic(extra_seed, doc)
+        real_write = lib.write_json_atomic
+
+        def no_seed_write(path, data):
+            if Path(path) == extra_seed:
+                raise PermissionError(13, "Permission denied", str(path))
+            real_write(path, data)
+
+        lib.write_json_atomic = no_seed_write
+        try:
+            rep5 = lib.seed_library(lib.LocalFolderStore(tmp / "libA"), extra_seed, pin=True,
+                                    log=lambda m: None)
+        finally:
+            lib.write_json_atomic = real_write
+        r5 = rep5.results[0]
+        check(r5.status == "added" and "pin was not saved" in r5.detail
+              and r5 in rep5.failed and lib.LocalFolderStore(tmp / "libA").get("extra_5") is not None,
+              "a pin that can't be saved: the asset is reported as added, and as needing attention")
+
+        # A built-in whose new download fails keeps a good file, and drops only a bad one
+        srv.files["/moon.jpg"] = jpeg_bytes(color=(90, 90, 90))
+        moon = {"asset_id": "moon_builtin", "kind": "texture", "name": "moonBuiltin", "builtin": True,
+                "mapping": "equirectangular", "description": "a built-in moon",
+                "download": {"url": srv.url("/moon.jpg")},
+                "provenance": {"page_url": "https://example.org/m", "author": "A", "title": "Moon",
+                               "license": "CC-BY-4.0"}}
+        moon_seed = tmp / "moon_seed.json"
+        lib.write_json_atomic(moon_seed, {"version": 1, "entries": [moon]})
+        store = lib.LocalFolderStore(tmp / "libA")
+        res, _ = run_seed(store, moon_seed, pin=True)
+        good = store.get("moon_builtin").file("texture").sha256
+        repinned = json.loads(moon_seed.read_text())
+        repinned["entries"][0]["download"]["sha256"] = "0" * 64  # pin updated upstream
+        lib.write_json_atomic(moon_seed, repinned)
+        del srv.files["/moon.jpg"]  # ...and the new file can't be fetched here
+        res, _ = run_seed(store, moon_seed)
+        m = store.get("moon_builtin")
+        check(res["moon_builtin"].status == "partial" and "kept its current file" in res["moon_builtin"].detail
+              and m.file("texture") is not None and m.file("texture").sha256 == good
+              and store.path_of("moon_builtin", "texture").is_file(),
+              "a built-in whose new download fails keeps its intact file")
+        store.path_of("moon_builtin", "texture").write_bytes(b"damaged")
+        res, _ = run_seed(store, moon_seed)
+        m = store.get("moon_builtin")
+        check(res["moon_builtin"].status == "partial" and m.file("texture") is None and m.pixels is None
+              and m.file("thumbnail") is not None,
+              "...but drops a damaged one (keeping its intact thumbnail)")
+        check(not [p for p in store.validate() if p.level == "error"], "...and the library validates")
+
+        # Network failures: permanent ones fail at once, transient ones are retried
+        def classify(reason):
+            return lib._network_failure("u", lib.urllib.error.URLError(reason))
+
+        e = classify(OSError("Tunnel connection failed: 403 Forbidden"))
+        check(e.status == 403 and not e.transient and e.status not in lib._policy().STATUS,
+              "a proxy refusing the host (403) is permanent")
+        check(classify(OSError("Tunnel connection failed: 503 Service Unavailable")).status
+              in lib._policy().STATUS, "a proxy answering 503 is transient")
+        check(not classify(socket.gaierror(socket.EAI_NONAME, "Name or service not known")).transient,
+              "a host that doesn't exist is permanent")
+        check(classify(socket.gaierror(socket.EAI_AGAIN, "Temporary failure")).transient,
+              "a temporary DNS failure is transient")
+        check(not classify(ssl.SSLCertVerificationError("certificate verify failed")).transient,
+              "a certificate that fails verification is permanent")
+        check(classify(ConnectionRefusedError(111, "refused")).transient
+              and classify(TimeoutError("timed out")).transient, "refused and timed-out connections are transient")
+        check(not classify("unknown url type: ftp").transient, "an unsupported URL is permanent")
+        real_fetch, tries = lib._fetch_once, []
+
+        def refused(url, dest):
+            tries.append(url)
+            raise classify(OSError("Tunnel connection failed: 403 Forbidden"))
+
+        lib._fetch_once = refused
+        try:
+            lib.download("https://blocked.example/x.jpg", tmp / "x.jpg")
+            check(False, "a proxy refusal is tried once")
+        except lib.DownloadError:
+            check(len(tries) == 1, "a proxy refusal is tried once, not retried")
+        finally:
+            lib._fetch_once = real_fetch
+
         # Concurrent writers
         s1 = lib.LocalFolderStore(tmp / "libA")
         s2 = lib.LocalFolderStore(tmp / "libA")
@@ -408,26 +520,38 @@ def part2(tmp: Path) -> None:
         check(winner is not None and loser is not None and fresh.get(winner) is not None
               and fresh.get(loser) is None and not (tmp / "libA" / loser).exists(),
               "two simultaneous writers: one is recorded, the other refused, none silently lost")
-        check(not (tmp / "libA" / lib.LOCK_NAME).exists(), "the lock is released after writing")
-
-        # The lock: a live one makes writers wait and then give up; a stale one is cleared
-        store = lib.LocalFolderStore(tmp / "libA")
         lock = tmp / "libA" / lib.LOCK_NAME
-        lock.write_text("12345 another run")
+        with open(lock, "a+b") as f:
+            check(lib._try_lock(f), "the lock is released after writing")
+            lib._unlock(f)
+
+        # The lock: a writer waits for another run's lock, then gives up
+        store = lib.LocalFolderStore(tmp / "libA")
         saved_timeout, lib.LOCK_TIMEOUT = lib.LOCK_TIMEOUT, 0.2
-        try:
-            store.add_alias("map_a", "lockedAlias")
-            check(False, "a writer gives up on a lock held by another run")
-        except lib.LibraryError as exc:
-            check("held by another writer" in str(exc) and lock.exists(),
-                  "a writer gives up on a lock held by another run, and leaves it")
-        finally:
-            lib.LOCK_TIMEOUT = saved_timeout
-        old = time.time() - lib.LOCK_STALE - 10
-        os.utime(lock, (old, old))
-        store.add_alias("map_a", "staleLockAlias")
-        check(store.find("staleLockAlias") is not None and not lock.exists(),
-              "a lock left by a crashed run is cleared")
+        with open(lock, "a+b") as held:
+            lib._try_lock(held)
+            try:
+                store.add_alias("map_a", "lockedAlias")
+                check(False, "a writer gives up on a lock held by another run")
+            except lib.LibraryError as exc:
+                check("another run is writing" in str(exc),
+                      "a writer gives up on a lock held by another run")
+            finally:
+                lib.LOCK_TIMEOUT = saved_timeout
+                lib._unlock(held)
+        # A run that dies holding the lock: the OS releases it, nothing to clean up
+        code = ("import os, sys; sys.path.insert(0, sys.argv[1]); import library as lib; "
+                "f = open(sys.argv[2], 'a+b'); assert lib._try_lock(f); os._exit(0)")
+        died = subprocess.run([sys.executable, "-c", code, str(HERE), str(lock)], timeout=60)
+        store.add_alias("map_a", "afterCrashAlias")
+        check(died.returncode == 0 and store.find("afterCrashAlias") is not None,
+              "a lock held by a run that died is released by the OS")
+        probe = subprocess.run(
+            [sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); import library as lib; "
+             "lib._policy(); print('benchmark' in sys.modules, 'instructor' in sys.modules)", str(HERE)],
+            capture_output=True, text=True, timeout=60)
+        check(probe.stdout.strip() == "False False",
+              "downloads use the shared retry policy without importing benchmark or instructor")
 
         # Sizes must be real sizes; aliases can't be blank; files can't collide
         for what, kw in [("one-number bounds", {"bounds": [0.4]}), ("a zero bound", {"bounds": [1, 0, 1]}),

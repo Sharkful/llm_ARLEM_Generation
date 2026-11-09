@@ -60,10 +60,8 @@ LIBRARY_ENV = "ARLEM_ASSET_LIBRARY"
 SEED_FILE = Path(__file__).resolve().parent / "seed_assets.json"
 INDEX_NAME = "library.json"
 LOCK_NAME = "library.lock"
-# How long a writer waits for the lock, and when a lock left by a crashed writer is
-# treated as abandoned. Writes take well under a second.
+# How long a writer waits for another writer's lock. Writes take well under a second.
 LOCK_TIMEOUT = 30.0
-LOCK_STALE = 300.0
 SCHEMA_VERSION = 1
 
 # License policy (owner decision, 2026-11-03): CC0, public domain and CC-BY. Never
@@ -85,8 +83,10 @@ MAX_TEXTURE_SIDE = 2048
 THUMBNAIL_SIDE = 256
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
 DOWNLOAD_TIMEOUT = 60
-# Transient download errors are retried with benchmark._transient_retryer()'s policy
-# (attempts, back-off and HTTP statuses), as narration does.
+# Transient download errors are retried with the shared policy in
+# Code/Benchmark/transient_policy.py (attempts, back-off, HTTP statuses), the one LLM
+# calls and narration use. TRANSIENT_WAIT overrides the back-off (tests).
+TRANSIENT_WAIT = None
 USER_AGENT = "llm_ARLEM_Generation-asset-provisioning/1"
 
 ASSET_ID = re.compile(r"^[a-z0-9][a-z0-9_]*$")
@@ -383,6 +383,35 @@ class AssetStore(Protocol):
     def validate(self) -> list[Problem]: ...
 
 
+def _try_lock(f) -> bool:
+    """Take an exclusive, non-blocking OS lock on an open file; False if held elsewhere.
+    Two separate opens of the file conflict even within one process."""
+    if os.name == "nt":
+        import msvcrt
+        try:
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+            return True
+        except OSError:
+            return False
+    import fcntl
+    try:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except BlockingIOError:
+        return False
+
+
+def _unlock(f) -> None:
+    if os.name == "nt":
+        import msvcrt
+        f.seek(0)
+        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+
 def resolve_library_path(cli_value: str | os.PathLike | None = None) -> Path:
     if cli_value:
         return Path(cli_value).expanduser().resolve()
@@ -428,34 +457,23 @@ class LocalFolderStore:
 
     @contextlib.contextmanager
     def _locked(self):
-        """Hold ``library.lock`` (created exclusively, so it works on every OS) for the
-        whole write, so two writers can't both pass the revision check. A lock older
-        than ``LOCK_STALE`` was left by a crashed writer and is removed."""
-        lock = self.root / LOCK_NAME
-        deadline = time.monotonic() + LOCK_TIMEOUT
-        while True:
-            try:
-                fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-                break
-            except FileExistsError:
-                try:
-                    age = time.time() - lock.stat().st_mtime
-                except FileNotFoundError:
-                    continue
-                if age > LOCK_STALE:
-                    lock.unlink(missing_ok=True)
-                    continue
+        """Hold an OS lock on ``library.lock`` for the whole write, so two writers can't
+        both pass the revision check. The operating system releases it if the process
+        dies, so a crashed run never leaves the library locked. Another writer waits up
+        to ``LOCK_TIMEOUT`` seconds."""
+        lock_path = self.root / LOCK_NAME
+        with open(lock_path, "a+b") as f:
+            deadline = time.monotonic() + LOCK_TIMEOUT
+            while not _try_lock(f):
                 if time.monotonic() > deadline:
                     raise LibraryError(
-                        f"{lock} is held by another writer; if no other run is using this "
-                        f"library, delete the file and rerun") from None
+                        f"another run is writing to this library ({lock_path} is locked); "
+                        f"waited {LOCK_TIMEOUT:g} s")
                 time.sleep(0.05)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(f"{os.getpid()} {now_iso()}\n")
-            yield
-        finally:
-            lock.unlink(missing_ok=True)
+            try:
+                yield
+            finally:
+                _unlock(f)
 
     def _assert_current(self) -> None:
         """Refuse to write from a stale view: another writer changed the library since
@@ -620,10 +638,28 @@ class DownloadError(Exception):
         self.retries = 0
 
 
-# Failures while connecting or reading that a re-send can fix: a dropped or cut-off
-# connection (http.client.IncompleteRead, RemoteDisconnected), TLS errors, timeouts.
-_TRANSIENT_ERRORS = (urllib.error.URLError, http.client.HTTPException, ssl.SSLError,
-                     socket.timeout, TimeoutError, ConnectionError)
+# A proxy that refuses the host: urllib reports "Tunnel connection failed: 403 ...".
+_TUNNEL_STATUS = re.compile(r"Tunnel connection failed: (\d{3})")
+
+
+def _network_failure(url: str, exc: BaseException) -> DownloadError:
+    """Classify a failure to connect or read. Transient: timeouts, refused, reset or
+    cut-off connections (http.client.IncompleteRead), TLS errors other than a bad
+    certificate, a temporary DNS failure, a proxy answering 429/5xx. Permanent: a host
+    that doesn't exist, a proxy refusing the host (e.g. 403), a certificate that fails
+    verification, anything else urllib can't do (e.g. an unknown URL scheme)."""
+    reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+    text = f"{url}: {reason if isinstance(reason, str) else f'{type(reason).__name__}: {reason}'}"
+    tunnel = _TUNNEL_STATUS.search(str(reason))
+    if tunnel:
+        return DownloadError(text + " (refused by the network proxy)", status=int(tunnel.group(1)))
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        return DownloadError(text)
+    if isinstance(reason, socket.gaierror):
+        return DownloadError(text, transient=reason.errno == getattr(socket, "EAI_AGAIN", None))
+    transient = isinstance(reason, (TimeoutError, socket.timeout, ConnectionError,
+                                    http.client.HTTPException, ssl.SSLError))
+    return DownloadError(text, transient=transient)
 
 
 def _fetch_once(url: str, dest: Path) -> None:
@@ -642,29 +678,30 @@ def _fetch_once(url: str, dest: Path) -> None:
                 raise http.client.IncompleteRead(b"", int(expected) - total)
     except urllib.error.HTTPError as exc:
         raise DownloadError(f"{url}: HTTP {exc.code}", status=exc.code) from exc
-    except _TRANSIENT_ERRORS as exc:
-        reason = getattr(exc, "reason", None) or f"{type(exc).__name__}: {exc}"
-        raise DownloadError(f"{url}: {reason}", transient=True) from exc
+    except (urllib.error.URLError, http.client.HTTPException, TimeoutError, socket.timeout,
+            ConnectionError, ssl.SSLError) as exc:
+        raise _network_failure(url, exc) from exc
 
 
-def _benchmark():
-    """``benchmark`` for its transient-retry policy, imported on first use (it pulls in
-    instructor, so library commands that don't download stay light)."""
+def _policy():
+    """The shared transient-retry policy (``Code/Benchmark/transient_policy.py``), the
+    one ``benchmark._transient_retryer()`` and narration use. A small module with no
+    import-time side effects, unlike ``benchmark`` itself."""
     if str(BENCHMARK_DIR) not in sys.path:
-        sys.path.insert(0, str(BENCHMARK_DIR))
-    import benchmark
-    return benchmark
+        sys.path.append(str(BENCHMARK_DIR))
+    import transient_policy
+    return transient_policy
 
 
 def download(url: str, dest: Path) -> int:
-    """Download ``url`` to ``dest``. Transient errors (``benchmark._TRANSIENT_STATUS``,
-    dropped connections, timeouts) are retried with ``benchmark._transient_retryer()``'s
-    attempts and back-off; 4xx never. Returns the retries used; a raised
-    ``DownloadError`` carries them in ``.retries``."""
+    """Download ``url`` to ``dest``. Transient failures (HTTP statuses in
+    ``transient_policy.STATUS``, see ``_network_failure`` for the rest) are retried with
+    the shared policy's attempts and back-off; others never. Returns the retries used;
+    a raised ``DownloadError`` carries them in ``.retries``."""
     if not url.startswith(("https://", "http://")):
         raise DownloadError(f"{url}: only http(s) downloads are allowed")
     import tenacity
-    bm = _benchmark()
+    policy = _policy()
     attempts = 0
 
     def once():
@@ -679,11 +716,9 @@ def download(url: str, dest: Path) -> int:
 
     retryer = tenacity.Retrying(
         retry=tenacity.retry_if_exception(
-            lambda e: isinstance(e, DownloadError)
-            and (e.transient or e.status in bm._TRANSIENT_STATUS)),
-        stop=tenacity.stop_after_attempt(bm._TRANSIENT_ATTEMPTS),
-        wait=(bm._TRANSIENT_WAIT if bm._TRANSIENT_WAIT is not None
-              else tenacity.wait_exponential(multiplier=2, min=2, max=20)),
+            lambda e: isinstance(e, DownloadError) and (e.transient or e.status in policy.STATUS)),
+        stop=tenacity.stop_after_attempt(policy.ATTEMPTS),
+        wait=TRANSIENT_WAIT if TRANSIENT_WAIT is not None else policy.default_wait(),
         reraise=True,
     )
     retryer(once)
@@ -749,7 +784,8 @@ def load_seed(path: Path = SEED_FILE) -> SeedList:
 @dataclass
 class SeedResult:
     asset_id: str
-    # partial: a built-in recorded without its file (the download failed)
+    # partial: a built-in recorded without a new file (its download failed); it keeps
+    # its current file only if that file is intact
     status: Literal["added", "updated", "unchanged", "partial", "failed"]
     detail: str = ""
     retries: int = 0
@@ -759,11 +795,14 @@ class SeedResult:
 class SeedReport:
     results: list[SeedResult] = field(default_factory=list)
     pinned: list[str] = field(default_factory=list)
+    pin_failures: list[str] = field(default_factory=list)
 
     @property
     def failed(self) -> list[SeedResult]:
-        """Entries that need attention: failed, or recorded without their file."""
-        return [r for r in self.results if r.status in ("failed", "partial")]
+        """Entries that need attention: failed, recorded without their file, or added
+        without their pin being saved."""
+        return [r for r in self.results
+                if r.status in ("failed", "partial") or r.asset_id in self.pin_failures]
 
 
 def _entry_from_seed(s: SeedEntry, old: Optional[LibraryEntry]) -> LibraryEntry:
@@ -798,90 +837,139 @@ def _same(old: Optional[LibraryEntry], new: LibraryEntry) -> bool:
     return old is not None and old.model_dump(exclude={"added"}) == new.model_dump(exclude={"added"})
 
 
+def _intact_files(store: LocalFolderStore, entry: Optional[LibraryEntry]) -> dict[str, Path]:
+    """The entry's files that exist and match their recorded checksums, by role."""
+    out = {}
+    for f in entry.files if entry else []:
+        path = store.path_of(entry.asset_id, f.role)
+        if path is not None and path.is_file() and sha256_of(path) == f.sha256:
+            out[f.role] = path
+    return out
+
+
+def _seed_one(store: LocalFolderStore, s: SeedEntry, *, pin: bool, log,
+              save_pin) -> SeedResult:
+    """Seed one entry. Raises ``ConcurrentWriteError`` (after which the store holds
+    the current index) so the caller can retry; any other failure is the result."""
+    old = store.get(s.asset_id)
+    entry = _entry_from_seed(s, old)
+    retries = 0
+    work = None
+    try:
+        files: dict[str, Path] = {}
+        new_pin = None
+        d = s.download
+        try:
+            have = old.file(PRIMARY_ROLE[s.kind]) if old else None
+            have_path = store.path_of(s.asset_id, have.role) if have else None
+            # Skip the download only when the file on disk really is the pinned one.
+            current = (have is not None and d is not None and d.sha256 == have.sha256
+                       and have_path.is_file() and sha256_of(have_path) == d.sha256)
+            if d is not None and not current:
+                if d.sha256 is None and not pin:
+                    raise DownloadError("download is not pinned in the seed list "
+                                        "(rerun with --pin to record its checksum)")
+                if s.kind != "texture":
+                    raise DownloadError("seeding model files is not supported yet "
+                                        "(normalization comes with #113)")
+                work = Path(tempfile.mkdtemp(prefix="seed_dl_"))
+                target = work / "download"
+                log(f"  downloading {s.asset_id} from {d.url}")
+                try:
+                    retries = download(d.url, target)
+                except DownloadError as exc:
+                    retries = exc.retries
+                    raise
+                digest, size = sha256_of(target), target.stat().st_size
+                if d.sha256 is None:
+                    new_pin = (digest, size)  # recorded once the asset is accepted
+                elif digest != d.sha256:
+                    raise DownloadError(f"the source file changed (sha256 {digest[:12]}..., "
+                                        f"pinned {d.sha256[:12]}...); not added")
+                fmt, px = _image_facts(target)
+                if fmt != "JPEG":
+                    raise DownloadError(f"downloaded file is {fmt or 'not an image'}, not JPEG")
+                entry.pixels = list(px)
+                thumb = work / "thumbnail.png"
+                make_thumbnail(target, thumb)
+                files = {"texture": target, "thumbnail": thumb}
+        except ConcurrentWriteError:
+            raise
+        except Exception as exc:
+            if not s.builtin:
+                raise
+            # A built-in is on the headset either way: record it, keeping whatever of
+            # its current files is still intact (never deleting a good file because a
+            # new download failed).
+            intact = _intact_files(store, old)
+            primary = PRIMARY_ROLE[s.kind]
+            fallback = entry.model_copy(update={"files": []})
+            if primary not in intact:
+                fallback = fallback.model_copy(update={"pixels": None, "bounds": None,
+                                                       "triangles": None})
+            unchanged = (old is not None and set(intact) == {f.role for f in old.files}
+                         and _same(old, fallback.model_copy(update={"files": old.files})))
+            if not unchanged:
+                store.put(fallback, intact, keep_files=False)
+            kept = "kept its current file" if primary in intact else "recorded without its file"
+            return SeedResult(s.asset_id, "partial", f"{kept}: {exc}", retries)
+        if not files and _same(old, entry):
+            return SeedResult(s.asset_id, "unchanged", retries=retries)
+        store.put(entry, files)
+        status = "updated" if old is not None else "added"
+        if new_pin is not None:
+            d.sha256, d.bytes = new_pin
+            problem = save_pin(s.asset_id)
+            if problem:
+                return SeedResult(s.asset_id, status, f"added, but its pin was not saved to "
+                                  f"the seed list: {problem}", retries)
+        return SeedResult(s.asset_id, status, retries=retries)
+    except ConcurrentWriteError:
+        raise
+    except Exception as exc:
+        detail = str(exc) if isinstance(exc, (DownloadError, LibraryError)) \
+            else f"{type(exc).__name__}: {exc}"
+        return SeedResult(s.asset_id, "failed", detail, retries)
+    finally:
+        if work is not None:
+            shutil.rmtree(work, ignore_errors=True)
+
+
 def seed_library(store: LocalFolderStore, seed_path: Path = SEED_FILE, *,
                  only: Optional[set[str]] = None, pin: bool = False, log=print) -> SeedReport:
     """Bring ``store`` up to date with the seed list. Downloads are fetched only for
     entries whose file is missing or differs from the pinned checksum. With ``pin``,
     checksums missing from the seed list are recorded in it, each as soon as its asset
-    is accepted; without it, an unpinned download is refused, and a download whose
-    checksum changed is always refused. One entry failing, for any reason, never stops
-    the others. A built-in whose file can't be downloaded is still recorded (it is on
-    the headset either way), without the file, and reported as ``partial``."""
+    is accepted; without it, an unpinned download is refused before downloading, and a
+    download whose checksum changed is always refused. One entry failing, for any
+    reason, never stops the others; an entry refused because another run wrote to the
+    library meanwhile is retried once against the current library. A built-in whose
+    file can't be downloaded is still recorded (it is on the headset either way),
+    keeping its current file if that is intact, and reported as ``partial``."""
     seed = load_seed(seed_path)
     check_only(seed, only)
     report = SeedReport()
+
+    def save_pin(asset_id: str) -> Optional[str]:
+        try:
+            write_json_atomic(Path(seed_path), seed.model_dump(exclude_none=True))
+        except OSError as exc:
+            report.pin_failures.append(asset_id)
+            return f"{type(exc).__name__}: {exc}"
+        report.pinned.append(asset_id)
+        return None
+
     for s in seed.entries:
         if only and s.asset_id not in only:
             continue
-        old = store.get(s.asset_id)
-        entry = _entry_from_seed(s, old)
-        retries = 0
-        work = None
-        new_pin = None
         try:
-            files: dict[str, Path] = {}
-            d = s.download
+            result = _seed_one(store, s, pin=pin, log=log, save_pin=save_pin)
+        except ConcurrentWriteError:
             try:
-                have = old.file(PRIMARY_ROLE[s.kind]) if old else None
-                have_path = store.path_of(s.asset_id, have.role) if have else None
-                # Skip the download only when the file on disk really is the pinned one.
-                current = (have is not None and d is not None and d.sha256 == have.sha256
-                           and have_path.is_file() and sha256_of(have_path) == d.sha256)
-                if d is not None and not current:
-                    work = Path(tempfile.mkdtemp(prefix="seed_dl_"))
-                    target = work / "download"
-                    log(f"  downloading {s.asset_id} from {d.url}")
-                    try:
-                        retries = download(d.url, target)
-                    except DownloadError as exc:
-                        retries = exc.retries
-                        raise
-                    digest, size = sha256_of(target), target.stat().st_size
-                    if d.sha256 is None:
-                        if not pin:
-                            raise DownloadError("download is not pinned in the seed list "
-                                                "(rerun with --pin to record its checksum)")
-                        new_pin = (digest, size)  # recorded once the asset is accepted
-                    elif digest != d.sha256:
-                        raise DownloadError(f"the source file changed (sha256 {digest[:12]}..., "
-                                            f"pinned {d.sha256[:12]}...); not added")
-                    if s.kind != "texture":
-                        raise DownloadError("seeding model files is not supported yet "
-                                            "(normalization comes with #113)")
-                    fmt, px = _image_facts(target)
-                    if fmt != "JPEG":
-                        raise DownloadError(f"downloaded file is {fmt or 'not an image'}, not JPEG")
-                    entry.pixels = list(px)
-                    thumb = work / "thumbnail.png"
-                    make_thumbnail(target, thumb)
-                    files = {"texture": target, "thumbnail": thumb}
-            except Exception as exc:
-                if not s.builtin:
-                    raise
-                bare = entry.model_copy(update={"files": [], "pixels": None, "bounds": None,
-                                                "triangles": None})
-                if not _same(old, bare):
-                    store.put(bare, keep_files=False)
-                report.results.append(SeedResult(
-                    s.asset_id, "partial", f"recorded without its file: {exc}", retries))
-                continue
-            if not files and _same(old, entry):
-                report.results.append(SeedResult(s.asset_id, "unchanged", retries=retries))
-                continue
-            store.put(entry, files)
-            if new_pin is not None:
-                d.sha256, d.bytes = new_pin
-                write_json_atomic(Path(seed_path), seed.model_dump(exclude_none=True))
-                report.pinned.append(s.asset_id)
-            status = "updated" if old is not None else "added"
-            report.results.append(SeedResult(s.asset_id, status, retries=retries))
-        except Exception as exc:
-            detail = str(exc) if isinstance(exc, (DownloadError, LibraryError)) \
-                else f"{type(exc).__name__}: {exc}"
-            report.results.append(SeedResult(s.asset_id, "failed", detail, retries))
-        finally:
-            if work is not None:
-                shutil.rmtree(work, ignore_errors=True)
+                result = _seed_one(store, s, pin=pin, log=log, save_pin=save_pin)
+            except ConcurrentWriteError as exc:
+                result = SeedResult(s.asset_id, "failed", str(exc))
+        report.results.append(result)
     return report
 
 
