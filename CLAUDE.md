@@ -332,9 +332,10 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   Cost comes from reported tokens via `tracking/pricing.py` (TTS entries are from
   secondary sources; checking them against billing is #101).
 - **`spoken_form.py`** (#94): the text each clip sends to the voice service
-  (`--spoken-form {none,rules,llm}`). LLM mode is one
+  (`--spoken-form {none,rules,llm}`; default `rules`, chosen in the #94 measurement:
+  free, deterministic, and every mode agreed on the notation that mattered). LLM mode is one
   call per lab to a cheap registry model (`--spoken-form-model`, default
-  `claude-haiku-5.5`, provisional) through `create_instructor_client` +
+  `claude-haiku-5.5`, the measurement's pick) through `create_instructor_client` +
   `provider_create_kwargs`, with the `LabSpokenForms` response matched back by audio
   name. `check_spoken()` compares the spoken text with the narration word by word in
   code and **flags, never rejects**: a flagged clip is narrated with the model's text,
@@ -352,7 +353,7 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   wins: `glossary/shared.yaml` (pronunciation only) → `glossary/topics/<topic>.yaml` →
   `--glossary FILE` → the run folder's `glossary.yaml` (also on `--resume`). The manifest records
   `glossary_version` (content hash), the layers and `unresolved_terms`. `preview` and `terms`
-  subcommands review it without any request. The seed glossary awaits review.
+  subcommands review it without any request. The glossary was reviewed (2026-11-05).
 - **`tts.py`**: the providers and the frozen paper defaults (`PROVIDERS`,
   `STYLE_INSTRUCTION`).
   - OpenAI `gpt-4o-mini-tts-2025-12-15`/`marin`: PCM over SSE, because only the

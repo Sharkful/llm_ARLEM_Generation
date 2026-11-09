@@ -63,6 +63,9 @@ MANIFEST_SCHEMA = "narration_manifest/1"
 AUDIO_FORMAT = {"format": "wav", "sample_rate": bundle.WAV_SAMPLE_RATE,
                 "sample_width_bits": 8 * bundle.WAV_SAMPLE_WIDTH, "channels": bundle.WAV_CHANNELS}
 SPOKEN_FORM_MODES = spoken_form.MODES
+# The default spoken form (#94 measurement): deterministic, free, and the same text on
+# every run. --spoken-form llm is the opt-in for topics the glossary does not cover.
+DEFAULT_SPOKEN_FORM = "rules"
 FATAL_STATUS = {401, 402, 403, 404}  # key, billing, permission, unknown model: every clip would fail
 MAX_SERVER_WAIT = 60.0      # seconds: the longest wait a provider's "retry after" is honored for
 RATE_LIMITED_IN_A_ROW = 3   # clips that fail on rate limits alone, in a row, before the run stops
@@ -884,10 +887,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("lab", nargs="?", type=Path, help="a json_lab *_output.json")
     ap.add_argument("--provider", choices=sorted(tts.PROVIDERS))
     ap.add_argument("--voice", help="override the provider's frozen default voice")
-    ap.add_argument("--spoken-form", choices=SPOKEN_FORM_MODES, default="none",
-                    help="text sent to the voice service: none (as written), rules (glossary "
-                         "and notation rules, no LLM) or llm (one cheap-model call per lab); "
-                         "both flag what they change beyond notation, never reject")
+    ap.add_argument("--spoken-form", choices=SPOKEN_FORM_MODES,
+                    help=f"text sent to the voice service (default {DEFAULT_SPOKEN_FORM}): none "
+                         "(as written), rules (glossary and notation rules, no LLM) or llm (one "
+                         "cheap-model call per lab); both flag what they change beyond notation, "
+                         "never reject")
     ap.add_argument("--glossary", action="append",
                     help="an extra glossary file for --spoken-form rules (repeatable); a run "
                          "folder's glossary.yaml is also used, and is how to add terms on --resume")
@@ -912,7 +916,7 @@ def main(argv: list[str] | None = None) -> int:
                      ("lab", "provider", "voice", "topic", "bundle_name", "run_group",
                       "spoken_form_model", "glossary")
                      if getattr(args, k)]
-            if given or args.spoken_form != "none" or args.dry_run:
+            if given or args.spoken_form or args.dry_run:
                 raise InputError(f"--resume takes its settings from the manifest; drop "
                                  f"{', '.join(given) or '--spoken-form/--dry-run'}")
             run_dir = args.resume
@@ -931,6 +935,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             if not args.lab or not args.provider:
                 raise InputError("give a lab file and --provider (or --resume <run folder>)")
+            args.spoken_form = args.spoken_form or DEFAULT_SPOKEN_FORM
             spec = tts.PROVIDERS[args.provider]
             settings = Settings(input_path=args.lab, provider=args.provider,
                                 voice=args.voice or spec.voice, style=tts.STYLE_INSTRUCTION,

@@ -1417,8 +1417,13 @@ if HAVE_NARRATION:
     code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "rules", "--dry-run")
     check(code == 0 and "Spoken form: rules, glossary" in text and "clips changed" in text,
           "--spoken-form rules --dry-run reports what the rules would change, sending nothing")
-    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--glossary", str(good_g), "--dry-run")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "none",
+                     "--glossary", str(good_g), "--dry-run")
     check(code == 2 and "only applies with --spoken-form rules" in text, "--glossary without rules mode is an error")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--dry-run")
+    check(code == 0 and "Spoken form: rules, glossary" in text and narrate_lab.DEFAULT_SPOKEN_FORM == "rules"
+          and spoken_form.DEFAULT_MODEL == "claude-haiku-5.5",
+          "the default spoken form is rules, and the default LLM model is Claude Haiku 5.5")
     code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "rules",
                      "--glossary", str(gdir / "missing.yaml"), "--dry-run")
     check(code == 2 and "no glossary file" in text, "a missing --glossary file exits 2")

@@ -2,10 +2,9 @@
 
 Status: **agreed** (#91). This spec decides what the narration tool produces.
 Built so far: the zip layout (#92, `bundle.py`), the narration CLI (#93,
-`narrate_lab.py` + `tts.py`) and the spoken-form pass (#94): LLM mode
-(`spoken_form.py`) and rules mode with its glossary (`spoken_rules.py`,
-`glossary/`; the glossary awaits review). The measurement that picks the default
-mode is next.
+`narrate_lab.py` + `tts.py`) and the spoken-form pass (#94): rules mode with its
+reviewed glossary (`spoken_rules.py`, `glossary/`; the default) and LLM mode
+(`spoken_form.py`; Claude Haiku 5.5 by default).
 
 ## Why
 
@@ -89,7 +88,8 @@ compared with the original.
 - **Spoken text** is produced by the spoken-form pass (#94; see "Spoken-form
   pass" below): `--spoken-form {none,rules,llm}`. It may only
   expand symbols, numbers, units, formulas and acronyms in context (DNA `5'` →
-  "five prime"). The default is chosen by measured cost (#94).
+  "five prime"). The default is `rules`, chosen in the #94 measurement (see
+  "Choosing the default" below).
 - **One request per clip.** The whole clip's spoken text goes in one request,
   for natural flow across sentences. There is no segment splitting and no
   inserted silences. The longest wave-2 clip (966 characters) fits every
@@ -104,6 +104,9 @@ compared with the original.
 |---|---|---|
 | OpenAI | `gpt-4o-mini-tts` (dated snapshot pinned in #93) | `marin`, one of the two voices OpenAI recommends for best quality |
 | Gemini | Gemini 3.8 Flash TTS | `Charon`, a stock voice commonly picked for academic narration |
+
+Spoken form: `rules` (`narrate_lab.DEFAULT_SPOKEN_FORM`); for `--spoken-form llm`,
+Claude Haiku 5.5 (`spoken_form.DEFAULT_MODEL`).
 
 Style instruction, the same for both providers:
 
@@ -393,8 +396,8 @@ python "Code/Narration/narrate_lab.py" <lab_output.json> --provider gemini --spo
   audio name, together with the lab's id, course and topic.
   - The reply is a structured `LabSpokenForms` (a list of `audio_name`,
     `spoken_text`) and is matched back to clips by name, never by position.
-  - The models are the three cheapest in the benchmark registry. The default
-    (`claude-haiku-5.5`) is provisional until the #94 measurement.
+  - The models are the three cheapest in the benchmark registry. The default is
+    `claude-haiku-5.5`, chosen in the #94 measurement.
   - The call goes through `create_instructor_client` + `provider_create_kwargs`,
     is tracked by `tracking/`, and uses transient-only retries.
   - It asks for **low** reasoning effort (`spoken_form.REASONING_EFFORT`), not
@@ -509,7 +512,36 @@ for, on four principles:
   in capitals in its lab), no ordinary word changed, and a second pass changes
   nothing. Every rule also has test cases from topics we have no lab for
   (circuits, kinematics, RNA, heights, sky coordinates, statistics, temperature).
-- **Glossary review:** the seed is awaiting @Sharkful's sign-off (#94).
+- **Glossary review:** signed off by @Sharkful (2026-11-05, #94).
+
+### Choosing the default (#94 measurement)
+
+One wave-2 lab per topic (`Artifacts/Data/Narration/spoken-form-measure/`,
+`spoken_form_comparison.md`), spoken text for every mode (`--text-only`):
+
+| Mode | Clips changed (of 110) | Flagged | Added $ / lab | Added s / lab |
+|---|---|---|---|---|
+| rules | 31 | 0 | $0 | 0.03 |
+| llm Claude Haiku 5.5 | 46 | 1 | $0.0018 | 12 |
+| llm Gemini 3.5 Flash-Lite | 40 | 0 | $0.0039 | 6 |
+| llm GPT-6 Luna | 44 | 0 | $0.0008 | 11 |
+
+- Every mode agreed on the notation that needed it: primes, formulas, VSEPR,
+  decimals, θ, axis subscripts, operators, slashes. The extra LLM changes are
+  whole numbers written as words and `DNA` / `SSBs` spelled out, which the voice
+  reads correctly as written.
+- LLM slips: GPT-6 Luna wrote "three prime-T, A…" and missed VSEPR once;
+  Flash-Lite wrote "three prime dash T…" (the voice would say "dash") and missed
+  two formulas and an ion. Haiku made no notation slips; its one flag was a
+  reworded clip, caught by the word check. All 15 calls succeeded first time.
+- The rules gap the run found (`I3-` read "I 3-") was fixed (ion charges).
+- **Decision:** `rules` is the default: free, instant, and the same text on
+  every run, which keeps paper runs reproducible. `--spoken-form llm` with
+  Claude Haiku 5.5 is the opt-in for topics whose notation the glossary doesn't
+  cover; it adds about 2% to a lab's audio cost.
+- The audio listening check was cut short by Gemini TTS's daily quota (the run
+  is now stopped at once by such a 429, see "Failures"); the retrograde lab has
+  audio for none, rules and Haiku.
 
 ## Engineering rules (from the repo, not from JW's code)
 

@@ -44,7 +44,7 @@ from pydantic import BaseModel, Field
 MODES = ("none", "llm", "rules")
 # Benchmark registry keys (benchmark_config.MODELS) allowed for the LLM mode.
 MODELS = ("claude-haiku-5.5", "gpt-6-luna", "gemini-3.5-flash-lite")
-DEFAULT_MODEL = "claude-haiku-5.5"   # provisional; the #94 measurement picks the default
+DEFAULT_MODEL = "claude-haiku-5.5"   # chosen in the #94 measurement: fewest slips, ~$0.002 / lab
 PROMPT_VERSION = 1                   # bump when the prompt changes, so caches refresh
 CACHE_FILE = "spoken_forms.json"
 MAX_RETRIES = 2                      # instructor reasks for a malformed reply (schema only)
