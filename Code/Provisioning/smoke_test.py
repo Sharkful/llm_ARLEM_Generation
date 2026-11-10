@@ -867,7 +867,9 @@ def part3(tmp: Path) -> None:
           "CLI --no-llm: without a library, the seed list's built-ins are known; the rest is unplanned")
     behaviour = {"dnaDoubleHelixPrefab": {"same_as": "dnaHelixPrefab"},
                  "summaryPanelPrefab": {"route": "ui", "form": "ui"},
-                 "heart_muscle_texture": {"route": "generate", "form": "material"}}
+                 "heart_muscle_texture": {"route": "generate", "form": "material"},
+                 "dnaHelixPrefab": {"route": "component", "form": "effect",
+                                    "reason": "it grows as the strands separate"}}
     code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"),
                      call_fn=fake_router(behaviour))
     m = last_manifest()
@@ -879,8 +881,18 @@ def part3(tmp: Path) -> None:
     check(by["2k_mars"]["status"] == "available" and not by["2k_mars"]["library"]["builtin"],
           "a library texture is available")
     check(by["dnaDoubleHelixPrefab"]["status"] == "merged" and by["summaryPanelPrefab"]["plan"]["route"] == "ui"
-          and m["counts"]["by_route"] == {"generate": 1, "search": 1, "ui": 1},
+          and m["counts"]["by_route"] == {"component": 1, "generate": 1, "ui": 1},
           "planned, merged and per-route counts are recorded")
+    check(by["dnaHelixPrefab"]["status"] == "flagged"
+          and m["review_items"] == [{"name": "dnaHelixPrefab", "kind": "model", "route": "component",
+                                     "reason": "it grows as the strands separate", "description": "a dnaHelixPrefab",
+                                     "objects": ["dnaHelix", "dnaHelix2"]}]
+          and "flagged for a reviewer" in text,
+          "behaviour routed to 'component' is flagged for a reviewer, with its objects and reason")
+    check({"shape", "component", "impossible"} <= set(routing.routes_for("model"))
+          and {"component", "impossible"} <= set(routing.routes_for("texture"))
+          and not {"kit", "textured_primitive"} & set(routing.routes_for("model")),
+          "routes: one 'shape' route (kit and textured_primitive merged), and the review routes")
     check(m["library"]["library_id"] == lib.LocalFolderStore(tmp / "libP3").identity()["library_id"]
           and m["source"]["labId"] == "tiny_lab" and m["provenance"]["git_commit"],
           "the manifest records the library identity, the source and provenance")

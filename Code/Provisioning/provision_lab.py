@@ -123,12 +123,21 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
         elif r.key in planned:
             p = planned[r.key]
             rec["plan"] = p.model_dump(exclude={"name", "kind"}, exclude_none=True)
-            rec["status"] = "merged" if p.same_as else "planned"
+            if p.same_as:
+                rec["status"] = "merged"
+            elif p.route in routing.REVIEW_ROUTES:
+                rec["status"] = "flagged"  # behaviour or impossible: a reviewer decides (#116)
+            else:
+                rec["status"] = "planned"
         else:
             rec["status"] = "unplanned"
         assets.append(rec)
     statuses = Counter(a["status"] for a in assets)
-    routes = Counter(a["plan"]["route"] for a in assets if a["status"] == "planned")
+    review_items = [{"name": a["name"], "kind": a["kind"], "route": a["plan"]["route"],
+                     "reason": a["plan"]["reason"], "description": a["plan"]["description"],
+                     "objects": sorted({u["object"] for u in a["uses"]})}
+                    for a in assets if a["status"] == "flagged"]
+    routes = Counter(a["plan"]["route"] for a in assets if a["status"] in ("planned", "flagged"))
     forms = Counter(a["plan"]["form"] for a in assets if "plan" in a)
     if no_llm:
         status = "audited"
@@ -161,6 +170,9 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
             "by_route": dict(sorted(routes.items())),
             "by_form": dict(sorted(forms.items())),
         },
+        # Assets the plan says are behaviour or can't be made: for a reviewer, who can have
+        # them turned into components (#116). Nothing is provided for them.
+        "review_items": review_items,
         "assets": assets,
         "provenance": provenance(),
         "created": _now(),
@@ -172,10 +184,14 @@ def _print_plan(manifest: dict) -> None:
         if a["status"] == "available":
             what = f"available ({a['library']['asset_id']}" + \
                    (", built-in)" if a["library"]["builtin"] else ")")
-        elif a["status"] in ("planned", "merged"):
+        elif a["status"] in ("planned", "merged", "flagged"):
             p = a["plan"]
-            what = (f"same as {p['same_as']}" if a["status"] == "merged"
-                    else f"{p['route']:18} {p['form']:18} {p['description'][:70]}")
+            if a["status"] == "merged":
+                what = f"same as {p['same_as']}"
+            elif a["status"] == "flagged":
+                what = f"FLAGGED {p['route']:10} {p['reason'][:80]}"
+            else:
+                what = f"{p['route']:10} {p['form']:18} {p['description'][:70]}"
         else:
             what = a["status"]
         print(f"  {a['kind']:7} {a['name'][:32]:32} {what}")
@@ -184,6 +200,9 @@ def _print_plan(manifest: dict) -> None:
           + ", ".join(f"{n} {s}" for s, n in c["by_status"].items()))
     if c["by_route"]:
         print("routes: " + ", ".join(f"{n} {r}" for r, n in c["by_route"].items()))
+    if manifest["review_items"]:
+        print(f"{len(manifest['review_items'])} flagged for a reviewer (behaviour or impossible; "
+              f"see review_items in the manifest)")
     r = manifest.get("routing") or {}
     if r.get("calls"):
         cost = f"${r['cost_usd']:.4f}, " if "cost_usd" in r else ""

@@ -44,6 +44,9 @@ MODEL_FORMS = {
     "text": "text in the scene",
     "textured_primitive": "a simple shape whose look comes from an image on it: a planet, moon or star, "
                           "a coin, a dish, a map, a screen",
+    "effect": "something that changes, grows or moves over time or reacts to the student rather than a "
+              "fixed shape: a trail drawn as an object moves, a path that depends on how something is "
+              "launched, a pulse, a flow",
     "structure": "a scientific structure that exists in a public database: a molecule, a protein, DNA "
                  "or RNA, a crystal",
     "organism": "a living thing or part of one: an organ, a cell, tissue, an animal, a plant",
@@ -56,21 +59,34 @@ TEXTURE_FORMS = {
     "material": "a generic material: wood, metal, stone, fabric, plastic",
     "diagram": "a picture with content: a diagram, chart, graph paper, structural formula, labelled "
                "figure, words",
+    "dynamic": "a picture that changes while the lab runs: a live graph, a video, a value display",
     "other": "none of the above",
 }
+# Behaviour or impossibility, not an asset: these routes are flagged for a reviewer, who
+# can have the asset turned into a component (the reviewer step is #116).
+REVIEW_ROUTES = {
+    "component": "Not a fixed 3D model or picture but behaviour: something that changes, grows or "
+                 "moves over time or reacts to the student (a trail drawn as an object moves, a path "
+                 "that depends on how something is launched, a live graph). It should be a component "
+                 "on an object, not an asset. Flagged for a reviewer.",
+    "impossible": "Can't be provided as a 3D model or texture from what the lab gives: it needs data, "
+                  "content or behaviour the lab doesn't specify. Flagged for a reviewer.",
+}
 MODEL_ROUTES = {
-    "kit": "A standard shape from the kit, colored by the lab: arrow, ring or torus, line or thin rod, "
-           "grid, flat plane or board, dome, marker or small sphere, cube, cylinder, cone. For diagram "
-           "elements in any subject: vectors, axes, orbits, paths, trails, sight lines, ground planes, "
-           "highlights, regions.",
-    "textured_primitive": "A simple shape (sphere, plane, cylinder) with a real image on it, found in "
-                          "a texture library: planets, moons, stars, a coin, a dish, a map, a screen.",
+    "shape": "A simple shape, colored and scaled by the lab, optionally with a real image on it found "
+             "in a texture library. The headset makes sphere, cube, plane, capsule, cylinder and quad "
+             "itself; arrow, ring or torus, cone, dome, grid and rounded panel are provided once. For "
+             "diagram elements in any subject (vectors, axes, orbit rings, ground planes, markers, "
+             "regions, blocks) and for things whose look is an image on a simple shape (planets, moons, "
+             "stars, a coin, a map, a screen).",
     "ui": "Not a 3D model: a panel, board, label, readout, legend, menu, button or slider. Becomes a "
           "flat panel with text on it.",
     "search": "A recognizable real object or organism to find in free 3D model libraries: anatomy, "
               "cells, instruments, lab equipment, animals, plants, vehicles, tools, buildings.",
     "composite": "Built from a few simple colored shapes (up to about 12) when it is simple enough and "
-                 "the other routes don't fit or a library is unlikely to have it.",
+                 "the other routes don't fit or a library is unlikely to have it. One shape alone is "
+                 "\"shape\", not composite.",
+    **REVIEW_ROUTES,
 }
 TEXTURE_ROUTES = {
     "search": "A real surface or material found in a texture library: planet and moon maps, star "
@@ -79,6 +95,7 @@ TEXTURE_ROUTES = {
             "formula, labelled figure, words.",
     "generate": "A stylized or generic surface no library has, made by an image model. Never for real "
                 "places, and never for anything with words or scientific detail.",
+    **REVIEW_ROUTES,
 }
 KINDS = ("model", "texture")
 
@@ -281,6 +298,9 @@ shows. Don't add detail the lab doesn't need.
 'dnaDoubleHelixPrefab' both showing the same double helix). Different states, cut-aways or views of a \
 thing (a heart and a heart cross-section) are different assets.
 - A texture is a picture wrapped onto a model. A texture with words, labels or a diagram is "draw".
+- Use "component" for behaviour the lab named as an asset (something that changes, grows, moves or \
+reacts), and "impossible" only when nothing can be made from what the lab gives. Say why in reason: \
+a reviewer reads it.
 """
 
 

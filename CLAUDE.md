@@ -387,9 +387,10 @@ not reused. Built so far:
   `purpose`. Matches `lab_metrics.analyze_assets` on all wave-2 labs.
 - **`routing.py`** (#106): one LLM call per lab (`LabAssetPlan`) for the assets the library
   doesn't have: description, `must_be_right`, search keywords, **form** and **route** (chosen
-  by form, never by subject; model routes `kit` / `textured_primitive` / `ui` / `search` /
-  `composite` / `builder:<name>`, texture routes `search` / `draw` / `generate`), `same_as`
-  merges. Checked under a `routing_scope` ContextVar (one error for all problems → one
+  by form, never by subject; model routes `shape` / `ui` / `search` / `composite` /
+  `builder:<name>`, texture routes `search` / `draw` / `generate`, plus `component` and
+  `impossible` for behaviour named as an asset: those are `flagged` for a reviewer in the
+  manifest's `review_items`, never provided), `same_as` merges. Checked under a `routing_scope` ContextVar (one error for all problems → one
   reask). Same client/guards/tracker as every entry point; default model Claude Haiku 5.5.
   **`builders.py`**: the builder registry, empty until #111.
 - **`provision_lab.py`** (#106): the CLI; only `--dry-run` so far. Without a library it

@@ -106,26 +106,27 @@ Each asset gets one **route** from the describe-and-route step (#106). If a rout
 gives nothing usable, the asset falls through to the next applicable one:
 
 ```
-reuse ─► builder | kit | textured primitive | ui ─► search ─► composite ─► needs review
+reuse ─► builder | shape | ui ─► search ─► composite ─► needs review
+component | impossible ─► flagged for a reviewer (nothing is provided)
 ```
 
 | Route | For | How | Issue |
 |---|---|---|---|
 | `reuse` | Anything already in the library | Name or alias hit, else shortlist + LLM judge | #108 |
-| `kit` | Diagram elements: arrows, rings, lines, grids, planes, domes, markers, basic solids | A fixed set of shapes built in Python; color from the lab | #109 |
-| `textured_primitive` | A surface on a simple shape: planets and moons, but also coins, dishes, maps, screens | Kit sphere / plane / cylinder + a texture from the library or a texture search. Real places are never faked | #109 |
-| `ui` | Panels, boards, readouts, controls | Panel from the kit + `textPrefab` children (§ UI-like prefabs) | #109 |
+| `shape` | Diagram elements (arrows, rings, lines, grids, planes, domes, markers, blocks) and surfaces on a simple shape (planets and moons, but also coins, dishes, maps, screens) | A simple shape colored and scaled by the lab, optionally with an image from the library or a texture search (§ Simple shapes). Real places are never faked | #109 |
+| `ui` | Panels, boards, readouts, controls | A panel shape + `textPrefab` children (§ UI-like prefabs) | #109 |
 | `builder:<name>` | A structure a registered builder can make from data | The builder (§ Builders) | #111, #114 |
 | `search` | Recognizable objects: anatomy, instruments, animals, vehicles | Free libraries, ranked top 10, auto-pick (§ Search) | #110 |
 | `composite` | Anything describable as a few simple parts | LLM part plan, code assembles, vision review (§ Composite) | #112 |
+| `component` | Behaviour the lab named as an asset: something that changes, grows, moves or reacts (a trail drawn as an object moves, a launch-dependent trajectory, a live graph) | Not provided; flagged for a reviewer, who can have it made a component (§ Behaviour named as an asset) | #116 |
+| `impossible` | Nothing can be made from what the lab gives | Not provided; flagged for a reviewer | #116 |
 | `needs_review` | Nothing above worked | A placeholder ships; a person decides | #116 |
 
 Search falls through to `composite`; `composite` falls through to `needs_review`.
-A builder or `textured_primitive` that can't find its data falls through to
-`search`.
+A builder, or a `shape` whose image can't be found, falls through to `search`.
 
 **Needs review vs failure.** "Needs review" means the tool did its job but an asset
-has no acceptable result: it ships as a **placeholder** (a neutral gray kit shape
+has no acceptable result: it ships as a **placeholder** (a neutral gray headset cube
 named for the asset) so the lab still loads, and is listed in the manifest. Failure
 means the run itself broke (bad input, an error that stops the run).
 
@@ -170,8 +171,13 @@ routes with their descriptions; registered builders (`builders.py`, empty until
 
 | Kind | Forms | Routes |
 |---|---|---|
-| model | `diagram_element`, `ui`, `text`, `textured_primitive`, `structure`, `organism`, `object`, `other` | `kit`, `textured_primitive`, `ui`, `search`, `composite`, `builder:<name>` |
-| texture | `real_surface`, `material`, `diagram`, `other` | `search`, `draw` (drawn by code), `generate` (image model, #118) |
+| model | `diagram_element`, `ui`, `text`, `textured_primitive`, `effect`, `structure`, `organism`, `object`, `other` | `shape`, `ui`, `search`, `composite`, `builder:<name>`, `component`, `impossible` |
+| texture | `real_surface`, `material`, `diagram`, `dynamic`, `other` | `search`, `draw` (drawn by code), `generate` (image model, #118), `component`, `impossible` |
+
+`shape` replaced the earlier `kit` and `textured_primitive` routes (one mechanism: a
+simple shape with a color or an image). Assets routed to `component` or `impossible`
+get the status `flagged` and are listed in the manifest's `review_items` (name, kind,
+route, reason, description, objects); nothing is provided for them.
 
 The response is checked under `routing_scope` (a ContextVar, like
 `asset_plan_validation`): every listed asset planned exactly once with its listed
@@ -184,6 +190,42 @@ The call uses `create_instructor_client`, `provider_create_kwargs` and
 `_transient_retryer`, tracked by `InstructorTracker`; the default model is Claude
 Haiku 5.5 (`--model`). `routing.check_environment` stops before any call if the SDK
 or API key is missing.
+
+## Behaviour named as an asset (known break)
+
+Generated labs sometimes name **behaviour** as a prefab: a trail that grows as Mars
+moves, a trajectory that depends on how a ball is launched, a slider. These are not
+fixed shapes, so no model, search or assembly can provide them; on the headset they
+are components (for example Unity's line and trail renderers, or a new component).
+This is a general problem of the generated lab, not of one asset type, so it gets a
+general answer rather than a special route for each case:
+
+- **Now (#106):** the classifier can route an asset to `component` (it is behaviour)
+  or `impossible` (nothing can be made from what the lab gives). Both are flagged for
+  a reviewer in `review_items`, with the reason, and nothing is provided for them.
+- **The same holds for implied behaviour (#109):** a UI-like object keeps every
+  component the lab gives it, and when its name implies behaviour the lab never gave
+  it (a `controlPanelPrefab` with "sliders" and no components), that gap is flagged
+  the same way.
+- **Planned, not built:** the reviewer tool (#116) shows flagged assets so a person
+  can move each to a component (an existing one, or a `NewComponent` request), drop
+  it, or overrule the flag. Feeding these cases back into lab generation, so labs
+  stop naming behaviour as prefabs, belongs with library-aware generation (#117).
+  How the move to a component works is still open.
+
+## Simple shapes (#109)
+
+The headset instantiates **sphere, cube, plane, capsule, cylinder and quad** itself
+(Unity's built-in primitives) and applies the lab's `scale` and `color`, as it does
+for the built-in spheres today; no file is shipped for these. Shapes Unity lacks
+(arrow, ring or torus, cone, dome, grid, rounded panel) are provided once as models
+in the library and reused by every lab. A shape can also carry an image (a planet
+map on a sphere). How the lab names a primitive is part of the headset contract
+(#105).
+
+**Colliders:** a behaviour that needs a collider (for example `pointerReceiver`)
+sets one up when it is added, on the headset. A primitive uses its own mesh; a more
+complicated model uses a sphere scaled to roughly the model's size (#105).
 
 ## Model convention
 
@@ -285,8 +327,8 @@ author and sha256. Today that is the 15 real Solar System Scope 2k maps (CC-BY 4
 "based on NASA elevation and imagery data"): Sun, Mercury, Venus surface and
 atmosphere, Earth day, night and clouds, Moon, Mars, Jupiter, Saturn, Uranus,
 Neptune, stars, and stars with the Milky Way. Its `_fictional` dwarf-planet maps,
-the PNG ring map and the TIF normal and specular maps are left out. The kit's build
-parameters join it in #109. Seeding:
+the PNG ring map and the TIF normal and specular maps are left out. The build
+parameters of the provided shapes join it in #109. Seeding:
 
 - downloads only what is missing or doesn't match its pin, and checks the file on
   disk, not just the index;
@@ -401,7 +443,7 @@ First builders:
 The fallback for anything describable as a few parts (kept from JW's pipeline,
 rewritten):
 
-- One LLM call returns a **part plan**: each part is one kit primitive with its own
+- One LLM call returns a **part plan**: each part is one simple shape (§ Simple shapes) with its own
   color, relative position and relative size, up to 12 parts.
 - **Connectors** (`bond_between`): a part that joins two others names them; code
   computes its position, length and rotation. The LLM is not asked to do the 3D math.
@@ -415,15 +457,18 @@ rewritten):
 The headset has no panel prefab. A UI-like object (`summaryPanelPrefab`,
 `historyPanelPrefab`, `sliderPrefab`) is replaced in the bundled lab by:
 
-- a **panel** object from the kit (a flat rounded board), sized from the original
-  `scale` and colored from its `color`, and
+- a **panel** object (a flat rounded board, or the headset's cube or quad), sized
+  from the original `scale` and colored from its `color`, keeping **every component**
+  the lab gives the original object (so a clickable tile stays clickable), and
 - one or more `textPrefab` children with `TextMeshProComponent` text, written by
   an LLM from the module's narration and the object's role.
 
-Clip deltas that changed the original object are moved to the panel. Interactive
-controls (sliders, toggles) keep a label but lose their behaviour unless the lab
-already gives them a component that provides it; each is listed in the manifest.
-This mapping is a first try, judged in headset testing.
+Clip deltas that changed the original object are moved to the panel. Interaction
+comes from components, not from prefab names, so nothing the lab specified is lost.
+When the name implies behaviour the lab never gave the object (a `controlPanelPrefab`
+or `sliderPrefab` with no components), the gap is flagged for a reviewer in
+`review_items` (§ Behaviour named as an asset). This mapping is a first try, judged
+in headset testing.
 
 ## Output
 
@@ -588,6 +633,9 @@ python "Code/Provisioning/provision_lab.py" --resume <run folder> [--overwrite]
   size, budgets, and the credits file's name (#105).
 - How the importer applies a lab's `color` to a model with several materials:
   tint all, tint none, or tint only uncolored parts (#105).
+- How the lab names a headset primitive (sphere, cube, plane, capsule, cylinder,
+  quad) (#105).
+- How a flagged behaviour is moved to a component (#116).
 - Default LLM model per step (#106), chosen from the current roster and recorded.
 
 ## Review of JW's `asset_pipeline/`
@@ -672,7 +720,7 @@ APIs before building against any of them.
 | #106 | Audit, describe and route; `--dry-run` |
 | #107 | Asset library, seed list, built-ins, planet maps |
 | #108 | Reuse matcher |
-| #109 | Kit, textured primitives, UI mapping |
+| #109 | Simple shapes (headset primitives + provided shapes, with images), UI mapping |
 | #110 | Search, ranked top 10, auto-pick |
 | #111 | Builder interface; `molecule` builder |
 | #112 | Composite builder with vision review |
