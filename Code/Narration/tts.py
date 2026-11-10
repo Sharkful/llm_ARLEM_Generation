@@ -269,7 +269,10 @@ class OpenAITTS:
                         break
             except Exception as exc:
                 if events.usage is None:
-                    if expired.is_set():
+                    # A stall ends in whichever fires first: the watchdog (closing the
+                    # stream) or httpx's read timeout (the same limit, counted from the
+                    # last chunk). Either way the reply missed the limit.
+                    if expired.is_set() or _is_timeout(exc):
                         raise self._timeout(events) from exc
                     raise
             finally:
@@ -338,7 +341,15 @@ class GeminiTTS:
         if inline is None:
             # Clip-specific (e.g. finish reason OTHER or SAFETY), so retried, not fatal.
             reason = resp.candidates[0].finish_reason if resp.candidates else None
-            raise TTSNoAudio(f"no audio in the response (finish reason: {reason})")
+            exc = TTSNoAudio(f"no audio in the response (finish reason: {reason})")
+            um = resp.usage_metadata
+            exc.usage = {   # this reply was still billed
+                "input_tokens": getattr(um, "prompt_token_count", None) if um else None,
+                "output_tokens": (getattr(um, "candidates_token_count", None) or 0) if um else None,
+                "request_id": getattr(resp, "response_id", None) or None,
+                "served_model": (resp.model_version or "").removeprefix("models/") or None,
+            }
+            raise exc
         pcm = pcm_from_audio(inline.data, inline.mime_type)
         um = resp.usage_metadata
         served = (resp.model_version or "").removeprefix("models/") or None

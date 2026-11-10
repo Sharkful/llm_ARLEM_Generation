@@ -1,8 +1,10 @@
 # Narration generation: goals spec
 
 Status: **agreed** (#91). This spec decides what the narration tool produces.
-Built so far: the zip layout (#92, `bundle.py`) and the narration CLI (#93,
-`narrate_lab.py` + `tts.py`). The spoken-form pass (#94) is next.
+Built so far: the zip layout (#92, `bundle.py`), the narration CLI (#93,
+`narrate_lab.py` + `tts.py`) and the spoken-form pass (#94): rules mode with its
+reviewed glossary (`spoken_rules.py`, `glossary/`; the default) and LLM mode
+(`spoken_form.py`; Claude Haiku 5.5 by default).
 
 ## Why
 
@@ -57,8 +59,7 @@ languages other than English.
   2. `lab_name` in the paired `*_metrics.json` beside the input, if present
   3. none, which means the shared glossary only
 
-  The LLM spoken-form mode also gets `courseName`, `labId` and `objectives`
-  as context.
+  The LLM spoken-form mode also gets `labId` and `courseName` as context.
 
 ## Clip handling (edge cases)
 
@@ -84,10 +85,11 @@ compared with the original.
 
 - **Display text stays put.** `Clip.narration` is never changed; it stays the
   subtitle and display text.
-- **Spoken text** is produced by the spoken-form pass (#94):
-  `--spoken-form {llm,rules,none}`. It may only expand symbols, numbers, units,
-  formulas and acronyms in context (DNA `5'` → "five-prime"). It never rewords.
-  The default is chosen by measured cost (#94).
+- **Spoken text** is produced by the spoken-form pass (#94; see "Spoken-form
+  pass" below): `--spoken-form {none,rules,llm}`. It may only
+  expand symbols, numbers, units, formulas and acronyms in context (DNA `5'` →
+  "five prime"). The default is `rules`, chosen in the #94 measurement (see
+  "Choosing the default" below).
 - **One request per clip.** The whole clip's spoken text goes in one request,
   for natural flow across sentences. There is no segment splitting and no
   inserted silences. The longest wave-2 clip (966 characters) fits every
@@ -102,6 +104,9 @@ compared with the original.
 |---|---|---|
 | OpenAI | `gpt-4o-mini-tts` (dated snapshot pinned in #93) | `marin`, one of the two voices OpenAI recommends for best quality |
 | Gemini | Gemini 3.8 Flash TTS | `Charon`, a stock voice commonly picked for academic narration |
+
+Spoken form: `rules` (`narrate_lab.DEFAULT_SPOKEN_FORM`); for `--spoken-form llm`,
+Claude Haiku 5.5 (`spoken_form.DEFAULT_MODEL`).
 
 Style instruction, the same for both providers:
 
@@ -118,7 +123,8 @@ chance to swap a voice.
 The **working folder** goes under
 `Artifacts/Data/Narration/[<run group>/]<run name>/`. Like `OneShot/` and
 `Hierarchical/`, it is never pooled with `Benchmark/`. The run name is
-`<input stem>_<provider>_<timestamp>`.
+`<input stem>_<provider>_<mode>_<timestamp>`, where mode is `none`, `rules` or
+`llm-<model>`.
 
 ```
 <run name>/
@@ -223,9 +229,10 @@ one top-level folder with the zip's own name:
 |---|---|
 | Source | input path; `labId`; source model and level; `lab_name` (from the paired metrics file, if any) |
 | Voice service | provider; requested model; served model(s); voice; style instruction; audio format and sample rate |
-| Spoken form | mode; LLM model, tokens and cost (llm mode); glossary version (rules mode) |
+| Spoken form | mode; LLM model, tokens and cost (llm mode); glossary version, layers, extra files and undecided terms (rules mode) |
 | Counts | clips narrated, skipped (unchanged), failed, silent; generated, dropped and renamed names |
-| Totals | characters; audio seconds; TTS cost; spoken-form cost; total cost; wall time; transient retries |
+| Totals | characters; audio seconds; money spent (total, TTS, spoken form, this run); cost of the audio kept in the bundle; requests, failed requests, requests of unknown cost; wall time; transient retries |
+| Calls | one record per request sent, in every run (below) |
 | Provenance | tool git commit; package versions; timestamps |
 
 **Per clip:** module and clip index; `clipName`; final audio name (and why it
@@ -237,11 +244,35 @@ plus `shared` for a clip that reuses another clip's file); `transient_errors`,
 one entry per retried attempt with its HTTP status, exception type, a short
 readable `reason` (e.g. "the provider was temporarily unavailable (HTTP 503)")
 and the trimmed message; `error` and `error_reason` for a clip that failed; and
-a **source hash**. The run record also keeps a `runs` list (one
-entry per run of the folder) and an overall `status`: `complete`, `incomplete`
-(some clips failed; resume it), `failed` (stopped early) or `invalid` (the zip
-failed validation). Totals cover every clip with audio, so a resumed lab's cost
-stays whole; `cost_usd_this_run` is the part this run paid for.
+`calls`, `calls_failed` and `spend_usd`, the requests made for this clip's
+audio in every run and what they cost; and a **source hash**. The run record
+also keeps a `runs` list (one entry per run of the folder) and an overall
+`status`: `complete`, `incomplete` (some clips failed; resume it), `failed`
+(stopped early) or `invalid` (the zip failed validation).
+
+**Call log and cost.** Every request sent is billed, so every request is
+recorded and counted, not only the one whose output was kept. The manifest's
+`calls` list has one record per request, in every run of the folder: `run`
+(1-based), `step` (`tts` or `spoken_form`), `clip` (audio name; none for the
+spoken-form call), `attempt` and `kind` (`first`, `retry` for TTS; `first`,
+`reask`, `transient re-send` for the spoken form), `status` (`ok` / `error`),
+the error's type, reason and message, tokens, `cost_usd`, seconds, served model,
+request id and start time. A resume appends to it.
+
+- `totals.total_cost_usd` is the money spent: the sum of every request's cost,
+  failed attempts, reasks, regenerated audio (a voice change, `--overwrite`)
+  and earlier runs included. `tts_cost_usd`, `spoken_form_cost_usd` and
+  `this_run_cost_usd` split it.
+- `totals.kept_audio_cost_usd` is what the audio now in the bundle cost when it
+  was made: a clean run's cost, for comparison.
+- A request's cost comes from the usage the provider reported. A reply that
+  came back without audio still reports usage and is counted. An HTTP error
+  reply (429, 5xx) is recorded at $0: providers don't bill rejected requests. A
+  request with no reply and no usage (time limit, dropped connection) has
+  `cost_usd: null`, counted in `totals.calls_cost_unknown`, never guessed.
+- A manifest written before the call log existed gets one rebuilt record per
+  clip with audio (and one for the spoken-form total), as run 0; its failed
+  attempts are unknown.
 
 The source hash covers the spoken text, provider, model, voice, style
 instruction, format and sample rate. A rerun skips a clip when the hash
@@ -276,7 +307,18 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
   all of them. Valid audio is never paid for twice: unchanged clips are skipped
   even after a stop-the-run error, and a run killed part-way keeps the records
   of the clips it never reached.
-- `--spoken-form` only offers `none` until #94 adds `rules` and `llm`.
+- `--spoken-form {none,rules,llm}`, `--spoken-form-model` (llm) and
+  `--glossary FILE` (rules) choose the spoken-form pass (below).
+- `--text-only` runs only the spoken-form pass and records each clip's spoken
+  text (status `text_only`), with no audio, no zip and no voice-service key.
+  `--resume` on that folder narrates it, reusing the spoken text, so an LLM pass
+  is paid once. Each run records `spoken_form_seconds`, the pass's wall time.
+- `compare_runs.py <run folders or a group folder>` compares runs of the same
+  labs across modes (no requests): per mode, clips changed and flagged and the
+  pass's added cost and time; per lab, every clip whose spoken text differs
+  between modes, with each mode's changes in bold, which is the list to listen
+  to. It writes `spoken_form_comparison.md` and `.csv` next to the runs. Audio cost is averaged over
+  complete runs only.
 - **Failures:**
   - A clip that fails is recorded and the run continues. No zip is built until
     every narrated clip has audio, and a stale zip is removed.
@@ -289,6 +331,16 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
   - Transient errors (429/5xx/connection) are retried up to 3 attempts, with
     the same policy as `benchmark._transient_retryer()`, and counted. The SDK
     clients never retry on their own.
+  - **A 429 is read, not just retried** (`rate_limit_info`). A used-up daily
+    quota (Gemini's `QuotaFailure` names a `...PerDay...` quota) or a used-up
+    balance (OpenAI `insufficient_quota`) stops the run like a 402, with the
+    quota and its limit in the reason; resume after it resets. A rate limit is
+    retried after the wait the provider asks for (Gemini `RetryInfo`, OpenAI
+    `retry-after`; capped at 60 s), else the usual back-off. If 3 clips in a row
+    still fail on rate limits, the run stops (`RATE_LIMITED_IN_A_ROW`), so an
+    unrecognized quota doesn't send three requests for every remaining clip.
+    Found in the #94 measurement: Gemini TTS hit its quota part-way through a
+    15-run sweep.
   - **Every request has a 90 s limit** (`tts.REQUEST_TIME_LIMIT`; a clip
     normally takes under 12 s). At the limit the request is abandoned and retried
     like a transient error, recorded as "no complete reply within the
@@ -332,6 +384,173 @@ python "Code/Narration/narrate_lab.py" --resume <run folder> [--overwrite]
     per-request limit above. The offline smoke test
   (`smoke_test.py` parts 2 and 3: a fake service, then mock OpenAI and Gemini
   servers) covers everything else.
+
+## Spoken-form pass (#94, `spoken_form.py`)
+
+```
+python "Code/Narration/narrate_lab.py" <lab_output.json> --provider gemini --spoken-form llm \
+    [--spoken-form-model {claude-haiku-5.5,gpt-6-luna,gemini-3.5-flash-lite}]
+```
+
+- **One call per lab.** Every narrated clip goes in one prompt, tagged with its
+  audio name, together with the lab's id, course and topic.
+  - The reply is a structured `LabSpokenForms` (a list of `audio_name`,
+    `spoken_text`) and is matched back to clips by name, never by position.
+  - The models are the three cheapest in the benchmark registry. The default is
+    `claude-haiku-5.5`, chosen in the #94 measurement.
+  - The call goes through `create_instructor_client` + `provider_create_kwargs`,
+    is tracked by `tracking/`, and uses transient-only retries.
+  - It asks for **low** reasoning effort (`spoken_form.REASONING_EFFORT`), not
+    the roster's medium, since expanding symbols needs no deliberation.
+  - Returned tags are matched after trimming brackets, quotes and spaces and
+    ignoring case, so a model that echoes `[name]` still lines up.
+- **What the model may change**, per the prompt:
+  - symbols and arrows (`5'→3'` → "five prime to three prime")
+  - numbers with units (`109.5°`, `1.52 AU`, `150-200`)
+  - formulas as letters and numbers (`XeF4` → "X e F four", `CH₄` → "C H four")
+  - acronyms ("D N A", or "vesper" when said as a word)
+  - math (`vx = v cosθ` → "v x equals v cos theta")
+  - letter sequences (`TACGGTCA` → "T, A, C, G…")
+  - emphasis capitals (`press NEXT` → "press next")
+
+  Nothing else may change.
+- **The word check flags; it never rejects** (`check_spoken`). Code compares each
+  clip's spoken text with its narration word by word.
+  - Allowed: replacing tokens with digits, symbols, subscripts, Greek letters or
+    all-caps acronyms; spelling a short word out letter by letter (`vx` →
+    "v x"); and punctuation and case changes.
+  - Flagged: an ordinary word changed, dropped or reordered, words added where
+    nothing was replaced, or an empty reply.
+  - A flagged clip is still narrated with the model's text. The run carries on,
+    and the flag is left for a reviewer.
+  - A clip the model didn't return or returned empty, or every clip when the
+    call itself fails, falls back to the narration as written, flagged.
+  - The word check treats only all-caps tokens as acronyms (`DNA`, `SSBs`,
+    `DNA's`, `NEXT`), so capitalized short words like "It" or "In" are still
+    checked. Spelling a word out is only allowed for words of 2–4 letters, so a
+    dropped "a" is flagged.
+- **Cache: `spoken_forms.json`** in the run folder, written straight after the
+  call.
+  - It holds per audio name: the narration, the model's text, the text to
+    speak, the flags, and the mode, model and prompt version.
+  - A rerun reuses a clip's entry while all of those match, so the model's
+    run-to-run wording differences never re-bill audio. Only clips whose
+    narration changed are sent again, and changing the model or prompt version
+    refreshes everything.
+  - A fallback entry is not the model's answer, so the next run sends that clip
+    again, unless a reviewer has edited it.
+  - **Reviewer edits:** change a clip's `spoken_text` and rerun with `--resume`.
+    The edit is kept (source `edited`, still word-checked), and since the spoken
+    text is part of the clip's source hash, only that clip's audio is redone.
+- **Recorded:** the manifest's `spoken_form` block holds mode, model and model
+  id, reasoning effort, prompt version, served models, calls, clips sent and
+  cached, tokens, this run's cost, retries and any call error. Each request
+  (first attempt, every reask, every transient re-send) is its own entry in the
+  manifest's call log with its cost, so a call that fails after its reasks still
+  counts all of them. Each clip records `spoken_form` {`source`: none / llm /
+  cache / edited / fallback, `flags`, `changes` (original → spoken)}.
+  `counts.spoken_form_flagged` and `totals.spoken_form_cost_usd` (every run) sum
+  them up.
+
+### Rules mode (`spoken_rules.py`, `glossary/`)
+
+```
+python "Code/Narration/narrate_lab.py" <lab_output.json> --provider gemini --spoken-form rules \
+    [--glossary FILE]
+python "Code/Narration/spoken_rules.py" preview <lab_output.json>     # before/after, no requests
+python "Code/Narration/spoken_rules.py" terms <labs or folders...>     # terms to review
+```
+
+Deterministic and free: no LLM, no cache. It is built for topics we have no lab
+for, on four principles:
+
+1. **Rules cover notation, not topics.** Each rule is general:
+   - chemical formulas, found by checking a token splits into real element symbols
+     plus digits (`XeF4` → "X e F 4", `C6H12O6`, `2H2O`); a token with no digits is
+     never treated as a formula (`HeLa`, `CNS`); an ion's charge is said
+     (`I3-` → "I 3 minus", `Na+` → "N a plus"), but a suspended hyphen is not
+     (`S- and P-waves`)
+   - number + unit from a general unit table (`9.8 m/s²` → "9 point 8 meters per
+     second squared", `220 Ω`, `5mm`); singular for 1 and when describing a
+     noun after an article ("a 180 degree turn"), plural otherwise ("the 5 seconds
+     after launch")
+   - degrees (`°`, `°C`, `°F`), percent, ranges (`150-200` → "150 to 200"),
+     signs, and decimals ("104.5" → "104 point 5"; digits after the point one by
+     one; not prices: `$4.99` stays). Other numbers keep their digits: the cloud
+     voices read them fine.
+   - Greek letters, math operators (`=`, `+`, `<`, `±`, `√`, powers), arrows,
+     `v0` / `v₀` → "v zero", and axis subscripts (`Vx` → "V x") in a lab with
+     vector clues
+   - letter chains (`A-T-G-C` → "A, T, G, C"; `H-O-H` → "H O H") and long runs of
+     a few capital letters (`TACGGTCA`), read letter by letter
+   - `word/word` → "word or word"
+2. **Ambiguous notation is decided by evidence in the lab.** `5'` can be prime,
+   feet or arcminutes. Each meaning lists clue words (`senses` in the glossary);
+   the one with strictly the most clue words anywhere in the lab (id, course,
+   object names, narration) wins. Strong local patterns always win: `5'10"` is
+   feet and inches, `23°26'` is arcminutes, `5'→3'`, `3'-to-5'`, `5'-ATGC-3'` and
+   "the 3' end" are primes. A pair joined by a plain hyphen or "to" (`5'-6'`)
+   could be a range of feet, so the clues decide it. A topic glossary can pin a
+   meaning.
+3. **When unsure, leave it and flag it.** An acronym the glossary doesn't know is
+   left for the voice and flagged; a capitalized word of 4+ letters the lab also
+   writes in lowercase is emphasis (`press NEXT` → "press next"). Shorter ones
+   are often initialisms that spell a word (`LED`, `WHO`), so they are left; short
+   emphasis words go in the glossary (`NOT` → "not"). A prime with no clues and
+   a symbol with no rule are left and flagged. On a new topic the worst case is
+   the narration as written plus a list of terms to review.
+4. **The glossary is layered**, most specific last (it wins):
+   `glossary/shared.yaml` → `glossary/topics/<topic>.yaml` → `--glossary FILE`
+   (repeatable) → `glossary.yaml` in the run folder (also read on `--resume`,
+   which is how to add terms to an existing run). Sections: `terms` (pronunciation;
+   empty = known, read as written, never flagged), `units`, `symbols`, `senses`,
+   `pins`. The shared file holds pronunciation only; topic files exist for the
+   five wave-2 topics and are near-empty, because the shared rules already cover
+   them.
+
+- **Recorded:** each clip's `spoken_form` has source `rules`, the rule changes
+  (`{rule, original, spoken}`) and its flags; the word check still runs as a
+  safety net (a rule that changes an ordinary word is a bug). The manifest's
+  `spoken_form` block has `glossary_version` (a content hash of the merged
+  layers), `glossary_files`, `glossary_extra` and `unresolved_terms` (term →
+  clips).
+- **Rerunning after a glossary edit** redoes only the clips whose spoken text
+  changed (source hash).
+- **On wave 2** (1,790 clips): 244 clips changed, 1 flagged (`AWAY`, written only
+  in capitals in its lab), no ordinary word changed, and a second pass changes
+  nothing. Every rule also has test cases from topics we have no lab for
+  (circuits, kinematics, RNA, heights, sky coordinates, statistics, temperature).
+- **Glossary review:** signed off by @Sharkful (2026-11-05, #94).
+
+### Choosing the default (#94 measurement)
+
+One wave-2 lab per topic (`Artifacts/Data/Narration/spoken-form-measure/`,
+`spoken_form_comparison.md`), spoken text for every mode (`--text-only`):
+
+| Mode | Clips changed (of 110) | Flagged | Added $ / lab | Added s / lab |
+|---|---|---|---|---|
+| rules | 31 | 0 | $0 | 0.03 |
+| llm Claude Haiku 5.5 | 46 | 1 | $0.0018 | 12 |
+| llm Gemini 3.5 Flash-Lite | 40 | 0 | $0.0039 | 6 |
+| llm GPT-6 Luna | 44 | 0 | $0.0008 | 11 |
+
+- Every mode agreed on the notation that needed it: primes, formulas, VSEPR,
+  decimals, θ, axis subscripts, operators, slashes. The extra LLM changes are
+  whole numbers written as words and `DNA` / `SSBs` spelled out, which the voice
+  reads correctly as written.
+- LLM slips: GPT-6 Luna wrote "three prime-T, A…" and missed VSEPR once;
+  Flash-Lite wrote "three prime dash T…" (the voice would say "dash") and missed
+  two formulas and an ion. Haiku made no notation slips; its one flag was a
+  reworded clip, caught by the word check. All 15 calls succeeded first time.
+- The rules gap the run found (`I3-` read "I 3-") was fixed (ion charges).
+- **Decision:** `rules` is the default: free, instant, and the same text on
+  every run, which keeps paper runs reproducible. `--spoken-form llm` with
+  Claude Haiku 5.5 is the opt-in for topics whose notation the glossary doesn't
+  cover; it adds about 2% to a lab's audio cost.
+- The audio listening check was cut short by Gemini TTS's daily quota (the run
+  is now stopped at once by such a 429, see "Failures"). The retrograde lab has
+  complete audio for none and Haiku; its rules run stopped at 27 of 29 clips (the
+  two missing clips have the same text in every mode).
 
 ## Engineering rules (from the repo, not from JW's code)
 

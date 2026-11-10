@@ -89,6 +89,12 @@ Narration (finished lab -> one WAV per clip -> lab resources zip; json_lab only)
 # --dry-run prints the clip plan and sends nothing; --run-group NAME -> Artifacts/Data/Narration/NAME/
 python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider gemini --dry-run
 python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider openai --run-group testing
+python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider gemini --spoken-form llm
+python "Code/Narration/narrate_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --provider gemini --spoken-form rules
+python "Code/Narration/spoken_rules.py" preview "Artifacts/Data/Benchmark/Outputs/<run>_output.json"   # rules before/after
+python "Code/Narration/spoken_rules.py" terms "Artifacts/Data/Benchmark/Outputs"   # terms the glossary doesn't cover
+python "Code/Narration/narrate_lab.py" "<lab>_output.json" --provider gemini --spoken-form llm --text-only   # spoken text only, no audio; --resume narrates it
+python "Code/Narration/compare_runs.py" "Artifacts/Data/Narration/<run group>"   # modes side by side: cost, time, changed clips
 python "Code/Narration/narrate_lab.py" --resume "Artifacts/Data/Narration/testing/<run name>"
 python "Code/Narration/bundle.py" validate "<Name>Lab.zip"
 python "Code/Narration/smoke_test.py"   # offline check, no API keys (fake TTS + mock OpenAI/Gemini)
@@ -319,12 +325,46 @@ manifests and the bundled lab JSON are tracked). JW's `narration_generator/` (br
   dropped; compared ignoring case; applied to the bundled copy only), synthesizes one
   request per clip, and rewrites `narration_manifest.json` after every clip. `--resume`
   skips clips whose source hash matches, also after a stop-the-run error or a crash
-  (unreached clips keep their previous records). It zips and validates only when every clip has audio. Transient
+  (unreached clips keep their previous records). It zips and validates only when every clip has audio.
+  `--text-only` runs just the spoken-form pass (no audio, no voice key); resuming that folder
+  narrates it with the cached spoken text. Run folders are named `<stem>_<provider>_<mode>_<stamp>`.
+  **`compare_runs.py`** tabulates runs of the same labs by spoken-form mode (cost, time, changed
+  and flagged clips) and lists the clips whose spoken text differs, to listen to. The manifest's `calls` list logs every
+  request in every run (TTS attempts and retries, spoken-form first attempt, reasks and re-sends)
+  with its own cost; `totals.total_cost_usd` is that spend, all of it, beside
+  `kept_audio_cost_usd` (what the bundled audio cost). An HTTP error reply costs $0; a request
+  with no reply and no usage is `null` (`calls_cost_unknown`), never guessed. Transient
   errors, and requests abandoned at the 90 s per-request limit, are retried with
   `benchmark._transient_retryer()`'s policy and recorded per clip with a readable reason
-  (`transient_errors`); 401/402/403/404 and unusable audio stop the run.
+  (`transient_errors`); 401/402/403/404 and unusable audio stop the run. A 429 is read
+  (`rate_limit_info`): a used-up daily quota (Gemini `...PerDay...` QuotaFailure) or balance
+  (OpenAI `insufficient_quota`) stops the run; a rate limit waits the provider's RetryInfo /
+  retry-after (capped at 60 s); 3 clips in a row failing on rate limits stop the run.
   Cost comes from reported tokens via `tracking/pricing.py` (TTS entries are from
   secondary sources; checking them against billing is #101).
+- **`spoken_form.py`** (#94): the text each clip sends to the voice service
+  (`--spoken-form {none,rules,llm}`; default `rules`, chosen in the #94 measurement:
+  free, deterministic, and every mode agreed on the notation that mattered). LLM mode is one
+  call per lab to a cheap registry model (`--spoken-form-model`, default
+  `claude-haiku-5.5`, the measurement's pick) through `create_instructor_client` +
+  `provider_create_kwargs`, with the `LabSpokenForms` response matched back by audio
+  name. `check_spoken()` compares the spoken text with the narration word by word in
+  code and **flags, never rejects**: a flagged clip is narrated with the model's text,
+  and a missing or empty clip, or a failed call, falls back to the narration (re-sent on
+  the next run). The call uses low reasoning effort, tags are matched after trimming
+  brackets, spaces and case, and a failed call's tokens are still recorded. Results are
+  cached in the run folder's `spoken_forms.json`, so reruns don't re-bill audio; a
+  reviewer can edit `spoken_text` there and `--resume` redoes only that clip.
+- **`spoken_rules.py`** + **`glossary/`** (#94, rules mode): no LLM. General notation rules
+  (formulas by element-symbol parsing, number + unit, degrees, decimals "104 point 5", ranges,
+  Greek, operators, letter chains and sequences); digits otherwise stay. Ambiguous notation
+  (`5'`: prime / feet / arcminutes) is decided by clue words found anywhere in the lab
+  (`senses`), strong local patterns first; what can't be decided (an unknown acronym, a prime
+  with no clues, a symbol with no rule) is left as written and flagged. Glossary layers, last
+  wins: `glossary/shared.yaml` (pronunciation only) → `glossary/topics/<topic>.yaml` →
+  `--glossary FILE` → the run folder's `glossary.yaml` (also on `--resume`). The manifest records
+  `glossary_version` (content hash), the layers and `unresolved_terms`. `preview` and `terms`
+  subcommands review it without any request. The glossary was reviewed (2026-11-05).
 - **`tts.py`**: the providers and the frozen paper defaults (`PROVIDERS`,
   `STYLE_INSTRUCTION`).
   - OpenAI `gpt-4o-mini-tts-2025-12-15`/`marin`: PCM over SSE, because only the

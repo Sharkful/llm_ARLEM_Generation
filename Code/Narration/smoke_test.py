@@ -17,6 +17,11 @@ short generated tones in place of narration. Checks:
 - every wave-2 json_lab lab bundles and validates
 - the CLI exit codes
 
+Part 1b (the spoken-form rules and glossary, #94): rule-by-rule cases, cases from
+topics we have no lab for, what must be left alone, flags for undecided terms,
+glossary layers, versions and errors, and the whole wave-2 corpus (no ordinary
+word changed, a second pass changes nothing).
+
 Part 2 (the narration CLI, #93) runs narrate_lab.py with a fake voice service:
 clip names (generated, sanitized, deduplicated, shared, dropped), the bundled lab,
 cost from token usage, reruns that skip unchanged clips, voice changes and
@@ -32,6 +37,7 @@ Outputs go to a temp dir that is removed afterwards. Exit code 1 on any failure.
 """
 
 import contextlib
+import csv
 import io
 import json
 import math
@@ -197,9 +203,9 @@ check(has_error(validate_bundle(renamed), "must match the zip name"),
 
 check(has_error(broken("no_videos", lambda f: (f / "Videos").rmdir()), "missing folder"),
       "a missing Videos/ folder is an error")
-check(has_error(broken("two_json", lambda f: (f / "Extra.json").write_text("{}")), "exactly one lab JSON"),
+check(has_error(broken("two_json", lambda f: (f / "Extra.json").write_text("{}", encoding="utf-8")), "exactly one lab JSON"),
       "a second JSON file is an error")
-check(has_error(broken("stray", lambda f: (f / "README.txt").write_text("x")), "unexpected file"),
+check(has_error(broken("stray", lambda f: (f / "README.txt").write_text("x", encoding="utf-8")), "unexpected file"),
       "a stray file at the top is an error")
 check(has_error(broken("stray_dir", lambda f: (f / "Models").mkdir()), "unexpected folder"),
       "an unexpected folder at the top is an error")
@@ -237,14 +243,14 @@ check(r.ok and any("not used by any clip" in w for w in r.warnings),
 
 def drop_modules(f):
     p = f / bundle_names(lab["labId"]).json_file
-    d = json.loads(p.read_text())
+    d = json.loads(p.read_text(encoding="utf-8"))
     del d["modules"]
-    p.write_text(json.dumps(d))
+    p.write_text(json.dumps(d), encoding="utf-8")
 
 
 check(has_error(broken("bad_lab", drop_modules), "not a valid json_lab Lab"),
       "a JSON that isn't a valid json_lab Lab is an error")
-check(has_error(broken("bad_json", lambda f: (f / bundle_names(lab["labId"]).json_file).write_text("{oops")),
+check(has_error(broken("bad_json", lambda f: (f / bundle_names(lab["labId"]).json_file).write_text("{oops", encoding="utf-8")),
                 "not valid JSON"),
       "a malformed JSON file is an error")
 
@@ -274,9 +280,9 @@ def with_json(tag, edit):
     d = fresh(tag)
     f = build(lab, d)
     p = f / bundle_names(lab["labId"]).json_file
-    data = json.loads(p.read_text())
+    data = json.loads(p.read_text(encoding="utf-8"))
     edit(data)
-    p.write_text(json.dumps(data))
+    p.write_text(json.dumps(data), encoding="utf-8")
     return f
 
 
@@ -500,6 +506,192 @@ with contextlib.redirect_stdout(out):
     code = bundle.main(["names", str(SAMPLE_LAB)])
 check(code == 0 and names.zip_file in out.getvalue(), "names prints the derived zip name")
 
+# ══ Part 1b: spoken-form rules and glossary (#94) ═════════════════════
+
+print("\n-- Part 1b: spoken-form rules and glossary")
+try:
+    import spoken_rules  # noqa: E402
+    import spoken_form  # noqa: E402
+    import yaml  # noqa: E402
+    HAVE_RULES = True
+except ImportError as exc:
+    HAVE_RULES = False
+    check(False, f"spoken-form rules import (run in the project venv): {exc}")
+
+if HAVE_RULES:
+    SHARED = spoken_rules.load_glossary()
+
+    def say(text, *context, topic=None, glossary=None):
+        """The rules' output for text, in a lab whose narration is text plus context."""
+        g = glossary or (spoken_rules.load_glossary(topic) if topic else SHARED)
+        ctx = spoken_rules.LabContext.from_texts([text, *context], topic)
+        return spoken_rules.apply_rules(text, g, ctx)
+
+    # Each case: (narration, expected spoken text, other narration in the same lab).
+    # Grouped by rule; the second group is written from topics we have no lab for,
+    # to show the rules carry over.
+    CASES = {
+        "wave-2 notation": [
+            ("The H-O-H bond angle is 104.5°.", "The H O H bond angle is 104 point 5 degrees.", ()),
+            ("Methane, CH₄, and XeF4 both apply VSEPR.", "Methane, C H 4, and X e F 4 both apply vesper.", ()),
+            ("Read the strand 5' to 3': A-T-G-C-C.", "Read the strand 5 prime to 3 prime: A, T, G, C, C.", ()),
+            ("It reads 3'-TACGGTCA-5'.", "It reads 3 prime, T, A, C, G, G, T, C, A, 5 prime.", ()),
+            ("Polymerase moves 5'→3' and adds to the 3' end.",
+             "Polymerase moves 5 prime to 3 prime and adds to the 3 prime end.", ()),
+            ("It travels in the 3'-to-5' direction.", "It travels in the 3 prime to 5 prime direction.", ()),
+            ("Mars orbits at 1.52 AU; Earth at 1 AU.",
+             "Mars orbits at 1 point 5 2 astronomical units; Earth at 1 astronomical unit.", ()),
+            ("Press NEXT to go on.", "Press next to go on.", ("Then the next step.",)),
+            ("The heart beats 150-200 times.", "The heart beats 150 to 200 times.", ()),
+            ("So vx = v cosθ and vy = 0.", "So v x equals v cos theta and v y equals 0.",
+             ("Each vector has an x component.",)),
+            ("At maximum height, Vy is zero. By symmetry it falls back.",
+             "At maximum height, V y is zero. By symmetry it falls back.", ("the vertical component",)),
+            ("the 45° result and a 180° turn, at 45°", "the 45 degree result and a 180 degree turn, at 45 degrees", ()),
+            ("Track the pulmonary trunk/arteries and/or veins.",
+             "Track the pulmonary trunk or arteries and or veins.", ()),
+            ("Earth’s orbit doesn’t change.", "Earth’s orbit doesn’t change.", ()),
+        ],
+        "other topics": [
+            ("A 9 V battery drives 0.5 A through a 220 Ω resistor.",
+             "A 9 volt battery drives 0 point 5 amps through a 220 ohm resistor.", ("in the circuit",)),
+            ("Gravity accelerates it at 9.8 m/s² near the surface.",
+             "Gravity accelerates it at 9 point 8 meters per second squared near the surface.", ()),
+            ("Speed is measured in m/s.", "Speed is measured in meters per second.", ()),
+            ("Glucose, C6H12O6, burns in O2: 2H2 + O2 → 2H2O.",
+             "Glucose, C 6 H 12 O 6, burns in O 2: 2 H 2 plus O 2 to 2 H 2 O.", ()),
+            ("The 5' cap and the 3' end protect the mRNA.",
+             "The 5 prime cap and the 3 prime end protect the mRNA.", ()),
+            ("Its 5' and 3' untranslated regions differ.", "Its 5 prime and 3 prime untranslated regions differ.",
+             ("This RNA is spliced.",)),
+            ("The doorway is 7' high and she is 5'10\".", "The doorway is 7 feet high and she is 5 feet 10 inches.",
+             ("How tall is it?",)),
+            ("Polaris sits at a declination of 89°15'.", "Polaris sits at a declination of 89 degrees 15 arcminutes.", ()),
+            ("The result is significant if p < 0.05.", "The result is significant if p is less than 0 point 0 5.", ()),
+            ("Water boils at 100 °C and it was -40°F outside.",
+             "Water boils at 100 degrees Celsius and it was minus 40 degrees Fahrenheit outside.", ()),
+            ("Expect 10–15% growth.", "Expect 10 to 15 percent growth.", ()),
+            ("Do NOT touch the probe.", "Do not touch the probe.", ("It is not hot.",)),
+            ("The ball leaves with speed v0, then v₀ halves.", "The ball leaves with speed v zero, then v zero halves.", ()),
+            ("Leave a 5mm gap; it is 1 mm wide.", "Leave a 5 millimeter gap; it is 1 millimeter wide.", ()),
+            ("The change Δx is small.", "The change delta x is small.", ()),
+            ("Its pH is 7.4.", "Its P H is 7 point 4.", ()),
+            ("ClF3, BrF5 and I3- form; Ca2+ and Na+ ions; Cl- too.",
+             "C l F 3, B r F 5 and I 3 minus form; C a 2 plus and N a plus ions; C l minus too.", ()),
+            ("Most adults are 5'-6' tall.", "Most adults are 5 feet to 6 feet tall.", ()),
+            ("In the 5 s after launch, the 10 m between them shrinks; a 5 m long rope.",
+             "In the 5 seconds after launch, the 10 meters between them shrinks; a 5 meter long rope.", ()),
+        ],
+        "left alone": [
+            ("In the 1990's and the 1990s, 3D models came in.", "In the 1990's and the 1990s, 3D models came in.", ()),
+            ("He said it is in Iron Age tools, as we saw.", "He said it is in Iron Age tools, as we saw.", ()),
+            ("It moves by itself, an ox and my ax.", "It moves by itself, an ox and my ax.", ("the x component",)),
+            ("Take 2 C atoms and 3 H atoms.", "Take 2 C atoms and 3 H atoms.", ()),
+            ("A T-shirt, an X-ray and a U-turn.", "A T-shirt, an X-ray and a U-turn.", ()),
+            ("The year 2024 had 365 days.", "The year 2024 had 365 days.", ()),
+            ("Jupiter at 5.2.", "Jupiter at 5 point 2.", ()),
+            ("The kit costs $4.99 per student.", "The kit costs $4.99 per student.", ()),
+            ("The LED lights up.", "The LED lights up.", ("This led to a brighter bulb.",)),
+            ("Both S- and P-waves arrive; the N- and C-termini differ.",
+             "Both S- and P-waves arrive; the N- and C-termini differ.", ()),
+        ],
+    }
+    for group, cases in CASES.items():
+        bad = []
+        for text, expected, context in cases:
+            r = say(text, *context)
+            if r.spoken_text != expected:
+                bad.append(f"{text!r} -> {r.spoken_text!r} (expected {expected!r})")
+        check(not bad, f"rules, {group}: {len(cases) - len(bad)}/{len(cases)} cases"
+              + ("".join(f"\n       {b}" for b in bad)))
+
+    r = say("The CMB is ancient light.")
+    check(r.spoken_text == "The CMB is ancient light." and r.unresolved == ["CMB"] and "CMB" in r.flags[0],
+          "an acronym not in the glossary is left for the voice and flagged")
+    r = say("Set it to 5' first.")
+    check(r.spoken_text == "Set it to 5' first." and r.unresolved == ["5'"] and "no clues" in r.flags[0],
+          "a prime with no clues in the lab is left as written and flagged")
+    r = say("It points AWAY from the fork.")
+    check(r.spoken_text == "It points AWAY from the fork." and r.unresolved == ["AWAY"],
+          "a capitalized word never written in lowercase in the lab is flagged, not guessed")
+    r = say("Sulfate, SO4²⁻, then x².")
+    check(r.spoken_text == "Sulfate, SO4²⁻, then x squared." and "⁻" in r.unresolved,
+          "a superscript charge is left as written and flagged; a superscript power is still said")
+    r = say("The angle ∡ is shown.")
+    check(r.unresolved == ["∡"] and "no rule" in r.flags[0], "a symbol with no rule is flagged")
+    r = say("Set it to 5' first.", topic="dna_structure_and_replication")
+    check(r.spoken_text == "Set it to 5 prime first." and not r.flags,
+          "a topic glossary pin decides a prime the lab's own words don't")
+    r = say("Then 5'-ATGC-3' and the 3' end.", topic="vsepr_molecular_geometry")
+    check(r.spoken_text == "Then 5 prime, A, T, G, C, 3 prime and the 3 prime end.",
+          "local patterns (strand ends, 'the 3' end') are primes in any lab")
+    changes = say("XeF4 has 109.5° angles.").changes
+    check([c["rule"] for c in changes] == ["degrees", "formula", "decimal"]
+          and changes[1] == {"rule": "formula", "original": "XeF4", "spoken": "X e F 4"},
+          "every change records its rule, the original and the spoken text")
+
+    # Glossary layers, versions and errors.
+    gdir = fresh("glossary")
+    extra = gdir / "extra.yaml"
+    extra.write_text("terms:\n  CMB: C M B\npins:\n  number_prime: feet\n", encoding="utf-8")
+    run_folder = gdir / "run"
+    run_folder.mkdir()
+    (run_folder / spoken_rules.RUN_GLOSSARY).write_text("terms:\n  CMB: cosmic microwave background\n",
+                                                        encoding="utf-8")
+    g1 = spoken_rules.load_glossary(None, [extra])
+    g2 = spoken_rules.load_glossary(None, [extra], run_folder)
+    check(say("The CMB at 5'.", glossary=g1).spoken_text == "The C M B at 5 feet."
+          and say("The CMB.", glossary=g2).spoken_text == "The cosmic microwave background."
+          and len(g2.files) == 3 and g2.files[-1].endswith("glossary.yaml"),
+          "glossary layers: an extra file adds terms and pins, a run folder's glossary.yaml wins")
+    check(g1.version != SHARED.version and spoken_rules.load_glossary(None, [extra]).version == g1.version
+          and spoken_rules.load_glossary("dna_structure_and_replication").version != SHARED.version,
+          "the glossary version is a content hash: same files same version, any change a new one")
+    errors = []
+    for body in ("- just a list\n", "terms:\n  X: [1, 2]\n", "units:\n  q: {say: 5}\n",
+                 "pins:\n  number_prime: furlongs\n", "colours: {}\n", "terms: {a: b\n"):
+        (gdir / "bad.yaml").write_text(body, encoding="utf-8")
+        try:
+            spoken_rules.load_glossary(None, [gdir / "bad.yaml"])
+            errors.append(f"accepted: {body!r}")
+        except spoken_rules.GlossaryError:
+            pass
+    check(not errors, "a malformed glossary is a clear GlossaryError, not a crash" + "".join(errors))
+    for path in sorted((spoken_rules.GLOSSARY_DIR / "topics").glob("*.yaml")):
+        spoken_rules.load_glossary(path.stem)
+    check(True, "every committed topic glossary loads")
+
+    # The whole wave-2 corpus: no crash, no ordinary word changed, stable on a rerun.
+    n_clips, word_flags, unstable, flagged, changed = 0, [], [], 0, 0
+    for path, lab_ in spoken_rules._labs([OUTPUTS]):
+        topic = spoken_rules._topic_of(path)
+        g = spoken_rules.load_glossary(topic)
+        ctx = spoken_rules.LabContext.from_lab(lab_, topic)
+        for c in spoken_rules._clips(lab_):
+            n_clips += 1
+            r = spoken_rules.apply_rules(c["narration"], g, ctx)
+            changed += bool(r.changes)
+            flagged += bool(r.flags)
+            f, _ = spoken_form.check_spoken(c["narration"], r.spoken_text)
+            if f:
+                word_flags.append((c["narration"][:80], f))
+            if spoken_rules.apply_rules(r.spoken_text, g, ctx).spoken_text != r.spoken_text:
+                unstable.append(r.spoken_text[:80])
+    check(n_clips > 1700 and not word_flags and not unstable and flagged <= 5,
+          f"all {n_clips} wave-2 clips: {changed} changed, no ordinary word changed, running the rules "
+          f"twice changes nothing, {flagged} flagged" + "".join(f"\n       {w}" for w in word_flags[:5]))
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = spoken_rules.main(["preview", str(SAMPLE_LAB)])
+    check(code == 0 and "5 prime to 3 prime" in out.getvalue() and "number prime -> prime" in out.getvalue(),
+          "spoken_rules.py preview shows the written and spoken text")
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = spoken_rules.main(["terms", str(OUTPUTS), "--json"])
+    report = json.loads(out.getvalue())
+    check(code == 0 and report["clips"] == n_clips and report["rules"]["formula"] > 0,
+          "spoken_rules.py terms reports rule counts and the terms to review")
+
 # ══ Part 2: the narration CLI with a fake voice service (#93) ═════════
 
 print("\n-- Part 2: narration CLI")
@@ -546,7 +738,7 @@ if HAVE_NARRATION:
     COST_PER_CLIP = 50 * 0.60 / 1e6 + 1000 * 12.00 / 1e6   # gpt-4o-mini-tts rates
 
     def manifest_of(run_dir):
-        return json.loads((Path(run_dir) / "narration_manifest.json").read_text())
+        return json.loads((Path(run_dir) / "narration_manifest.json").read_text(encoding="utf-8"))
 
     # ── Planning edge cases ──────────────────────────────────────────
     edge = json.loads(SAMPLE_LAB.read_text(encoding="utf-8"))
@@ -597,7 +789,7 @@ if HAVE_NARRATION:
           "the edge-case lab narrates, and its zip validates (dropped names removed)")
     check(len(fake.calls) == sum(p.action == "narrate" for p in plans),
           "each name is synthesized once (a shared clip makes no extra request)")
-    check(json.loads(edge_path.read_text()) == edge, "the input lab file is never modified")
+    check(json.loads(edge_path.read_text(encoding="utf-8")) == edge, "the input lab file is never modified")
     check(em["counts"]["names"] == {"generated": 4, "sanitized": 1, "deduplicated": 1, "dropped": 1}
           and em["counts"]["shared"] == 1 and em["counts"]["silent"] == 1,
           "the manifest counts every name change")
@@ -613,9 +805,18 @@ if HAVE_NARRATION:
           f"a wave-2 lab narrates into a valid {rm['bundle']['zip_file']}")
     check(rm["counts"]["generated"] == len(refs) == len(fake.calls),
           f"one request per narrated clip ({len(refs)})")
-    check(abs(rm["totals"]["cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9
+    check(abs(rm["totals"]["kept_audio_cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9
+          and abs(rm["totals"]["total_cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9
           and rm["totals"]["input_tokens"] == 50 * len(refs),
           "cost comes from reported token usage at the tracking/pricing.py rates")
+    rc = rm["calls"]
+    check(len(rc) == len(refs) == rm["totals"]["calls"] and rm["totals"]["calls_failed"] == 0
+          and all(x["step"] == "tts" and x["run"] == 1 and x["status"] == "ok" and x["kind"] == "first"
+                  and abs(x["cost_usd"] - COST_PER_CLIP) < 1e-12 and x["started_at"] for x in rc)
+          and sorted(x["clip"] for x in rc) == sorted(refs)
+          and all(c["calls"] == 1 and abs(c["spend_usd"] - COST_PER_CLIP) < 1e-12
+                  for c in rm["clips"] if c["status"] == "generated"),
+          "every request is logged with its run, clip and cost, and each clip counts its requests")
     check(abs(rm["totals"]["audio_seconds"] - 0.2 * len(refs)) < 1e-6, "audio seconds are recorded")
     check(rm["source"]["lab_name"] == "dna_structure_and_replication" and rm["source"]["level"] == "L4"
           and rm["source"]["source_model"] == "claude-sonnet-5",
@@ -634,10 +835,10 @@ if HAVE_NARRATION:
     code = narrate(settings_for(SAMPLE_LAB), real_run, provider=fake, log=quiet)
     rm2 = manifest_of(real_run)
     check(code == 0 and not fake.calls and rm2["counts"]["skipped"] == len(refs)
-          and rm2["totals"]["cost_usd_this_run"] == 0
-          and abs(rm2["totals"]["cost_usd"] - rm["totals"]["cost_usd"]) < 1e-9
+          and rm2["totals"]["this_run_cost_usd"] == 0 and rm2["calls"] == rm["calls"]
+          and rm2["totals"]["total_cost_usd"] == rm["totals"]["total_cost_usd"]
           and len(rm2["runs"]) == 2,
-          "a rerun skips every unchanged clip, keeps the lab's cost, and logs a second run")
+          "a rerun skips every unchanged clip, spends nothing, keeps the call log, and logs a second run")
     orphan = real_run / rm["bundle"]["folder"] / "Audios" / "no_longer_used.wav"
     write_wav(orphan, PCM)
     fake = FakeTTS()
@@ -649,6 +850,11 @@ if HAVE_NARRATION:
     fake = FakeTTS()
     narrate(settings_for(SAMPLE_LAB, voice="cedar"), real_run, overwrite=True, provider=fake, log=quiet)
     check(len(fake.calls) == len(refs), "--overwrite regenerates every clip")
+    ot = manifest_of(real_run)["totals"]
+    check(ot["calls"] == 3 * len(refs) and abs(ot["total_cost_usd"] - 3 * len(refs) * COST_PER_CLIP) < 1e-9
+          and abs(ot["this_run_cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9
+          and abs(ot["kept_audio_cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9,
+          "regenerated audio still counts: the total is every run's spend, beside the kept audio's cost")
 
     # ── Retries, failures, resume ────────────────────────────────────
     fake = FakeTTS(script=lambda n, t: HTTPError(503) if n == 0 else None)
@@ -661,12 +867,72 @@ if HAVE_NARRATION:
     check(len(te) == 1 and te[0]["status"] == 503 and te[0]["type"] == "HTTPError"
           and te[0]["reason"] == "the provider was temporarily unavailable (HTTP 503)",
           "each retried error is recorded with its status, type and a readable reason")
+    c0 = tm["clips"][0]
+    mine = [x for x in tm["calls"] if x["clip"] == c0["audio_name"]]
+    check([(x["attempt"], x["kind"], x["status"]) for x in mine] == [(1, "first", "error"), (2, "retry", "ok")]
+          and mine[0]["cost_usd"] == 0.0 and mine[0]["error_type"] == "HTTPError"
+          and "HTTP 503" in mine[0]["error_reason"]
+          and c0["calls"] == 2 and c0["calls_failed"] == 1 and abs(c0["spend_usd"] - COST_PER_CLIP) < 1e-12
+          and tm["totals"]["calls_failed"] == 1 and tm["totals"]["calls_cost_unknown"] == 0,
+          "a retried clip logs both requests; an HTTP error reply costs $0 (not billed)")
     fake = FakeTTS(script=lambda n, t: HTTPError(429) if n < 2 else None)
     r = TMP / "runs" / "transient_twice"
     narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
     te = manifest_of(r)["clips"][0]["transient_errors"]
     check([e["reason"] for e in te] == ["rate limit or quota reached: too many requests for now (HTTP 429)"] * 2,
           "two retries on one clip record both reasons")
+
+    # ── Quotas and rate limits: stop on a used-up quota, wait as asked otherwise ──
+    def gemini_429(quota_id, delay="33s", limit="100"):
+        """A google-genai style 429 (error body in .details, status in .code)."""
+        exc = Exception("429 RESOURCE_EXHAUSTED. You exceeded your current quota")
+        exc.code = 429
+        exc.details = {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED",
+                                 "message": "You exceeded your current quota, please check your plan",
+                                 "details": [
+                                     {"@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                                      "violations": [{"quotaId": quota_id, "quotaValue": limit}]},
+                                     {"@type": "type.googleapis.com/google.rpc.RetryInfo",
+                                      "retryDelay": delay}]}}
+        return exc
+
+    fake = FakeTTS(script=lambda n, t: gemini_429("GenerateRequestsPerDayPerProjectPerModel"))
+    r = TMP / "runs" / "daily_quota"
+    code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    dq = manifest_of(r)
+    check(code == 1 and len(fake.calls) == 1 and dq["status"] == "failed"
+          and "daily request quota" in dq["clips"][0]["error_reason"]
+          and "GenerateRequestsPerDayPerProjectPerModel, limit 100" in dq["clips"][0]["error_reason"]
+          and any("daily request quota" in w for w in dq["warnings"]),
+          "a used-up daily quota (Gemini QuotaFailure ...PerDay...) stops the run after one request")
+    billing = HTTPError(429)
+    billing.body = {"message": "You exceeded your current quota", "type": "insufficient_quota",
+                    "code": "insufficient_quota"}
+    fake = FakeTTS(script=lambda n, t: billing)
+    r = TMP / "runs" / "insufficient_quota"
+    code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    check(code == 1 and len(fake.calls) == 1
+          and "billing" in manifest_of(r)["clips"][0]["error_reason"],
+          "OpenAI's insufficient_quota 429 (no credit left) stops the run after one request")
+    per_minute = gemini_429("GenerateRequestsPerMinutePerProjectPerModel", delay="12.5s")
+    long_wait = gemini_429("GenerateRequestsPerMinutePerProjectPerModel", delay="3600s")
+    with_header = HTTPError(429)
+    with_header.response = type("R", (), {"headers": {"retry-after": "7"}})()
+    check(narrate_lab.server_wait(per_minute) == 12.5 and narrate_lab.server_wait(long_wait) == 60.0
+          and narrate_lab.server_wait(with_header) == 7.0 and narrate_lab.server_wait(HTTPError(429)) is None
+          and not narrate_lab._is_fatal(per_minute)
+          and "asked to wait 12.5 s" in narrate_lab.describe_error(per_minute)["reason"],
+          "a per-minute rate limit is retried after the wait the provider asks for (capped at 60 s)")
+    fake = FakeTTS(script=lambda n, t: HTTPError(429))
+    r = TMP / "runs" / "rate_limited_in_a_row"
+    code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
+    rr = manifest_of(r)
+    n_tries = narrate_lab.RATE_LIMITED_IN_A_ROW * benchmark._TRANSIENT_ATTEMPTS
+    check(code == 1 and len(fake.calls) == n_tries and rr["status"] == "failed"
+          and any("in a row failed on rate limits" in w for w in rr["warnings"])
+          and rr["clips"][narrate_lab.RATE_LIMITED_IN_A_ROW]["error"].startswith("not attempted"),
+          f"{narrate_lab.RATE_LIMITED_IN_A_ROW} clips in a row failing on rate limits stop the run "
+          f"({n_tries} requests, not one per clip for the whole lab)")
     fake = FakeTTS(script=lambda n, t: HTTPError(503))
     r = TMP / "runs" / "transient_exhausted"
     narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
@@ -689,12 +955,22 @@ if HAVE_NARRATION:
     failed_clip = next(c for c in fm["clips"] if c["status"] == "failed")
     check(failed_clip["error_reason"] == "unexpected error" and failed_clip["error"] == "ValueError: boom",
           "a failed clip records the error and a reason")
+    check(fm["totals"]["calls_cost_unknown"] == 1
+          and next(x for x in fm["calls"] if x["status"] == "error")["cost_usd"] is None
+          and abs(fm["totals"]["total_cost_usd"] - (len(refs) - 1) * COST_PER_CLIP) < 1e-9,
+          "a failure with no reply and no usage has unknown cost (null), counted, never guessed")
     check(not stale.exists() and fm["bundle"]["validation"] is None,
           "an incomplete run builds no zip and removes a stale one")
     fake = FakeTTS()
     code = narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
-    check(code == 0 and fake.calls == [target_text] and manifest_of(r)["status"] == "complete",
+    fm2 = manifest_of(r)
+    check(code == 0 and fake.calls == [target_text] and fm2["status"] == "complete",
           "rerunning the same folder narrates only the failed clip and completes")
+    fc = next(c for c in fm2["clips"] if c["spoken_text"] == target_text)
+    check(len(fm2["calls"]) == len(refs) + 1 and [x["run"] for x in fm2["calls"]][-1] == 2
+          and fc["calls"] == 2 and fc["calls_failed"] == 1
+          and abs(fm2["totals"]["total_cost_usd"] - len(refs) * COST_PER_CLIP) < 1e-9,
+          "a resume appends to the call log: the failed clip shows both runs' requests")
 
     for status in (401, 402, 403, 404):
         fake = FakeTTS(script=lambda n, t, s=status: HTTPError(s))
@@ -731,7 +1007,8 @@ if HAVE_NARRATION:
     r = TMP / "runs" / "nousage"
     narrate(settings_for(SAMPLE_LAB), r, provider=fake, log=quiet)
     nm = manifest_of(r)
-    check(nm["clips"][0]["cost_usd"] is None and "no token usage" in " ".join(nm["clips"][0]["warnings"]),
+    check(nm["clips"][0]["cost_usd"] is None and "no token usage" in " ".join(nm["clips"][0]["warnings"])
+          and nm["totals"]["calls_cost_unknown"] == len(refs) and nm["totals"]["total_cost_usd"] == 0,
           "missing usage gives no cost and a warning, not a guess")
 
     # ── Reruns keep valid audio, even after a stop or a crash ────────
@@ -822,6 +1099,11 @@ if HAVE_NARRATION:
     check(code == 0 and c0["status"] == "generated" and c0["transient_retries"] == 1
           and c0["audio_seconds"] > 0 and "no audio" in c0["transient_errors"][0]["reason"],
           "a reply with no audio is retried, not saved as an empty clip")
+    mine = [x for x in manifest_of(r)["calls"] if x["clip"] == c0["audio_name"]]
+    check(len(mine) == 2 and mine[0]["error_type"] == "TTSNoAudio"
+          and abs(mine[0]["cost_usd"] - COST_PER_CLIP) < 1e-12
+          and abs(c0["spend_usd"] - 2 * COST_PER_CLIP) < 1e-12,
+          "a reply that came back without audio was still billed: its cost is counted")
     first_text = lab["modules"][0]["clips"][0]["narration"].strip()
     fake = EmptyFirst(lambda n, t: t == first_text)
     r = TMP / "runs" / "empty_always"
@@ -830,6 +1112,212 @@ if HAVE_NARRATION:
     check(code == 1 and em2["status"] == "incomplete" and em2["clips"][0]["status"] == "failed"
           and em2["counts"]["generated"] == len(refs) - 1,
           "a clip that never gets audio fails on its own (resumable); the run doesn't stop")
+
+    # ── Spoken form: the word check ──────────────────────────────────
+    import spoken_form  # noqa: E402
+    from spoken_form import check_spoken
+    allowed = [
+        ("when one strand is moving 5'→3', the other must be moving 3'→5'.",
+         "when one strand is moving five prime to three prime, the other must be moving three prime to five prime."),
+        ("The arrows show how vx = v cosθ and vy = v sinθ.",
+         "The arrows show how v x equals v cos theta and v y equals v sin theta."),
+        ("the domain angles are about 109.5 degrees.", "the domain angles are about one hundred nine point five degrees."),
+        ("Methane, CH₄, has carbon with four bonding pairs.", "Methane, C H four, has carbon with four bonding pairs."),
+        ("binding proteins, or SSBs, attach behind it.", "binding proteins, or S S Bs, attach behind it."),
+        ("the completed strand reads 3'-TACGGTCA-5', running", "the completed strand reads three prime, T, A, C, G, G, T, C, A, five prime, running"),
+        ("Mars orbits at 1.52 AU.", "Mars orbits at one point five two A U."),
+        ("the patient's own right/left.", "the patient's own right or left."),
+        ("Press NEXT to advance.", "Press next to advance."),
+    ]
+    check(all(not check_spoken(o, sp)[0] for o, sp in allowed),
+          "the word check allows symbols, numbers, formulas, acronyms and sequences to be spelled out: "
+          + str([o[:30] for o, sp in allowed if check_spoken(o, sp)[0]]))
+    flagged_cases = [
+        ("Helicase separates the strands at the fork.", "Helicase splits the strands at the fork.", "changed"),
+        ("Helicase separates the strands at the fork.", "Helicase separates the strands at the fork. Great job!", "added"),
+        ("Helicase separates the strands at the fork.", "Helicase separates strands at the fork.", "changed"),
+        ("Helicase separates the strands at the fork.", "", "empty"),
+    ]
+    check(all(any(k in f for f in check_spoken(o, sp)[0]) for o, sp, k in flagged_cases),
+          "the word check flags a reworded, added, dropped or missing word")
+    check(check_spoken("It is here.", "This is here.")[0] and check_spoken("In a cell.", "Inside a cell.")[0],
+          "a changed two-letter capitalized word (It, In) is flagged, not taken for an acronym")
+    check(check_spoken("Add a cell and a membrane.", "Add one cell and a membrane.")[0],
+          "a dropped one-letter word is flagged even when the same letter appears nearby")
+    check(not check_spoken("Xenon, Xe, has eight.", "Xenon, X e, has eight.")[0]
+          and not check_spoken("The DNA's backbone.", "The D N A's backbone.")[0],
+          "element symbols and possessive acronyms may still be spelled out")
+    ch = check_spoken("Mars orbits at 1.52 AU.", "Mars orbits at one point five two A U.")[1]
+    check(ch == [{"original": "1.52 AU", "spoken": "one point five two A U"}],
+          "each change is recorded as original -> spoken")
+
+    # ── Spoken form: LLM mode end to end with a fake model ──────────
+    import re as _re
+
+    class FakeSpoken:
+        """Spells out DNA/SSBs, rewords one clip, and can leave a clip out or fail."""
+        def __init__(self, reword=None, omit=None, fail=False):
+            self.calls, self.reword, self.omit, self.fail = [], reword, omit, fail
+
+        def __call__(self, prompt):
+            clips = _re.findall(r"\[([^\]\n]+)\]\n(.+?)(?=\n\n\[|\Z)", prompt.split("Clips:\n\n", 1)[1], _re.S)
+            self.calls.append([n for n, _ in clips])
+            if self.fail:
+                raise HTTPError(503)
+            out = []
+            for name, text in clips:
+                if name == self.omit:
+                    continue
+                spoken = text.replace("DNA", "D N A").replace("SSBs", "S S Bs")
+                if name == self.reword:
+                    spoken = spoken.replace("two", "a pair of", 1) if "two" in spoken else spoken + " Nice work."
+                out.append(spoken_form.ClipSpokenForm(audio_name=name, spoken_text=spoken))
+            return spoken_form.LabSpokenForms(clips=out), {"input_tokens": 900, "output_tokens": 800,
+                                                           "cost_usd": 0.0005, "served_models": ["fake-llm"]}
+
+    def llm_settings(path=SAMPLE_LAB, model="claude-haiku-5.5"):
+        st = settings_for(path)
+        st.spoken_form, st.spoken_form_model = "llm", model
+        return st
+
+    names_in_order = [q.name for q in plan_clips(lab) if q.action == "narrate"]
+    first, second, third = names_in_order[:3]
+    fake_sp = FakeSpoken(reword=second, omit=third)
+    tts_fake = FakeTTS()
+    r = TMP / "runs" / "llm"
+    code = narrate(llm_settings(), r, provider=tts_fake, spoken_call=fake_sp, log=quiet)
+    lm_ = manifest_of(r)
+    by_name = {c["audio_name"]: c for c in lm_["clips"]}
+    check(code == 0 and lm_["status"] == "complete" and len(fake_sp.calls) == 1
+          and len(fake_sp.calls[0]) == len(refs),
+          "LLM mode: one call carries every narrated clip, and the run completes")
+    check(by_name[first]["spoken_text"] == lab["modules"][0]["clips"][0]["narration"].strip().replace("DNA", "D N A")
+          and by_name[first]["spoken_form"]["source"] == "llm" and not by_name[first]["spoken_form"]["flags"]
+          and tts_fake.calls[0] == by_name[first]["spoken_text"],
+          "a clip's spoken text comes back by audio name and is what the voice service receives")
+    sent_second = fake_sp.calls[0].index(second)
+    second_display = by_name[second]["display_text"].strip()
+    check(by_name[second]["spoken_form"]["flags"] and by_name[second]["spoken_form"]["source"] == "llm"
+          and by_name[second]["spoken_text"] != second_display.replace("DNA", "D N A").replace("SSBs", "S S Bs")
+          and tts_fake.calls[sent_second] == by_name[second]["spoken_text"],
+          "a reworded clip is flagged, not rejected, and the LLM's reworded text is what gets narrated")
+    check(by_name[third]["spoken_form"]["source"] == "fallback"
+          and by_name[third]["spoken_text"] == by_name[third]["display_text"].strip()
+          and "didn't return" in by_name[third]["spoken_form"]["flags"][0],
+          "a clip the model left out falls back to its narration as written, flagged")
+    check(by_name[first]["display_text"] != by_name[first]["spoken_text"]
+          and json.loads((r / rm["bundle"]["folder"] / bundle_names(lab["labId"]).json_file).read_text(encoding="utf-8"))
+              ["modules"][0]["clips"][0]["narration"] == lab["modules"][0]["clips"][0]["narration"],
+          "the bundled lab keeps the display narration unchanged")
+    sfm = lm_["spoken_form"]
+    check(sfm["mode"] == "llm" and sfm["model"] == "claude-haiku-5.5" and sfm["calls"] == 1
+          and sfm["clips_sent"] == len(refs) and sfm["input_tokens"] == 900 and sfm["cost_usd"] == 0.0005
+          and lm_["counts"]["spoken_form_flagged"] == 2 and lm_["totals"]["spoken_form_cost_usd"] == 0.0005
+          and abs(lm_["totals"]["total_cost_usd"] - (lm_["totals"]["tts_cost_usd"] + 0.0005)) < 1e-12
+          and [x["step"] for x in lm_["calls"]].count("spoken_form") == 1
+          and lm_["calls"][0]["step"] == "spoken_form" and lm_["calls"][0]["clip"] is None,
+          "the manifest records the spoken-form model, tokens, cost, flagged count and total cost")
+    cache = json.loads((r / spoken_form.CACHE_FILE).read_text(encoding="utf-8"))["clips"]
+    check(set(cache) == set(refs) and cache[second]["flags"] and cache[first]["prompt_version"] == spoken_form.PROMPT_VERSION,
+          "spoken forms are cached in spoken_forms.json with their flags")
+
+    fake_sp2, tts_fake = FakeSpoken(), FakeTTS()
+    narrate(llm_settings(), r, provider=tts_fake, spoken_call=fake_sp2, log=quiet)
+    lm2 = manifest_of(r)
+    third_rec = {c["audio_name"]: c for c in lm2["clips"]}[third]
+    check(fake_sp2.calls == [[third]] and third_rec["spoken_form"]["source"] == "llm"
+          and lm2["spoken_form"]["clips_cached"] == len(refs) - 1
+          and abs(lm2["totals"]["spoken_form_cost_usd"] - 0.0010) < 1e-12,
+          "a rerun reuses every cached spoken form; only the clip that fell back is sent again"
+          " (its audio is redone only if the model's text differs)")
+    fake_sp2b, tts_fake = FakeSpoken(), FakeTTS()
+    narrate(llm_settings(), r, provider=tts_fake, spoken_call=fake_sp2b, log=quiet)
+    check(not fake_sp2b.calls and not tts_fake.calls and manifest_of(r)["counts"]["skipped"] == len(refs),
+          "once every clip has the model's text, a rerun makes no LLM call and redoes no audio")
+
+    data = json.loads((r / spoken_form.CACHE_FILE).read_text(encoding="utf-8"))
+    data["clips"][first]["spoken_text"] = "Reviewer's fixed wording for D N A."
+    (r / spoken_form.CACHE_FILE).write_text(json.dumps(data), encoding="utf-8")
+    fake_sp3, tts_fake = FakeSpoken(), FakeTTS()
+    narrate(llm_settings(), r, provider=tts_fake, spoken_call=fake_sp3, log=quiet)
+    c_first = {c["audio_name"]: c for c in manifest_of(r)["clips"]}[first]
+    check(not fake_sp3.calls and tts_fake.calls == ["Reviewer's fixed wording for D N A."]
+          and c_first["spoken_form"]["source"] == "edited" and c_first["spoken_form"]["flags"],
+          "a reviewer's edit in spoken_forms.json is kept and only that clip's audio is redone (still checked)")
+
+    edited, edited_text = edited_lab("llm_edit_input")
+    fake_sp4, tts_fake = FakeSpoken(), FakeTTS()
+    narrate(llm_settings(edited), r, provider=tts_fake, spoken_call=fake_sp4, log=quiet)
+    check(len(fake_sp4.calls) == 1 and len(fake_sp4.calls[0]) == 1 and len(tts_fake.calls) == 1,
+          "after a narration edit, only the changed clip is sent to the LLM and re-narrated")
+
+    fake_sp5 = FakeSpoken()
+    narrate(llm_settings(model="gpt-6-luna"), TMP / "runs" / "llm", provider=FakeTTS(),
+            spoken_call=fake_sp5, log=quiet)
+    check(len(fake_sp5.calls) == 1 and len(fake_sp5.calls[0]) == len(refs),
+          "switching the spoken-form model refreshes every cached spoken form")
+
+    r = TMP / "runs" / "llm_fail"
+    tts_fake = FakeTTS()
+    code = narrate(llm_settings(), r, provider=tts_fake, spoken_call=FakeSpoken(fail=True), log=quiet)
+    lf = manifest_of(r)
+    check(code == 0 and lf["status"] == "complete" and "HTTPError" in (lf["spoken_form"]["error"] or "")
+          and all(c["spoken_form"]["source"] == "fallback" for c in lf["clips"] if c["spoken_form"])
+          and tts_fake.calls[0] == lab["modules"][0]["clips"][0]["narration"].strip(),
+          "if the spoken-form call fails, every clip falls back to its narration, flagged, and the run completes")
+
+    # A failed call's fallback is retried next time, not cached as the model's answer.
+    r = TMP / "runs" / "llm_fail_then_ok"
+    narrate(llm_settings(), r, provider=FakeTTS(), spoken_call=FakeSpoken(fail=True), log=quiet)
+    retry_sp = FakeSpoken()
+    narrate(llm_settings(), r, provider=FakeTTS(), spoken_call=retry_sp, log=quiet)
+    lr = manifest_of(r)
+    check(len(retry_sp.calls) == 1 and len(retry_sp.calls[0]) == len(refs)
+          and all(c["spoken_form"]["source"] == "llm" for c in lr["clips"] if c["spoken_form"]),
+          "after a failed spoken-form call, the next run sends every clip to the model again")
+    r = TMP / "runs" / "llm_fallback_edit"
+    narrate(llm_settings(), r, provider=FakeTTS(), spoken_call=FakeSpoken(omit=first), log=quiet)
+    data = json.loads((r / spoken_form.CACHE_FILE).read_text(encoding="utf-8"))
+    data["clips"][first]["spoken_text"] = "A reviewer's text."
+    (r / spoken_form.CACHE_FILE).write_text(json.dumps(data), encoding="utf-8")
+    edit_sp = FakeSpoken()
+    narrate(llm_settings(), r, provider=FakeTTS(), spoken_call=edit_sp, log=quiet)
+    c_first = {c["audio_name"]: c for c in manifest_of(r)["clips"]}[first]
+    check(not edit_sp.calls and c_first["spoken_text"] == "A reviewer's text."
+          and c_first["spoken_form"]["source"] == "edited",
+          "a reviewer's edit of a fallback clip is kept and not sent to the model again")
+
+    class OddReplies(FakeSpoken):
+        """Echoes tags with brackets, spaces or other case, and returns one empty text."""
+        def __call__(self, prompt):
+            forms, usage = super().__call__(prompt)
+            for i, c in enumerate(forms.clips):
+                # clip 0: [bracketed], 1: exact tag but empty text, 2: spaces, 3: upper case
+                c.audio_name = [f"[{c.audio_name}]", c.audio_name, f"  {c.audio_name} ",
+                                c.audio_name.upper()][i % 4]
+                if i == 1:
+                    c.spoken_text = "   "
+            return forms, usage
+
+    r = TMP / "runs" / "llm_odd"
+    tts_fake = FakeTTS()
+    narrate(llm_settings(), r, provider=tts_fake, spoken_call=OddReplies(), log=quiet)
+    lo = {c["audio_name"]: c for c in manifest_of(r)["clips"]}
+    fourth = names_in_order[3]
+    check(all(lo[n]["spoken_form"]["source"] == "llm" for n in (first, third, fourth)),
+          "tags echoed with brackets, extra spaces or other case are still matched to their clips")
+    check(lo[second]["spoken_form"]["source"] == "fallback"
+          and lo[second]["spoken_text"] == lo[second]["display_text"].strip()
+          and "" not in tts_fake.calls and lo[second]["spoken_form"]["flags"],
+          "an empty spoken text falls back to the narration (flagged) instead of reaching the voice")
+
+    r = TMP / "runs" / "none_mode"
+    narrate(settings_for(SAMPLE_LAB), r, provider=FakeTTS(), log=quiet)
+    nm_ = manifest_of(r)
+    check(nm_["spoken_form"]["mode"] == "none" and nm_["spoken_form"]["calls"] == 0
+          and not (r / spoken_form.CACHE_FILE).exists()
+          and all(c["spoken_form"]["source"] == "none" for c in nm_["clips"] if c["spoken_form"]),
+          "--spoken-form none makes no call and writes no cache")
 
     # ── Unsupported inputs and CLI flags ─────────────────────────────
     l1 = next(iter(sorted(glob(str(OUTPUTS / "*json_lab_L1_*_output.json")))), None)
@@ -863,6 +1351,173 @@ if HAVE_NARRATION:
         dotenv.load_dotenv = real_load
         os.environ.update({k: v for k, v in saved.items() if v is not None})
     check(code == 2 and "OPENAI_API_KEY" in text, "a missing API key exits 2 before any request")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "llm", "--dry-run")
+    check(code == 0 and "Spoken form: llm with claude-haiku-5.5" in text,
+          "--spoken-form llm --dry-run names the default model and sends nothing")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form-model", "gpt-6-luna", "--dry-run")
+    check(code == 2 and "only applies with --spoken-form llm" in text,
+          "--spoken-form-model without --spoken-form llm is an error")
+    code, text = cli("--resume", str(TMP / "runs" / "llm"), "--spoken-form-model", "gpt-6-luna")
+    check(code == 2 and "--spoken-form-model" in text, "--resume refuses a spoken-form model override")
+    saved = {k: os.environ.pop(k, None) for k in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")}
+    try:
+        try:
+            narrate_lab.check_spoken_form_environment("claude-haiku-5.5")
+            ok = False
+        except narrate_lab.InputError as exc:
+            ok = "ANTHROPIC_API_KEY" in str(exc)
+    finally:
+        os.environ.update({k: v for k, v in saved.items() if v is not None})
+    check(ok, "a missing key for the spoken-form model is caught before any request")
+
+    # ── Spoken form: rules mode ──────────────────────────────────────
+    def rules_settings(path=SAMPLE_LAB, glossary=None):
+        st = settings_for(path)
+        st.spoken_form, st.glossary = "rules", glossary
+        return st
+
+    r = TMP / "runs" / "rules"
+    tts_fake = FakeTTS()
+    code = narrate(rules_settings(), r, provider=tts_fake, log=quiet)
+    rl = manifest_of(r)
+    sfr = rl["spoken_form"]
+    by_name = {c["audio_name"]: c for c in rl["clips"]}
+    strand = next(c for c in rl["clips"] if c["display_text"] and "5' to 3'" in c["display_text"])
+    check(code == 0 and rl["status"] == "complete" and sfr["mode"] == "rules" and sfr["calls"] == 0
+          and sfr["glossary_version"] and len(sfr["glossary_files"]) == 2
+          and sfr["glossary_files"][1].endswith("topics/dna_structure_and_replication.yaml")
+          and not [x for x in rl["calls"] if x["step"] == "spoken_form"]
+          and rl["totals"]["spoken_form_cost_usd"] == 0,
+          "rules mode: no LLM call, and the manifest records the glossary version and its layers")
+    check("5 prime to 3 prime" in strand["spoken_text"] and strand["spoken_text"] in tts_fake.calls
+          and strand["spoken_form"]["source"] == "rules"
+          and any(ch["rule"] in ("prime", "number prime (prime)") for ch in strand["spoken_form"]["changes"])
+          and strand["display_text"] != strand["spoken_text"],
+          "rules mode: the voice receives the rules' text, and each clip records its rule changes")
+    check(isinstance(sfr["unresolved_terms"], dict) and rl["counts"]["spoken_form_flagged"]
+          == sum(1 for c in rl["clips"] if (c.get("spoken_form") or {}).get("flags")),
+          "rules mode: undecided terms are listed for the lab and flagged per clip")
+
+    with_ssb = [c["audio_name"] for c in rl["clips"] if c["display_text"] and "SSB" in c["display_text"]]
+    (r / spoken_rules.RUN_GLOSSARY).write_text("terms:\n  SSB: single-strand binding protein\n",
+                                               encoding="utf-8")
+    tts_fake = FakeTTS()
+    narrate(rules_settings(), r, provider=tts_fake, log=quiet)
+    rl2 = manifest_of(r)
+    ssb_clip = {c["audio_name"]: c for c in rl2["clips"]}[with_ssb[0]]
+    check(with_ssb and len(tts_fake.calls) == len(with_ssb)
+          and "single-strand binding proteins" in ssb_clip["spoken_text"]
+          and rl2["spoken_form"]["glossary_version"] != sfr["glossary_version"]
+          and rl2["spoken_form"]["glossary_files"][-1].endswith("glossary.yaml"),
+          f"a term added in the run folder's glossary.yaml redoes only the {len(with_ssb)} clip(s) it changes")
+
+    gdir = fresh("cli_glossary")
+    good_g, bad_g = gdir / "extra.yaml", gdir / "bad.yaml"
+    good_g.write_text("terms:\n  SSB: S S B\n", encoding="utf-8")
+    bad_g.write_text("pins:\n  number_prime: furlongs\n", encoding="utf-8")
+    r = TMP / "runs" / "rules_extra"
+    narrate(rules_settings(glossary=[str(good_g)]), r, provider=FakeTTS(), log=quiet)
+    rx_ = manifest_of(r)
+    check(rx_["spoken_form"]["glossary_extra"] == [str(good_g)] and len(rx_["spoken_form"]["glossary_files"]) == 3
+          and any("S S Bs" in (c["spoken_text"] or "") for c in rx_["clips"]),
+          "--glossary FILE adds a layer, and the manifest keeps it for --resume")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "rules", "--dry-run")
+    check(code == 0 and "Spoken form: rules, glossary" in text and "clips changed" in text,
+          "--spoken-form rules --dry-run reports what the rules would change, sending nothing")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "none",
+                     "--glossary", str(good_g), "--dry-run")
+    check(code == 2 and "only applies with --spoken-form rules" in text, "--glossary without rules mode is an error")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--dry-run")
+    check(code == 0 and "Spoken form: rules, glossary" in text and narrate_lab.DEFAULT_SPOKEN_FORM == "rules"
+          and spoken_form.DEFAULT_MODEL == "claude-haiku-5.5",
+          "the default spoken form is rules, and the default LLM model is Claude Haiku 5.5")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "rules",
+                     "--glossary", str(gdir / "missing.yaml"), "--dry-run")
+    check(code == 2 and "no glossary file" in text, "a missing --glossary file exits 2")
+    code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "rules",
+                     "--glossary", str(bad_g), "--dry-run")
+    check(code == 2 and "furlongs" in text, "a bad glossary exits 2 with the reason, before any request")
+    code, text = cli("--resume", str(TMP / "runs" / "rules"), "--glossary", str(good_g))
+    check(code == 2 and "--glossary" in text,
+          "--resume refuses --glossary (the run folder's glossary.yaml is the way to add terms)")
+
+    # ── Text-only runs and the mode comparison (#94 measurement) ─────
+    r = TMP / "runs" / "measure" / "rules_text"
+    code = narrate(rules_settings(), r, provider=None, text_only=True, log=quiet)
+    tm_ = manifest_of(r)
+    check(code == 0 and tm_["status"] == "text_only" and tm_["counts"]["text_only"] == len(refs)
+          and not list(r.rglob("*.wav")) and not list(r.glob("*.zip"))
+          and all(c["spoken_text"] for c in tm_["clips"] if c["status"] == "text_only")
+          and tm_["runs"][0]["text_only"] and tm_["runs"][0]["spoken_form_seconds"] is not None
+          and not tm_["calls"],
+          "--text-only records every clip's spoken text with no voice service, audio or zip")
+    tts_fake = FakeTTS()
+    code = narrate(rules_settings(), r, provider=tts_fake, log=quiet)
+    check(code == 0 and manifest_of(r)["status"] == "complete" and len(tts_fake.calls) == len(refs),
+          "running a text-only folder again narrates it")
+    zip_ = r / manifest_of(r)["bundle"]["zip_file"]
+    code = narrate(rules_settings(), r, provider=None, text_only=True, log=quiet)
+    t2 = manifest_of(r)
+    check(code == 0 and t2["status"] == "complete" and zip_.is_file()
+          and t2["bundle"]["validation"] and t2["bundle"]["validation"]["ok"],
+          "--text-only on a finished folder with no spoken-text change leaves it complete, zip and all")
+    (r / spoken_rules.RUN_GLOSSARY).write_text("terms:\n  DNA: deoxyribonucleic acid\n", encoding="utf-8")
+    narrate(rules_settings(), r, provider=None, text_only=True, log=quiet)
+    t3 = manifest_of(r)
+    check(t3["status"] == "text_only" and not zip_.exists() and t3["counts"]["text_only"] > 0,
+          "--text-only after a spoken-text change marks the folder text_only and removes the stale zip")
+    (r / spoken_rules.RUN_GLOSSARY).unlink()
+    narrate(rules_settings(), r, provider=FakeTTS(), log=quiet)
+
+    r_llm = TMP / "runs" / "measure" / "llm_text"
+    sp_fake = FakeSpoken()
+    narrate(llm_settings(), r_llm, provider=None, spoken_call=sp_fake, text_only=True, log=quiet)
+    tts_fake = FakeTTS()
+    narrate(llm_settings(), r_llm, provider=tts_fake, spoken_call=sp_fake, log=quiet)
+    lt = manifest_of(r_llm)
+    check(len(sp_fake.calls) == 1 and len(tts_fake.calls) == len(refs) and lt["status"] == "complete"
+          and [x["run"] for x in lt["calls"] if x["step"] == "spoken_form"] == [1],
+          "narrating a text-only LLM folder reuses its spoken forms: the model is paid once")
+    narrate(settings_for(SAMPLE_LAB), TMP / "runs" / "measure" / "none_text", provider=None,
+            text_only=True, log=quiet)
+    narrate(rules_settings(), TMP / "runs" / "measure" / "rules_text_older", provider=None,
+            text_only=True, log=quiet)
+    older = TMP / "runs" / "measure" / "rules_text_older" / "narration_manifest.json"
+    om_ = json.loads(older.read_text(encoding="utf-8"))
+    om_["runs"][0]["started_at"] = "2000-01-01T00:00:00+00:00"   # the older run of the two
+    older.write_text(json.dumps(om_), encoding="utf-8")
+
+    import compare_runs  # noqa: E402
+    out_md = TMP / "runs" / "measure_report" / "report.md"
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = compare_runs.main([str(TMP / "runs" / "measure"), "--out", str(out_md)])
+    md = out_md.read_text(encoding="utf-8") if out_md.exists() else ""
+    rows = list(csv.DictReader(open(out_md.with_suffix(".csv"), encoding="utf-8"))) if out_md.exists() else []
+    check(code == 0 and {r_["mode"] for r_ in rows} == {"none", "rules", "llm claude-haiku-5.5"}
+          and "| rules | 1 |" in md and "| llm claude-haiku-5.5 | 1 |" in md and "$0.0005" in md,
+          "compare_runs.py tabulates each mode's clips changed, flags, spoken-form cost and time")
+    check(len(rows) == 3 and "ignored older runs: `rules_text_older`" in md,
+          "compare_runs.py compares one run per lab and mode, naming the older duplicates it ignored")
+    check("## Clips whose spoken text differs" in md and "**5 prime" in md and "🔊" in md
+          and "*none*" in md and "*Written:*" in md,
+          "compare_runs.py lists each clip whose spoken text differs, with every mode's text and changes in bold")
+    saved = {k: os.environ.pop(k, None) for k in ("OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")}
+    real_root = narrate_lab.NARRATION_ROOT
+    narrate_lab.NARRATION_ROOT = TMP / "cli_root"
+    try:
+        import dotenv
+        real_load = dotenv.load_dotenv
+        dotenv.load_dotenv = lambda *a, **k: False
+        code, text = cli(str(SAMPLE_LAB), "--provider", "gemini", "--spoken-form", "rules",
+                         "--text-only", "--run-group", "g")
+    finally:
+        dotenv.load_dotenv = real_load
+        narrate_lab.NARRATION_ROOT = real_root
+        os.environ.update({k: v for k, v in saved.items() if v is not None})
+    made = [p.name for p in (TMP / "cli_root" / "g").glob("*")] if (TMP / "cli_root" / "g").exists() else []
+    check(code == 0 and len(made) == 1 and "_gemini_rules_" in made[0],
+          "--text-only needs no voice-service key, and the run folder is named after the mode")
 
 # ══ Part 3: real clients against local mock servers ═══════════════════
 
@@ -902,7 +1557,7 @@ if HAVE_NARRATION:
                             time.sleep(delay)
                             self.wfile.write(piece)
                             self.wfile.flush()
-                    except (BrokenPipeError, ConnectionResetError):
+                    except ConnectionError:   # broken pipe, reset, or Windows' "aborted"
                         pass   # the client gave up (time limit): expected in these tests
 
                 def log_message(self, *a):
@@ -961,8 +1616,11 @@ if HAVE_NARRATION:
         check(code == 0 and om_m["status"] == "complete" and om_m["totals"]["transient_retries"] == 1
               and len(om.requests) - n_before == len(refs) + 1,
               "end to end over HTTP: a 503 is retried once by our retryer (the SDK makes no retries)")
-        check(abs(om_m["totals"]["cost_usd"] - len(refs) * (14 * 0.60 + 101 * 12.00) / 1e6) < 1e-9,
-              "OpenAI cost from the reported usage")
+        check(abs(om_m["totals"]["kept_audio_cost_usd"] - len(refs) * (14 * 0.60 + 101 * 12.00) / 1e6) < 1e-9
+              and om_m["totals"]["total_cost_usd"] == om_m["totals"]["kept_audio_cost_usd"]
+              and om_m["totals"]["calls"] == len(refs) + 1 and om_m["totals"]["calls_failed"] == 1
+              and all(x["request_id"] == "req_mock123" for x in om_m["calls"] if x["status"] == "ok"),
+              "OpenAI cost from the reported usage; the 503 is a logged request that cost $0")
 
         openai_state["fail"] = [401]
         r = TMP / "runs" / "openai_401"
@@ -1015,6 +1673,24 @@ if HAVE_NARRATION:
             check(outcome.startswith("no complete reply within 1 s") and took < 2.5,
                   f"a stream that goes {mode} past the limit is abandoned at the limit "
                   f"({took:.1f} s; {outcome})")
+        # Windows' coarse timers can fire the watchdog after httpx's read timeout (the
+        # same limit, counted from the last chunk); that must still be a TTSTimeout.
+        real_timer = threading.Timer
+
+        class LateTimer(real_timer):
+            def __init__(self, interval, function, *a, **kw):
+                super().__init__(interval + 0.3, function, *a, **kw)
+        stall.update(mode="silent", count=0)
+        threading.Timer = LateTimer
+        try:
+            fast.synthesize("x")
+            outcome = "no error"
+        except Exception as exc:  # noqa: BLE001
+            outcome = type(exc).__name__
+        finally:
+            threading.Timer = real_timer
+        check(outcome == "TTSTimeout",
+              f"a stall caught by httpx's read timeout before the watchdog is still the time limit ({outcome})")
         stall.update(mode="before_headers", count=0)
         t0 = time.monotonic()
         try:
@@ -1090,8 +1766,10 @@ if HAVE_NARRATION:
                 "modelVersion": "gemini-3.8-flash-tts"}).encode()
         if gem_state["fail"]:
             code = gem_state["fail"].pop(0)
+            code, details = code if isinstance(code, tuple) else (code, [])
             return code, {"content-type": "application/json"}, json.dumps(
-                {"error": {"code": code, "message": f"mock {code}", "status": "X"}}).encode()
+                {"error": {"code": code, "message": f"mock {code}", "status": "X",
+                           "details": details}}).encode()
         return 200, {"content-type": "application/json"}, json.dumps({
             "candidates": [{"content": {"role": "model", "parts": [{"inlineData": {
                 "mimeType": gem_state["mime"], "data": base64.b64encode(gem_state["data"]).decode()}}]},
@@ -1160,7 +1838,7 @@ if HAVE_NARRATION:
               and len(gm.requests) - n_before == len(refs) + 1
               and validate_bundle(r / gmm["bundle"]["zip_file"]).ok,
               "Gemini end to end: a 500 is retried once (no SDK retries) and the zip validates")
-        check(abs(gmm["totals"]["cost_usd"] - len(refs) * (12 * 1.00 + 125 * 18.00) / 1e6) < 1e-9,
+        check(abs(gmm["totals"]["kept_audio_cost_usd"] - len(refs) * (12 * 1.00 + 125 * 18.00) / 1e6) < 1e-9,
               "Gemini cost from the reported usage at the gemini-3.8-flash-tts rates")
         gem_state["fail"] = [403]
         r = TMP / "runs" / "gemini_403"
@@ -1168,6 +1846,27 @@ if HAVE_NARRATION:
         code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
                        provider=prov, log=quiet)
         check(code == 1 and len(gm.requests) - n_before == 1, "a Gemini 403 stops the run after one request")
+        def quota(quota_id, delay):
+            return [{"@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                     "violations": [{"quotaId": quota_id, "quotaValue": "100"}]},
+                    {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": delay}]
+        gem_state["fail"] = [(429, quota("GenerateRequestsPerDayPerProjectPerModel", "40s"))]
+        r = TMP / "runs" / "gemini_daily_quota"
+        n_before = len(gm.requests)
+        code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
+                       provider=prov, log=quiet)
+        check(code == 1 and len(gm.requests) - n_before == 1
+              and "daily request quota" in manifest_of(r)["clips"][0]["error_reason"],
+              "the real Gemini client's 429 for a used-up daily quota stops the run after one request")
+        gem_state["fail"] = [(429, quota("GenerateRequestsPerMinutePerProjectPerModel", "0.4s"))]
+        r = TMP / "runs" / "gemini_per_minute"
+        t0 = time.monotonic()
+        code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
+                       provider=prov, log=quiet)
+        gpm = manifest_of(r)
+        check(code == 0 and gpm["clips"][0]["transient_retries"] == 1 and time.monotonic() - t0 >= 0.4
+              and "asked to wait 0.4 s" in gpm["clips"][0]["transient_errors"][0]["reason"],
+              "the real Gemini client's per-minute 429 waits the RetryInfo delay, then succeeds")
         gem_state["no_audio"] = 1
         r = TMP / "runs" / "gemini_no_audio"
         code = narrate(settings_for(SAMPLE_LAB, voice="Charon", provider="gemini"), r,
@@ -1178,6 +1877,12 @@ if HAVE_NARRATION:
               and "no audio" in c0["transient_errors"][0]["reason"]
               and "OTHER" in c0["transient_errors"][0]["detail"],
               "a Gemini reply with no audio (finish reason OTHER) is retried; it doesn't stop the run")
+        na = next(x for x in gna["calls"] if x["status"] == "error")
+        check(na["error_type"] == "TTSNoAudio" and na["input_tokens"] == 12 and na["output_tokens"] == 0
+              and abs(na["cost_usd"] - 12 * 1.00 / 1e6) < 1e-15
+              and na["served_model"] == "gemini-3.8-flash-tts"
+              and abs(gna["totals"]["total_cost_usd"] - gna["totals"]["kept_audio_cost_usd"] - 12e-6) < 1e-15,
+              "the billed tokens of a Gemini reply with no audio are logged and counted in the total")
 
         slow = {"sleep": 0}
         real_handler = gemini_handler
@@ -1218,6 +1923,105 @@ if HAVE_NARRATION:
     finally:
         gm.close()
 
+
+# The spoken-form LLM call, for real (guarded client, tracker, provider kwargs), against
+# a mock Anthropic server.
+if HAVE_NARRATION:
+    anth_reqs = []
+    anth_state = {"bad": False, "fail": []}
+
+    def anthropic_handler(path, body):
+        anth_reqs.append(body)
+        if anth_state["fail"]:
+            code = anth_state["fail"].pop(0)
+            return code, {"content-type": "application/json"}, json.dumps(
+                {"type": "error", "error": {"type": "overloaded_error", "message": "mock"}}).encode()
+        if anth_state["bad"]:   # a reply that never fits LabSpokenForms
+            tool = body["tools"][0]["name"]
+            return 200, {"content-type": "application/json"}, json.dumps({
+                "id": "msg_mock", "type": "message", "role": "assistant", "model": body["model"],
+                "content": [{"type": "tool_use", "id": "toolu_bad", "name": tool, "input": {"oops": 1}}],
+                "stop_reason": "tool_use", "stop_sequence": None,
+                "usage": {"input_tokens": 1200, "output_tokens": 1000}}).encode()
+        prompt = body["messages"][0]["content"]
+        if isinstance(prompt, list):
+            prompt = " ".join(block.get("text", "") for block in prompt)
+        clips = _re.findall(r"\[([^\]\n]+)\]\n(.+?)(?=\n\n\[|\Z)", prompt.split("Clips:\n\n", 1)[1], _re.S)
+        tool = body["tools"][0]["name"]
+        return 200, {"content-type": "application/json"}, json.dumps({
+            "id": "msg_mock", "type": "message", "role": "assistant", "model": body["model"],
+            "content": [{"type": "tool_use", "id": "toolu_mock", "name": tool, "input": {"clips": [
+                {"audio_name": n, "spoken_text": t.replace("DNA", "D N A")} for n, t in clips]}}],
+            "stop_reason": "tool_use", "stop_sequence": None,
+            "usage": {"input_tokens": 1200, "output_tokens": 1000},
+        }).encode()
+
+    am = Mock(anthropic_handler)
+    saved_env = {k: os.environ.get(k) for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY")}
+    os.environ["ANTHROPIC_BASE_URL"], os.environ["ANTHROPIC_API_KEY"] = am.url, "test"
+    try:
+        r = TMP / "runs" / "llm_anthropic"
+        st = settings_for(SAMPLE_LAB)
+        st.spoken_form, st.spoken_form_model = "llm", "claude-haiku-5.5"
+        code = narrate(st, r, provider=FakeTTS(), log=quiet)
+        la = manifest_of(r)
+        req = anth_reqs[-1] if anth_reqs else {}
+        check(code == 0 and len(anth_reqs) == 1 and req.get("model") == "claude-haiku-5-5"
+              and req.get("tool_choice") == {"type": "auto", "disable_parallel_tool_use": True}
+              and "exactly once" in str(req.get("system")) and req["tools"][0]["name"] == "LabSpokenForms",
+              "the real spoken-form call goes through the guarded Anthropic path (tool_choice auto, one call)")
+        check(la["spoken_form"]["input_tokens"] == 1200 and la["spoken_form"]["output_tokens"] == 1000
+              and abs(la["spoken_form"]["cost_usd"] - (1200 * 0.10 + 1000 * 0.50) / 1e6) < 1e-12
+              and la["spoken_form"]["served_models"] == ["claude-haiku-5-5"]
+              and la["spoken_form"]["model_id"] == "claude-haiku-5-5",
+              "its tokens, cost (Claude Haiku 5.5 rates) and served model are tracked")
+        sfc = [x for x in la["calls"] if x["step"] == "spoken_form"]
+        check(len(sfc) == 1 and sfc[0]["status"] == "ok" and sfc[0]["kind"] == "first"
+              and sfc[0]["seconds"] is not None and sfc[0]["seconds"] >= 0
+              and sfc[0]["input_tokens"] == 1200 and sfc[0]["served_model"] == "claude-haiku-5-5"
+              and abs(sfc[0]["cost_usd"] - la["spoken_form"]["cost_usd"]) < 1e-15
+              and abs(la["totals"]["spoken_form_cost_usd"] - la["spoken_form"]["cost_usd"]) < 1e-15,
+              "the spoken-form request is in the call log with its own cost and time")
+        check(any("D N A" in c["spoken_text"] for c in la["clips"] if c.get("spoken_text")),
+              "the model's spoken text reaches the clips")
+        check(req.get("output_config") == {"effort": "low"} and la["spoken_form"]["reasoning_effort"] == "low",
+              "the spoken-form call asks for low reasoning effort, and the manifest records it")
+        anth_state["bad"] = True
+        r = TMP / "runs" / "llm_anthropic_bad"
+        n_before = len(anth_reqs)
+        code = narrate(st, r, provider=FakeTTS(), log=quiet)
+        lb = manifest_of(r)
+        attempts = len(anth_reqs) - n_before
+        check(code == 0 and attempts == spoken_form.MAX_RETRIES + 1 and lb["spoken_form"]["error"]
+              and lb["spoken_form"]["input_tokens"] == 1200 * attempts
+              and abs(lb["spoken_form"]["cost_usd"] - attempts * (1200 * 0.10 + 1000 * 0.50) / 1e6) < 1e-12,
+              "a spoken-form call that fails after its reasks still records the tokens and cost it used")
+        sfc = [x for x in lb["calls"] if x["step"] == "spoken_form"]
+        one = (1200 * 0.10 + 1000 * 0.50) / 1e6
+        check([x["kind"] for x in sfc] == ["first"] + ["reask"] * spoken_form.MAX_RETRIES
+              and all(x["status"] == "error" and x["error_type"] and abs(x["cost_usd"] - one) < 1e-15
+                      for x in sfc)
+              and abs(lb["totals"]["spoken_form_cost_usd"] - attempts * one) < 1e-12
+              and abs(lb["totals"]["total_cost_usd"]
+                      - lb["totals"]["tts_cost_usd"] - attempts * one) < 1e-12,
+              "each reask is its own logged request with its cost, and all of them count in the total")
+        anth_state["bad"] = False
+        anth_state["fail"] = [529]
+        r = TMP / "runs" / "llm_anthropic_529"
+        code = narrate(st, r, provider=FakeTTS(), log=quiet)
+        l5 = manifest_of(r)
+        sfc = [x for x in l5["calls"] if x["step"] == "spoken_form"]
+        check(code == 0 and not l5["spoken_form"]["error"] and l5["spoken_form"]["transient_retries"] == 1
+              and [(x["kind"], x["status"]) for x in sfc] == [("first", "error"), ("transient re-send", "ok")]
+              and sfc[0]["cost_usd"] == 0.0 and abs(sfc[1]["cost_usd"] - one) < 1e-15,
+              "a spoken-form request rejected with HTTP 529 is logged at $0, then the re-send with its cost")
+    finally:
+        am.close()
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 shutil.rmtree(TMP, ignore_errors=True)
 print("\nALL PASSED" if not FAILED else "\nSOME FAILED")
 sys.exit(1 if FAILED else 0)

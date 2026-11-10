@@ -443,6 +443,7 @@ class InstructorTracker:
             attempt.served_model = served_model_of(response)
             attempt.responded = True
             attempt.success = True      # provisional: a parse error clears it
+            self._end_attempt(attempt)
             call.total_usage = call.total_usage + usage
 
     def _on_completion_error(self, call_id: str, error: Exception):
@@ -533,9 +534,18 @@ class InstructorTracker:
         second is still counted."""
         record = self._error_record(error, attempt.attempt_number, default_type)
         attempt.success = False
+        self._end_attempt(attempt)
         if attempt.error is None:
             attempt.error = record
         self._count_error(call, record)
+
+    @staticmethod
+    def _end_attempt(attempt: AttemptMetrics) -> None:
+        """Record how long the request took: from the attempt opening (just before
+        the request is sent) to its response or error. A later parse error on the
+        same attempt keeps the request's time."""
+        if attempt.duration_ms is None:
+            attempt.duration_ms = (datetime.now() - attempt.timestamp).total_seconds() * 1000
 
     def _error_record(self, error: Exception, attempt_number: int,
                       default_type: ErrorType) -> ErrorRecord:
