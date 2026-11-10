@@ -742,8 +742,16 @@ def run(settings: Settings, run_dir: Path, *, overwrite: bool = False, provider=
             manifest["warnings"].append(f"served by {s}, not the requested {spec.model}")
 
     failed = [r for r in records if r["status"] == "failed"]
-    if text_only:
+    if text_only and not any(r["status"] == "text_only" for r in records) and old \
+            and old.get("status") == "complete" and (run_dir / names.zip_file).is_file():
+        # Every clip's audio is still current: the folder stays complete, zip and all.
+        manifest["status"] = "complete"
+        manifest["bundle"]["validation"] = (old.get("bundle") or {}).get("validation")
+        log("\nText only: no spoken text changed; the narrated folder is still complete.")
+    elif text_only:
         manifest["status"] = "text_only"
+        # Some spoken text changed, so a zip from an earlier run is out of date.
+        (run_dir / names.zip_file).unlink(missing_ok=True)
         log(f"\nText only: spoken text recorded, no audio. Narrate this folder with:\n"
             f'  python "Code/Narration/narrate_lab.py" --resume "{_rel(run_dir)}"')
     elif failed:

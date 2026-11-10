@@ -578,6 +578,9 @@ if HAVE_RULES:
             ("Its pH is 7.4.", "Its P H is 7 point 4.", ()),
             ("ClF3, BrF5 and I3- form; Ca2+ and Na+ ions; Cl- too.",
              "C l F 3, B r F 5 and I 3 minus form; C a 2 plus and N a plus ions; C l minus too.", ()),
+            ("Most adults are 5'-6' tall.", "Most adults are 5 feet to 6 feet tall.", ()),
+            ("In the 5 s after launch, the 10 m between them shrinks; a 5 m long rope.",
+             "In the 5 seconds after launch, the 10 meters between them shrinks; a 5 meter long rope.", ()),
         ],
         "left alone": [
             ("In the 1990's and the 1990s, 3D models came in.", "In the 1990's and the 1990s, 3D models came in.", ()),
@@ -587,6 +590,10 @@ if HAVE_RULES:
             ("A T-shirt, an X-ray and a U-turn.", "A T-shirt, an X-ray and a U-turn.", ()),
             ("The year 2024 had 365 days.", "The year 2024 had 365 days.", ()),
             ("Jupiter at 5.2.", "Jupiter at 5 point 2.", ()),
+            ("The kit costs $4.99 per student.", "The kit costs $4.99 per student.", ()),
+            ("The LED lights up.", "The LED lights up.", ("This led to a brighter bulb.",)),
+            ("Both S- and P-waves arrive; the N- and C-termini differ.",
+             "Both S- and P-waves arrive; the N- and C-termini differ.", ()),
         ],
     }
     for group, cases in CASES.items():
@@ -1384,7 +1391,7 @@ if HAVE_NARRATION:
           "rules mode: no LLM call, and the manifest records the glossary version and its layers")
     check("5 prime to 3 prime" in strand["spoken_text"] and strand["spoken_text"] in tts_fake.calls
           and strand["spoken_form"]["source"] == "rules"
-          and any(ch["rule"] == "prime" for ch in strand["spoken_form"]["changes"])
+          and any(ch["rule"] in ("prime", "number prime (prime)") for ch in strand["spoken_form"]["changes"])
           and strand["display_text"] != strand["spoken_text"],
           "rules mode: the voice receives the rules' text, and each clip records its rule changes")
     check(isinstance(sfr["unresolved_terms"], dict) and rl["counts"]["spoken_form_flagged"]
@@ -1448,6 +1455,19 @@ if HAVE_NARRATION:
     code = narrate(rules_settings(), r, provider=tts_fake, log=quiet)
     check(code == 0 and manifest_of(r)["status"] == "complete" and len(tts_fake.calls) == len(refs),
           "running a text-only folder again narrates it")
+    zip_ = r / manifest_of(r)["bundle"]["zip_file"]
+    code = narrate(rules_settings(), r, provider=None, text_only=True, log=quiet)
+    t2 = manifest_of(r)
+    check(code == 0 and t2["status"] == "complete" and zip_.is_file()
+          and t2["bundle"]["validation"] and t2["bundle"]["validation"]["ok"],
+          "--text-only on a finished folder with no spoken-text change leaves it complete, zip and all")
+    (r / spoken_rules.RUN_GLOSSARY).write_text("terms:\n  DNA: deoxyribonucleic acid\n", encoding="utf-8")
+    narrate(rules_settings(), r, provider=None, text_only=True, log=quiet)
+    t3 = manifest_of(r)
+    check(t3["status"] == "text_only" and not zip_.exists() and t3["counts"]["text_only"] > 0,
+          "--text-only after a spoken-text change marks the folder text_only and removes the stale zip")
+    (r / spoken_rules.RUN_GLOSSARY).unlink()
+    narrate(rules_settings(), r, provider=FakeTTS(), log=quiet)
 
     r_llm = TMP / "runs" / "measure" / "llm_text"
     sp_fake = FakeSpoken()
@@ -1460,6 +1480,12 @@ if HAVE_NARRATION:
           "narrating a text-only LLM folder reuses its spoken forms: the model is paid once")
     narrate(settings_for(SAMPLE_LAB), TMP / "runs" / "measure" / "none_text", provider=None,
             text_only=True, log=quiet)
+    narrate(rules_settings(), TMP / "runs" / "measure" / "rules_text_older", provider=None,
+            text_only=True, log=quiet)
+    older = TMP / "runs" / "measure" / "rules_text_older" / "narration_manifest.json"
+    om_ = json.loads(older.read_text(encoding="utf-8"))
+    om_["runs"][0]["started_at"] = "2000-01-01T00:00:00+00:00"   # the older run of the two
+    older.write_text(json.dumps(om_), encoding="utf-8")
 
     import compare_runs  # noqa: E402
     out_md = TMP / "runs" / "measure_report" / "report.md"
@@ -1471,6 +1497,8 @@ if HAVE_NARRATION:
     check(code == 0 and {r_["mode"] for r_ in rows} == {"none", "rules", "llm claude-haiku-5.5"}
           and "| rules | 1 |" in md and "| llm claude-haiku-5.5 | 1 |" in md and "$0.0005" in md,
           "compare_runs.py tabulates each mode's clips changed, flags, spoken-form cost and time")
+    check(len(rows) == 3 and "ignored older runs: `rules_text_older`" in md,
+          "compare_runs.py compares one run per lab and mode, naming the older duplicates it ignored")
     check("## Clips whose spoken text differs" in md and "**5 prime" in md and "🔊" in md
           and "*none*" in md and "*Written:*" in md,
           "compare_runs.py lists each clip whose spoken text differs, with every mode's text and changes in bold")

@@ -405,11 +405,7 @@ def _make_llm_call(model_key: str, report: PassReport):
             # each instructor attempt inside it is one request (attempt 2+ = a reask).
             out = []
             for ci, tc in enumerate(tracker.aggregate.calls):
-                for ai, att in enumerate(tc.attempts):
-                    # The tracker marks when each request starts; a request ends when
-                    # the next one starts (a reask) or the call ends.
-                    end = (tc.attempts[ai + 1].timestamp if ai + 1 < len(tc.attempts)
-                           else tc.end_time)
+                for att in tc.attempts:
                     kind = ("reask" if att.attempt_number > 1
                             else "first" if ci == 0 else "transient re-send")
                     err = att.error
@@ -422,9 +418,8 @@ def _make_llm_call(model_key: str, report: PassReport):
                         "output_tokens": att.usage.completion_tokens,
                         "cost_usd": (tracker.pricing.calculate_cost(att.usage)
                                      if att.responded else unanswered_cost(err)),
-                        "seconds": (round(att.duration_ms / 1000, 3) if att.duration_ms
-                                    else round((end - att.timestamp).total_seconds(), 3)
-                                    if end else None),
+                        "seconds": (round(att.duration_ms / 1000, 3)
+                                    if att.duration_ms is not None else None),
                         "served_model": att.served_model,
                         "started_at": att.timestamp.isoformat(timespec="seconds"),
                     })

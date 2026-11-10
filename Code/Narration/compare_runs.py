@@ -99,20 +99,34 @@ def _md(text: str) -> str:
 
 
 def build(manifests: list[Path]) -> tuple[list[dict], str]:
-    rows, by_lab = [], defaultdict(dict)   # input -> mode -> manifest
+    by_lab = defaultdict(dict)   # input -> mode -> (row, manifest): one run per lab and mode
+    replaced = []
     for path in manifests:
         try:
             m = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
         row = run_row(path, m)
-        rows.append(row)
-        by_lab[row["input"]][row["mode"]] = (row, m)
+        started = ((m.get("runs") or [{}])[0].get("started_at") or "", row["run"])
+        kept = by_lab[row["input"]].get(row["mode"])
+        if kept and kept[2] > started:
+            replaced.append(row["run"])          # an older run of the same lab and mode
+            continue
+        if kept:
+            replaced.append(kept[0]["run"])
+        by_lab[row["input"]][row["mode"]] = (row, m, started)
+    rows = [v[0] for per_mode in by_lab.values() for v in per_mode.values()]
+    if not rows:
+        return [], "# Spoken-form comparison\n\nNo readable run manifests.\n"
 
     modes = sorted({r["mode"] for r in rows}, key=lambda x: (x != "none", x != "rules", x))
     out = ["# Spoken-form comparison", "",
            f"{len(rows)} runs, {len(by_lab)} labs. Spoken-form cost and time are what the pass "
-           "adds to narrating a lab; audio columns fill in once a run has audio.", "",
+           "adds to narrating a lab; audio columns fill in once a run has audio."]
+    if replaced:
+        out += ["", f"Only the newest run of each lab and mode is compared; ignored older "
+                    f"runs: {', '.join(f'`{r}`' for r in sorted(replaced))}."]
+    out += ["",
            "## By mode", "",
            "| Mode | Labs | Clips changed | Flagged | Spoken-form $ / lab | Spoken-form s / lab "
            "| Failed requests | Audio $ / lab (complete runs) |",
@@ -172,6 +186,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: no {MANIFEST} under {', '.join(map(str, args.paths))}", file=sys.stderr)
         return 2
     rows, report = build(manifests)
+    if not rows:
+        print(f"error: none of the {len(manifests)} {MANIFEST} files could be read", file=sys.stderr)
+        return 2
     out = args.out or Path(os.path.commonpath([str(p.parent.parent) for p in manifests])) / "spoken_form_comparison.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(report, encoding="utf-8")

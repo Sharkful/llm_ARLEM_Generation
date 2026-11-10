@@ -467,13 +467,17 @@ for, on four principles:
 1. **Rules cover notation, not topics.** Each rule is general:
    - chemical formulas, found by checking a token splits into real element symbols
      plus digits (`XeF4` → "X e F 4", `C6H12O6`, `2H2O`); a token with no digits is
-     never treated as a formula (`HeLa`, `CNS`)
+     never treated as a formula (`HeLa`, `CNS`); an ion's charge is said
+     (`I3-` → "I 3 minus", `Na+` → "N a plus"), but a suspended hyphen is not
+     (`S- and P-waves`)
    - number + unit from a general unit table (`9.8 m/s²` → "9 point 8 meters per
-     second squared", `220 Ω`, `5mm`); singular for 1 and after an article
-     ("a 180 degree turn")
+     second squared", `220 Ω`, `5mm`); singular for 1 and when describing a
+     noun after an article ("a 180 degree turn"), plural otherwise ("the 5 seconds
+     after launch")
    - degrees (`°`, `°C`, `°F`), percent, ranges (`150-200` → "150 to 200"),
      signs, and decimals ("104.5" → "104 point 5"; digits after the point one by
-     one). Other numbers keep their digits: the cloud voices read them fine.
+     one; not prices: `$4.99` stays). Other numbers keep their digits: the cloud
+     voices read them fine.
    - Greek letters, math operators (`=`, `+`, `<`, `±`, `√`, powers), arrows,
      `v0` / `v₀` → "v zero", and axis subscripts (`Vx` → "V x") in a lab with
      vector clues
@@ -485,10 +489,14 @@ for, on four principles:
    the one with strictly the most clue words anywhere in the lab (id, course,
    object names, narration) wins. Strong local patterns always win: `5'10"` is
    feet and inches, `23°26'` is arcminutes, `5'→3'`, `3'-to-5'`, `5'-ATGC-3'` and
-   "the 3' end" are primes. A topic glossary can pin a meaning.
+   "the 3' end" are primes. A pair joined by a plain hyphen or "to" (`5'-6'`)
+   could be a range of feet, so the clues decide it. A topic glossary can pin a
+   meaning.
 3. **When unsure, leave it and flag it.** An acronym the glossary doesn't know is
-   left for the voice and flagged; a capitalized word the lab also writes in
-   lowercase is emphasis (`press NEXT` → "press next"); a prime with no clues and
+   left for the voice and flagged; a capitalized word of 4+ letters the lab also
+   writes in lowercase is emphasis (`press NEXT` → "press next"). Shorter ones
+   are often initialisms that spell a word (`LED`, `WHO`), so they are left; short
+   emphasis words go in the glossary (`NOT` → "not"). A prime with no clues and
    a symbol with no rule are left and flagged. On a new topic the worst case is
    the narration as written plus a list of terms to review.
 4. **The glossary is layered**, most specific last (it wins):
@@ -540,8 +548,9 @@ One wave-2 lab per topic (`Artifacts/Data/Narration/spoken-form-measure/`,
   Claude Haiku 5.5 is the opt-in for topics whose notation the glossary doesn't
   cover; it adds about 2% to a lab's audio cost.
 - The audio listening check was cut short by Gemini TTS's daily quota (the run
-  is now stopped at once by such a 429, see "Failures"); the retrograde lab has
-  audio for none, rules and Haiku.
+  is now stopped at once by such a 429, see "Failures"). The retrograde lab has
+  complete audio for none and Haiku; its rules run stopped at 27 of 29 clips (the
+  two missing clips have the same text in every mode).
 
 ## Engineering rules (from the repo, not from JW's code)
 

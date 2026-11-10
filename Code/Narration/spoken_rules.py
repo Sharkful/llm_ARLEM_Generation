@@ -224,7 +224,7 @@ _CHARS = str.maketrans({
 })
 _SUPER = {"²": "^2", "³": "^3", "¹": "^1", "⁴": "^4"}
 # Characters that need no handling: voices read them as punctuation or pauses.
-_PLAIN = set(" .,;:!?'\"()[]-—–…/\n\t’‘“”") | set("abcdefghijklmnopqrstuvwxyz"
+_PLAIN = set(" .,;:!?'\"()[]-—–…/\n\t’‘“”$€£¥") | set("abcdefghijklmnopqrstuvwxyz"
                                                "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 # Two-letter words that look like an axis variable (b + y = "by").
 _NOT_VARIABLES = {"by", "my", "ax", "ox", "ex", "oy", "ay", "oz"}
@@ -233,9 +233,23 @@ _NOT_VARIABLES = {"by", "my", "ax", "ox", "ex", "oy", "ay", "oz"}
 _ARTICLE = re.compile(r"(?:^|\W)(?:a|an|the|this|that|each|every|one)\s+$", re.IGNORECASE)
 
 
-def _one(n: str, before: str) -> bool:
-    """Singular unit word: for 1, and for an adjective ("a 180 degree turn")."""
-    return n.lstrip("-") == "1" or bool(_ARTICLE.search(before))
+# After "the 5 s", these words mean the number + unit is a plural noun phrase
+# ("the 5 seconds after launch"), not an adjective ("the 5 second delay").
+_PLURAL_NEXT = frozenset("""
+after before between of in on at to from for with by ago later apart away is are was were
+be been and or per each that which when while into onto over under above below behind
+across along around through since until than as it they""".split())
+
+
+def _one(n: str, before: str, after: str = "") -> bool:
+    """Singular unit word: for 1, and for an adjective, i.e. after an article and
+    before the noun it describes ("a 180 degree turn", "the 45 degree result")."""
+    if n.lstrip("-") == "1":
+        return True
+    if not _ARTICLE.search(before):
+        return False
+    nxt = re.match(r"\s*([A-Za-z]+)", after)
+    return bool(nxt) and nxt.group(1).islower() and nxt.group(1) not in _PLURAL_NEXT
 
 
 class _Rules:
@@ -353,7 +367,9 @@ class _Rules:
                                + (f" {m.group(3)} arcseconds" if m.group(3) else ""), t)
         if "prime" in self.g.senses.get("number_prime", {}):
             w = self._prime_word
-            t = self.sub("prime", r"(?<![\w.])(\d+)' ?(?:→|->|-to-|-|–|to\b) ?(\d+)'(?![\w'])",
+            # An arrow or "-to-" between two primes is a direction (5'→3'); a plain
+            # hyphen or "to" may be a range of feet (5'-6'), so the clues decide those.
+            t = self.sub("prime", r"(?<![\w.])(\d+)' ?(?:→|->|-to-) ?(\d+)'(?![\w'])",
                          lambda m: f"{m.group(1)} {w('prime', m.group(1))} to "
                                    f"{m.group(2)} {w('prime', m.group(2))}", t)
             t = self.sub("prime", r"(?<![\w.])(\d+)'(?= ?-? ?(?:end|ends|cap|carbon|terminus|UTR|"
@@ -361,6 +377,12 @@ class _Rules:
                          lambda m: f"{m.group(1)} {w('prime', m.group(1))}", t)
         # The rest by the lab's clues. "1990's" is a plural, not a prime.
         rx = re.compile(r"(?<![\w.'])(\d+)'(?![\w'\"])")
+        if self.prime is not None:   # a pair joined by a hyphen or "to" reads as a range
+            p = self.prime
+            t = self.sub(f"number prime ({p})",
+                         r"(?<![\w.'])(\d+)' ?(?:-|–|to\b) ?(\d+)'(?![\w'\"])",
+                         lambda m: f"{m.group(1)} {self._prime_word(p, m.group(1))} to "
+                                   f"{m.group(2)} {self._prime_word(p, m.group(2))}", t)
         if self.prime is None:
             for m in rx.finditer(t):
                 self.flag(m.group(0), "prime, feet or arcminutes? The lab has no clues; "
@@ -372,7 +394,7 @@ class _Rules:
     def degrees(self, t: str) -> str:
         def deg(m):
             n, scale = m.group(1), m.group(2)
-            word = "degree" if _one(n, t[:m.start()]) else "degrees"
+            word = "degree" if _one(n, t[:m.start()], t[m.end():]) else "degrees"
             return f"{n} {word}" + ({"C": " Celsius", "F": " Fahrenheit"}.get(scale or "", ""))
         t = self.sub("degrees", r"(" + _NUM + r") ?°(?: ?([CF])\b)?", deg, t)
         return self.sub("degrees", r"°(?: ?([CF])\b)?",
@@ -402,7 +424,7 @@ class _Rules:
                 n, sym, glued = m.group(1), m.group(3), m.group(2) == ""
                 if glued and "/" not in sym and len(sym.split("^")[0]) < 2:
                     return None          # "1990s", "3D": a single letter glued on is not a unit
-                words = self._unit_words(sym, not _one(n, t[:m.start()]))
+                words = self._unit_words(sym, not _one(n, t[:m.start()], t[m.end():]))
                 return None if words is None else f"{n} {words}"
             t = self.sub("unit", rf"(?<![\w.])(-?{_NUM})( ?)({unit})(?![\w/^])", after_number, t)
             # A compound unit on its own ("in m/s") is still a unit.
@@ -421,6 +443,10 @@ class _Rules:
                 return None
             if not any(n for _, n in groups) and not charge:
                 return None              # no counts or charge: may be a word (HeLa, CNS)
+            # "S- and P-waves", "N- or C-terminal": a suspended hyphen, not a charge.
+            if (charge == "-" and not any(n for _, n in groups) and re.match(
+                    r"(?:\s*,\s*[A-Z][a-z]?-)*\s*,?\s*(?:and|or|to)\s+[A-Za-z]+-\w", t[m.end():])):
+                return None
             said = " ".join(" ".join(e) + (f" {n}" if n else "") for e, n in groups)
             # An ion's charge as written: I3- -> "I 3 minus", Ca2+ -> "C a 2 plus".
             sign = {"+": " plus", "-": " minus"}.get(charge, "")
@@ -457,7 +483,8 @@ class _Rules:
 
     def decimals(self, t: str) -> str:
         # The voice may read "104.5" as "104. 5"; digits after the point one by one.
-        return self.sub("decimal", r"(?<![\w.])(\d+(?:,\d{3})*)\.(\d+)(?!\w|\.\d)",
+        # Not money ($4.99): voices read prices as written.
+        return self.sub("decimal", r"(?<![\w.$€£¥])(\d+(?:,\d{3})*)\.(\d+)(?!\w|\.\d)",
                         lambda m: f"{m.group(1)} point {' '.join(m.group(2))}", t)
 
     def slashes(self, t: str) -> str:
@@ -475,7 +502,10 @@ class _Rules:
             word, base = m.group(0), m.group(1)
             if base in self.g.terms or word in self.g.terms:
                 return None                          # known: read as written
-            if len(base) >= 3 and base.casefold() in self.ctx.lowercase_words:
+            # Emphasis only for 4+ letters: shorter ones are often initialisms that
+            # spell a word (LED, WHO, CAT); longer ones read the same as a word
+            # (NEXT, AWAY, LASER). Short emphasis words go in the glossary (NOT).
+            if len(base) >= 4 and base.casefold() in self.ctx.lowercase_words:
                 return word.casefold()               # emphasis: "press NEXT"
             self.flag(word, "acronym not in the glossary; left for the voice")
             return None
@@ -509,13 +539,9 @@ def _labs(paths: list[Path]):
 
 
 def _topic_of(path: Path) -> str | None:
-    name = path.name.removesuffix("_output.json") + "_metrics.json"
-    for cand in (path.with_name(name), path.parent.parent / "Metrics" / name):
-        try:
-            return json.loads(cand.read_text(encoding="utf-8")).get("lab_name")
-        except (OSError, ValueError):
-            continue
-    return None
+    """The lab's topic from its paired metrics file, as narrate_lab finds it."""
+    from narrate_lab import paired_metrics   # narrate_lab imports this module at the top
+    return (paired_metrics(path) or {}).get("lab_name")
 
 
 def _clips(lab: dict):
