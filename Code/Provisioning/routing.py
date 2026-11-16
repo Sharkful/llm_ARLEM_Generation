@@ -190,6 +190,8 @@ class LabAssetPlan(BaseModel):
         problems: list[str] = []
         seen: dict[tuple[str, str], PlannedAsset] = {}
         wrong_kind: set[tuple[str, str]] = set()   # answered, but with the wrong kind
+        forms = {kind: forms_for(kind) for kind in KINDS}     # once per validation
+        routes = {kind: routes_for(kind) for kind in KINDS}
         kinds_of = {}
         for kind, k in listed:
             kinds_of.setdefault(k, set()).add(kind)
@@ -211,12 +213,12 @@ class LabAssetPlan(BaseModel):
                 continue
             seen[key] = a
             a.name = name
-            if a.form not in forms_for(a.kind):
+            if a.form not in forms[a.kind]:
                 problems.append(f"{name!r}: form {a.form!r} is not one of the {a.kind} forms "
-                                f"({', '.join(forms_for(a.kind))})")
-            if a.route not in routes_for(a.kind):
+                                f"({', '.join(forms[a.kind])})")
+            if a.route not in routes[a.kind]:
                 problems.append(f"{name!r}: route {a.route!r} is not one of the {a.kind} routes "
-                                f"({', '.join(routes_for(a.kind))})")
+                                f"({', '.join(routes[a.kind])})")
             if not a.description.strip():
                 problems.append(f"{name!r}: the description is empty")
             if not a.reason.strip():
