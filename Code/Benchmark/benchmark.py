@@ -330,6 +330,35 @@ def _transient_retryer():
     )
 
 
+def guarded_create(tracked_client, tracker, model_config: ModelConfig, response_model,
+                   messages: list, max_retries: int, stats: Optional[dict] = None):
+    """One structured call the way every entry point must make it: the provider
+    guards (``provider_create_kwargs``: the Anthropic ``tool_choice`` guard, reasoning
+    effort, stateless Responses reasoning) and the bounded transient retry
+    (``_transient_retryer``) around ``tracked_client.create``.
+
+    ``stats``, if given, is updated even when the call fails: ``transient_retries``
+    (re-sends after a transient error) and ``reask_restarts`` (re-sends of a call
+    that had already reasked, which restart with a fresh parse-retry budget; the
+    field to filter on when comparing self-correction across providers). Shared by
+    the hierarchical pipeline and provisioning's describe-and-route step.
+    """
+    kwargs = dict(response_model=response_model, messages=messages, max_retries=max_retries)
+    kwargs.update(provider_create_kwargs(model_config, response_model))
+    retryer = _transient_retryer()
+    first = len(tracker.aggregate.calls)
+    try:
+        return retryer(tracked_client.create, **kwargs)
+    finally:
+        if stats is not None:
+            resent = retryer.statistics.get("attempt_number", 1) - 1
+            stats["transient_retries"] = stats.get("transient_retries", 0) + resent
+            # Every call but the last was re-sent; one that had already reasked
+            # restarts with a fresh parse-retry budget (see _transient_retryer).
+            stats["reask_restarts"] = stats.get("reask_restarts", 0) + sum(
+                1 for c in tracker.aggregate.calls[first:-1] if c.parse_errors)
+
+
 def decode_mode_for(model_config: ModelConfig, spec_type: SpecType):
     """Return the instructor decode Mode used for this provider × spec.
 

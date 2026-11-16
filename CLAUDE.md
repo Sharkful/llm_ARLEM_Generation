@@ -100,7 +100,16 @@ python "Code/Narration/bundle.py" validate "<Name>Lab.zip"
 python "Code/Narration/smoke_test.py"   # offline check, no API keys (fake TTS + mock OpenAI/Gemini)
 ```
 
-Provisioning asset library (models and textures for labs; the provisioning CLI itself is not built yet):
+Provisioning (models and textures for labs; so far the asset library and the plan, #106):
+
+```bash
+# --dry-run: audit + library lookup + one describe-and-route LLM call; builds nothing.
+# --no-llm stops after the audit (no key). Output: Artifacts/Data/Provisioning/[<run group>/]<lab>_<ts>/
+python "Code/Provisioning/provision_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --dry-run
+python "Code/Provisioning/provision_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --dry-run --no-llm
+```
+
+Asset library:
 
 ```bash
 # Library folder: --library PATH, else $ARLEM_ASSET_LIBRARY, else Artifacts/Assets/Library/ (gitignored)
@@ -265,8 +274,9 @@ instead of in one `Lab` call; see `HIERARCHICAL.md`.
   is saved to `Runs/<run>/`, and can be resumed; the metrics file is rewritten after
   every step. Accepted steps get new-component names/descriptions/input definitions
   normalized to one canonical form, keeping each instance's input values (logged as
-  `normalizations`). Imports the client factory, provider
-  kwargs, and transient retryer from `benchmark.py`, so the Gemini and Anthropic guards apply.
+  `normalizations`). Imports the client factory and `guarded_create` (provider kwargs inside
+  the transient retryer, with transient-retry and reask-restart counts) from `benchmark.py`,
+  so the Gemini and Anthropic guards apply.
 - **`registry.py`** — component catalog (built-ins with full field descriptions,
   derived from the json_lab classes, plus NewComponents from accepted modules),
   invented prefabs/textures with their planned purpose, and per-module summaries
@@ -412,7 +422,27 @@ not reused. Built so far:
   An unpinned download is refused before downloading. One entry failing never stops a
   seed run; a built-in whose file can't be downloaded is still recorded (`partial`),
   keeping its current file if intact.
-- **`smoke_test.py`**: offline (mock download server, throwaway library; never the real one).
+- **`audit.py`** (#106): every `prefab` / `texture` a lab references (grouped ignoring case;
+  `demoPrefab` excluded; clip changes can't set either), with uses, text on the object (also
+  from clip changes, by `target`), narration sentences that mention it and the hierarchical
+  `purpose`. Matches `lab_metrics.analyze_assets` on all wave-2 labs.
+- **`routing.py`** (#106): one LLM call per lab (`LabAssetPlan`) for the assets the library
+  doesn't have: description, `must_be_right`, search keywords, **form** and **route** (chosen
+  by form, never by subject; model routes `shape` / `ui` / `search` / `composite` /
+  `builder:<name>`, texture routes `search` / `draw` / `generate`, plus `component` and
+  `impossible` for behaviour named as an asset: those are `flagged` for a reviewer in the
+  manifest's `review_items`, never provided), `same_as` merges. Checked under a `routing_scope` ContextVar (one error for all problems → one
+  reask). Same client/guards/tracker as every entry point; default model Claude Haiku 5.5.
+  **`builders.py`**: the builder registry, empty until #111.
+- **`provision_lab.py`** (#106): the CLI; only `--dry-run` so far. With no library at the
+  default location it falls back to the seed list's built-ins; a broken library, or a
+  `--library` / `$ARLEM_ASSET_LIBRARY` path with none, is an error. Assets are keyed by kind and name (a model and a
+  texture can share a name). No call and no key when the library has everything. Writes
+  `provisioning_manifest.json` (library identity, routing record with cost, served models,
+  transient retries and reask restarts, per-asset status and plan; anything merged into a
+  flagged asset is flagged too).
+- **`smoke_test.py`**: offline (mock download server, throwaway library, fake LLM; never the
+  real library).
 
 
 
@@ -424,8 +454,9 @@ Everything downstream of a run. Reads `Metrics/` + `Outputs/`; never calls an LL
 `Code/Benchmark/` for `benchmark_config.MODELS` and `lab_metrics.analyze_assets`
 via a `sys.path` insert. Code/Analysis never imports the other way round; the other
 packages that import from `Code/Benchmark/` are Narration (`benchmark`'s retry policy and
-error helpers), Hierarchical (client factory, provider kwargs, transient retryer) and
-Provisioning (`transient_policy.py` only).
+error helpers), Hierarchical (client factory, `guarded_create`) and Provisioning
+(`transient_policy.py` for downloads; the client factory and `guarded_create` for the
+describe-and-route call).
 
 **`reprice_runs.py`** — re-costs a run CSV against current `tracking/pricing.py`
 rates, written as a `_repriced` sibling so originals stay put.

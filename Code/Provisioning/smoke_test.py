@@ -42,6 +42,7 @@ import http.server
 import io
 import json
 import os
+import re
 import shutil
 import socket
 import ssl
@@ -249,7 +250,7 @@ def part2(tmp: Path) -> None:
             check((tmp / "libA" / "library.json").stat().st_mode & 0o777 == 0o644,
                   "library.json is readable by everyone (0644)")
         pinned = {e["asset_id"]: e["download"].get("sha256")
-                  for e in json.loads(seed_path.read_text())["entries"] if "download" in e}
+                  for e in json.loads(seed_path.read_text(encoding="utf-8"))["entries"] if "download" in e}
         check(bool(pinned["map_a"]) and bool(pinned["flaky"]), "accepted downloads are pinned")
         check(not pinned["not_jpeg"] and not pinned["nc_map"] and not pinned["missing"],
               "refused downloads are never pinned")
@@ -278,7 +279,7 @@ def part2(tmp: Path) -> None:
         res, _ = run_seed(store, seed_path, pin=True)
         check(res["map_a"].status == "failed" and "source file changed" in res["map_a"].detail,
               "a changed source file is refused, even with --pin")
-        check(next(e for e in json.loads(seed_path.read_text())["entries"]
+        check(next(e for e in json.loads(seed_path.read_text(encoding="utf-8"))["entries"]
                    if e["asset_id"] == "map_a")["download"]["sha256"] == pinned["map_a"],
               "...and its pin is kept")
         srv.files["/a.jpg"] = jpeg_bytes()
@@ -303,7 +304,7 @@ def part2(tmp: Path) -> None:
             check(True, "an alias already used elsewhere is refused")
 
         # One entry failing for an unexpected reason, or the run being killed, loses nothing
-        doc = json.loads(seed_path.read_text())
+        doc = json.loads(seed_path.read_text(encoding="utf-8"))
         doc["entries"] = [dict(e, asset_id=f"extra_{i}", name=f"extra_{i}",
                                download={"url": srv.url(f"/extra_{i}.jpg")})
                           for i, e in enumerate(doc["entries"][2:5])]
@@ -330,7 +331,7 @@ def part2(tmp: Path) -> None:
             check(True, "a killed seed run stops")
         finally:
             lib.make_thumbnail = real_thumbnail
-        pins = [e["download"].get("sha256") for e in json.loads(extra_seed.read_text())["entries"]]
+        pins = [e["download"].get("sha256") for e in json.loads(extra_seed.read_text(encoding="utf-8"))["entries"]]
         check(bool(pins[0]) and not pins[1] and not pins[2],
               "pins of entries accepted before the run was killed are already saved")
         store = lib.LocalFolderStore(tmp / "libA")
@@ -402,7 +403,7 @@ def part2(tmp: Path) -> None:
         store = lib.LocalFolderStore(tmp / "libA")
         res, _ = run_seed(store, moon_seed, pin=True)
         good = store.get("moon_builtin").file("texture").sha256
-        repinned = json.loads(moon_seed.read_text())
+        repinned = json.loads(moon_seed.read_text(encoding="utf-8"))
         repinned["entries"][0]["download"]["sha256"] = "0" * 64  # pin updated upstream
         lib.write_json_atomic(moon_seed, repinned)
         del srv.files["/moon.jpg"]  # ...and the new file can't be fetched here
@@ -671,12 +672,364 @@ def part2(tmp: Path) -> None:
         srv.close()
 
 
+# ── Part 3 ────────────────────────────────────────────────────────────
+
+
+def tiny_lab() -> dict:
+    """A small valid lab touching every audit case."""
+    obj = lambda **kw: {"position": [0, 0, 0], "scale": [1, 1, 1], **kw}  # noqa: E731
+    return {
+        "labId": "tiny_lab", "courseName": "Test", "objectives": ["see things"],
+        "modules": [
+            {"moduleName": "One", "description": "first", "educationalObjectives": ["a"],
+             "objects": [
+                 obj(prefab="dnaHelixPrefab", name="dnaHelix", color=[1, 0, 0, 1]),
+                 obj(prefab="DNAHELIXPREFAB", name="dnaHelix2"),
+                 obj(prefab="moveableSphere", name="ball", texture="2k_mars"),
+                 obj(prefab="summaryPanelPrefab", name="summaryPanel",
+                     components=[{"type": "TextMeshProComponent", "text": "Key ideas"}]),
+                 obj(prefab="textPrefab", name="title",
+                     components=[{"type": "TextMeshProComponent", "text": "Hello"}]),
+             ],
+             "clips": [
+                 {"clipName": "c1", "autoAdvance": False, "changeMeaning": "Introduces the helix and the summary panel.",
+                  "narration": "Here is the DNA helix. It twists. The summary panel lists ideas.",
+                  "changes": [{"target": "summaryPanel",
+                               "components": [{"type": "TextMeshProComponent", "text": "Updated"}]}]},
+             ]},
+            {"moduleName": "Two", "description": "second", "educationalObjectives": ["b"],
+             "objects": [obj(prefab="dnaDoubleHelixPrefab", name="helixAgain",
+                             texture="heart_muscle_texture")],
+             "clips": [{"clipName": "c2", "autoAdvance": False, "changeMeaning": "Shows the helix again in the second module.",
+                        "narration": "Nothing relevant."}]},
+        ],
+    }
+
+
+def fake_router(behaviour: dict):
+    """A call_fn that plans whatever the prompt lists (as instructor would return it,
+    validated under the routing scope). ``behaviour`` can override per asset."""
+
+    def call(response_model, messages, max_retries):
+        behaviour.setdefault("calls", 0)
+        behaviour["calls"] += 1
+        prompt = messages[0]["content"]
+        behaviour["prompt"] = prompt
+        listed = re.findall(r"^\[(model|texture)\] (\S+)$", prompt, flags=re.M)
+        assets = []
+        for kind, name in listed:
+            a = {"name": name.upper() if behaviour.get("shout") else name, "kind": kind,
+                 "description": f"a {name}", "search_keywords": [name, f"{name} model"],
+                 "form": "object" if kind == "model" else "real_surface",
+                 "route": "search", "reason": "test"}
+            a.update(behaviour.get(name, {}))
+            assets.append(a)
+        if behaviour.get("raise"):
+            raise RuntimeError(behaviour["raise"])
+        return response_model.model_validate({"assets": assets})
+
+    return call
+
+
+def part3(tmp: Path) -> None:
+    print("Part 3: audit, describe and route, provision_lab.py --dry-run (#106)")
+    import audit
+    import builders
+    import provision_lab
+    import routing
+    from lab_metrics import analyze_assets, KNOWN_PREFABS, KNOWN_TEXTURES
+
+    # The audit agrees with lab_metrics on every wave-2 lab
+    labs = mismatches = 0
+    for f in sorted((ROOT / "Artifacts" / "Data" / "Benchmark" / "Outputs").glob("*json_lab*_output.json")):
+        lab = json.loads(f.read_text(encoding="utf-8"))
+        if "modules" not in lab:
+            continue
+        labs += 1
+        reqs = audit.audit_lab(audit.load_lab(f))
+        a = analyze_assets(lab)
+        novel_p = {r.key for r in reqs if r.kind == "model" and r.key not in KNOWN_PREFABS}
+        novel_t = {r.key for r in reqs if r.kind == "texture" and r.key not in KNOWN_TEXTURES}
+        if novel_p != {x.lower() for x in a["novel_prefab_names"]} or \
+                novel_t != {x.lower() for x in a["novel_texture_names"]}:
+            mismatches += 1
+    check(labs >= 100 and mismatches == 0,
+          f"the audit finds the same invented assets as lab_metrics in all {labs} wave-2 labs")
+
+    # The audit on a small lab
+    lab = tiny_lab()
+    lab_path = tmp / "tiny_lab_output.json"
+    lab_path.write_text(json.dumps(lab), encoding="utf-8")
+    reqs = {(r.kind, r.key): r for r in audit.audit_lab(audit.load_lab(lab_path), {"dnahelixprefab": "shows DNA"})}
+    helix = reqs[("model", "dnahelixprefab")]
+    check(helix.spellings == ["dnaHelixPrefab", "DNAHELIXPREFAB"] and helix.use_count == 2,
+          "names are grouped ignoring case, keeping each spelling")
+    check(("model", "demoprefab") not in reqs, "demoPrefab (the module's system object) is not an asset")
+    check(helix.narration == ["Here is the DNA helix."], "narration lines that mention the object are kept")
+    check(helix.purpose == "shows DNA", "a hierarchical purpose is attached")
+    panel = reqs[("model", "summarypanelprefab")]
+    check(panel.uses[0].text == ["Key ideas", "Updated"], "text on the object, also from clip changes, is kept")
+    mars = reqs[("texture", "2k_mars")]
+    check(mars.uses[0].paired_with == "moveableSphere", "a texture records the model it is on")
+    check(audit.name_words("dnaHelixPrefab") == "dna helix"
+          and audit.name_words("heart_cutaway_texture") == "heart cutaway", "name words for narration matching")
+    check(audit.purposes_from_metrics({"registry": {"invented_prefabs": {"heartPrefab": {"module": 1, "purpose": "pumps"}},
+                                                     "invented_textures": {}}}) == {"heartprefab": "pumps"},
+          "purposes come from a hierarchical metrics registry")
+    for bad, what in [({"objects": []}, "a module-only output"), ([1, 2], "not an object")]:
+        p = tmp / "bad.json"
+        p.write_text(json.dumps(bad))
+        try:
+            audit.load_lab(p)
+            check(False, f"{what} is refused")
+        except audit.InputError:
+            check(True, f"{what} is refused")
+
+    # The plan's checks
+    asked = [helix, reqs[("model", "dnadoublehelixprefab")], mars]
+    good = {"assets": [
+        {"name": "dnahelixprefab", "kind": "model", "description": "a helix", "search_keywords": ["dna", "double helix"],
+         "form": "structure", "route": "composite", "reason": "r"},
+        {"name": "dnaDoubleHelixPrefab", "kind": "model", "description": "a helix", "search_keywords": ["dna", "double helix"],
+         "form": "structure", "route": "composite", "reason": "r", "same_as": "DNAHELIXPREFAB"},
+        {"name": "2k_mars", "kind": "texture", "description": "mars", "search_keywords": ["mars map", "mars texture"],
+         "form": "real_surface", "route": "search", "reason": "r"}]}
+    with routing.routing_scope(asked):
+        plan = routing.LabAssetPlan.model_validate(good)
+    check(plan.assets[0].name == "dnaHelixPrefab" and plan.assets[1].same_as == "dnaHelixPrefab",
+          "names and same_as come back in the lab's own spelling")
+    broken = copy.deepcopy(good)
+    broken["assets"][0]["route"] = "draw"                      # a texture route on a model
+    broken["assets"][1]["same_as"] = "dnaDoubleHelixPrefab"    # itself
+    broken["assets"][2]["kind"] = "model"                      # wrong kind
+    broken["assets"].append(dict(good["assets"][0], name="ghostPrefab"))
+    try:
+        with routing.routing_scope(asked):
+            routing.LabAssetPlan.model_validate(broken)
+        check(False, "a bad plan is refused")
+    except lib.ValidationError as exc:
+        msg = str(exc)
+        check(all(s in msg for s in ("route 'draw'", "same_as can't name the asset itself",
+                                     "listed as a texture, not a model", "'ghostPrefab' is not one of the listed")),
+              "every problem in a plan is reported in one error (one reask)")
+    lenient = copy.deepcopy(good)
+    lenient["assets"][0]["kind"] = "prefab"            # a field error...
+    del lenient["assets"][0]["search_keywords"]
+    lenient["assets"] = lenient["assets"][:2]          # ...and a missing asset
+    try:
+        with routing.routing_scope(asked):
+            routing.LabAssetPlan.model_validate(lenient)
+        check(False, "field problems and plan problems are refused")
+    except lib.ValidationError as exc:
+        msg = str(exc)
+        check("not a prefab asset" in msg and "missing: 2k_mars" in msg and "1 validation error" in msg,
+              "a bad field and a missing asset come back in the same single error")
+    for n, ok in ((1, False), (2, True), (6, True), (7, False)):
+        few = copy.deepcopy(good)
+        few["assets"][2]["search_keywords"] = [f"k{i}" for i in range(n)]
+        try:
+            with routing.routing_scope(asked):
+                routing.LabAssetPlan.model_validate(few)
+            accepted = True
+        except lib.ValidationError:
+            accepted = False
+        check(accepted == ok, f"{n} search keyword(s) {'accepted' if ok else 'refused'} (2 to 6)")
+    twin = audit.AssetRequest(name="earth", kind="texture")
+    twin_model = audit.AssetRequest(name="Earth", kind="model")
+    with routing.routing_scope([twin_model, twin]):
+        both = routing.LabAssetPlan.model_validate({"assets": [
+            {"name": "earth", "kind": "model", "description": "a globe", "search_keywords": ["earth", "globe"],
+             "form": "textured_primitive", "route": "shape", "reason": "r"},
+            {"name": "earth", "kind": "texture", "description": "a map", "search_keywords": ["earth", "map"],
+             "form": "real_surface", "route": "search", "reason": "r"}]})
+    check([(a.kind, a.name) for a in both.assets] == [("model", "Earth"), ("texture", "earth")],
+          "a model and a texture with the same name are two assets, each planned once")
+    try:
+        with routing.routing_scope(asked):
+            routing.LabAssetPlan.model_validate({"assets": good["assets"][:2]})
+        check(False, "a plan missing an asset is refused")
+    except lib.ValidationError as exc:
+        check("missing: 2k_mars" in str(exc), "a plan missing an asset is refused, naming it")
+    chain = copy.deepcopy(good)
+    chain["assets"][0]["same_as"] = "dnaDoubleHelixPrefab"
+    try:
+        with routing.routing_scope(asked):
+            routing.LabAssetPlan.model_validate(chain)
+        check(False, "merges into a merged asset are refused")
+    except Exception as exc:
+        check("itself merged" in str(exc), "merges into a merged asset are refused")
+    check(routing.LabAssetPlan.model_validate(broken) is not None, "outside a scope nothing is checked")
+    info = builders.register(builders.BuilderInfo("testmol", "model", "any molecule", "its name"))
+    try:
+        check("builder:testmol" in routing.routes_for("model") and "builder:testmol" not in routing.routes_for("texture")
+              and "builder:testmol" in routing.build_prompt(lab, asked),
+              "a registered builder becomes a route, offered by its description")
+    finally:
+        builders.REGISTRY.remove(info)
+
+    # The CLI, with a library holding the built-ins (seeded without network) and 2k_mars
+    p3lib = lib.LocalFolderStore(tmp / "libP3", create=True)
+    no_download = {e.asset_id for e in lib.load_seed().entries if e.builtin and not e.download}
+    run_seed(p3lib, lib.SEED_FILE, only=no_download)
+    jpg = tmp / "mars.jpg"
+    jpg.write_bytes(jpeg_bytes())
+    p3lib.put(lib.LibraryEntry(asset_id="2k_mars", kind="texture", name="2k_mars", mapping="equirectangular",
+                               description="Mars", pixels=[64, 32],
+                               provenance=lib.Provenance(license="CC0-1.0")), {"texture": jpg})
+    out = tmp / "prov_out"
+
+    def run(*args, call_fn=None):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            code = provision_lab.main(list(args), call_fn=call_fn, output_root=out)
+        return code, buf.getvalue()
+
+    def last_manifest():
+        return json.loads(max(out.rglob("provisioning_manifest.json"), key=os.path.getmtime).read_text(encoding="utf-8"))
+
+    check(run(str(lab_path))[0] == 2, "CLI: without --dry-run -> exit 2 (the full run is #113)")
+    check(run(str(lab_path), "--dry-run", "--run-group", "bad name")[0] == 2, "CLI: a bad run group -> exit 2")
+    check(run(str(tmp / "bad.json"), "--dry-run", "--no-llm")[0] == 2, "CLI: not a lab -> exit 2")
+    saved_default, lib.DEFAULT_LIBRARY = lib.DEFAULT_LIBRARY, tmp / "no_library"  # empty default
+    try:
+        code, text = run(str(lab_path), "--dry-run", "--no-llm")
+    finally:
+        lib.DEFAULT_LIBRARY = saved_default
+    m = last_manifest()
+    by = {a["name"]: a for a in m["assets"]}
+    check(code == 0 and m["status"] == "audited" and "no asset library" in text
+          and by["moveableSphere"]["status"] == "available" and by["textPrefab"]["library"]["builtin"]
+          and by["dnaHelixPrefab"]["status"] == "unplanned",
+          "CLI --no-llm: without a library, the seed list's built-ins are known; the rest is unplanned")
+    behaviour = {"dnaDoubleHelixPrefab": {"same_as": "dnaHelixPrefab"},
+                 "summaryPanelPrefab": {"route": "ui", "form": "ui"},
+                 "heart_muscle_texture": {"route": "generate", "form": "material"},
+                 "dnaHelixPrefab": {"route": "component", "form": "effect",
+                                    "reason": "it grows as the strands separate"}}
+    code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"),
+                     call_fn=fake_router(behaviour))
+    m = last_manifest()
+    by = {a["name"]: a for a in m["assets"]}
+    check(code == 0 and m["status"] == "planned" and behaviour["calls"] == 1, "CLI: one call plans the lab")
+    check("[model] moveableSphere" not in behaviour["prompt"] and "[model] dnaHelixPrefab" in behaviour["prompt"]
+          and "[texture] 2k_mars" not in behaviour["prompt"],
+          "assets the library has (by name) are not sent to the LLM")
+    check(by["2k_mars"]["status"] == "available" and not by["2k_mars"]["library"]["builtin"],
+          "a library texture is available")
+    check(by["dnaDoubleHelixPrefab"]["plan"]["same_as"] == "dnaHelixPrefab" and by["summaryPanelPrefab"]["plan"]["route"] == "ui"
+          and m["counts"]["by_route"] == {"component": 1, "generate": 1, "ui": 1},
+          "planned, merged and per-route counts are recorded")
+    check(by["dnaHelixPrefab"]["status"] == "flagged"
+          and m["review_items"][0] == {"name": "dnaHelixPrefab", "kind": "model", "route": "component",
+                                       "reason": "it grows as the strands separate", "description": "a dnaHelixPrefab",
+                                       "objects": ["dnaHelix", "dnaHelix2"]}
+          and "flagged for a reviewer" in text,
+          "behaviour routed to 'component' is flagged for a reviewer, with its objects and reason")
+    check(by["dnaDoubleHelixPrefab"]["status"] == "flagged"
+          and m["review_items"][1]["same_as"] == "dnaHelixPrefab"
+          and m["review_items"][1]["reason"] == "it grows as the strands separate"
+          and m["review_items"][1]["objects"] == ["helixAgain"] and m["review_items"][1]["route"] == "component",
+          "an asset merged into a flagged one is flagged too, so its objects reach the reviewer")
+    check(m["routing"]["reask_restarts"] == 0 and m["routing"]["transient_retries"] == 0,
+          "the routing record carries transient retries and reask restarts")
+    check({"shape", "component", "impossible"} <= set(routing.routes_for("model"))
+          and {"component", "impossible"} <= set(routing.routes_for("texture"))
+          and not {"kit", "textured_primitive"} & set(routing.routes_for("model")),
+          "routes: one 'shape' route (kit and textured_primitive merged), and the review routes")
+    check(m["library"]["library_id"] == lib.LocalFolderStore(tmp / "libP3").identity()["library_id"]
+          and m["source"]["labId"] == "tiny_lab" and m["provenance"]["git_commit"],
+          "the manifest records the library identity, the source and provenance")
+    lib.LocalFolderStore(tmp / "libP3").add_alias("2k_mars", "heart_muscle_texture")
+    run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), call_fn=fake_router({}))
+    a = {x["name"]: x for x in last_manifest()["assets"]}["heart_muscle_texture"]
+    check(a["status"] == "available" and a["library"]["matched"] == "alias", "an alias hit is available")
+    code, _ = run(str(lab_path), "--dry-run", "--library", str(tmp / "libB"),
+                  call_fn=fake_router({"raise": "the provider is down"}))
+    m = last_manifest()
+    check(code == 1 and m["status"] == "failed" and "provider is down" in m["routing"]["error"],
+          "CLI: a failed call -> exit 1, recorded in the manifest")
+    run(str(lab_path), "--dry-run", "--no-llm", "--library", str(tmp / "libB"))
+    run(str(lab_path), "--dry-run", "--no-llm", "--library", str(tmp / "libB"))
+    check(len(list(out.rglob("provisioning_manifest.json"))) == 6, "two runs in the same second get separate folders")
+    # Libraries that can't be used are errors, not "no library"
+    code, text = run(str(lab_path), "--dry-run", "--no-llm", "--library", str(tmp / "typo_library"))
+    check(code == 2 and "no asset library there" in text, "CLI: a --library path with no library -> exit 2")
+    broken_lib = tmp / "broken_library"
+    broken_lib.mkdir()
+    (broken_lib / lib.INDEX_NAME).write_text('{"schema_version": 99}', encoding="utf-8")
+    code, text = run(str(lab_path), "--dry-run", "--no-llm", "--library", str(broken_lib))
+    check(code == 2 and "not a valid library index" in text, "CLI: a broken library -> exit 2 with the real error")
+    os.environ[lib.LIBRARY_ENV] = str(broken_lib)
+    try:
+        code, text = run(str(lab_path), "--dry-run", "--no-llm")
+    finally:
+        del os.environ[lib.LIBRARY_ENV]
+    check(code == 2, "CLI: a broken library at the default location is an error too")
+    os.environ[lib.LIBRARY_ENV] = str(tmp / "typo_library")
+    try:
+        code, text = run(str(lab_path), "--dry-run", "--no-llm")
+    finally:
+        del os.environ[lib.LIBRARY_ENV]
+    check(code == 2 and f"${lib.LIBRARY_ENV}=" in text and "no asset library there" in text,
+          f"CLI: ${lib.LIBRARY_ENV} pointing at a folder with no library -> exit 2")
+
+    # Metrics files
+    (tmp / "list.json").write_text("[1, 2]", encoding="utf-8")
+    code, text = run(str(lab_path), "--dry-run", "--no-llm", "--library", str(tmp / "libP3"),
+                     "--metrics", str(tmp / "list.json"))
+    check(code == 2 and "not a metrics record" in text, "CLI: --metrics that isn't a JSON object -> exit 2")
+    pair = tmp / "pair" / "Outputs"
+    pair.mkdir(parents=True)
+    (tmp / "pair" / "Metrics").mkdir()
+    paired_lab = pair / "x_json_lab_L4_1_output.json"
+    paired_lab.write_text(json.dumps(lab), encoding="utf-8")
+    (pair / "x_json_lab_L4_1_metrics.json").write_text("{truncated", encoding="utf-8")
+    (tmp / "pair" / "Metrics" / "x_json_lab_L4_1_metrics.json").write_text(
+        json.dumps({"model": "m1", "level": "L4", "registry": {"invented_prefabs": {
+            "summaryPanelPrefab": {"module": 1, "purpose": "recap"}}}}), encoding="utf-8")
+    problems: list = []
+    found = audit.paired_metrics(paired_lab, problems)
+    check(found is not None and found["model"] == "m1" and len(problems) == 1 and "skipped" in problems[0],
+          "an unreadable metrics file beside the output is skipped, and the one in Metrics/ is used")
+    code, text = run(str(paired_lab), "--dry-run", "--no-llm", "--library", str(tmp / "libP3"))
+    m = last_manifest()
+    check(code == 0 and m["source"]["level"] == "L4" and m["source"]["metrics_problems"]
+          and "skipped" in text, "CLI: the skipped metrics file is noted and recorded")
+
+    routing._benchmark()  # loads .env, as a real run would
+    saved = {k: os.environ.pop(k) for ks in routing.API_KEY_ENV.values() for k in ks if k in os.environ}
+    saved_default, lib.DEFAULT_LIBRARY = lib.DEFAULT_LIBRARY, tmp / "no_library"
+    try:
+        code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libB"))
+        check(code == 2 and "no API key" in text, "CLI: no API key -> exit 2, before any call")
+        code, text = run(str(lab_path), "--dry-run", "--model", "no-such-model")
+        check(code == 2 and "unknown model" in text, "CLI: an unknown model -> exit 2")
+        only_builtins = tiny_lab()
+        for module in only_builtins["modules"]:
+            for o in module["objects"]:
+                o["prefab"] = "tinySphere"
+                o.pop("texture", None)
+        nothing = tmp / "only_builtins_output.json"
+        nothing.write_text(json.dumps(only_builtins), encoding="utf-8")
+        code, text = run(str(nothing), "--dry-run", "--library", str(tmp / "libP3"))
+        m = last_manifest()
+        check(code == 0 and m["status"] == "planned" and m["routing"]["calls"] == 0,
+              "CLI: a lab whose assets are all in the library needs no API key and makes no call")
+        code, text = run(str(nothing), "--dry-run", "--library", str(tmp / "libP3"), "--model", "no-such-model")
+        check(code == 2 and "unknown model" in text,
+              "CLI: an unknown model -> exit 2, even when nothing needs planning")
+    finally:
+        os.environ.update(saved)
+        lib.DEFAULT_LIBRARY = saved_default
+
+
 def main() -> int:
     saved_env = os.environ.pop(lib.LIBRARY_ENV, None)
     tmp = Path(tempfile.mkdtemp(prefix="provisioning_smoke_"))
     try:
         part1()
         part2(tmp)
+        part3(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         if saved_env is not None:
