@@ -413,10 +413,14 @@ route, so only what the library lacks is planned:
      not a lung, an Earth map is not a Mars map). It goes on to describe and route,
      and its reason stays in the manifest for a reviewer.
 
-   Describe and route also lists the reused assets (not to plan them), so a duplicate
-   the judge left for planning can be `same_as` one of them (`H2OPrefab` same as a
-   reused `waterModelPrefab`); it then follows that library match (`reused`, with the
-   target's decision and `same_as`).
+   Describe and route also lists the reused assets, each with what it was matched to
+   and its first objects (not to plan them), so a duplicate the judge left for
+   planning can be `same_as` one of them when it is the very same object (`H2OPrefab`
+   same as a reused `waterModelPrefab`; Saturn is not Jupiter). It then follows that
+   library match: `reused`, with the target's decision, `same_as`, routing's reason
+   and the judge's own verdict on it (`judge`), no plan of its own, and counted once
+   (in neither `by_reuse` nor `by_form`). Behaviour or impossible merged that way is
+   still flagged for a reviewer.
 
    The prompt lists the lab, the shortlisted entries (id, kind, built-in, name,
    description, mapping, tags) and each asset's context, and says to choose `none`
@@ -645,7 +649,7 @@ Built so far (#106, #108): the plan. `--dry-run` is required until #113.
   any error; reuse also the
   shortlist size); `aliases` (`saved`, the proposals and whether each was saved, and
   `library_after` when saved; an alias already on its entry, e.g. saved by another
-  run meanwhile, counts as saved); `llm`, the tracker summary for the whole run; the
+  run meanwhile, counts as saved with `already`, as nothing was written); `llm`, the tracker summary for the whole run; the
   routes offered; counts by status, reuse decision, route (each asset that would be
   provided or reviewed once; merged ones follow their target) and form;
   `review_items`; and per asset its spellings, uses, component counts, narration,

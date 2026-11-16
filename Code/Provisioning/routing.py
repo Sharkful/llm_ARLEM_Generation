@@ -122,11 +122,11 @@ MIN_KEYWORDS, MAX_KEYWORDS = 2, 6
 
 
 @contextmanager
-def routing_scope(requests: list[AssetRequest], reused: list[AssetRequest] = ()):
+def routing_scope(requests: list[AssetRequest], reused: list[tuple[AssetRequest, str]] = ()):
     """Check ``LabAssetPlan`` responses against these assets while inside; ``same_as``
     may also name one of the ``reused`` assets (the reuse judge matched it)."""
     token = _SCOPE.set(({(r.kind, r.key): r.name for r in requests},
-                        {(r.kind, r.key): r.name for r in reused}))
+                        {(r.kind, r.key): r.name for r, _ in reused}))
     try:
         yield
     finally:
@@ -336,14 +336,23 @@ modules:
 {modules}"""
 
 
-def build_prompt(lab: dict, requests: list[AssetRequest], reused: list[AssetRequest] = ()) -> str:
+def _reused_line(r: AssetRequest, matched: str) -> str:
+    objects = ", ".join(f'"{u.object}"' for u in r.uses[:3])
+    more = f" and {r.use_count - 3} more" if r.use_count > 3 else ""
+    return f"- {r.name} ({r.kind}): matched to {matched}; objects {objects}{more}"
+
+
+def build_prompt(lab: dict, requests: list[AssetRequest],
+                 reused: list[tuple[AssetRequest, str]] = ()) -> str:
+    """``reused``: (asset, what the reuse judge matched it to) for each reused asset."""
     models = sum(r.kind == "model" for r in requests)
     textures = len(requests) - models
     library_block = ""
     if reused:
-        library_block = ("\nALREADY IN THE LIBRARY (not planned here; same_as may name one when a listed "
-                         "asset is the same object)\n"
-                         + "\n".join(f"- {r.name} ({r.kind})" for r in reused) + "\n")
+        library_block = ("\nALREADY IN THE LIBRARY (not planned here). same_as may name one only when a "
+                         "listed asset is the very same object, so the same library match is right for it "
+                         "(not merely the same kind of thing: Saturn is not Jupiter)\n"
+                         + "\n".join(_reused_line(r, m) for r, m in reused) + "\n")
     return f"""You plan how to provide the 3D models and textures for an augmented-reality science lab \
 shown on a headset. The lab was generated with names for assets that don't exist yet. For each asset \
 listed below, say what it should look like and how it should be provided.
@@ -384,9 +393,10 @@ a reviewer reads it.
 
 
 def plan_routes(llm, lab: dict, requests: list[AssetRequest],
-                reused: list[AssetRequest] = ()) -> tuple[Optional[LabAssetPlan], dict]:
+                reused: list[tuple[AssetRequest, str]] = ()) -> tuple[Optional[LabAssetPlan], dict]:
     """(plan, record) from one call through ``llm`` (an ``llm.TrackedLLM``). ``reused``
-    are the assets the reuse judge matched: listed so a duplicate can be same_as one.
+    pairs each asset the reuse judge matched with what it was matched to (e.g. "sphere +
+    2k_mars"): listed so a duplicate can be same_as one.
     With nothing to plan, no call is made and the plan is empty. On failure the plan is
     None and the record carries the error."""
     if not requests:

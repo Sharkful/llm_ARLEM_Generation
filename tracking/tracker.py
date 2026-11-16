@@ -186,10 +186,11 @@ class InstructorTracker:
     # Public API - Reporting
     # =========================================================================
 
-    def served_models(self) -> List[str]:
-        """Every model id the responses reported, sorted (see served_model_of)."""
-        return sorted({a.served_model for c in self.aggregate.calls for a in c.attempts
-                       if a.served_model})
+    def served_models(self, calls: Optional[List[CallMetrics]] = None) -> List[str]:
+        """Every model id the responses reported, sorted (see served_model_of): for
+        ``calls`` (e.g. one step's slice of ``aggregate.calls``), else for every call."""
+        calls = self.aggregate.calls if calls is None else calls
+        return sorted({a.served_model for c in calls for a in c.attempts if a.served_model})
 
     def summary(self) -> Dict[str, Any]:
         """Generate a summary dictionary of all metrics."""

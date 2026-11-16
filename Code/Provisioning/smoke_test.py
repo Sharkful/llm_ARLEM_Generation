@@ -1222,6 +1222,21 @@ def part4(tmp: Path) -> None:
           and twin["status"] == "reused" and twin["reuse"]["same_as"] == "dnaHelixPrefab"
           and twin["reuse"]["texture_id"] == "2k_mars" and "(same as dnaHelixPrefab)" in text,
           "a duplicate of a reused asset can be same_as it, and follows the library match")
+    check("- dnaHelixPrefab (model): matched to sphere + 2k_mars; objects \"dnaHelix\", \"dnaHelix2\"" in merge["prompt"]
+          and "Saturn is not Jupiter" in merge["prompt"],
+          "describe and route sees what each reused asset was matched to, and its objects")
+    check("plan" not in twin and twin["reuse"]["judge"] == {"decision": "none", "reason": "test"}
+          and twin["reuse"]["routing_reason"] == "test"
+          and m["counts"]["by_reuse"] == {"textured_shape": 1} and m["counts"]["by_form"] == {"object": 1},  # only the one planned asset
+          "a duplicate following a reused asset has no plan to provide, keeps the judge's own verdict, "
+          "and is counted once")
+    flag = {"reuse": {"dnaHelixPrefab": behaviour["reuse"]["dnaHelixPrefab"]},
+            "dnaDoubleHelixPrefab": {"same_as": "dnaHelixPrefab", "route": "component", "form": "effect"}}
+    run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), call_fn=fake_router(flag))
+    m = last_manifest()
+    twin = {a["name"]: a for a in m["assets"]}["dnaDoubleHelixPrefab"]
+    check(twin["status"] == "flagged" and [i["name"] for i in m["review_items"]] == ["dnaDoubleHelixPrefab"],
+          "behaviour merged into a reused asset is still flagged for a reviewer")
     try:
         with routing.routing_scope([reqs[("model", "dnadoublehelixprefab")]]):
             routing.LabAssetPlan.model_validate({"assets": [{
@@ -1241,7 +1256,8 @@ def part4(tmp: Path) -> None:
           and store.identity()["revision"] == rev + 1 and m["aliases"]["library_after"]["revision"] == rev + 1,
           "--save-aliases saves the match as an alias and records the library after")
     again_saved = provision_lab.save_aliases(store, [{"name": "summaryPanelPrefab", "asset_id": "summary_board"}])
-    check(again_saved == [{"name": "summaryPanelPrefab", "asset_id": "summary_board", "saved": True}]
+    check(again_saved == [{"name": "summaryPanelPrefab", "asset_id": "summary_board", "saved": True,
+                           "already": True}]
           and store.identity()["revision"] == rev + 1,
           "an alias already there (another run saved it) counts as saved, with no write")
     again = {"reuse": {"dnaHelixPrefab": behaviour["reuse"]["dnaHelixPrefab"]}}
