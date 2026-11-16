@@ -31,7 +31,13 @@ throwaway library (never the real one):
   can't collide; library.json is 0644
 - credit lines, the GLB check, library path resolution and the CLI exit codes
 
-Requires the project venv (pydantic, Pillow). Exit code 1 on any failure.
+Parts 3 and 4: the audit, describe and route, the reuse judge and the CLI, with a fake
+LLM. Part 5: the same CLI on the real client (create_instructor_client, guarded_create,
+the tracker) against a local mock Anthropic server: per-step calls, tokens, cost and
+served models.
+
+Requires the project venv (pydantic, Pillow; Part 5 also anthropic and instructor).
+Exit code 1 on any failure.
 """
 
 from __future__ import annotations
@@ -707,15 +713,30 @@ def tiny_lab() -> dict:
 
 
 def fake_router(behaviour: dict):
-    """A call_fn that plans whatever the prompt lists (as instructor would return it,
-    validated under the routing scope). ``behaviour`` can override per asset."""
+    """A call_fn for both LLM steps, answering whatever the prompt lists (validated under
+    the step's scope, as instructor would). The reuse judge decides "none" unless
+    ``behaviour["reuse"][name]`` says otherwise; describe and route plans "search" unless
+    ``behaviour[name]`` overrides fields. ``behaviour["raise"]`` makes the step named in
+    ``behaviour["raise_in"]`` ("reuse" or "route", default both) fail."""
 
     def call(response_model, messages, max_retries):
+        prompt = messages[0]["content"]
+        listed = re.findall(r"^\[(model|texture)\] (\S+)$", prompt, flags=re.M)
+        step = "reuse" if response_model.__name__ == "ReusePlan" else "route"
+        if behaviour.get("raise") and behaviour.get("raise_in", step) == step:
+            raise RuntimeError(behaviour["raise"])
+        if step == "reuse":
+            behaviour["reuse_calls"] = behaviour.get("reuse_calls", 0) + 1
+            behaviour["reuse_prompt"] = prompt
+            decisions = []
+            for kind, name in listed:
+                d = {"name": name, "kind": kind, "decision": "none", "reason": "test"}
+                d.update(behaviour.get("reuse", {}).get(name, {}))
+                decisions.append(d)
+            return response_model.model_validate({"decisions": decisions})
         behaviour.setdefault("calls", 0)
         behaviour["calls"] += 1
-        prompt = messages[0]["content"]
         behaviour["prompt"] = prompt
-        listed = re.findall(r"^\[(model|texture)\] (\S+)$", prompt, flags=re.M)
         assets = []
         for kind, name in listed:
             a = {"name": name.upper() if behaviour.get("shout") else name, "kind": kind,
@@ -724,8 +745,6 @@ def fake_router(behaviour: dict):
                  "route": "search", "reason": "test"}
             a.update(behaviour.get(name, {}))
             assets.append(a)
-        if behaviour.get("raise"):
-            raise RuntimeError(behaviour["raise"])
         return response_model.model_validate({"assets": assets})
 
     return call
@@ -910,7 +929,8 @@ def part3(tmp: Path) -> None:
                      call_fn=fake_router(behaviour))
     m = last_manifest()
     by = {a["name"]: a for a in m["assets"]}
-    check(code == 0 and m["status"] == "planned" and behaviour["calls"] == 1, "CLI: one call plans the lab")
+    check(code == 0 and m["status"] == "planned" and behaviour["calls"] == 1
+          and behaviour["reuse_calls"] == 1, "CLI: one reuse call and one routing call plan the lab")
     check("[model] moveableSphere" not in behaviour["prompt"] and "[model] dnaHelixPrefab" in behaviour["prompt"]
           and "[texture] 2k_mars" not in behaviour["prompt"],
           "assets the library has (by name) are not sent to the LLM")
@@ -943,7 +963,7 @@ def part3(tmp: Path) -> None:
     run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), call_fn=fake_router({}))
     a = {x["name"]: x for x in last_manifest()["assets"]}["heart_muscle_texture"]
     check(a["status"] == "available" and a["library"]["matched"] == "alias", "an alias hit is available")
-    code, _ = run(str(lab_path), "--dry-run", "--library", str(tmp / "libB"),
+    code, _ = run(str(lab_path), "--dry-run", "--library", str(tmp / "libB"), "--no-reuse",
                   call_fn=fake_router({"raise": "the provider is down"}))
     m = last_manifest()
     check(code == 1 and m["status"] == "failed" and "provider is down" in m["routing"]["error"],
@@ -996,8 +1016,9 @@ def part3(tmp: Path) -> None:
     check(code == 0 and m["source"]["level"] == "L4" and m["source"]["metrics_problems"]
           and "skipped" in text, "CLI: the skipped metrics file is noted and recorded")
 
-    routing._benchmark()  # loads .env, as a real run would
-    saved = {k: os.environ.pop(k) for ks in routing.API_KEY_ENV.values() for k in ks if k in os.environ}
+    import llm
+    llm._benchmark()  # loads .env, as a real run would
+    saved = {k: os.environ.pop(k) for ks in llm.API_KEY_ENV.values() for k in ks if k in os.environ}
     saved_default, lib.DEFAULT_LIBRARY = lib.DEFAULT_LIBRARY, tmp / "no_library"
     try:
         code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libB"))
@@ -1023,6 +1044,326 @@ def part3(tmp: Path) -> None:
         lib.DEFAULT_LIBRARY = saved_default
 
 
+# ── Part 4 ────────────────────────────────────────────────────────────
+
+
+def part4(tmp: Path) -> None:
+    print("Part 4: the reuse judge (#108)")
+    import audit
+    import provision_lab
+    import reuse
+    import routing
+
+    lab = tiny_lab()
+    lab_path = tmp / "tiny_lab_output.json"   # written by Part 3
+    reqs = {(r.kind, r.key): r for r in audit.audit_lab(audit.load_lab(lab_path))}
+    helix, panel = reqs[("model", "dnahelixprefab")], reqs[("model", "summarypanelprefab")]
+    muscle = reqs[("texture", "heart_muscle_texture")]
+    store = lib.LocalFolderStore(tmp / "libP3")
+    pool = reuse.candidates(store.entries())
+    check(all(e.reusable for e in pool) and not any(e.name == "demoPrefab" for e in pool),
+          "candidates leave out system objects (demoPrefab)")
+
+    # The judge's checks
+    asked = [helix, panel, muscle]
+    good = {"decisions": [
+        {"name": "dnaHelixPrefab", "kind": "model", "decision": "textured_shape", "shape": "sphere",
+         "texture_id": "2k_mars", "reason": "r"},
+        {"name": "SUMMARYPANELPREFAB", "kind": "model", "decision": "reuse", "asset_id": "text_prefab",
+         "adapt": "", "reason": "r"},
+        {"name": "heart_muscle_texture", "kind": "texture", "decision": "none", "asset_id": "2k_mars",
+         "reason": "r"}]}
+    with reuse.reuse_scope(asked, pool):
+        plan = reuse.ReusePlan.model_validate(good)
+    by = {d.name: d for d in plan.decisions}
+    check(by["summaryPanelPrefab"].asset_id == "text_prefab" and by["heart_muscle_texture"].asset_id == "",
+          "decisions come back in the lab's spelling; 'none' clears ids")
+    bad = copy.deepcopy(good)
+    bad["decisions"][0].update(shape="pyramid")                       # not a shape
+    bad["decisions"][1].update(asset_id="2k_mars")                    # a texture for a model
+    bad["decisions"][2].update(decision="textured_shape", shape="sphere", texture_id="2k_mars")  # texture
+    bad["decisions"].append({"name": "ghostPrefab", "kind": "model", "decision": "none", "reason": "r"})
+    try:
+        with reuse.reuse_scope(asked, pool):
+            reuse.ReusePlan.model_validate(bad)
+        check(False, "a bad reuse plan is refused")
+    except lib.ValidationError as exc:
+        msg = str(exc)
+        check(all(x in msg for x in ("shape 'pyramid'", "'2k_mars' is a texture, not a model",
+                                     "textured_shape is for models", "'ghostPrefab' is not one of")),
+              "every problem in a reuse plan is reported in one error (one reask)")
+    for change, what in [({"decision": "reuse", "asset_id": "no_such_id"}, "not a library id"),
+                         ({"decision": "reuse", "asset_id": ""}, "needs the asset_id"),
+                         ({"decision": "textured_shape", "shape": "sphere", "texture_id": ""}, "needs the texture_id"),
+                         ({"decision": "reuse", "asset_id": "tiny_sphere", "texture_id": "text_prefab"},
+                          "is a model, not a texture"),
+                         ({"decision": "maybe"}, "is not one of reuse")]:
+        one = copy.deepcopy(good)
+        one["decisions"][0] = {"name": "dnaHelixPrefab", "kind": "model", "reason": "r", **change}
+        try:
+            with reuse.reuse_scope(asked, pool):
+                reuse.ReusePlan.model_validate(one)
+            check(False, f"refused: {what}")
+        except lib.ValidationError as exc:
+            check(what in str(exc), f"refused: {what}")
+    texture_reuse = copy.deepcopy(good)
+    texture_reuse["decisions"][2] = {"name": "heart_muscle_texture", "kind": "texture", "decision": "reuse",
+                                     "asset_id": "2k_mars", "texture_id": "2k_mars", "reason": "r"}
+    try:
+        with reuse.reuse_scope(asked, pool):
+            reuse.ReusePlan.model_validate(texture_reuse)
+        check(False, "a reused texture can't take a texture_id")
+    except lib.ValidationError as exc:
+        check("only a reused model can take a texture_id" in str(exc), "a reused texture can't take a texture_id")
+    schema = reuse.ReusePlan.model_json_schema()["$defs"]["ReuseDecision"]
+    check(schema["required"] == ["name", "kind", "decision", "reason"]
+          and "default" not in schema["properties"]["decision"],
+          "the reuse tool schema stays strict while validation is lenient")
+
+    # Shortlisting a big library
+    many = [lib.LibraryEntry(asset_id=f"filler_{i}", kind="model", name=f"filler{i}", description="unrelated thing",
+                             builtin=True) for i in range(30)]
+    target = lib.LibraryEntry(asset_id="dna_double_helix", kind="model", name="dnaDoubleHelix",
+                              description="a DNA double helix", tags=["dna", "helix"], builtin=True)
+    saved_limit, saved_size = reuse.SHORTLIST_LIMIT, reuse.SHORTLIST_SIZE
+    reuse.SHORTLIST_LIMIT, reuse.SHORTLIST_SIZE = 10, 3
+    try:
+        short = reuse.shortlist([helix], many + [target])
+    finally:
+        reuse.SHORTLIST_LIMIT, reuse.SHORTLIST_SIZE = saved_limit, saved_size
+    check(len(short) == 3 and target in short, "a big library is shortlisted to each asset's best word matches")
+    check(len(reuse.shortlist([helix], many)) == 30, "a small library is sent whole")
+    # What students do with an asset's objects reaches both judges
+    check(audit._behaviours([{"componentType": "pointerReceiver", "draggable": True},
+                             {"type": "SimpleOrbitComponent"}, {"componentType": "newscript", "scriptName": "Spin"},
+                             {"componentType": "textMeshPro", "text": "x"}])
+          == ["pointerReceiver (draggable)", "simpleOrbit", "Spin"],
+          "object components are named (saved or schema form, new scripts by name, draggable marked), text left out")
+    ball_lab = {"modules": [{"moduleName": "M", "objects": [
+        {"name": "marker", "prefab": "domainPrefab"},
+        {"name": "dragMe", "prefab": "domainPrefab",
+         "components": [{"componentType": "pointerReceiver", "draggable": True}]},
+        {"name": "later", "prefab": "domainPrefab"}],
+        "clips": [{"narration": "", "changes": [
+            {"target": "later", "components": [{"componentType": "simpleOrbit"}]},
+            {"target": "dragMe", "components": [{"componentType": "pointerReceiver", "draggable": False}]}]}]}]}
+    dom = audit.audit_lab(ball_lab)[0]
+    block = routing.asset_block(dom)
+    check(dom.components == {"pointerReceiver (draggable)": 1, "simpleOrbit": 1}
+          and dom.uses[1].components == ["pointerReceiver (draggable)"]
+          and "components on its objects: pointerReceiver (draggable) on 1 of 3, simpleOrbit on 1 of 3" in block
+          and 'object "dragMe" in module 1 "M", components pointerReceiver (draggable)' in block,
+          "the asset block shows each object's components and a count over all its objects (clip changes too)")
+    check(dom.uses[1].components == ["pointerReceiver (draggable)"],
+          "an object draggable in any clip counts as draggable once (a change turning drag off isn't a second entry)")
+    check(reuse.SHAPES == routing.HEADSET_PRIMITIVES and "torus" not in reuse.SHAPES,
+          "a textured shape is one the headset makes today (Unity's primitives)")
+    prompt = reuse.build_prompt(lab, asked, pool)
+    check("- 2k_mars [texture] 2k_mars:" in prompt and "[model] dnaHelixPrefab" in prompt
+          and "text_prefab [model, built-in]" in prompt, "the prompt lists library entries and the assets")
+
+    # The CLI
+    out = tmp / "prov_out4"
+
+    def run(*args, call_fn=None):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            code = provision_lab.main(list(args), call_fn=call_fn, output_root=out)
+        return code, buf.getvalue()
+
+    def last_manifest():
+        return json.loads(max(out.rglob("provisioning_manifest.json"), key=os.path.getmtime)
+                          .read_text(encoding="utf-8"))
+
+    glb = tmp / "board.glb"
+    glb.write_bytes(b"glTF" + (2).to_bytes(4, "little") + (12).to_bytes(4, "little"))
+    lib.LocalFolderStore(tmp / "libP3").put(lib.LibraryEntry(
+        asset_id="summary_board", kind="model", name="summaryBoard", description="a board listing key ideas",
+        bounds=[1, 0.6, 0.05], triangles=12, provenance=lib.Provenance(license="CC0-1.0", method="kit")),
+        {"model": glb})
+    builtin_reuse = reuse.ReusePlan(decisions=[reuse.ReuseDecision(
+        name="marsPrefab", kind="model", decision="reuse", asset_id="tiny_sphere", reason="a red ball")])
+    check(provision_lab.alias_proposals(builtin_reuse, lib.LocalFolderStore(tmp / "libP3").entries()) == [],
+          "a reuse of a built-in (a stand-in) is not proposed as an alias")
+    behaviour = {"reuse": {"summaryPanelPrefab": {"decision": "reuse", "asset_id": "summary_board",
+                                                  "reason": "a panel of text is the summary board"},
+                           "dnaHelixPrefab": {"decision": "textured_shape", "shape": "sphere",
+                                              "texture_id": "2k_mars", "reason": "test"}}}
+    code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), call_fn=fake_router(behaviour))
+    m = last_manifest()
+    by = {a["name"]: a for a in m["assets"]}
+    check(code == 0 and behaviour["reuse_calls"] == 1 and behaviour["calls"] == 1,
+          "CLI: one reuse call, then one routing call")
+    check("[model] moveableSphere" not in behaviour["reuse_prompt"]
+          and "[model] summaryPanelPrefab" in behaviour["reuse_prompt"],
+          "assets found by name are not sent to the reuse judge")
+    check("[model] summaryPanelPrefab" not in behaviour["prompt"] and "[model] dnaHelixPrefab" not in behaviour["prompt"]
+          and "[model] dnaDoubleHelixPrefab" in behaviour["prompt"],
+          "reused assets are not sent to describe and route")
+    check(by["summaryPanelPrefab"]["status"] == "reused" and by["summaryPanelPrefab"]["reuse"] ==
+          {"decision": "reuse", "asset_id": "summary_board", "reason": "a panel of text is the summary board"}
+          and by["dnaHelixPrefab"]["reuse"]["texture_id"] == "2k_mars"
+          and m["counts"]["by_reuse"] == {"reuse": 1, "textured_shape": 1},
+          "reused assets and their decisions are recorded")
+    check(m["aliases"] == {"saved": False, "proposed": [{"name": "summaryPanelPrefab", "asset_id": "summary_board"}]}
+          and "1 proposed" in text and m["reuse"]["shortlist"] > 0 and "reuse: claude-haiku-5.5" in text,
+          "a single-entry reuse is proposed as an alias, not saved by default")
+    check(by["dnaDoubleHelixPrefab"]["reuse"] == {"decision": "none", "reason": "test"}
+          and by["dnaDoubleHelixPrefab"]["status"] == "planned",
+          "the judge's 'none' and its reason are kept for a reviewer")
+    check(by["dnaHelixPrefab"]["components"] == {} and "components" in by["summaryPanelPrefab"],
+          "the manifest records each asset's component counts")
+    merge = {"reuse": {"dnaHelixPrefab": behaviour["reuse"]["dnaHelixPrefab"]},
+             "dnaDoubleHelixPrefab": {"same_as": "dnaHelixPrefab"}}
+    code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), call_fn=fake_router(merge))
+    m = last_manifest()
+    twin = {a["name"]: a for a in m["assets"]}["dnaDoubleHelixPrefab"]
+    check(code == 0 and "ALREADY IN THE LIBRARY" in merge["prompt"] and "- dnaHelixPrefab (model)" in merge["prompt"]
+          and twin["status"] == "reused" and twin["reuse"]["same_as"] == "dnaHelixPrefab"
+          and twin["reuse"]["texture_id"] == "2k_mars" and "(same as dnaHelixPrefab)" in text,
+          "a duplicate of a reused asset can be same_as it, and follows the library match")
+    check("- dnaHelixPrefab (model): matched to sphere + 2k_mars; objects \"dnaHelix\", \"dnaHelix2\"" in merge["prompt"]
+          and "Saturn is not Jupiter" in merge["prompt"],
+          "describe and route sees what each reused asset was matched to, and its objects")
+    check("plan" not in twin and twin["reuse"]["judge"] == {"decision": "none", "reason": "test"}
+          and twin["reuse"]["routing_reason"] == "test"
+          and m["counts"]["by_reuse"] == {"textured_shape": 1} and m["counts"]["by_form"] == {"object": 1},  # only the one planned asset
+          "a duplicate following a reused asset has no plan to provide, keeps the judge's own verdict, "
+          "and is counted once")
+    flag = {"reuse": {"dnaHelixPrefab": behaviour["reuse"]["dnaHelixPrefab"]},
+            "dnaDoubleHelixPrefab": {"same_as": "dnaHelixPrefab", "route": "component", "form": "effect"}}
+    run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), call_fn=fake_router(flag))
+    m = last_manifest()
+    twin = {a["name"]: a for a in m["assets"]}["dnaDoubleHelixPrefab"]
+    check(twin["status"] == "flagged" and [i["name"] for i in m["review_items"]] == ["dnaDoubleHelixPrefab"],
+          "behaviour merged into a reused asset is still flagged for a reviewer")
+    try:
+        with routing.routing_scope([reqs[("model", "dnadoublehelixprefab")]]):
+            routing.LabAssetPlan.model_validate({"assets": [{
+                "name": "dnaDoubleHelixPrefab", "kind": "model", "description": "d", "search_keywords": ["a", "b"],
+                "form": "object", "route": "search", "reason": "r", "same_as": "dnaHelixPrefab"}]})
+        check(False, "same_as a reused asset is refused when it isn't passed as reused")
+    except lib.ValidationError as exc:
+        check("not a listed or reused model" in str(exc),
+              "same_as a reused asset is refused when it isn't passed as reused")
+    rev = lib.LocalFolderStore(tmp / "libP3").identity()["revision"]
+    code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), "--save-aliases",
+                     call_fn=fake_router(dict(behaviour)))
+    m = last_manifest()
+    store = lib.LocalFolderStore(tmp / "libP3")
+    check(code == 0 and m["aliases"]["saved"] and m["aliases"]["proposed"][0]["saved"]
+          and store.find("summaryPanelPrefab").asset_id == "summary_board"
+          and store.identity()["revision"] == rev + 1 and m["aliases"]["library_after"]["revision"] == rev + 1,
+          "--save-aliases saves the match as an alias and records the library after")
+    again_saved = provision_lab.save_aliases(store, [{"name": "summaryPanelPrefab", "asset_id": "summary_board"}])
+    check(again_saved == [{"name": "summaryPanelPrefab", "asset_id": "summary_board", "saved": True,
+                           "already": True}]
+          and store.identity()["revision"] == rev + 1,
+          "an alias already there (another run saved it) counts as saved, with no write")
+    again = {"reuse": {"dnaHelixPrefab": behaviour["reuse"]["dnaHelixPrefab"]}}
+    code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), call_fn=fake_router(again))
+    a = {x["name"]: x for x in last_manifest()["assets"]}["summaryPanelPrefab"]
+    check(code == 0 and a["status"] == "available" and a["library"]["matched"] == "alias"
+          and "summaryPanelPrefab" not in again["reuse_prompt"],
+          "on the next run the saved alias is found by name, with no judge call for it")
+    nr = {}
+    run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), "--no-reuse", call_fn=fake_router(nr))
+    check("reuse_calls" not in nr and nr["calls"] == 1 and last_manifest()["reuse"] is None,
+          "--no-reuse skips the judge")
+    code, text = run(str(lab_path), "--dry-run", "--no-llm", "--save-aliases", "--library", str(tmp / "libP3"))
+    check(code == 2 and "needs the reuse judge" in text, "--save-aliases without the judge -> exit 2")
+    saved_default, lib.DEFAULT_LIBRARY = lib.DEFAULT_LIBRARY, tmp / "no_library"
+    try:
+        code, text = run(str(lab_path), "--dry-run", "--save-aliases", call_fn=fake_router({}))
+    finally:
+        lib.DEFAULT_LIBRARY = saved_default
+    check(code == 2 and "needs an asset library" in text, "--save-aliases without a library -> exit 2")
+    down = {"raise": "the provider is down", "raise_in": "reuse"}
+    code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), call_fn=fake_router(down))
+    m = last_manifest()
+    check(code == 1 and m["status"] == "failed" and "provider is down" in m["reuse"]["error"]
+          and m["routing"] is None and "calls" not in down and "the reuse judge failed" in text,
+          "a failed reuse call -> exit 1, and nothing is routed")
+
+
+# ── Part 5 ────────────────────────────────────────────────────────────
+
+
+def part5(tmp: Path) -> None:
+    print("Part 5: the real client path (mock Anthropic server)")
+    try:
+        import anthropic  # noqa: F401
+        import instructor  # noqa: F401
+    except ImportError:
+        check(False, "Part 5 needs the project venv (anthropic, instructor)")
+        return
+    import provision_lab
+    import reuse
+    import routing
+
+    answer = fake_router({"reuse": {"dnaHelixPrefab": {"decision": "textured_shape", "shape": "sphere",
+                                                       "texture_id": "2k_mars", "reason": "test"}}})
+    sent: list[dict] = []
+
+    class MockAnthropic(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            sent.append(body)
+            tool = body["tools"][0]["name"]
+            content = body["messages"][0]["content"]
+            prompt = content if isinstance(content, str) else "".join(b.get("text", "") for b in content)
+            model = reuse.ReusePlan if tool == "ReusePlan" else routing.LabAssetPlan
+            data = answer(model, [{"role": "user", "content": prompt}], 1).model_dump()
+            payload = json.dumps({
+                "id": "msg_mock", "type": "message", "role": "assistant",
+                # the reuse step is "served" by another model, to tell the steps apart
+                "model": body["model"] + ("-other" if tool == "ReusePlan" else ""),
+                "content": [{"type": "tool_use", "id": "toolu_mock", "name": tool, "input": data}],
+                "stop_reason": "tool_use", "stop_sequence": None,
+                "usage": {"input_tokens": 1000, "output_tokens": 200}}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), MockAnthropic)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    saved = {k: os.environ.get(k) for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY")}
+    os.environ["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{srv.server_port}"
+    os.environ["ANTHROPIC_API_KEY"] = "test"
+    out = tmp / "prov_out5"
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            code = provision_lab.main([str(tmp / "tiny_lab_output.json"), "--dry-run", "--library",
+                                       str(tmp / "libP3"), "--model", "claude-haiku-5.5"], output_root=out)
+    finally:
+        srv.shutdown()
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    m = json.loads(next(out.rglob("provisioning_manifest.json")).read_text(encoding="utf-8"))
+    model_id = sent[0]["model"] if sent else ""
+    check(code == 0 and [b["tools"][0]["name"] for b in sent] == ["ReusePlan", "LabAssetPlan"]
+          and sent[0].get("tool_choice") == {"type": "auto", "disable_parallel_tool_use": True},
+          "CLI on the real client: one reuse request, then one routing request, with the Anthropic guard")
+    r, t = m["reuse"], m["routing"]
+    check(r["calls"] == 1 and t["calls"] == 1 and r["prompt_tokens"] == t["prompt_tokens"] == 1000
+          and r["completion_tokens"] == t["completion_tokens"] == 200,
+          "each step records only its own calls and tokens")
+    check(r["cost_usd"] > 0 and abs(r["cost_usd"] + t["cost_usd"] - m["llm"]["cost"]["total_usd"]) < 1e-6
+          and m["llm"]["total_calls"] == 2,
+          "the steps' costs add up to the run's tracker total")
+    check(r["served_models"] == [model_id + "-other"] and t["served_models"] == [model_id],
+          "each step records the models that served its own calls")
+
+
 def main() -> int:
     saved_env = os.environ.pop(lib.LIBRARY_ENV, None)
     tmp = Path(tempfile.mkdtemp(prefix="provisioning_smoke_"))
@@ -1030,6 +1371,8 @@ def main() -> int:
         part1()
         part2(tmp)
         part3(tmp)
+        part4(tmp)
+        part5(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         if saved_env is not None:

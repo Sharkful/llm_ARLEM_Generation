@@ -8,13 +8,12 @@ element, a UI element, a structure from a public database, a recognizable object
 never by the lab's subject, so the tool works for STEM topics we have no labs for.
 Builders are offered by their own descriptions (``builders.REGISTRY``).
 
-The call goes through ``benchmark.create_instructor_client`` and
-``benchmark.guarded_create`` (``provider_create_kwargs``, the #44 Gemini and Anthropic
-guards, inside ``_transient_retryer``; shared with the hierarchical pipeline), tracked
-by ``InstructorTracker``, like every LLM entry point. The response is checked under
+The call goes through the run's ``llm.TrackedLLM`` (the repo's client factory and
+``benchmark.guarded_create``, tracked). The response is checked under
 ``routing_scope``: every listed asset (a kind and a name: a lab can use one name for a
 model and a texture) planned exactly once, an allowed form and route,
-``MIN_KEYWORDS`` to ``MAX_KEYWORDS`` search keywords, and ``same_as`` merges that point at another listed asset of the same kind.
+``MIN_KEYWORDS`` to ``MAX_KEYWORDS`` search keywords, and ``same_as`` merges that point
+at another listed asset of the same kind.
 Fields are lenient so all problems come back in one error, and instructor reasks
 once for all of them.
 """
@@ -22,11 +21,8 @@ once for all of them.
 from __future__ import annotations
 
 import contextvars
-import sys
-import time
 from contextlib import contextmanager
-from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -34,10 +30,6 @@ import builders
 from audit import AssetRequest
 from library import name_key
 
-HERE = Path(__file__).resolve().parent
-BENCHMARK_DIR = HERE.parent / "Benchmark"
-DEFAULT_MODEL = "claude-haiku-5.5"
-DEFAULT_MAX_RETRIES = 3
 
 MODEL_FORMS = {
     "diagram_element": "a mark in a diagram: arrow, vector, axis, line, path, trail, orbit, ring, grid, "
@@ -74,9 +66,13 @@ REVIEW_ROUTES = {
     "impossible": "Can't be provided as a 3D model or texture from what the lab gives: it needs data, "
                   "content or behaviour the lab doesn't specify. Flagged for a reviewer.",
 }
+# Unity's built-in primitives: the headset makes these itself (PROVISIONING.md, "Simple
+# shapes"). Shapes Unity lacks are provided once as library models (#109).
+HEADSET_PRIMITIVES = ("sphere", "cube", "plane", "capsule", "cylinder", "quad")
+
 MODEL_ROUTES = {
     "shape": "A simple shape, colored and scaled by the lab, optionally with a real image on it found "
-             "in a texture library. The headset makes sphere, cube, plane, capsule, cylinder and quad "
+             f"in a texture library. The headset makes {', '.join(HEADSET_PRIMITIVES)} "
              "itself; arrow, ring or torus, cone, dome, grid and rounded panel are provided once. For "
              "diagram elements in any subject (vectors, axes, orbit rings, ground planes, markers, "
              "regions, blocks) and for things whose look is an image on a simple shape (planets, moons, "
@@ -117,40 +113,82 @@ def routes_for(kind: str) -> dict[str, str]:
 
 # ── Response model ────────────────────────────────────────────────────
 
-# Listed assets for the call being checked: (kind, name key) -> name. Keyed by kind
-# too, because a lab can use one name for a model and a texture (two assets).
-_SCOPE: contextvars.ContextVar[Optional[dict[tuple[str, str], str]]] = \
+# For the call being checked: (listed assets, reused assets), each (kind, name key) ->
+# name. Keyed by kind too, because a lab can use one name for a model and a texture (two
+# assets). Reused assets aren't planned, but a listed one may be same_as one of them.
+_SCOPE: contextvars.ContextVar[Optional[tuple[dict, dict]]] = \
     contextvars.ContextVar("routing_scope", default=None)
 MIN_KEYWORDS, MAX_KEYWORDS = 2, 6
 
 
 @contextmanager
-def routing_scope(requests: list[AssetRequest]):
-    """Check ``LabAssetPlan`` responses against these assets while inside."""
-    token = _SCOPE.set({(r.kind, r.key): r.name for r in requests})
+def routing_scope(requests: list[AssetRequest], reused: list[tuple[AssetRequest, str]] = ()):
+    """Check ``LabAssetPlan`` responses against these assets while inside; ``same_as``
+    may also name one of the ``reused`` assets (the reuse judge matched it)."""
+    token = _SCOPE.set(({(r.kind, r.key): r.name for r in requests},
+                        {(r.kind, r.key): r.name for r, _ in reused}))
     try:
         yield
     finally:
         _SCOPE.reset(token)
 
 
-def _strict_tool_schema(schema: dict) -> None:
-    """The tool schema the LLM sees stays strict: every field but the optional ones is
-    required, and no field shows the lenient default (kind's "" isn't in its enum)."""
-    optional = {"must_be_right", "same_as"}
-    props = schema.get("properties", {})
-    schema["required"] = [k for k in props if k not in optional]
-    for k, prop in props.items():
-        if k not in optional:
-            prop.pop("default", None)
+def match_listed(items, listed: dict[tuple[str, str], str], verb: str):
+    """Match a response's items (each with ``name`` and ``kind``) to the listed assets.
+    Returns ``(seen, problems)``: ``seen`` maps (kind, name key) to its item, with the
+    item's name set to the lab's spelling; problems are unknown names, wrong kinds,
+    duplicates and missing assets. An item with the wrong kind is reported once, not
+    also as missing, and never makes the correct item look duplicated. Shared by every
+    per-lab check (routing, reuse)."""
+    problems: list[str] = []
+    seen: dict = {}
+    wrong_kind: set = set()   # answered, but with the wrong kind
+    kinds_of: dict[str, set] = {}
+    for kind, k in listed:
+        kinds_of.setdefault(k, set()).add(kind)
+    for a in items:
+        k = name_key(a.name)
+        if k not in kinds_of:
+            problems.append(f"{a.name!r} is not one of the listed assets")
+            continue
+        if a.kind not in kinds_of[k]:
+            listed_as = " and a ".join(sorted(kinds_of[k]))
+            problems.append(f"{a.name!r} is listed as a {listed_as}, not a {a.kind or 'kind-less'} asset")
+            if len(kinds_of[k]) == 1:   # clearly that asset: don't also call it missing
+                wrong_kind.add((next(iter(kinds_of[k])), k))
+            continue
+        key = (a.kind, k)
+        if key in seen:
+            problems.append(f"{a.kind} {listed[key]!r} is {verb} more than once")
+            continue
+        seen[key] = a
+        a.name = listed[key]
+    missing = [f"{name} ({kind})" for (kind, k), name in listed.items()
+               if (kind, k) not in seen and (kind, k) not in wrong_kind]
+    if missing:
+        problems.append("these listed assets are missing: " + ", ".join(missing))
+    return seen, problems
+
+
+def strict_schema(optional: set[str]):
+    """A ``json_schema_extra`` that keeps the tool schema the LLM sees strict while the
+    model validates leniently: every field not in ``optional`` is required, and none of
+    them shows its lenient default."""
+    def apply(schema: dict) -> None:
+        props = schema.get("properties", {})
+        schema["required"] = [k for k in props if k not in optional]
+        for k, prop in props.items():
+            if k not in optional:
+                prop.pop("default", None)
+    return apply
 
 
 class PlannedAsset(BaseModel):
     # Only name is required when validating: everything else is checked in
     # LabAssetPlan._check, so all problems in a response come back in one error (field
     # errors would stop validation before that check runs, and cost a reask each). The
-    # schema sent to the LLM still marks them required (_strict_tool_schema).
-    model_config = ConfigDict(json_schema_extra=_strict_tool_schema)
+    # schema sent to the LLM still marks them required (strict_schema).
+    model_config = ConfigDict(json_schema_extra=strict_schema({"must_be_right", "same_as"}))
 
     name: str = Field(description="The asset's name, exactly as listed.")
     kind: str = Field("", description="The asset's kind, as listed.",
@@ -184,35 +222,15 @@ class LabAssetPlan(BaseModel):
 
     @model_validator(mode="after")
     def _check(self):
-        listed = _SCOPE.get()
-        if listed is None:
+        scope = _SCOPE.get()
+        if scope is None:
             return self
-        problems: list[str] = []
-        seen: dict[tuple[str, str], PlannedAsset] = {}
-        wrong_kind: set[tuple[str, str]] = set()   # answered, but with the wrong kind
+        listed, reused = scope
+        seen, problems = match_listed(self.assets, listed, "planned")
         forms = {kind: forms_for(kind) for kind in KINDS}     # once per validation
         routes = {kind: routes_for(kind) for kind in KINDS}
-        kinds_of = {}
-        for kind, k in listed:
-            kinds_of.setdefault(k, set()).add(kind)
-        for a in self.assets:
-            k = name_key(a.name)
-            if k not in kinds_of:
-                problems.append(f"{a.name!r} is not one of the listed assets")
-                continue
-            if a.kind not in kinds_of[k]:
-                listed_as = " and a ".join(sorted(kinds_of[k]))
-                problems.append(f"{a.name!r} is listed as a {listed_as}, not a {a.kind or 'kind-less'} asset")
-                if len(kinds_of[k]) == 1:   # clearly that asset: don't also call it missing
-                    wrong_kind.add((next(iter(kinds_of[k])), k))
-                continue
-            key = (a.kind, k)
-            name = listed[key]
-            if key in seen:
-                problems.append(f"{a.kind} {name!r} is planned more than once")
-                continue
-            seen[key] = a
-            a.name = name
+        for a in seen.values():
+            name = a.name
             if a.form not in forms[a.kind]:
                 problems.append(f"{name!r}: form {a.form!r} is not one of the {a.kind} forms "
                                 f"({', '.join(forms[a.kind])})")
@@ -227,10 +245,6 @@ class LabAssetPlan(BaseModel):
             if not MIN_KEYWORDS <= n <= MAX_KEYWORDS:
                 problems.append(f"{name!r}: give {MIN_KEYWORDS} to {MAX_KEYWORDS} search keywords "
                                 f"(got {n})")
-        missing = [f"{name} ({kind})" for (kind, k), name in listed.items()
-                   if (kind, k) not in seen and (kind, k) not in wrong_kind]
-        if missing:
-            problems.append("these listed assets are missing: " + ", ".join(missing))
         for (kind, k), a in seen.items():
             if not a.same_as:
                 continue
@@ -238,9 +252,11 @@ class LabAssetPlan(BaseModel):
             target = seen.get((kind, t))
             if t == k:
                 problems.append(f"{a.name!r}: same_as can't name the asset itself")
+            elif target is None and (kind, t) in reused:
+                a.same_as = reused[(kind, t)]    # follows the library match
             elif target is None:
                 other = next((x for (kk, tt), x in seen.items() if tt == t), None)
-                problems.append(f"{a.name!r}: same_as {a.same_as!r} is not a listed {kind}"
+                problems.append(f"{a.name!r}: same_as {a.same_as!r} is not a listed or reused {kind}"
                                 + (f" (it is a {other.kind})" if other is not None else ""))
             elif target.same_as:
                 problems.append(f"{a.name!r}: same_as {target.name!r}, which is itself merged into "
@@ -267,13 +283,15 @@ def _use_line(u, kind: str) -> str:
                     else f"textured with {u.paired_with}")
     if u.parent and u.parent != "[CURRENT_LAB]":
         bits.append(f'child of "{u.parent}"')
+    if u.components:
+        bits.append("components " + ", ".join(u.components))
     line = ", ".join(bits)
     if u.text:
         line += "; text on it: " + " | ".join(f'"{t}"' for t in u.text)
     return line
 
 
-def _asset_block(r: AssetRequest) -> str:
+def asset_block(r: AssetRequest) -> str:
     lines = [f"[{r.kind}] {r.name}"]
     if len(r.spellings) > 1:
         lines.append(f"  also spelled: {', '.join(s for s in r.spellings if s != r.name)}")
@@ -282,6 +300,9 @@ def _asset_block(r: AssetRequest) -> str:
         lines.append(f"  - {_use_line(u, r.kind)}")
     if r.use_count > len(r.uses):
         lines.append(f"  - ...and {r.use_count - len(r.uses)} more use(s)")
+    if r.components:
+        lines.append("  components on its objects: " + ", ".join(
+            f"{c} on {n} of {r.use_count}" for c, n in r.components.items()))
     for n in r.narration:
         lines.append(f'  narration: "{n}"')
     if r.purpose:
@@ -293,32 +314,56 @@ def _options(title: str, options: dict[str, str]) -> str:
     return title + "\n" + "\n".join(f"- {k}: {v}" for k, v in options.items())
 
 
-def build_prompt(lab: dict, requests: list[AssetRequest]) -> str:
-    models = sum(r.kind == "model" for r in requests)
-    textures = len(requests) - models
+# How an asset block (asset_block) reads; every provisioning prompt that lists assets uses it.
+ASSET_CONTEXT = ("Each asset shows how the lab uses it: the objects, their module, scale [x, y, z], color "
+                 "[r, g, b, a], the texture or model it is paired with, text shown on it, its components "
+                 "(what students do with it, with a count over all its objects), narration that mentions "
+                 "it, and its planned purpose when known.")
+
+
+def lab_summary(lab: dict) -> str:
+    """The LAB block every provisioning prompt opens with."""
     modules = "\n".join(
         f"{i}. {m.get('moduleName', '')}: {' '.join(str(m.get('description', '')).split())[:200]}"
         for i, m in enumerate(lab.get("modules", []), start=1))
     objectives = "\n".join(f"- {o}" for o in lab.get("objectives") or [])
-    return f"""You plan how to provide the 3D models and textures for an augmented-reality science lab \
-shown on a headset. The lab was generated with names for assets that don't exist yet. For each asset \
-listed below, say what it should look like and how it should be provided.
-
-LAB
+    return f"""LAB
 id: {lab.get("labId", "")}
 course: {lab.get("courseName", "")}
 objectives:
 {objectives}
 modules:
-{modules}
+{modules}"""
+
+
+def _reused_line(r: AssetRequest, matched: str) -> str:
+    objects = ", ".join(f'"{u.object}"' for u in r.uses[:3])
+    more = f" and {r.use_count - 3} more" if r.use_count > 3 else ""
+    return f"- {r.name} ({r.kind}): matched to {matched}; objects {objects}{more}"
+
+
+def build_prompt(lab: dict, requests: list[AssetRequest],
+                 reused: list[tuple[AssetRequest, str]] = ()) -> str:
+    """``reused``: (asset, what the reuse judge matched it to) for each reused asset."""
+    models = sum(r.kind == "model" for r in requests)
+    textures = len(requests) - models
+    library_block = ""
+    if reused:
+        library_block = ("\nALREADY IN THE LIBRARY (not planned here). same_as may name one only when a "
+                         "listed asset is the very same object, so the same library match is right for it "
+                         "(not merely the same kind of thing: Saturn is not Jupiter)\n"
+                         + "\n".join(_reused_line(r, m) for r, m in reused) + "\n")
+    return f"""You plan how to provide the 3D models and textures for an augmented-reality science lab \
+shown on a headset. The lab was generated with names for assets that don't exist yet. For each asset \
+listed below, say what it should look like and how it should be provided.
+
+{lab_summary(lab)}
 
 ASSETS TO PLAN ({models} model(s), {textures} texture(s))
-Each asset shows how the lab uses it: the objects, their module, scale [x, y, z], color [r, g, b, a], \
-the texture or model it is paired with, text shown on it, narration that mentions it, and its planned \
-purpose when known.
+{ASSET_CONTEXT}
 
-{chr(10).join(_asset_block(r) for r in requests)}
-
+{chr(10).join(asset_block(r) for r in requests)}
+{library_block}
 {_options("FORMS FOR MODELS", MODEL_FORMS)}
 
 {_options("FORMS FOR TEXTURES", TEXTURE_FORMS)}
@@ -346,97 +391,15 @@ a reviewer reads it.
 
 # ── The call ──────────────────────────────────────────────────────────
 
-# (response_model, messages, max_retries) -> a validated response_model instance
-CallFn = Callable[[type, list, int], BaseModel]
 
-
-def _benchmark():
-    if str(BENCHMARK_DIR) not in sys.path:
-        sys.path.insert(0, str(BENCHMARK_DIR))
-    import benchmark
-    return benchmark
-
-
-def model_config_for(model_key: str):
-    """The ``benchmark_config.MODELS`` entry for ``model_key`` (KeyError if unknown)."""
-    bm = _benchmark()
-    if model_key not in bm.MODELS:
-        raise KeyError(f"unknown model {model_key!r} (see benchmark.py --list-models)")
-    return bm.MODELS[model_key]
-
-
-API_KEY_ENV = {"anthropic": ("ANTHROPIC_API_KEY",), "openai": ("OPENAI_API_KEY",),
-               "google": ("GEMINI_API_KEY", "GOOGLE_API_KEY")}
-
-
-def check_environment(model_key: str) -> None:
-    """Exit-worthy problems before any call: unknown model, SDK missing, or no key."""
-    import os
-    cfg = model_config_for(model_key)
-    _benchmark().require_environment([cfg])
-    names = API_KEY_ENV.get(cfg.provider.value, ())
-    if names and not any(os.environ.get(n) for n in names):
-        raise KeyError(f"no API key for {model_key}: set {' or '.join(names)} in .env")
-
-
-class Router:
-    """Plans a lab's assets with one tracked LLM call (or ``call_fn``, for tests)."""
-
-    def __init__(self, model_key: str = DEFAULT_MODEL, *, call_fn: Optional[CallFn] = None,
-                 max_retries: int = DEFAULT_MAX_RETRIES):
-        self.model_key = model_key
-        self.max_retries = max_retries
-        self.stats: dict = {}       # transient_retries, reask_restarts (benchmark.guarded_create)
-        self.tracker = None
-        if call_fn is not None:
-            self.model_config = None
-            self._call_fn = call_fn
-            return
-        bm = _benchmark()
-        from tracking import InstructorTracker
-        self.model_config = model_config_for(model_key)
-        self.tracker = InstructorTracker(
-            model=self.model_config.model_id, provider=self.model_config.provider.value,
-            pricing_config=self.model_config.pricing_config)
-        client = bm.create_instructor_client(self.model_config, bm.SpecType.JSON_LAB)
-        self._client = self.tracker.wrap(client)
-        self._call_fn = self._llm_call
-
-    def _llm_call(self, response_model, messages, max_retries):
-        return _benchmark().guarded_create(self._client, self.tracker, self.model_config,
-                                           response_model, messages, max_retries, self.stats)
-
-    def plan(self, lab: dict, requests: list[AssetRequest]) -> tuple[Optional[LabAssetPlan], dict]:
-        """(plan, record). With nothing to plan, no call is made and the plan is empty.
-        On failure the plan is None and the record carries the error."""
-        record: dict = {"model": self.model_key, "calls": 0}
-        if self.model_config is not None:
-            record.update(model_id=self.model_config.model_id,
-                          provider=self.model_config.provider.value,
-                          reasoning_effort=self.model_config.reasoning_effort,
-                          tool_choice=_benchmark().tool_choice_for(self.model_config))
-        if not requests:
-            return LabAssetPlan(assets=[]), record
-        prompt = build_prompt(lab, requests)
-        record["prompt_characters"] = len(prompt)
-        t0 = time.monotonic()
-        plan, error = None, None
-        try:
-            with routing_scope(requests):
-                plan = self._call_fn(LabAssetPlan, [{"role": "user", "content": prompt}],
-                                     self.max_retries)
-        except Exception as exc:  # recorded; the CLI decides the exit code
-            error = f"{type(exc).__name__}: {' '.join(str(exc).split())[:2000]}"
-        record["seconds"] = round(time.monotonic() - t0, 2)
-        record["transient_retries"] = self.stats.get("transient_retries", 0)
-        record["reask_restarts"] = self.stats.get("reask_restarts", 0)
-        if self.tracker is not None:
-            record["tracking"] = self.tracker.summary()
-            record["served_models"] = self.tracker.served_models()
-            record["cost_usd"] = record["tracking"]["cost"]["total_usd"]
-            record["calls"] = record["tracking"]["total_calls"]
-        else:
-            record["calls"] = 1
-        if error:
-            record["error"] = error
-        return plan, record
+def plan_routes(llm, lab: dict, requests: list[AssetRequest],
+                reused: list[tuple[AssetRequest, str]] = ()) -> tuple[Optional[LabAssetPlan], dict]:
+    """(plan, record) from one call through ``llm`` (an ``llm.TrackedLLM``). ``reused``
+    pairs each asset the reuse judge matched with what it was matched to (e.g. "sphere +
+    2k_mars"): listed so a duplicate can be same_as one.
+    With nothing to plan, no call is made and the plan is empty. On failure the plan is
+    None and the record carries the error."""
+    if not requests:
+        return LabAssetPlan(assets=[]), {**llm.describe(), "calls": 0}
+    with routing_scope(requests, reused):
+        return llm.call(LabAssetPlan, build_prompt(lab, requests, reused))

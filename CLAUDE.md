@@ -100,11 +100,12 @@ python "Code/Narration/bundle.py" validate "<Name>Lab.zip"
 python "Code/Narration/smoke_test.py"   # offline check, no API keys (fake TTS + mock OpenAI/Gemini)
 ```
 
-Provisioning (models and textures for labs; so far the asset library and the plan, #106):
+Provisioning (models and textures for labs; so far the asset library and the plan, #106, #108):
 
 ```bash
-# --dry-run: audit + library lookup + one describe-and-route LLM call; builds nothing.
-# --no-llm stops after the audit (no key). Output: Artifacts/Data/Provisioning/[<run group>/]<lab>_<ts>/
+# --dry-run: audit + library lookup + reuse judge + describe and route (two LLM calls); builds nothing.
+# --no-llm stops after the audit (no key); --no-reuse skips the judge; --save-aliases saves its matches.
+# Output: Artifacts/Data/Provisioning/[<run group>/]<lab>_<ts>/
 python "Code/Provisioning/provision_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --dry-run
 python "Code/Provisioning/provision_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --dry-run --no-llm
 ```
@@ -423,8 +424,8 @@ not reused. Built so far:
   seed run; a built-in whose file can't be downloaded is still recorded (`partial`),
   keeping its current file if intact.
 - **`audit.py`** (#106): every `prefab` / `texture` a lab references (grouped ignoring case;
-  `demoPrefab` excluded; clip changes can't set either), with uses, text on the object (also
-  from clip changes, by `target`), narration sentences that mention it and the hierarchical
+  `demoPrefab` excluded; clip changes can't set either), with uses, text on the object and its
+  behaviour components (both also from clip changes, by `target`), narration sentences that mention it and the hierarchical
   `purpose`. Matches `lab_metrics.analyze_assets` on all wave-2 labs.
 - **`routing.py`** (#106): one LLM call per lab (`LabAssetPlan`) for the assets the library
   doesn't have: description, `must_be_right`, search keywords, **form** and **route** (chosen
@@ -434,15 +435,25 @@ not reused. Built so far:
   manifest's `review_items`, never provided), `same_as` merges. Checked under a `routing_scope` ContextVar (one error for all problems → one
   reask). Same client/guards/tracker as every entry point; default model Claude Haiku 5.5.
   **`builders.py`**: the builder registry, empty until #111.
-- **`provision_lab.py`** (#106): the CLI; only `--dry-run` so far. With no library at the
+- **`reuse.py`** (#108): the reuse judge, run before routing on assets with no name or alias
+  hit. One LLM call per lab (`ReusePlan`) over a shortlist of reusable entries (whole library
+  up to 200, else per-asset word matches): `reuse` an entry of the same kind (a model may add
+  a library `texture_id`), `textured_shape` (a headset shape plus a library texture, e.g. a
+  planet), or `none`. Checked under `reuse_scope` with routing's `match_listed`; strict tool
+  schema, lenient validation. Single-entry reuses of non-built-in entries are proposed as aliases; `--save-aliases`
+  writes them (opt-in: a wrong alias applies to every later lab).
+- **`llm.py`**: `TrackedLLM`, the run's one tracked client (`create_instructor_client` +
+  `benchmark.guarded_create`), shared by the reuse judge and routing; per-step records
+  (calls, tokens, cost, retries, served models) plus a whole-run tracker summary.
+- **`provision_lab.py`** (#106, #108): the CLI; only `--dry-run` so far. With no library at the
   default location it falls back to the seed list's built-ins; a broken library, or a
   `--library` / `$ARLEM_ASSET_LIBRARY` path with none, is an error. Assets are keyed by kind and name (a model and a
   texture can share a name). No call and no key when the library has everything. Writes
   `provisioning_manifest.json` (library identity, routing record with cost, served models,
   transient retries and reask restarts, per-asset status and plan; anything merged into a
   flagged asset is flagged too).
-- **`smoke_test.py`**: offline (mock download server, throwaway library, fake LLM; never the
-  real library).
+- **`smoke_test.py`**: offline (mock download server, throwaway library, fake LLM, and the
+  real client against a mock Anthropic server; never the real library).
 
 
 
@@ -455,8 +466,8 @@ Everything downstream of a run. Reads `Metrics/` + `Outputs/`; never calls an LL
 via a `sys.path` insert. Code/Analysis never imports the other way round; the other
 packages that import from `Code/Benchmark/` are Narration (`benchmark`'s retry policy and
 error helpers), Hierarchical (client factory, `guarded_create`) and Provisioning
-(`transient_policy.py` for downloads; the client factory and `guarded_create` for the
-describe-and-route call).
+(`transient_policy.py` for downloads; the client factory and `guarded_create`, through
+`llm.TrackedLLM`, for the reuse judge and describe and route).
 
 **`reprice_runs.py`** — re-costs a run CSV against current `tracking/pricing.py`
 rates, written as a `_repriced` sibling so originals stay put.

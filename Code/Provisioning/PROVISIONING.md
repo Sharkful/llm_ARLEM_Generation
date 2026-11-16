@@ -3,7 +3,8 @@
 Status: **agreed** (#104, milestone "3D Model and Texture Provisioning", parent
 #103). It decides what the provisioning tool produces and how. Built so far: the
 asset library (#107, `library.py`, `seed_assets.json`) and the plan (#106: the
-audit, describe and route, `provision_lab.py --dry-run`), with `smoke_test.py`.
+audit, describe and route, `provision_lab.py --dry-run`; #108: the reuse judge), with
+`smoke_test.py`.
 The issues that build the rest are listed at the end.
 
 ## Why
@@ -154,7 +155,11 @@ The manifest is rewritten after every asset, so a run can resume (§ CLI).
 `audit.py` lists the assets (step 1), with up to 8 uses each (all are counted), up
 to 3 narration sentences that mention the object or asset by its name's words
 (`dnaHelix` → "dna helix"), text shown on the object (also text added by clip
-changes), and the hierarchical `purpose`. On all 104 wave-2 labs it finds exactly
+changes), the behaviour components on each object (also added by clip changes;
+`pointerReceiver (draggable)`, `simpleOrbit`, a new script by name) with a count
+over all the asset's objects, and the hierarchical `purpose`. The components were
+added after the first live reuse runs: without them the judge couldn't tell a marker
+from a sphere students drag (`electronDomainPrefab`, 4 of 10 objects draggable). On all 104 wave-2 labs it finds exactly
 the invented assets `lab_metrics.analyze_assets` counts.
 
 Each asset is then looked up in the library by name or alias (`find`; a different
@@ -385,14 +390,66 @@ Exit codes: 0 ok; 1 validation errors, or seed entries that failed or are `parti
 2 bad input (no library, unreadable seed list, unknown `--only` id). `validate` never
 creates a library, and `seed` checks its arguments before creating one.
 
-## Reuse (#108)
+## Reuse (#108, built)
 
-1. Name or alias hit, case-insensitive.
-2. Shortlist: the whole library while it has fewer than about 200 entries; above
-   that, the 10 to 20 nearest by embedding similarity of descriptions.
-3. One LLM judge per lab (all its assets at once): for each asset, the entry to
-   reuse or none, a reason, and whether the lab's `color` and `scale` can adapt the
-   match (a gray sphere tinted red is fine; a heart is not a lung).
+`reuse.py`, run by `provision_lab.py` between the library lookup and describe and
+route, so only what the library lacks is planned:
+
+1. **Name or alias hit**, ignoring case: `available`, no call.
+2. **Shortlist** of reusable entries (system objects such as `demoPrefab` left out):
+   the whole library while it has at most 200; above that, for each asset the 20
+   entries that share the most words with it (its name, objects and narration against
+   the entry's name, tags, aliases and description). An embedding shortlist can
+   replace the word match once libraries are that big.
+3. **One LLM judge per lab** (`ReusePlan`, all unmatched assets at once). Per asset:
+   - `reuse`: a library entry of the same kind *is* this asset; the lab's `color` and
+     `scale` adapt it (`adapt` says how). A model may also take a library texture
+     (`texture_id`), e.g. a built-in sphere with a planet map.
+   - `textured_shape`: a model that is one of the primitives the headset makes today
+     (sphere, cube, plane, capsule, cylinder, quad: `routing.HEADSET_PRIMITIVES`, § Simple
+     shapes) with a library texture on it: a planet map on a sphere. The shapes Unity
+     lacks aren't offered until #109 provides them.
+   - `none`: nothing in the library is this asset (related is not enough: a heart is
+     not a lung, an Earth map is not a Mars map). It goes on to describe and route,
+     and its reason stays in the manifest for a reviewer.
+
+   Describe and route also lists the reused assets, each with what it was matched to
+   and its first objects (not to plan them), so a duplicate the judge left for
+   planning can be `same_as` one of them when it is the very same object (`H2OPrefab`
+   same as a reused `waterModelPrefab`; Saturn is not Jupiter). It then follows that
+   library match: `reused`, with the target's decision, `same_as`, routing's reason
+   and the judge's own verdict on it (`judge`), no plan of its own, and counted once
+   (in neither `by_reuse` nor `by_form`). Behaviour or impossible merged that way is
+   still flagged for a reviewer.
+
+   The prompt lists the lab, the shortlisted entries (id, kind, built-in, name,
+   description, mapping, tags) and each asset's context, and says to choose `none`
+   when unsure: a wrong reuse shows the wrong thing in the lab. A plain shape stands
+   in only for something generic (a marker, a ball, an atom drawn as a colored ball);
+   a specific real object with its own look (Mars) gets an entry that is that object,
+   its library texture on a sphere, or `none` so it gets the right look (a red sphere
+   for Mars was the first live run's mistake). The response is
+   checked under `reuse_scope` (every listed asset decided once via the same
+   `match_listed` check routing uses; ids that were offered, with the right kind; a
+   shape the headset makes). All problems come back in one error; the tool schema
+   stays strict while validation is lenient.
+4. **Aliases.** A `reuse` of a single entry (no `texture_id`) that is **not built-in**
+   is proposed as an alias of that entry and listed in the manifest. Built-ins are
+   generic moon-lab prefabs (spheres, the text label) that stand in for many different
+   things, so a lab's name for its stand-in is not a name of the entry: the first live
+   run (2026-11-16, seed built-ins only) proposed `marsPrefab`, `jupiterPrefab` and
+   `saturnPrefab` → `tiny_sphere`, which would have kept every later Mars a plain sphere,
+   with no call, even after a Mars map was added. `--save-aliases` saves them to the
+   library, so the next lab with that name is found by name with no call; a write
+   another run raced is retried once. Saving is opt-in, because a wrong alias would
+   silently apply to every later lab: it changes the library (its revision and content
+   hash, recorded as `library_after`). Combined decisions (a model plus a texture, or
+   a textured shape) are never saved; the judge decides them again each run.
+
+Both LLM steps share one tracked client (`llm.TrackedLLM`); each records its own calls,
+tokens, cost, retries, time and served models, and the manifest's `llm` holds the
+tracker summary for the whole run. A failed judge call fails the run (exit 1) before
+anything is routed.
 
 ## Search (#110)
 
@@ -553,41 +610,55 @@ library grows), auto-pick acceptance in review, cost and time per lab and per as
 and placeholder rate, reported per source model and level, and for the held-out set
 per field (#115).
 
-## Provisioning CLI (#106 built; #113)
+## Provisioning CLI (#106, #108 built; #113)
 
 ```
 python "Code/Provisioning/provision_lab.py" <lab_output.json> --dry-run [--no-llm]
+    [--no-reuse] [--save-aliases]
     [--model KEY] [--library PATH] [--metrics PATH] [--run-group NAME]
 ```
 
-Built so far (#106): the plan. `--dry-run` is required until #113.
+Built so far (#106, #108): the plan. `--dry-run` is required until #113.
 
-- `--dry-run` audits the lab, looks every asset up in the library, makes the one
-  describe-and-route call for the rest, prints the plan and saves
-  `provisioning_manifest.json` in `Artifacts/Data/Provisioning/[<run group>/]<lab>_<timestamp>/`
-  (a second run in the same second gets its own folder). It downloads and builds
-  nothing.
+- `--dry-run` audits the lab, looks every asset up in the library by name or alias,
+  asks the reuse judge about the rest, makes the describe-and-route call for what is
+  left, prints the plan and saves `provisioning_manifest.json` in
+  `Artifacts/Data/Provisioning/[<run group>/]<lab>_<timestamp>/` (a second run in the
+  same second gets its own folder). It downloads and builds nothing.
 - `--no-llm` stops after the audit and the library lookup: no API key needed.
+- `--no-reuse` skips the reuse judge: everything without a name hit is routed.
+- `--save-aliases` saves the judge's single-entry matches (not built-ins) as library aliases (needs
+  the judge and a library).
+- `--model` picks the model for both LLM steps (default Claude Haiku 5.5).
 - `--metrics` names the lab's metrics file (it must be a JSON object); by default the
   paired `*_metrics.json` is used (beside the output, else in the sibling `Metrics/`;
   an unreadable candidate is skipped and noted), for the source model, level and
   hierarchical purposes.
-- Exit codes: **0** planned (or audited with `--no-llm`); **1** the call failed
-  (recorded in the manifest); **2** bad input or environment (not a lab, bad run
-  group, a metrics file that isn't a JSON object, a library that can't be read or a
-  `--library` or `$ARLEM_ASSET_LIBRARY` path with none, unknown model, missing SDK or
-  API key).
+- Exit codes: **0** planned (or audited with `--no-llm`); **1** the reuse judge or
+  the describe-and-route call failed (recorded in the manifest); **2** bad input or
+  environment (not a lab, bad run group, a metrics file that isn't a JSON object, a
+  library that can't be read or a `--library` or `$ARLEM_ASSET_LIBRARY` path with
+  none, `--save-aliases` without the judge or a library, unknown model, missing SDK
+  or API key).
 - The plan manifest records: `status` (`planned`, `audited`, `failed`); the source
   (input, `labId`, metrics file and any skipped ones, source model, level, lab name,
   whether hierarchical); the library identity (or a note that there is none); the
-  routing record (model, model id, provider, reasoning effort, `tool_choice`, calls,
-  seconds, transient retries, reask restarts, served models, cost, the tracker
-  summary, any error); the routes offered; counts by status, route (each asset that
-  would be provided or reviewed once; merged ones follow their target) and form;
-  `review_items`; and per asset its spellings, uses, narration, purpose, `status`
+  `reuse` record and the `routing` record (each: model, model id, provider,
+  reasoning effort, `tool_choice`, and for that step's calls only: calls, prompt and
+  completion tokens, seconds, transient retries, reask restarts, served models, cost,
+  any error; reuse also the
+  shortlist size); `aliases` (`saved`, the proposals and whether each was saved, and
+  `library_after` when saved; an alias already on its entry, e.g. saved by another
+  run meanwhile, counts as saved with `already`, as nothing was written); `llm`, the tracker summary for the whole run; the
+  routes offered; counts by status, reuse decision, route (each asset that would be
+  provided or reviewed once; merged ones follow their target) and form;
+  `review_items`; and per asset its spellings, uses, component counts, narration,
+  purpose, the judge's `none` and its reason when it decided one, `status`
   (`available` with the library entry and whether it matched by name or alias,
-  `planned`, `merged` into another, `flagged` for a reviewer with its `review_route`,
-  or `unplanned`) and the plan.
+  `reused` with the judge's decision (or, merged into a reused asset, that asset's
+  decision and `same_as`), `planned`, `merged` into another, `flagged` for
+  a reviewer with its `review_route` and `review_reason`, or `unplanned`) and the
+  plan.
 
 Still to come (#113): the full run.
 
