@@ -57,8 +57,10 @@ USE_RDKIT = True        # tests turn the optional fallback off
 # Look and size, in ångström before the model is scaled to fit a unit cube.
 BALL_FACTOR = 0.2       # ball radius = BALL_FACTOR * van der Waals radius
 BOND_RADIUS = 0.08
-MULTI_BOND_RADIUS = {2: 0.055, 3: 0.045}
-MULTI_BOND_GAP = {2: 0.085, 3: 0.11}
+# Sticks of a double or triple bond: thinner, and spaced (center to center) wider than
+# a stick, so they read as two or three, not one thick stick.
+MULTI_BOND_RADIUS = {2: 0.05, 3: 0.04}
+MULTI_BOND_GAP = {2: 0.16, 3: 0.12}
 BOND_SHORTENING = {1: 1.0, 2: 0.87, 3: 0.78}   # idealized bond length factor by order
 LONE_PAIR_COLOR = (180, 200, 255, 90)
 LONE_PAIR_SIZE = (0.3, 0.55)   # lobe radius across and along its direction
@@ -361,11 +363,13 @@ def _bond_offset(mol: Molecule, a: int, b: int, pos):
 
 
 def build_scene(mol: Molecule, lone_pairs: dict[int, list]):
-    """The ball-and-stick ``trimesh.Scene`` (one mesh per material), unscaled."""
+    """The ball-and-stick ``trimesh.Scene`` (one mesh per material), unscaled, and the
+    centers of its atoms and lone-pair lobes (for the thumbnail's view)."""
     import numpy as np
     import trimesh
 
     pos = [np.asarray(p, dtype=float) for p in mol.coords]
+    centers = list(pos)
     parts: dict[str, list] = {}       # material name -> meshes, in first-seen order
     colors: dict[str, tuple] = {}
 
@@ -402,6 +406,7 @@ def build_scene(mol: Molecule, lone_pairs: dict[int, list]):
             # rotate the lobe's z axis onto d, then move it just outside the ball
             lobe.apply_transform(trimesh.geometry.align_vectors([0, 0, 1], d))
             lobe.apply_translation(pos[i] + d * (ball_r + along_r * 0.85))
+            centers.append(pos[i] + d * (ball_r + along_r * 0.85))
             add("lone_pair", LONE_PAIR_COLOR, lobe)
 
     scene = trimesh.Scene()
@@ -409,12 +414,13 @@ def build_scene(mol: Molecule, lone_pairs: dict[int, list]):
         mesh = trimesh.util.concatenate(meshes)
         mesh.visual = trimesh.visual.TextureVisuals(material=_material(name, colors[name]))
         scene.add_geometry(mesh, node_name=name, geom_name=name)
-    return scene
+    return scene, centers
 
 
-def normalize(scene) -> tuple[list[float], int]:
+def normalize(scene) -> tuple[list[float], int, "np.ndarray"]:
     """Center the scene on its bounding box and scale its largest side to 1.0 (the
-    model convention). Returns the bounds [x, y, z] and the triangle count."""
+    model convention). Returns the bounds [x, y, z], the triangle count and the 4x4
+    transform applied."""
     import numpy as np
     lo, hi = scene.bounds
     size = float(np.max(hi - lo))
@@ -427,14 +433,23 @@ def normalize(scene) -> tuple[list[float], int]:
         geom.apply_transform(matrix)
     lo, hi = scene.bounds
     bounds = [round(float(x), 6) for x in (hi - lo)]
-    return bounds, int(sum(len(g.faces) for g in scene.geometry.values()))
+    return bounds, int(sum(len(g.faces) for g in scene.geometry.values())), matrix
 
 
-def draw_thumbnail(scene, dest: Path) -> None:
+def _rotation(rot_y: float, rot_x: float):
+    import numpy as np
+    ry = np.array([[math.cos(rot_y), 0, math.sin(rot_y)], [0, 1, 0], [-math.sin(rot_y), 0, math.cos(rot_y)]])
+    rx = np.array([[1, 0, 0], [0, math.cos(rot_x), -math.sin(rot_x)], [0, math.sin(rot_x), math.cos(rot_x)]])
+    return rx @ ry
+
+
+def draw_thumbnail(scene, dest: Path, points=None) -> None:
     """A small render to check the model by eye: each mesh's triangles, flat-shaded
-    in its material color, back to front (painter's order). The view is fixed relative
-    to the model's own main axes (largest spread across, smallest toward the viewer),
-    turned to a 3/4 view, so planar and linear molecules show their shape."""
+    in its material color, back to front (painter's order). The view is a 3/4 view of
+    the model's own main axes (largest spread across, smallest toward the viewer). With
+    ``points`` (atom and lone-pair centers), it keeps that view unless two points come
+    close on screen (one hides another; a tetrahedron's main axes are arbitrary): then
+    it takes the nearest turn, from a fixed set, that keeps them reasonably apart."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -448,10 +463,20 @@ def draw_thumbnail(scene, dest: Path) -> None:
     for k in range(3):                              # a fixed sign per axis
         if axes[k][np.argmax(np.abs(axes[k]))] < 0:
             axes[k] = -axes[k]
-    rot_y, rot_x = math.radians(30), math.radians(-35)
-    ry = np.array([[math.cos(rot_y), 0, math.sin(rot_y)], [0, 1, 0], [-math.sin(rot_y), 0, math.cos(rot_y)]])
-    rx = np.array([[1, 0, 0], [0, math.cos(rot_x), -math.sin(rot_x)], [0, math.sin(rot_x), math.cos(rot_x)]])
-    view = rx @ ry @ axes
+    default = (30, -35)
+    turns = sorted({(y, x) for x in (-20, -35, -50) for y in range(0, 360, 15)} | {default},
+                   key=lambda t: (abs(t[1] - default[1]) / 15 + min(abs(t[0] - default[0]),
+                                                                   360 - abs(t[0] - default[0])) / 15, t))
+    views = [_rotation(math.radians(y), math.radians(x)) @ axes for y, x in turns]
+    view = views[0]
+    if points is not None and len(points) >= 2:
+        def spread(v):   # the closest two points on screen (rounded: no float-noise picks)
+            flat = np.asarray(points) @ v.T
+            return round(min(float(np.linalg.norm(flat[i, :2] - flat[j, :2]))
+                             for i in range(len(flat)) for j in range(i)), 4)
+        scores = [spread(v) for v in views]
+        enough = 0.6 * max(scores)
+        view = next(v for v, sc in zip(views, scores) if sc >= enough)
     light = _unit([0.4, 0.6, 1.0])
     polys, faces_rgba, depth = [], [], []
     for geom in scene.geometry.values():
@@ -561,8 +586,8 @@ def build(request: BuildRequest, out_dir: Path) -> BuildResult:
             for i, n in pairs_per_atom.items():
                 lone_pairs[i] = center_pairs.get(i) or free_directions(
                     [pos[j] - pos[i] for j in mol.neighbors(i)], n)
-        scene = build_scene(mol, lone_pairs)
-        bounds, triangles = normalize(scene)
+        scene, centers = build_scene(mol, lone_pairs)
+        bounds, triangles, matrix = normalize(scene)
     except BuildError as exc:
         return BuildResult(False, str(exc))
 
@@ -570,7 +595,8 @@ def build(request: BuildRequest, out_dir: Path) -> BuildResult:
     out_dir.mkdir(parents=True, exist_ok=True)
     model, thumb = out_dir / library.ROLE_FILES["model"], out_dir / library.ROLE_FILES["thumbnail"]
     model.write_bytes(scene.export(file_type="glb"))
-    draw_thumbnail(scene, thumb)
+    points = np.c_[np.asarray(centers, dtype=float), np.ones(len(centers))] @ matrix.T
+    draw_thumbnail(scene, thumb, points[:, :3])
 
     title, cid, formula = found["title"], found["cid"], found["formula"]
     suffix = "_lone_pairs" if lone_pairs else ""
