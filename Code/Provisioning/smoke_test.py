@@ -1015,6 +1015,9 @@ def part3(tmp: Path) -> None:
         m = last_manifest()
         check(code == 0 and m["status"] == "planned" and m["routing"]["calls"] == 0,
               "CLI: a lab whose assets are all in the library needs no API key and makes no call")
+        code, text = run(str(nothing), "--dry-run", "--library", str(tmp / "libP3"), "--model", "no-such-model")
+        check(code == 2 and "unknown model" in text,
+              "CLI: an unknown model -> exit 2, even when nothing needs planning")
     finally:
         os.environ.update(saved)
         lib.DEFAULT_LIBRARY = saved_default

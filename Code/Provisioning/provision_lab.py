@@ -302,6 +302,11 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[routing.CallFn] 
     plan, record = None, None
     if not args.no_llm and not to_plan:
         # Everything is in the library: nothing to ask, so no key or call is needed.
+        # The model key is still checked, so a typo fails the same way on every lab.
+        try:
+            routing.model_config_for(args.model)
+        except KeyError as exc:
+            return fail(exc.args[0])
         plan, record = routing.LabAssetPlan(assets=[]), {"model": args.model, "calls": 0,
                                                          "note": "nothing to plan"}
     elif not args.no_llm:
