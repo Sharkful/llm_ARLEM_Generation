@@ -158,9 +158,12 @@ changes), and the hierarchical `purpose`. On all 104 wave-2 labs it finds exactl
 the invented assets `lab_metrics.analyze_assets` counts.
 
 Each asset is then looked up in the library by name or alias (`find`; a different
-kind or a non-reusable entry such as `demoPrefab` doesn't count). Without a library
-the seed list's built-ins are used, so the headset's own assets are never planned.
-Only what the library doesn't have goes to the LLM.
+kind or a non-reusable entry such as `demoPrefab` doesn't count). When the default
+location (or `$ARLEM_ASSET_LIBRARY`) holds no library, the seed list's built-ins are
+used, so the headset's own assets are never planned. A library that exists but can't
+be read, or a `--library` path with no library, stops the run (exit 2) with the real
+error. Only what the library doesn't have goes to the LLM; when that is nothing, no
+call is made and no API key is needed.
 
 `routing.py` makes the one call per lab (`LabAssetPlan`): for each asset a
 description, `must_be_right` facts, 2 to 6 search keywords, a form, a route, a
@@ -177,19 +180,25 @@ routes with their descriptions; registered builders (`builders.py`, empty until
 `shape` replaced the earlier `kit` and `textured_primitive` routes (one mechanism: a
 simple shape with a color or an image). Assets routed to `component` or `impossible`
 get the status `flagged` and are listed in the manifest's `review_items` (name, kind,
-route, reason, description, objects); nothing is provided for them.
+route, reason, description, objects); nothing is provided for them. An asset merged
+(`same_as`) into a flagged asset, or flagged itself, is flagged too, with its `same_as`,
+so its objects reach the reviewer.
 
 The response is checked under `routing_scope` (a ContextVar, like
-`asset_plan_validation`): every listed asset planned exactly once with its listed
-kind, a form and route allowed for that kind, a non-empty description, keywords, and
-`same_as` pointing at another listed asset of the same kind that isn't itself
-merged. All problems come back in one error, so instructor reasks once. Names and
-`same_as` are returned in the lab's own spelling.
+`asset_plan_validation`): every listed asset planned exactly once. An asset is a kind
+and a name, because a lab can use one name for a model and a texture (two assets).
+Each needs a form and route allowed for its kind, a non-empty description and reason,
+2 to 6 search keywords, and `same_as` pointing at another listed asset of the same
+kind that isn't itself merged. Only `name` is a required field; everything else is
+checked in the one validator, so all problems (a wrong kind and a missing asset alike)
+come back in one error and instructor reasks once. Names and `same_as` are returned in
+the lab's own spelling.
 
-The call uses `create_instructor_client`, `provider_create_kwargs` and
-`_transient_retryer`, tracked by `InstructorTracker`; the default model is Claude
-Haiku 5.5 (`--model`). `routing.check_environment` stops before any call if the SDK
-or API key is missing.
+The call goes through `create_instructor_client` and `benchmark.guarded_create` (the
+provider guards inside the transient retry; shared with the hierarchical pipeline),
+tracked by `InstructorTracker`; the routing record counts `transient_retries` and
+`reask_restarts`. The default model is Claude Haiku 5.5 (`--model`).
+`routing.check_environment` stops before any call if the SDK or API key is missing.
 
 ## Behaviour named as an asset (known break)
 
@@ -558,21 +567,25 @@ Built so far (#106): the plan. `--dry-run` is required until #113.
   (a second run in the same second gets its own folder). It downloads and builds
   nothing.
 - `--no-llm` stops after the audit and the library lookup: no API key needed.
-- `--metrics` names the lab's metrics file; by default the paired `*_metrics.json` is
-  used (beside the output or in the sibling `Metrics/`), for the source model, level
-  and hierarchical purposes.
+- `--metrics` names the lab's metrics file (it must be a JSON object); by default the
+  paired `*_metrics.json` is used (beside the output, else in the sibling `Metrics/`;
+  an unreadable candidate is skipped and noted), for the source model, level and
+  hierarchical purposes.
 - Exit codes: **0** planned (or audited with `--no-llm`); **1** the call failed
   (recorded in the manifest); **2** bad input or environment (not a lab, bad run
-  group, unknown model, missing SDK or API key).
+  group, a metrics file that isn't a JSON object, a library that can't be read or a
+  `--library` path with none, unknown model, missing SDK or API key).
 - The plan manifest records: `status` (`planned`, `audited`, `failed`); the source
-  (input, `labId`, metrics file, source model, level, lab name, whether
-  hierarchical); the library identity (or a note that there is none); the routing
-  record (model, model id, provider, reasoning effort, `tool_choice`, calls, seconds,
-  transient retries, served models, cost, the tracker summary, any error); the routes
-  offered; counts by status, route and form; and per asset its spellings, uses,
-  narration, purpose, `status` (`available` with the library entry and whether it
-  matched by name or alias, `planned`, `merged` into another, or `unplanned`) and the
-  plan.
+  (input, `labId`, metrics file and any skipped ones, source model, level, lab name,
+  whether hierarchical); the library identity (or a note that there is none); the
+  routing record (model, model id, provider, reasoning effort, `tool_choice`, calls,
+  seconds, transient retries, reask restarts, served models, cost, the tracker
+  summary, any error); the routes offered; counts by status, route (each asset that
+  would be provided or reviewed once; merged ones follow their target) and form;
+  `review_items`; and per asset its spellings, uses, narration, purpose, `status`
+  (`available` with the library entry and whether it matched by name or alias,
+  `planned`, `merged` into another, `flagged` for a reviewer with its `review_route`,
+  or `unplanned`) and the plan.
 
 Still to come (#113): the full run.
 

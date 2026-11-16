@@ -86,19 +86,28 @@ def load_lab(path: Path) -> dict:
     return lab
 
 
-def paired_metrics(path: Path) -> Optional[dict]:
+def paired_metrics(path: Path, problems: Optional[list[str]] = None) -> Optional[dict]:
     """The benchmark or hierarchical metrics record for an ``*_output.json``, if any:
-    beside it, or in the sibling Metrics/ folder (as narration finds it)."""
+    beside it, or in the sibling Metrics/ folder (as narration finds it). A candidate
+    that can't be read, or isn't a JSON object, is skipped (and noted in ``problems``),
+    so a valid one in the other place is still found."""
     path = Path(path)
     if not path.name.endswith("_output.json"):
         return None
     name = path.name[: -len("_output.json")] + "_metrics.json"
     for cand in (path.with_name(name), path.parent.parent / "Metrics" / name):
-        if cand.is_file():
-            try:
-                return {"_path": str(cand), **json.loads(cand.read_text(encoding="utf-8"))}
-            except (OSError, ValueError):
-                return None
+        if not cand.is_file():
+            continue
+        try:
+            data = json.loads(cand.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            data, why = None, f"can't be read ({exc})"
+        else:
+            why = "is not a metrics record (a JSON object)"
+        if isinstance(data, dict):
+            return {"_path": str(cand), **data}
+        if problems is not None:
+            problems.append(f"metrics file {cand} {why}; skipped")
     return None
 
 

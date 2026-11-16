@@ -25,9 +25,9 @@ spelling (and reused components to their catalog description), so the final lab
 has one version of each script. Every rewrite is logged in ``normalizations``.
 
 LLM calls go through ``benchmark.create_instructor_client`` (Gemini parse-retry
-patch), ``benchmark.provider_create_kwargs`` (Anthropic tool_choice guard), and
-``benchmark._transient_retryer`` (bounded 429/5xx retry), the same guards as the
-one-shot benchmark runner.
+patch) and ``benchmark.guarded_create`` (``provider_create_kwargs``, the Anthropic
+tool_choice guard, inside ``_transient_retryer``, the bounded 429/5xx retry), the
+same guards as the one-shot benchmark runner.
 """
 
 from __future__ import annotations
@@ -50,12 +50,11 @@ import _paths  # noqa: F401
 from _paths import PROJECT_ROOT
 
 from benchmark import (
-    _transient_retryer,
     create_instructor_client,
+    guarded_create,
     decode_mode_for,
     exception_chain,
     get_provenance,
-    provider_create_kwargs,
     run_group_dir,
     status_of,
     tool_choice_for,
@@ -615,20 +614,14 @@ class HierarchicalPipeline:
 
     # ── LLM call ─────────────────────────────────────────────────────
     def _llm_call(self, response_model, messages, max_retries) -> BaseModel:
-        kwargs = dict(response_model=response_model, messages=messages, max_retries=max_retries)
-        kwargs.update(provider_create_kwargs(self.model_config, response_model))
-        retryer = _transient_retryer()
-        first = len(self.tracker.aggregate.calls)
+        stats: dict = {}
         try:
-            return retryer(self._tracked_client.create, **kwargs)
+            return guarded_create(self._tracked_client, self.tracker, self.model_config,
+                                  response_model, messages, max_retries, stats)
         finally:
-            resent = retryer.statistics.get("attempt_number", 1) - 1
-            self.transient_retries += resent
-            self._pending_resends[0] += resent
-            # Every call but the last was re-sent. One that had already reasked
-            # restarts with a fresh parse-retry budget (see _transient_retryer).
-            self._pending_resends[1] += sum(
-                1 for c in self.tracker.aggregate.calls[first:-1] if c.parse_errors)
+            self.transient_retries += stats.get("transient_retries", 0)
+            self._pending_resends[0] += stats.get("transient_retries", 0)
+            self._pending_resends[1] += stats.get("reask_restarts", 0)
 
     def _absorb_calls(self, rec: StepRecord) -> list:
         """Charge every tracker call not yet charged to a step to ``rec`` (tokens,

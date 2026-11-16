@@ -9,12 +9,14 @@ never by the lab's subject, so the tool works for STEM topics we have no labs fo
 Builders are offered by their own descriptions (``builders.REGISTRY``).
 
 The call goes through ``benchmark.create_instructor_client`` and
-``benchmark.provider_create_kwargs`` (the #44 Gemini and Anthropic guards) with
-``benchmark._transient_retryer`` around it, tracked by ``InstructorTracker``, like
-every LLM entry point. The response is checked under ``routing_scope``: every listed
-asset planned exactly once, with its own kind, an allowed form and route, and
-``same_as`` merges that point at another listed asset of the same kind. All problems
-come back in one error, so instructor reasks once for all of them.
+``benchmark.guarded_create`` (``provider_create_kwargs``, the #44 Gemini and Anthropic
+guards, inside ``_transient_retryer``; shared with the hierarchical pipeline), tracked
+by ``InstructorTracker``, like every LLM entry point. The response is checked under
+``routing_scope``: every listed asset (a kind and a name: a lab can use one name for a
+model and a texture) planned exactly once, an allowed form and route, 2 to 6 search
+keywords, and ``same_as`` merges that point at another listed asset of the same kind.
+Fields are lenient so all problems come back in one error, and instructor reasks
+once for all of them.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable, Literal, Optional
+from typing import Callable, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -115,15 +117,17 @@ def routes_for(kind: str) -> dict[str, str]:
 
 # ── Response model ────────────────────────────────────────────────────
 
-# Listed assets for the call being checked: name key -> (name, kind).
-_SCOPE: contextvars.ContextVar[Optional[dict[str, tuple[str, str]]]] = \
+# Listed assets for the call being checked: (kind, name key) -> name. Keyed by kind
+# too, because a lab can use one name for a model and a texture (two assets).
+_SCOPE: contextvars.ContextVar[Optional[dict[tuple[str, str], str]]] = \
     contextvars.ContextVar("routing_scope", default=None)
+MIN_KEYWORDS, MAX_KEYWORDS = 2, 6
 
 
 @contextmanager
 def routing_scope(requests: list[AssetRequest]):
     """Check ``LabAssetPlan`` responses against these assets while inside."""
-    token = _SCOPE.set({r.key: (r.name, r.kind) for r in requests})
+    token = _SCOPE.set({(r.kind, r.key): r.name for r in requests})
     try:
         yield
     finally:
@@ -131,9 +135,14 @@ def routing_scope(requests: list[AssetRequest]):
 
 
 class PlannedAsset(BaseModel):
+    # Only name is required here: everything else is checked in LabAssetPlan._check,
+    # so all problems in a response come back in one error (field errors would stop
+    # validation before that check runs, and cost a reask each).
     name: str = Field(description="The asset's name, exactly as listed.")
-    kind: Literal["model", "texture"] = Field(description="The asset's kind, as listed.")
+    kind: str = Field("", description="The asset's kind, as listed.",
+                      json_schema_extra={"enum": list(KINDS)})
     description: str = Field(
+        "",
         description="What it should look like in this lab, in 1 to 3 plain sentences: its shape, "
                     "parts and colors, and what it shows. Written for someone who has to find or build it.")
     must_be_right: list[str] = Field(
@@ -142,11 +151,12 @@ class PlannedAsset(BaseModel):
                     "check them (e.g. 'four chambers visible', 'tetrahedral, 109.5 degree bond angles'). "
                     "Empty when nothing specific.")
     search_keywords: list[str] = Field(
+        default_factory=list,
         description="2 to 6 short phrases a person would type into a 3D model or texture library to "
                     "find it (identity words, not filler).")
-    form: str = Field(description="One of the listed forms for its kind.")
-    route: str = Field(description="One of the listed routes for its kind.")
-    reason: str = Field(description="One sentence: why this route.")
+    form: str = Field("", description="One of the listed forms for its kind.")
+    route: str = Field("", description="One of the listed routes for its kind.")
+    reason: str = Field("", description="One sentence: why this route.")
     same_as: Optional[str] = Field(
         None,
         description="Only when this asset is clearly the same object as another listed asset of the "
@@ -155,7 +165,7 @@ class PlannedAsset(BaseModel):
 
 
 class LabAssetPlan(BaseModel):
-    assets: list[PlannedAsset] = Field(description="One entry per listed asset.")
+    assets: list[PlannedAsset] = Field(default_factory=list, description="One entry per listed asset.")
 
     @model_validator(mode="after")
     def _check(self):
@@ -163,45 +173,56 @@ class LabAssetPlan(BaseModel):
         if listed is None:
             return self
         problems: list[str] = []
-        seen: dict[str, PlannedAsset] = {}
+        seen: dict[tuple[str, str], PlannedAsset] = {}
+        kinds_of = {}
+        for kind, k in listed:
+            kinds_of.setdefault(k, set()).add(kind)
         for a in self.assets:
             k = name_key(a.name)
-            if k not in listed:
+            if k not in kinds_of:
                 problems.append(f"{a.name!r} is not one of the listed assets")
                 continue
-            name, kind = listed[k]
-            if k in seen:
-                problems.append(f"{name!r} is planned more than once")
+            if a.kind not in kinds_of[k]:
+                listed_as = " and a ".join(sorted(kinds_of[k]))
+                problems.append(f"{a.name!r} is listed as a {listed_as}, not a {a.kind or 'kind-less'} asset")
+                if len(kinds_of[k]) == 1:   # clearly that asset: don't also call it missing
+                    seen.setdefault((next(iter(kinds_of[k])), k), a)
                 continue
-            seen[k] = a
+            key = (a.kind, k)
+            name = listed[key]
+            if key in seen:
+                problems.append(f"{a.kind} {name!r} is planned more than once")
+                continue
+            seen[key] = a
             a.name = name
-            if a.kind != kind:
-                problems.append(f"{name!r} is a {kind}, not a {a.kind}")
-                continue
-            if a.form not in forms_for(kind):
-                problems.append(f"{name!r}: form {a.form!r} is not one of the {kind} forms "
-                                f"({', '.join(forms_for(kind))})")
-            if a.route not in routes_for(kind):
-                problems.append(f"{name!r}: route {a.route!r} is not one of the {kind} routes "
-                                f"({', '.join(routes_for(kind))})")
+            if a.form not in forms_for(a.kind):
+                problems.append(f"{name!r}: form {a.form!r} is not one of the {a.kind} forms "
+                                f"({', '.join(forms_for(a.kind))})")
+            if a.route not in routes_for(a.kind):
+                problems.append(f"{name!r}: route {a.route!r} is not one of the {a.kind} routes "
+                                f"({', '.join(routes_for(a.kind))})")
             if not a.description.strip():
                 problems.append(f"{name!r}: the description is empty")
-            if not 1 <= len([w for w in a.search_keywords if w.strip()]) <= 8:
-                problems.append(f"{name!r}: give 2 to 6 search keywords")
-        missing = [name for k, (name, _) in listed.items() if k not in seen]
+            if not a.reason.strip():
+                problems.append(f"{name!r}: the reason is empty")
+            n = len([w for w in a.search_keywords if w.strip()])
+            if not MIN_KEYWORDS <= n <= MAX_KEYWORDS:
+                problems.append(f"{name!r}: give {MIN_KEYWORDS} to {MAX_KEYWORDS} search keywords "
+                                f"(got {n})")
+        missing = [f"{name} ({kind})" for (kind, k), name in listed.items() if (kind, k) not in seen]
         if missing:
             problems.append("these listed assets are missing: " + ", ".join(missing))
-        for a in seen.values():
-            if not a.same_as:
+        for (kind, k), a in seen.items():
+            if not a.same_as or a.kind != kind:
                 continue
             t = name_key(a.same_as)
-            target = seen.get(t)
-            if t == name_key(a.name):
+            target = seen.get((kind, t))
+            if t == k:
                 problems.append(f"{a.name!r}: same_as can't name the asset itself")
             elif target is None:
-                problems.append(f"{a.name!r}: same_as {a.same_as!r} is not a listed asset")
-            elif target.kind != a.kind:
-                problems.append(f"{a.name!r}: same_as {target.name!r} is a {target.kind}")
+                other = next((x for (kk, tt), x in seen.items() if tt == t), None)
+                problems.append(f"{a.name!r}: same_as {a.same_as!r} is not a listed {kind}"
+                                + (f" (it is a {other.kind})" if other is not None else ""))
             elif target.same_as:
                 problems.append(f"{a.name!r}: same_as {target.name!r}, which is itself merged into "
                                 f"{target.same_as!r}; point both at the same asset")
@@ -346,7 +367,7 @@ class Router:
                  max_retries: int = DEFAULT_MAX_RETRIES):
         self.model_key = model_key
         self.max_retries = max_retries
-        self.transient_retries = 0
+        self.stats: dict = {}       # transient_retries, reask_restarts (benchmark.guarded_create)
         self.tracker = None
         if call_fn is not None:
             self.model_config = None
@@ -363,14 +384,8 @@ class Router:
         self._call_fn = self._llm_call
 
     def _llm_call(self, response_model, messages, max_retries):
-        bm = _benchmark()
-        kwargs = dict(response_model=response_model, messages=messages, max_retries=max_retries)
-        kwargs.update(bm.provider_create_kwargs(self.model_config, response_model))
-        retryer = bm._transient_retryer()
-        try:
-            return retryer(self._client.create, **kwargs)
-        finally:
-            self.transient_retries += retryer.statistics.get("attempt_number", 1) - 1
+        return _benchmark().guarded_create(self._client, self.tracker, self.model_config,
+                                           response_model, messages, max_retries, self.stats)
 
     def plan(self, lab: dict, requests: list[AssetRequest]) -> tuple[Optional[LabAssetPlan], dict]:
         """(plan, record). With nothing to plan, no call is made and the plan is empty.
@@ -394,7 +409,8 @@ class Router:
         except Exception as exc:  # recorded; the CLI decides the exit code
             error = f"{type(exc).__name__}: {' '.join(str(exc).split())[:2000]}"
         record["seconds"] = round(time.monotonic() - t0, 2)
-        record["transient_retries"] = self.transient_retries
+        record["transient_retries"] = self.stats.get("transient_retries", 0)
+        record["reask_restarts"] = self.stats.get("reask_restarts", 0)
         if self.tracker is not None:
             record["tracking"] = self.tracker.summary()
             record["served_models"] = self.tracker.served_models()

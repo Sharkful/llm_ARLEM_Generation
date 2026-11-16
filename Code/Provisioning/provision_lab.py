@@ -77,13 +77,19 @@ class Known:
     built-ins (so a machine with no library still knows what the headset has)."""
 
     def __init__(self, library_path: Optional[str]):
+        """Opens the library. A library that exists but can't be read, or a ``--library``
+        path with no library, raises ``LibraryError``: only the default location (or
+        ``$ARLEM_ASSET_LIBRARY``) falls back to the seed list when empty."""
         path = library.resolve_library_path(library_path)
-        try:
+        if library_path and not (path / library.INDEX_NAME).is_file():
+            raise library.LibraryError(f"--library {library_path}: no asset library there "
+                                       f"(build one with library.py seed --library {library_path})")
+        if (path / library.INDEX_NAME).is_file():
             self.store: Optional[library.LocalFolderStore] = library.LocalFolderStore(path)
             self.identity = self.store.identity()
             self.note = None
             self._entries = None
-        except library.LibraryError:
+        else:
             self.store = None
             self.identity = {"store": None, "location": str(path)}
             self.note = (f"no asset library at {path}: only the seed list's built-ins are known "
@@ -109,35 +115,51 @@ def _asset_record(r: audit.AssetRequest) -> dict:
 
 
 def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: Known,
-                   requests: list[audit.AssetRequest], plan, route_record: Optional[dict],
-                   *, no_llm: bool) -> dict:
-    planned = {library.name_key(p.name): p for p in (plan.assets if plan else [])}
+                   requests: list[audit.AssetRequest], hits: dict, plan,
+                   route_record: Optional[dict], *, no_llm: bool,
+                   metrics_problems: Optional[list[str]] = None) -> dict:
+    """``hits``: (kind, name key) -> the library entry found for it, from ``main``."""
+    planned = {(p.kind, library.name_key(p.name)): p for p in (plan.assets if plan else [])}
     assets = []
     for r in requests:
         rec = _asset_record(r)
-        hit = known.find(r.name, r.kind)
+        hit = hits.get((r.kind, r.key))
         if hit is not None:
             rec["status"] = "available"
             rec["library"] = {"asset_id": hit.asset_id, "builtin": hit.builtin,
                               "matched": "name" if library.name_key(hit.name) == r.key else "alias"}
-        elif r.key in planned:
-            p = planned[r.key]
+        elif (r.kind, r.key) in planned:
+            p = planned[(r.kind, r.key)]
             rec["plan"] = p.model_dump(exclude={"name", "kind"}, exclude_none=True)
-            if p.same_as:
+            target = planned.get((r.kind, library.name_key(p.same_as))) if p.same_as else None
+            # A merged asset follows its target: if either is behaviour or impossible,
+            # its objects need a reviewer too.
+            review_route = next((x.route for x in (p, target)
+                                 if x is not None and x.route in routing.REVIEW_ROUTES), None)
+            if review_route:
+                rec["status"] = "flagged"  # a reviewer decides (#116)
+                rec["review_route"] = review_route
+            elif p.same_as:
                 rec["status"] = "merged"
-            elif p.route in routing.REVIEW_ROUTES:
-                rec["status"] = "flagged"  # behaviour or impossible: a reviewer decides (#116)
             else:
                 rec["status"] = "planned"
         else:
             rec["status"] = "unplanned"
         assets.append(rec)
     statuses = Counter(a["status"] for a in assets)
-    review_items = [{"name": a["name"], "kind": a["kind"], "route": a["plan"]["route"],
-                     "reason": a["plan"]["reason"], "description": a["plan"]["description"],
-                     "objects": sorted({u["object"] for u in a["uses"]})}
-                    for a in assets if a["status"] == "flagged"]
-    routes = Counter(a["plan"]["route"] for a in assets if a["status"] in ("planned", "flagged"))
+    review_items = []
+    for a in assets:
+        if a["status"] != "flagged":
+            continue
+        item = {"name": a["name"], "kind": a["kind"], "route": a["review_route"],
+                "reason": a["plan"]["reason"], "description": a["plan"]["description"],
+                "objects": sorted({u["object"] for u in a["uses"]})}
+        if a["plan"].get("same_as"):
+            item["same_as"] = a["plan"]["same_as"]
+        review_items.append(item)
+    # Assets that would each be provided (or reviewed) once: merged ones follow their target.
+    routes = Counter(a["plan"]["route"] for a in assets
+                     if a["status"] in ("planned", "flagged") and not a["plan"].get("same_as"))
     forms = Counter(a["plan"]["form"] for a in assets if "plan" in a)
     if no_llm:
         status = "audited"
@@ -153,6 +175,7 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
             "input": _rel(input_path),
             "labId": lab.get("labId"),
             "metrics": _rel(Path(metrics["_path"])) if metrics else None,
+            "metrics_problems": metrics_problems or [],
             "source_model": (metrics or {}).get("model"),
             "level": (metrics or {}).get("level"),
             "lab_name": (metrics or {}).get("lab_name"),
@@ -248,23 +271,33 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[routing.CallFn] 
     if args.run_group and not _RUN_GROUP.match(args.run_group):
         return fail("--run-group may use only letters, digits, '_' and '-'")
     input_path = Path(args.lab)
+    metrics_problems: list[str] = []
     try:
         lab = audit.load_lab(input_path)
         if args.metrics:
             metrics = json.loads(Path(args.metrics).read_text(encoding="utf-8"))
+            if not isinstance(metrics, dict):
+                return fail(f"--metrics {args.metrics} is not a metrics record (a JSON object)")
             metrics["_path"] = str(args.metrics)
         else:
-            metrics = audit.paired_metrics(input_path)
+            metrics = audit.paired_metrics(input_path, metrics_problems)
         known = Known(args.library)
     except (audit.InputError, library.LibraryError, OSError, ValueError) as exc:
         return fail(str(exc))
+    for problem in metrics_problems:
+        print(f"note: {problem}")
     if known.note:
         print(f"note: {known.note}")
 
     requests = audit.audit_lab(lab, audit.purposes_from_metrics(metrics))
-    to_plan = [r for r in requests if known.find(r.name, r.kind) is None]
+    hits = {(r.kind, r.key): known.find(r.name, r.kind) for r in requests}
+    to_plan = [r for r in requests if hits[(r.kind, r.key)] is None]
     plan, record = None, None
-    if not args.no_llm:
+    if not args.no_llm and not to_plan:
+        # Everything is in the library: nothing to ask, so no key or call is needed.
+        plan, record = routing.LabAssetPlan(assets=[]), {"model": args.model, "calls": 0,
+                                                         "note": "nothing to plan"}
+    elif not args.no_llm:
         if call_fn is None:
             try:
                 routing.check_environment(args.model)
@@ -279,8 +312,8 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[routing.CallFn] 
             routing._benchmark().warn_served_model(router.model_config.model_id,
                                                    record["served_models"])
 
-    manifest = build_manifest(input_path, lab, metrics, known, requests, plan, record,
-                              no_llm=args.no_llm)
+    manifest = build_manifest(input_path, lab, metrics, known, requests, hits, plan, record,
+                              no_llm=args.no_llm, metrics_problems=metrics_problems)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = run_dir_for(input_path, args.run_group, stamp)
     if output_root is not None:
