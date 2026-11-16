@@ -181,8 +181,9 @@ routes with their descriptions; registered builders (`builders.py`, empty until
 simple shape with a color or an image). Assets routed to `component` or `impossible`
 get the status `flagged` and are listed in the manifest's `review_items` (name, kind,
 route, reason, description, objects); nothing is provided for them. An asset merged
-(`same_as`) into a flagged asset, or flagged itself, is flagged too, with its `same_as`,
-so its objects reach the reviewer.
+(`same_as`) into a flagged asset is flagged too, with its `same_as` and the target's
+route and reason (`review_route`, `review_reason`), so its objects reach the reviewer
+with the reason that actually flagged them.
 
 The response is checked under `routing_scope` (a ContextVar, like
 `asset_plan_validation`): every listed asset planned exactly once. An asset is a kind

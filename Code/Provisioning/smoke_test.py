@@ -927,6 +927,7 @@ def part3(tmp: Path) -> None:
           "behaviour routed to 'component' is flagged for a reviewer, with its objects and reason")
     check(by["dnaDoubleHelixPrefab"]["status"] == "flagged"
           and m["review_items"][1]["same_as"] == "dnaHelixPrefab"
+          and m["review_items"][1]["reason"] == "it grows as the strands separate"
           and m["review_items"][1]["objects"] == ["helixAgain"] and m["review_items"][1]["route"] == "component",
           "an asset merged into a flagged one is flagged too, so its objects reach the reviewer")
     check(m["routing"]["reask_restarts"] == 0 and m["routing"]["transient_retries"] == 0,

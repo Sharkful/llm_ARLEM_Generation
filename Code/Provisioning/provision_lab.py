@@ -139,11 +139,13 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
             target = planned.get((r.kind, library.name_key(p.same_as))) if p.same_as else None
             # A merged asset follows its target: if either is behaviour or impossible,
             # its objects need a reviewer too.
-            review_route = next((x.route for x in (p, target)
-                                 if x is not None and x.route in routing.REVIEW_ROUTES), None)
-            if review_route:
+            flagged_by = next((x for x in (p, target)
+                               if x is not None and x.route in routing.REVIEW_ROUTES), None)
+            if flagged_by is not None:
                 rec["status"] = "flagged"  # a reviewer decides (#116)
-                rec["review_route"] = review_route
+                # The route and reason that flagged it: its own, or its same_as target's.
+                rec["review_route"] = flagged_by.route
+                rec["review_reason"] = flagged_by.reason
             elif p.same_as:
                 rec["status"] = "merged"
             else:
@@ -157,7 +159,7 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
         if a["status"] != "flagged":
             continue
         item = {"name": a["name"], "kind": a["kind"], "route": a["review_route"],
-                "reason": a["plan"]["reason"], "description": a["plan"]["description"],
+                "reason": a["review_reason"], "description": a["plan"]["description"],
                 "objects": sorted({u["object"] for u in a["uses"]})}
         if a["plan"].get("same_as"):
             item["same_as"] = a["plan"]["same_as"]
