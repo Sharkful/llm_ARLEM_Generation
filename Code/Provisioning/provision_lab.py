@@ -1,19 +1,23 @@
 """
 Provision a lab's models and textures (spec: PROVISIONING.md). So far: the plan
-(#106). ``--dry-run`` audits the lab, looks every asset up in the library by name,
-and makes one LLM call that describes and routes the rest; it downloads and builds
-nothing. The full run (#113) comes later.
+(#106, #108). ``--dry-run`` audits the lab, looks every asset up in the library by
+name or alias, asks the reuse judge (one LLM call) which of the rest the library
+already has by meaning, and makes one more call that describes and routes what is
+left. It downloads and builds nothing. The full run (#113) comes later.
 
     python "Code/Provisioning/provision_lab.py" <lab>_output.json --dry-run
         [--model KEY] [--library PATH] [--metrics PATH] [--run-group NAME]
+        [--no-reuse] [--save-aliases]
     python "Code/Provisioning/provision_lab.py" <lab>_output.json --dry-run --no-llm
 
 ``--no-llm`` stops after the audit and the library lookup (no API key needed).
+``--no-reuse`` skips the reuse judge. ``--save-aliases`` saves the judge's
+single-entry matches as library aliases, so the next run finds them by name.
 The plan is saved as ``provisioning_manifest.json`` in
 ``Artifacts/Data/Provisioning/[<run group>/]<lab>_<timestamp>/``.
 
-Exit codes: 0 planned (or audited, with --no-llm); 1 the describe-and-route call
-failed; 2 bad input or environment.
+Exit codes: 0 planned (or audited, with --no-llm); 1 the reuse judge or the
+describe-and-route call failed; 2 bad input or environment.
 """
 
 from __future__ import annotations
@@ -40,6 +44,8 @@ if str(HERE) not in sys.path:
 
 import audit  # noqa: E402
 import library  # noqa: E402
+import llm  # noqa: E402
+import reuse  # noqa: E402
 import routing  # noqa: E402
 
 
@@ -104,6 +110,10 @@ class Known:
                 asset_id=e.asset_id, kind=e.kind, name=e.name, builtin=True,
                 reusable=e.reusable, description=e.description) for e in seed.entries if e.builtin]
 
+    def entries(self) -> list[library.LibraryEntry]:
+        """Every known entry (the reuse judge shortlists from these)."""
+        return self.store.entries() if self.store is not None else list(self._entries)
+
     def find(self, name: str, kind: str) -> Optional[library.LibraryEntry]:
         if self.store is not None:
             e = self.store.find(name)
@@ -119,11 +129,50 @@ def _asset_record(r: audit.AssetRequest) -> dict:
                                 "narration", "purpose")}
 
 
+def _reuse_record(d) -> dict:
+    """A reuse decision for the manifest, without empty fields."""
+    return {k: v for k, v in d.model_dump(exclude={"name", "kind"}).items() if v}
+
+
+def save_aliases(store: library.LocalFolderStore, reuse_plan) -> list[dict]:
+    """Add each accepted single-entry reuse's lab name as an alias of that entry, so the
+    next lab with the name hits by name with no call. A write refused because another
+    run wrote meanwhile is retried once (the store has reloaded)."""
+    out = []
+    for d in reuse_plan.decisions:
+        if d.decision != "reuse" or d.texture_id:
+            continue
+        rec = {"name": d.name, "asset_id": d.asset_id, "saved": False}
+        for attempt in (1, 2):
+            try:
+                store.add_alias(d.asset_id, d.name)
+                rec["saved"] = True
+                break
+            except library.ConcurrentWriteError as exc:
+                if attempt == 2:
+                    rec["error"] = str(exc)
+            except library.LibraryError as exc:
+                rec["error"] = str(exc)
+                break
+        out.append(rec)
+    return out
+
+
+def alias_proposals(reuse_plan) -> list[dict]:
+    """The aliases ``--save-aliases`` would save: accepted single-entry reuses."""
+    return [{"name": d.name, "asset_id": d.asset_id}
+            for d in (reuse_plan.decisions if reuse_plan else [])
+            if d.decision == "reuse" and not d.texture_id]
+
+
 def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: Known,
-                   requests: list[audit.AssetRequest], hits: dict, plan,
-                   route_record: Optional[dict], *, no_llm: bool,
+                   requests: list[audit.AssetRequest], hits: dict, reuse_plan,
+                   reuse_record: Optional[dict], plan, route_record: Optional[dict], *,
+                   no_llm: bool, aliases: Optional[dict] = None, llm_summary: Optional[dict] = None,
                    metrics_problems: Optional[list[str]] = None) -> dict:
-    """``hits``: (kind, name key) -> the library entry found for it, from ``main``."""
+    """``hits``: (kind, name key) -> the library entry found by name, from ``main``."""
+    reused = {(d.kind, library.name_key(d.name)): d
+              for d in (reuse_plan.decisions if reuse_plan else []) if d.decision != "none"}
     planned = {(p.kind, library.name_key(p.name)): p for p in (plan.assets if plan else [])}
     assets = []
     for r in requests:
@@ -133,6 +182,9 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
             rec["status"] = "available"
             rec["library"] = {"asset_id": hit.asset_id, "builtin": hit.builtin,
                               "matched": "name" if library.name_key(hit.name) == r.key else "alias"}
+        elif (r.kind, r.key) in reused:
+            rec["status"] = "reused"
+            rec["reuse"] = _reuse_record(reused[(r.kind, r.key)])
         elif (r.kind, r.key) in planned:
             p = planned[(r.kind, r.key)]
             rec["plan"] = p.model_dump(exclude={"name", "kind"}, exclude_none=True)
@@ -168,15 +220,16 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
     routes = Counter(a["plan"]["route"] for a in assets
                      if a["status"] in ("planned", "flagged") and not a["plan"].get("same_as"))
     forms = Counter(a["plan"]["form"] for a in assets if "plan" in a)
+    decisions = Counter(a["reuse"]["decision"] for a in assets if a["status"] == "reused")
     if no_llm:
         status = "audited"
-    elif route_record and route_record.get("error"):
+    elif any(rec and rec.get("error") for rec in (reuse_record, route_record)):
         status = "failed"
     else:
         status = "planned"
     return {
         "tool": "provision_lab",
-        "stage": "plan (#106)",
+        "stage": "plan (#106, #108)",
         "status": status,
         "source": {
             "input": _rel(input_path),
@@ -190,13 +243,17 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
         },
         "library": known.identity,
         "library_note": known.note,
+        "reuse": reuse_record,
+        "aliases": aliases or {"saved": False, "proposed": alias_proposals(reuse_plan)},
         "routing": route_record,
+        "llm": llm_summary,
         "routes_offered": {k: list(routing.routes_for(k)) for k in routing.KINDS},
         "counts": {
             "assets": len(assets),
             "models": sum(a["kind"] == "model" for a in assets),
             "textures": sum(a["kind"] == "texture" for a in assets),
             "by_status": dict(sorted(statuses.items())),
+            "by_reuse": dict(sorted(decisions.items())),
             "by_route": dict(sorted(routes.items())),
             "by_form": dict(sorted(forms.items())),
         },
@@ -209,11 +266,24 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
     }
 
 
+def _step_line(label: str, r: Optional[dict]) -> Optional[str]:
+    if not r or not r.get("calls"):
+        return None
+    cost = f"${r['cost_usd']:.4f}, " if "cost_usd" in r else ""
+    return (f"{label}: {r['model']}, {cost}{r['seconds']} s, {r['calls']} call(s)"
+            + (f", {r['transient_retries']} transient retries" if r.get("transient_retries") else ""))
+
+
 def _print_plan(manifest: dict) -> None:
     for a in manifest["assets"]:
         if a["status"] == "available":
             what = f"available ({a['library']['asset_id']}" + \
                    (", built-in)" if a["library"]["builtin"] else ")")
+        elif a["status"] == "reused":
+            u = a["reuse"]
+            base = u.get("asset_id") or u.get("shape", "")
+            what = (f"reused     {base}" + (f" + {u['texture_id']}" if u.get("texture_id") else "")
+                    + f"  ({u.get('reason', '')[:60]})")
         elif a["status"] in ("planned", "merged", "flagged"):
             p = a["plan"]
             if a["status"] == "merged":
@@ -233,11 +303,16 @@ def _print_plan(manifest: dict) -> None:
     if manifest["review_items"]:
         print(f"{len(manifest['review_items'])} flagged for a reviewer (behaviour or impossible; "
               f"see review_items in the manifest)")
-    r = manifest.get("routing") or {}
-    if r.get("calls"):
-        cost = f"${r['cost_usd']:.4f}, " if "cost_usd" in r else ""
-        print(f"describe and route: {r['model']}, {cost}{r['seconds']} s, {r['calls']} call(s)"
-              + (f", {r['transient_retries']} transient retries" if r.get("transient_retries") else ""))
+    al = manifest["aliases"]
+    if al.get("saved"):
+        saved = sum(x.get("saved", False) for x in al["proposed"])
+        print(f"aliases: {saved} of {len(al['proposed'])} saved to the library")
+    elif al["proposed"]:
+        print(f"aliases: {len(al['proposed'])} proposed (save them with --save-aliases)")
+    for line in (_step_line("reuse", manifest.get("reuse")),
+                 _step_line("describe and route", manifest.get("routing"))):
+        if line:
+            print(line)
 
 
 def run_dir_for(input_path: Path, run_group: Optional[str], stamp: str) -> Path:
@@ -251,18 +326,23 @@ def run_dir_for(input_path: Path, run_group: Optional[str], stamp: str) -> Path:
     return base / f"{stem}_{stamp}"
 
 
-def main(argv: Optional[list[str]] = None, *, call_fn: Optional[routing.CallFn] = None,
+def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = None,
          output_root: Optional[Path] = None) -> int:
     ap = argparse.ArgumentParser(description="Provision a lab's models and textures (so far: "
                                              "the plan, with --dry-run).")
     ap.add_argument("lab", help="a json_lab *_output.json")
     ap.add_argument("--dry-run", action="store_true",
-                    help="plan only: audit, library lookup, describe and route (required for now)")
+                    help="plan only: audit, library lookup, reuse, describe and route "
+                         "(required for now)")
     ap.add_argument("--no-llm", action="store_true",
                     help="stop after the audit and library lookup (no API key needed)")
-    ap.add_argument("--model", default=routing.DEFAULT_MODEL,
-                    help=f"benchmark_config.MODELS key for describe and route "
-                         f"(default {routing.DEFAULT_MODEL})")
+    ap.add_argument("--no-reuse", action="store_true",
+                    help="skip the reuse judge: plan every asset the library has no name for")
+    ap.add_argument("--save-aliases", action="store_true",
+                    help="save the reuse judge's single-entry matches as library aliases")
+    ap.add_argument("--model", default=llm.DEFAULT_MODEL,
+                    help=f"benchmark_config.MODELS key for the reuse judge and describe and "
+                         f"route (default {llm.DEFAULT_MODEL})")
     ap.add_argument("--library", help=f"library folder (default: ${library.LIBRARY_ENV}, else "
                                       f"{_rel(library.DEFAULT_LIBRARY)})")
     ap.add_argument("--metrics", help="the lab's metrics file (default: the paired *_metrics.json)")
@@ -277,6 +357,8 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[routing.CallFn] 
         return fail("only --dry-run is available so far; the full run comes with #113")
     if args.run_group and not _RUN_GROUP.match(args.run_group):
         return fail("--run-group may use only letters, digits, '_' and '-'")
+    if args.save_aliases and (args.no_llm or args.no_reuse):
+        return fail("--save-aliases needs the reuse judge (not --no-llm or --no-reuse)")
     input_path = Path(args.lab)
     metrics_problems: list[str] = []
     try:
@@ -291,6 +373,8 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[routing.CallFn] 
         known = Known(args.library)
     except (audit.InputError, library.LibraryError, OSError, ValueError) as exc:
         return fail(str(exc))
+    if args.save_aliases and known.store is None:
+        return fail("--save-aliases needs an asset library to save to (build one with library.py seed)")
     for problem in metrics_problems:
         print(f"note: {problem}")
     if known.note:
@@ -298,34 +382,50 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[routing.CallFn] 
 
     requests = audit.audit_lab(lab, audit.purposes_from_metrics(metrics))
     hits = {(r.kind, r.key): known.find(r.name, r.kind) for r in requests}
-    to_plan = [r for r in requests if hits[(r.kind, r.key)] is None]
-    plan, record = None, None
-    if not args.no_llm and not to_plan:
-        # Everything is in the library: nothing to ask, so no key or call is needed.
-        # The model key is still checked, so a typo fails the same way on every lab.
+    unmatched = [r for r in requests if hits[(r.kind, r.key)] is None]
+    reuse_plan = reuse_record = plan = record = None
+    aliases, llm_summary = None, None
+    if not args.no_llm:
+        # The model key is always checked, so a typo fails the same way on every lab; the
+        # SDK and key only when a call will be made.
         try:
-            routing.model_config_for(args.model)
+            if call_fn is None and unmatched:
+                llm.check_environment(args.model)
+            elif call_fn is None:
+                llm.model_config_for(args.model)
         except KeyError as exc:
             return fail(exc.args[0])
-        plan, record = routing.LabAssetPlan(assets=[]), {"model": args.model, "calls": 0,
-                                                         "note": "nothing to plan"}
-    elif not args.no_llm:
-        if call_fn is None:
-            try:
-                routing.check_environment(args.model)
-            except KeyError as exc:
-                return fail(exc.args[0])
-            except SystemExit as exc:  # benchmark.require_environment prints its own message
-                return fail(f"environment check failed ({exc.code})")
-        router = routing.Router(args.model, call_fn=call_fn)
-        print(f"planning {len(to_plan)} of {len(requests)} assets with {args.model}...")
-        plan, record = router.plan(lab, to_plan)
-        if record.get("served_models") and router.model_config is not None:
-            routing._benchmark().warn_served_model(router.model_config.model_id,
-                                                   record["served_models"])
+        except SystemExit as exc:  # benchmark.require_environment prints its own message
+            return fail(f"environment check failed ({exc.code})")
+        if not unmatched:
+            # Everything is in the library by name: nothing to ask, no call.
+            plan, record = routing.LabAssetPlan(assets=[]), {"model": args.model, "calls": 0,
+                                                             "note": "nothing to plan"}
+        else:
+            run_llm = llm.TrackedLLM(args.model, call_fn=call_fn)
+            to_plan = unmatched
+            if not args.no_reuse:
+                print(f"checking {len(unmatched)} of {len(requests)} assets against the library "
+                      f"with {args.model}...")
+                reuse_plan, reuse_record = reuse.judge_reuse(run_llm, lab, unmatched, known.entries())
+                if reuse_plan is not None:
+                    taken = {(d.kind, library.name_key(d.name)) for d in reuse_plan.decisions
+                             if d.decision != "none"}
+                    to_plan = [r for r in unmatched if (r.kind, r.key) not in taken]
+            if args.no_reuse or reuse_plan is not None:
+                print(f"planning {len(to_plan)} of {len(requests)} assets with {args.model}...")
+                plan, record = routing.plan_routes(run_llm, lab, to_plan)
+            if args.save_aliases and reuse_plan is not None:
+                aliases = {"saved": True, "proposed": save_aliases(known.store, reuse_plan),
+                           "library_after": known.store.identity()}
+            llm_summary = run_llm.summary()
+            if llm_summary and llm_summary.get("served_models"):
+                llm._benchmark().warn_served_model(run_llm.model_config.model_id,
+                                                   llm_summary["served_models"])
 
-    manifest = build_manifest(input_path, lab, metrics, known, requests, hits, plan, record,
-                              no_llm=args.no_llm, metrics_problems=metrics_problems)
+    manifest = build_manifest(input_path, lab, metrics, known, requests, hits, reuse_plan,
+                              reuse_record, plan, record, no_llm=args.no_llm, aliases=aliases,
+                              llm_summary=llm_summary, metrics_problems=metrics_problems)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = run_dir_for(input_path, args.run_group, stamp)
     if output_root is not None:
@@ -341,7 +441,9 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[routing.CallFn] 
     _print_plan(manifest)
     print(f"manifest: {_rel(manifest_path)}")
     if manifest["status"] == "failed":
-        print(f"error: describe and route failed: {record['error']}", file=sys.stderr)
+        for label, rec in (("the reuse judge", reuse_record), ("describe and route", record)):
+            if rec and rec.get("error"):
+                print(f"error: {label} failed: {rec['error']}", file=sys.stderr)
         return 1
     return 0
 
