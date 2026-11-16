@@ -17,9 +17,10 @@ check whether the library already has each asset, by meaning, not just by name.
      (a planet map on a sphere), the shape made by the headset;
    - ``none``: nothing in the library is this asset; it is planned and provided.
 4. **Aliases** (``provision_lab --save-aliases``): an accepted ``reuse`` of a single
-   entry (no texture) adds the lab's name to that entry's aliases, so the next lab with
-   that name hits step 1 with no call. Decisions that combine two entries are not
-   saved as aliases; the judge decides them again each time.
+   entry (no texture) that is not built-in adds the lab's name to that entry's aliases,
+   so the next lab with that name hits step 1 with no call. Decisions that combine two
+   entries, and stand-ins for a generic built-in (``marsPrefab`` as ``tiny_sphere``),
+   are not saved as aliases; the judge decides them again each time.
 
 The response is checked under ``reuse_scope``: every listed asset decided exactly once
 (``routing.match_listed``), entries that exist in the shortlist with the right kind,
@@ -232,6 +233,11 @@ RULES
 - Decide every listed asset exactly once, with its name exactly as listed and its listed kind.
 - Reuse only what the library entry really is. When unsure, choose none: the asset is then planned and \
 provided, which costs little; a wrong reuse shows the wrong thing in the lab.
+- A plain shape (a built-in sphere with only the lab's color) stands in only for something generic: a \
+marker, a ball, an atom drawn as a colored ball. A specific real object with its own look (Mars, a heart, \
+a named molecule) is not a plain shape tinted: reuse an entry that is that object, put its library \
+texture on a sphere (texture_id, or textured_shape), or choose none so it gets the right look. Mars with \
+no Mars map in the library is none, not a red sphere.
 - Prefer a built-in prefab when the lab uses it the way it works (a sphere students grab); otherwise \
 prefer textured_shape for a surface on a simple shape.
 - adapt: how the lab's color or scale changes the reused entry, if at all; else empty.

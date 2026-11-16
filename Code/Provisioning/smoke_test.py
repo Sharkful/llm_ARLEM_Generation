@@ -1143,8 +1143,18 @@ def part4(tmp: Path) -> None:
         return json.loads(max(out.rglob("provisioning_manifest.json"), key=os.path.getmtime)
                           .read_text(encoding="utf-8"))
 
-    behaviour = {"reuse": {"summaryPanelPrefab": {"decision": "reuse", "asset_id": "text_prefab",
-                                                  "reason": "a panel of text is the text prefab"},
+    glb = tmp / "board.glb"
+    glb.write_bytes(b"glTF" + (2).to_bytes(4, "little") + (12).to_bytes(4, "little"))
+    lib.LocalFolderStore(tmp / "libP3").put(lib.LibraryEntry(
+        asset_id="summary_board", kind="model", name="summaryBoard", description="a board listing key ideas",
+        bounds=[1, 0.6, 0.05], triangles=12, provenance=lib.Provenance(license="CC0-1.0", method="kit")),
+        {"model": glb})
+    builtin_reuse = reuse.ReusePlan(decisions=[reuse.ReuseDecision(
+        name="marsPrefab", kind="model", decision="reuse", asset_id="tiny_sphere", reason="a red ball")])
+    check(provision_lab.alias_proposals(builtin_reuse, lib.LocalFolderStore(tmp / "libP3").entries()) == [],
+          "a reuse of a built-in (a stand-in) is not proposed as an alias")
+    behaviour = {"reuse": {"summaryPanelPrefab": {"decision": "reuse", "asset_id": "summary_board",
+                                                  "reason": "a panel of text is the summary board"},
                            "dnaHelixPrefab": {"decision": "textured_shape", "shape": "sphere",
                                               "texture_id": "2k_mars", "reason": "test"}}}
     code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), call_fn=fake_router(behaviour))
@@ -1159,11 +1169,11 @@ def part4(tmp: Path) -> None:
           and "[model] dnaDoubleHelixPrefab" in behaviour["prompt"],
           "reused assets are not sent to describe and route")
     check(by["summaryPanelPrefab"]["status"] == "reused" and by["summaryPanelPrefab"]["reuse"] ==
-          {"decision": "reuse", "asset_id": "text_prefab", "reason": "a panel of text is the text prefab"}
+          {"decision": "reuse", "asset_id": "summary_board", "reason": "a panel of text is the summary board"}
           and by["dnaHelixPrefab"]["reuse"]["texture_id"] == "2k_mars"
           and m["counts"]["by_reuse"] == {"reuse": 1, "textured_shape": 1},
           "reused assets and their decisions are recorded")
-    check(m["aliases"] == {"saved": False, "proposed": [{"name": "summaryPanelPrefab", "asset_id": "text_prefab"}]}
+    check(m["aliases"] == {"saved": False, "proposed": [{"name": "summaryPanelPrefab", "asset_id": "summary_board"}]}
           and "1 proposed" in text and m["reuse"]["shortlist"] > 0 and "reuse: claude-haiku-5.5" in text,
           "a single-entry reuse is proposed as an alias, not saved by default")
     rev = lib.LocalFolderStore(tmp / "libP3").identity()["revision"]
@@ -1172,7 +1182,7 @@ def part4(tmp: Path) -> None:
     m = last_manifest()
     store = lib.LocalFolderStore(tmp / "libP3")
     check(code == 0 and m["aliases"]["saved"] and m["aliases"]["proposed"][0]["saved"]
-          and store.find("summaryPanelPrefab").asset_id == "text_prefab"
+          and store.find("summaryPanelPrefab").asset_id == "summary_board"
           and store.identity()["revision"] == rev + 1 and m["aliases"]["library_after"]["revision"] == rev + 1,
           "--save-aliases saves the match as an alias and records the library after")
     again = {"reuse": {"dnaHelixPrefab": behaviour["reuse"]["dnaHelixPrefab"]}}

@@ -408,13 +408,22 @@ route, so only what the library lacks is planned:
 
    The prompt lists the lab, the shortlisted entries (id, kind, built-in, name,
    description, mapping, tags) and each asset's context, and says to choose `none`
-   when unsure: a wrong reuse shows the wrong thing in the lab. The response is
+   when unsure: a wrong reuse shows the wrong thing in the lab. A plain shape stands
+   in only for something generic (a marker, a ball, an atom drawn as a colored ball);
+   a specific real object with its own look (Mars) gets an entry that is that object,
+   its library texture on a sphere, or `none` so it gets the right look (a red sphere
+   for Mars was the first live run's mistake). The response is
    checked under `reuse_scope` (every listed asset decided once via the same
    `match_listed` check routing uses; ids that were offered, with the right kind; a
    shape the headset makes). All problems come back in one error; the tool schema
    stays strict while validation is lenient.
-4. **Aliases.** A `reuse` of a single entry (no `texture_id`) is proposed as an alias
-   of that entry and listed in the manifest. `--save-aliases` saves them to the
+4. **Aliases.** A `reuse` of a single entry (no `texture_id`) that is **not built-in**
+   is proposed as an alias of that entry and listed in the manifest. Built-ins are
+   generic moon-lab prefabs (spheres, the text label) that stand in for many different
+   things, so a lab's name for its stand-in is not a name of the entry: the first live
+   run (2026-11-16, seed built-ins only) proposed `marsPrefab`, `jupiterPrefab` and
+   `saturnPrefab` → `tiny_sphere`, which would have kept every later Mars a plain sphere,
+   with no call, even after a Mars map was added. `--save-aliases` saves them to the
    library, so the next lab with that name is found by name with no call; a write
    another run raced is retried once. Saving is opt-in, because a wrong alias would
    silently apply to every later lab: it changes the library (its revision and content
@@ -602,7 +611,7 @@ Built so far (#106, #108): the plan. `--dry-run` is required until #113.
   same second gets its own folder). It downloads and builds nothing.
 - `--no-llm` stops after the audit and the library lookup: no API key needed.
 - `--no-reuse` skips the reuse judge: everything without a name hit is routed.
-- `--save-aliases` saves the judge's single-entry matches as library aliases (needs
+- `--save-aliases` saves the judge's single-entry matches (not built-ins) as library aliases (needs
   the judge and a library).
 - `--model` picks the model for both LLM steps (default Claude Haiku 5.5).
 - `--metrics` names the lab's metrics file (it must be a JSON object); by default the

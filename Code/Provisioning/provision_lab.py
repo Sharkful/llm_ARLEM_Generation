@@ -12,7 +12,7 @@ left. It downloads and builds nothing. The full run (#113) comes later.
 
 ``--no-llm`` stops after the audit and the library lookup (no API key needed).
 ``--no-reuse`` skips the reuse judge. ``--save-aliases`` saves the judge's
-single-entry matches as library aliases, so the next run finds them by name.
+single-entry matches (not built-ins) as library aliases, so the next run finds them by name.
 The plan is saved as ``provisioning_manifest.json`` in
 ``Artifacts/Data/Provisioning/[<run group>/]<lab>_<timestamp>/``.
 
@@ -134,18 +134,28 @@ def _reuse_record(d) -> dict:
     return {k: v for k, v in d.model_dump(exclude={"name", "kind"}).items() if v}
 
 
-def save_aliases(store: library.LocalFolderStore, reuse_plan) -> list[dict]:
-    """Add each accepted single-entry reuse's lab name as an alias of that entry, so the
-    next lab with the name hits by name with no call. A write refused because another
-    run wrote meanwhile is retried once (the store has reloaded)."""
+def alias_proposals(reuse_plan, entries: list[library.LibraryEntry]) -> list[dict]:
+    """The aliases ``--save-aliases`` would save: accepted reuses of a single entry (no
+    texture) that is not built-in. A built-in is a generic moon-lab prefab (a sphere, a
+    text label) that stands in for many different things, so a lab's name for its stand-in
+    is not a name of the entry: aliasing ``marsPrefab`` to ``tiny_sphere`` would keep every
+    later Mars a plain sphere, with no call, even once a Mars map is in the library."""
+    builtin = {e.asset_id for e in entries if e.builtin}
+    return [{"name": d.name, "asset_id": d.asset_id}
+            for d in (reuse_plan.decisions if reuse_plan else [])
+            if d.decision == "reuse" and not d.texture_id and d.asset_id not in builtin]
+
+
+def save_aliases(store: library.LocalFolderStore, proposals: list[dict]) -> list[dict]:
+    """Add each proposed alias (``alias_proposals``) to its entry, so the next lab with
+    the name hits by name with no call. A write refused because another run wrote
+    meanwhile is retried once (the store has reloaded)."""
     out = []
-    for d in reuse_plan.decisions:
-        if d.decision != "reuse" or d.texture_id:
-            continue
-        rec = {"name": d.name, "asset_id": d.asset_id, "saved": False}
+    for p in proposals:
+        rec = {**p, "saved": False}
         for attempt in (1, 2):
             try:
-                store.add_alias(d.asset_id, d.name)
+                store.add_alias(p["asset_id"], p["name"])
                 rec["saved"] = True
                 break
             except library.ConcurrentWriteError as exc:
@@ -156,13 +166,6 @@ def save_aliases(store: library.LocalFolderStore, reuse_plan) -> list[dict]:
                 break
         out.append(rec)
     return out
-
-
-def alias_proposals(reuse_plan) -> list[dict]:
-    """The aliases ``--save-aliases`` would save: accepted single-entry reuses."""
-    return [{"name": d.name, "asset_id": d.asset_id}
-            for d in (reuse_plan.decisions if reuse_plan else [])
-            if d.decision == "reuse" and not d.texture_id]
 
 
 def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: Known,
@@ -244,7 +247,8 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
         "library": known.identity,
         "library_note": known.note,
         "reuse": reuse_record,
-        "aliases": aliases or {"saved": False, "proposed": alias_proposals(reuse_plan)},
+        "aliases": aliases or {"saved": False,
+                              "proposed": alias_proposals(reuse_plan, known.entries())},
         "routing": route_record,
         "llm": llm_summary,
         "routes_offered": {k: list(routing.routes_for(k)) for k in routing.KINDS},
@@ -339,7 +343,7 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
     ap.add_argument("--no-reuse", action="store_true",
                     help="skip the reuse judge: plan every asset the library has no name for")
     ap.add_argument("--save-aliases", action="store_true",
-                    help="save the reuse judge's single-entry matches as library aliases")
+                    help="save the reuse judge's single-entry matches (not built-ins) as library aliases")
     ap.add_argument("--model", default=llm.DEFAULT_MODEL,
                     help=f"benchmark_config.MODELS key for the reuse judge and describe and "
                          f"route (default {llm.DEFAULT_MODEL})")
@@ -416,7 +420,8 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
                 print(f"planning {len(to_plan)} of {len(requests)} assets with {args.model}...")
                 plan, record = routing.plan_routes(run_llm, lab, to_plan)
             if args.save_aliases and reuse_plan is not None:
-                aliases = {"saved": True, "proposed": save_aliases(known.store, reuse_plan),
+                proposals = alias_proposals(reuse_plan, known.entries())
+                aliases = {"saved": True, "proposed": save_aliases(known.store, proposals),
                            "library_after": known.store.identity()}
             llm_summary = run_llm.summary()
             if llm_summary and llm_summary.get("served_models"):

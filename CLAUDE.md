@@ -440,7 +440,7 @@ not reused. Built so far:
   up to 200, else per-asset word matches): `reuse` an entry of the same kind (a model may add
   a library `texture_id`), `textured_shape` (a headset shape plus a library texture, e.g. a
   planet), or `none`. Checked under `reuse_scope` with routing's `match_listed`; strict tool
-  schema, lenient validation. Single-entry reuses are proposed as aliases; `--save-aliases`
+  schema, lenient validation. Single-entry reuses of non-built-in entries are proposed as aliases; `--save-aliases`
   writes them (opt-in: a wrong alias applies to every later lab).
 - **`llm.py`**: `TrackedLLM`, the run's one tracked client (`create_instructor_client` +
   `benchmark.guarded_create`), shared by the reuse judge and routing; per-step records
