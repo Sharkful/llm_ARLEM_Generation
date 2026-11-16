@@ -328,6 +328,9 @@ def _print_plan(manifest: dict) -> None:
                 what = f"same as {p['same_as']}"
             elif a["status"] == "flagged":
                 what = f"FLAGGED {p['route']:10} {p['reason'][:80]}"
+            elif p.get("builder_input"):
+                opts = f" [{', '.join(p['builder_options'])}]" if p.get("builder_options") else ""
+                what = f"{p['route']:10} {p['form']:18} {p['builder_input']!r}{opts}"
             else:
                 what = f"{p['route']:10} {p['form']:18} {p['description'][:70]}"
         else:

@@ -174,8 +174,11 @@ call is made and no API key is needed.
 description, `must_be_right` facts, 2 to 6 search keywords, a form, a route, a
 one-sentence reason, and `same_as` for two names of one object. The prompt lists the
 lab (id, course, objectives, modules), each asset's context, and the forms and
-routes with their descriptions; registered builders (`builders.py`, empty until
-#111) are offered as `builder:<name>` routes by their own descriptions.
+routes with their descriptions; registered builders (`builders.registry()`, § Builders)
+are offered as `builder:<name>` routes by their own descriptions, needs and options.
+A builder route also gives `builder_input` (what the builder needs, e.g. the compound's
+name) and `builder_options` (only options that builder declares, e.g. `lone_pairs`);
+a builder route without an input, or with an unknown option, is reasked.
 
 | Kind | Forms | Routes |
 |---|---|---|
@@ -486,22 +489,55 @@ The manifest keeps the **ranked top 10** with thumbnails, links, licenses and
 reasons, and who chose (`auto` / `reviewer`). A reviewer's choice is applied with
 `--resume` and no new search (#116).
 
-## Builders (#111, #114)
+## Builders (#111 built, #114)
 
-A builder is a plug-in that turns data into a model. Its contract:
+A builder is a plug-in that turns data into a model (`builders.py`). Its contract:
 
-- `name` and a **plain-words description** of what it can make and what it needs,
-  e.g. "any small molecule, given its name or formula". The route step sees these
-  descriptions, not code.
-- `build(request) → result`: a GLB plus provenance (data source, record id,
-  license), or "can't build this" with a reason, which sends the asset to `search`.
-- Deterministic for the same input and data.
+- `BuilderInfo`: `name`, a **plain-words description** of what it can make, what it
+  `needs` (the route step's `builder_input`) and its `options` (each with a
+  description; the route step may ask for them in `builder_options`), e.g. "any small
+  molecule, given its name or formula". The route step sees these descriptions, not
+  code. Builders register in `builders.registry()` (loaded lazily, so routing works
+  without a builder's dependencies installed).
+- `build(request, out_dir) → BuildResult`: a GLB and a thumbnail in `out_dir`, the
+  library entry to store them under (provenance: data source, record id, license),
+  and builder details for the manifest; or `ok=False` with a reason, which sends the
+  asset on to `search`.
+- Deterministic for the same input and data (byte-identical files).
+
+**`molecule` (#111, `molecule.py`).** Any small molecule, from PubChem (PUG REST, no
+key; public domain):
+
+1. Look the compound up by name, else by formula (`SF6`).
+2. Coordinates, best first: PubChem's 3D conformer; an **idealized VSEPR geometry**
+   for a molecule with one central atom bonded to all the others (electron domains =
+   bonded atoms + lone pairs at the ideal positions; lone pairs take a trigonal
+   bipyramid's equatorial positions and an octahedron's axial ones first; bond
+   lengths from covalent radii, shortened for double and triple bonds), from the 2D
+   record, because PubChem has no 3D record for hypervalent molecules (XeF4, PF5,
+   SF6), which are what VSEPR labs show; RDKit embedding, if installed; else "can't
+   build".
+3. Ball and stick: Jmol CPK colors, balls a fifth of the van der Waals radius, bonds
+   split into halves colored by their atoms, double and triple bonds as two or three
+   sticks, one material per element.
+4. Option `lone_pairs`: each central atom's lone pairs ((valence electrons − bond
+   orders − charge) / 2; terminal atoms are skipped, as VSEPR drawings do) as
+   translucent lobes, along the free domain positions (ideal, or found by repulsion
+   from the real bonds).
+5. Model convention: centered, largest side 1.0; a thumbnail drawn with matplotlib in
+   a 3/4 view of the molecule's main axes, to check by eye.
+
+**`build_assets.py`** builds everything a dry-run plan routed to a builder until the
+full run (#113) does: files in `<run>/built/<asset>/`, results in
+`<run>/build_results.json`, and with `--save` the library entry (the lab's names, and
+the names merged into it, become aliases; an entry already there just gains them), so
+the next dry run finds them by name.
 
 First builders:
 
 | Builder | Data | Output | Issue |
 |---|---|---|---|
-| `molecule` | PubChem 3D coordinates (public domain; PUG REST, no key); RDKit from SMILES as a fallback | Ball and stick, standard CPK colors and radii, bond orders; lone pairs as translucent lobes when asked | #111 |
+| `molecule` | PubChem 3D coordinates (public domain; PUG REST, no key); idealized VSEPR geometry for one-center molecules; RDKit as an optional fallback | Ball and stick, standard CPK colors and radii, bond orders; lone pairs as translucent lobes when asked | #111 (built) |
 | `macromolecule` | RCSB Protein Data Bank (CC0) | Backbone tube with chains colored apart, or ball and stick for small pieces; DNA as helix or ladder, bases colored by a recorded key; an idealized B-DNA option | #114 |
 | `crystal` | Crystallography Open Database (CC0 / public domain) | Unit cell or small lattice block, atoms colored by element | #114 |
 

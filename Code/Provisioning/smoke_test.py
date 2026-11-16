@@ -34,9 +34,12 @@ throwaway library (never the real one):
 Parts 3 and 4: the audit, describe and route, the reuse judge and the CLI, with a fake
 LLM. Part 5: the same CLI on the real client (create_instructor_client, guarded_create,
 the tracker) against a local mock Anthropic server: per-step calls, tokens, cost and
-served models.
+served models. Part 6: the molecule builder (#111) against a mock PubChem server
+(3D records, idealized VSEPR geometry, lone pairs, formula lookup, failures), the
+builder route in describe and route, and ``build_assets.py`` (build, save, alias).
 
-Requires the project venv (pydantic, Pillow; Part 5 also anthropic and instructor).
+Requires the project venv (pydantic, Pillow; Part 5 also anthropic and instructor;
+Part 6 trimesh and matplotlib).
 Exit code 1 on any failure.
 """
 
@@ -1364,6 +1367,218 @@ def part5(tmp: Path) -> None:
           "each step records the models that served its own calls")
 
 
+# ── Part 6 ────────────────────────────────────────────────────────────
+
+
+def pc_record(elements, bonds, coords=None, charges=None) -> dict:
+    """A PubChem PUG REST record (the fields the builder reads)."""
+    aids = list(range(1, len(elements) + 1))
+    comp = {"atoms": {"aid": aids, "element": elements},
+            "bonds": {"aid1": [a + 1 for a, _, _ in bonds], "aid2": [b + 1 for _, b, _ in bonds],
+                      "order": [o for _, _, o in bonds]}}
+    if charges:
+        comp["atoms"]["charge"] = [{"aid": a + 1, "value": v} for a, v in charges]
+    if coords:
+        comp["coords"] = [{"type": [2, 5, 255], "aid": aids, "conformers": [
+            {"x": [c[0] for c in coords], "y": [c[1] for c in coords], "z": [c[2] for c in coords]}]}]
+    return {"PC_Compounds": [comp]}
+
+
+def part6(tmp: Path) -> None:
+    print("Part 6: the molecule builder (#111), against a mock PubChem")
+    try:
+        import numpy as np
+        import trimesh
+    except ImportError:
+        check(False, "Part 6 needs the project venv (trimesh)")
+        return
+    import audit
+    import build_assets
+    import builders
+    import molecule as M
+    import provision_lab
+    import routing
+    from urllib.parse import quote
+
+    srv = Server()
+    saved = (M.PUBCHEM, M.USE_RDKIT)
+    M.PUBCHEM, M.USE_RDKIT = srv.base + "/rest/pug", False
+
+    def serve(name, cid, title, formula, rec3d=None, rec2d=None, by_formula=None):
+        js = lambda d: json.dumps(d).encode()  # noqa: E731
+        key = f"/rest/pug/compound/fastformula/{by_formula}/cids/JSON" if by_formula \
+            else f"/rest/pug/compound/name/{quote(name, safe='')}/cids/JSON"
+        srv.files[key] = js({"IdentifierList": {"CID": [cid]}})
+        srv.files[f"/rest/pug/compound/cid/{cid}/property/Title,MolecularFormula/JSON"] = js(
+            {"PropertyTable": {"Properties": [{"CID": cid, "Title": title, "MolecularFormula": formula}]}})
+        if rec3d:
+            srv.files[f"/rest/pug/compound/cid/{cid}/record/JSON?record_type=3d"] = js(rec3d)
+        srv.files[f"/rest/pug/compound/cid/{cid}/record/JSON?record_type=2d"] = js(rec2d or rec3d)
+
+    t = 1.09 / 3 ** 0.5
+    four = [(0, 1, 1), (0, 2, 1), (0, 3, 1), (0, 4, 1)]
+    serve("methane", 297, "Methane", "CH4",
+          rec3d=pc_record([6, 1, 1, 1, 1], four, [(0, 0, 0), (t, t, t), (t, -t, -t), (-t, t, -t), (-t, -t, t)]))
+    serve("water", 962, "Water", "H2O",
+          rec3d=pc_record([8, 1, 1], [(0, 1, 1), (0, 2, 1)], [(0, 0, 0), (0.757, 0.586, 0), (-0.757, 0.586, 0)]))
+    serve("xenon tetrafluoride", 123324, "Xenon tetrafluoride", "F4Xe", rec2d=pc_record([54, 9, 9, 9, 9], four))
+    serve("carbon dioxide", 280, "Carbon Dioxide", "CO2", rec2d=pc_record([6, 8, 8], [(0, 1, 2), (0, 2, 2)]))
+    serve("ammonium", 223, "Ammonium", "H4N+", rec2d=pc_record([7, 1, 1, 1, 1], four, charges=[(0, 1)]))
+    serve("SF6", 17358, "Sulfur Hexafluoride", "F6S", by_formula="SF6",
+          rec2d=pc_record([16, 9, 9, 9, 9, 9, 9], [(0, k, 1) for k in range(1, 7)]))
+    serve("ethane", 6324, "Ethane", "C2H6", rec2d=pc_record(
+        [6, 6, 1, 1, 1, 1, 1, 1], [(0, 1, 1), (0, 2, 1), (0, 3, 1), (0, 4, 1), (1, 5, 1), (1, 6, 1), (1, 7, 1)]))
+
+    def build(name, *options, folder=None):
+        req = builders.BuildRequest(name=name, kind="model", input=name, options=tuple(options))
+        return M.build(req, tmp / "mol" / (folder or name.replace(" ", "_")))
+
+    def angle(u, v):
+        u, v = np.asarray(u, float), np.asarray(v, float)
+        return float(np.degrees(np.arccos(np.clip(np.dot(u, v) / np.linalg.norm(u) / np.linalg.norm(v), -1, 1))))
+
+    try:
+        srv.fail_once["/rest/pug/compound/name/methane/cids/JSON"] = 503
+        r = build("methane")
+        check(r.ok and r.details["geometry"] == "pubchem_3d" and r.details["shape"] == "tetrahedral"
+              and r.details["cid"] == 297 and srv.hits["/rest/pug/compound/name/methane/cids/JSON"] == 2,
+              "methane builds from PubChem's 3D record (a 503 from PubChem is retried)")
+        glb = trimesh.load(r.files["model"], file_type="glb")
+        colors = {n: tuple(int(x) for x in g.visual.material.baseColorFactor[:3]) for n, g in glb.geometry.items()}
+        check(colors == {"C": (144, 144, 144), "H": (255, 255, 255)}
+              and abs(max(glb.extents) - 1.0) < 1e-6 and np.allclose(glb.bounds.mean(axis=0), 0, atol=1e-6)
+              and sum(len(g.faces) for g in glb.geometry.values()) == r.details["triangles"],
+              "the GLB has one CPK-colored material per element, fits a unit cube and is centered")
+        again = build("methane", folder="methane_again")
+        check(again.files["model"].read_bytes() == r.files["model"].read_bytes()
+              and again.files["thumbnail"].read_bytes() == r.files["thumbnail"].read_bytes(),
+              "the same PubChem data gives byte-identical files")
+        mol_lib = lib.LocalFolderStore(tmp / "libMol", create=True)
+        mol_lib.put(lib.LibraryEntry(**r.entry), r.files)
+        stored = mol_lib.get("pubchem_297")
+        check(stored.provenance.license == "public-domain" and stored.provenance.record_id == "297"
+              and stored.name == "methane_molecule" and not [p for p in lib.check_index(mol_lib.index, mol_lib.root)
+                                                              if p.level == "error"],
+              "the result is a valid library entry with PubChem provenance and a thumbnail")
+
+        r = build("xenon tetrafluoride", "lone_pairs")
+        mol, has_3d = M.fetch(123324)
+        pairs, shape = M.idealize(mol)
+        xe, fs = np.asarray(mol.coords[0]), [np.asarray(c) for c in mol.coords[1:]]
+        angles = sorted(round(angle(a - xe, b - xe)) for i, a in enumerate(fs) for b in fs[i + 1:])
+        normal = max((np.cross(fs[0] - xe, f - xe) for f in fs[1:]), key=np.linalg.norm)
+        check(r.ok and not has_3d and r.details["geometry"] == "idealized_vsepr" and shape == "square planar"
+              and angles == [90, 90, 90, 90, 180, 180] and r.details["lone_pairs"] == {"Xe1": 2}
+              and all(abs(abs(np.dot(d, normal / np.linalg.norm(normal))) - 1) < 1e-9 for d in pairs[0]),
+              "XeF4 (no 3D record) gets an idealized square-planar geometry, its two lone pairs on the axis")
+        glb = trimesh.load(r.files["model"], file_type="glb")
+        check("lone_pair" in glb.geometry and glb.geometry["lone_pair"].visual.material.alphaMode == "BLEND",
+              "lone pairs are translucent lobes")
+
+        r = build("water", "lone_pairs")
+        mol, _ = M.fetch(962)
+        o = np.asarray(mol.coords[0])
+        bonds = [np.asarray(c) - o for c in mol.coords[1:]]
+        lps = M.free_directions(bonds, 2)
+        check(r.ok and r.details["shape"] == "bent" and r.details["lone_pairs"] == {"O1": 2}
+              and 95 < angle(*lps) < 135 and all(np.dot(d, sum(bonds)) < 0 for d in lps),
+              "water's two lone pairs point away from its hydrogens, roughly tetrahedrally")
+        check(not build("water", folder="water_plain").details["lone_pairs_drawn"],
+              "lone pairs are drawn only when asked")
+
+        r = build("carbon dioxide", "lone_pairs")
+        check(r.ok and r.details["shape"] == "linear" and r.details["bond_orders"] == [2, 2]
+              and r.details["lone_pairs"] == {},
+              "CO2: linear, double bonds, and no lobes on the terminal oxygens")
+        r = build("ammonium", "lone_pairs")
+        check(r.ok and r.details["shape"] == "tetrahedral" and r.details["lone_pairs"] == {},
+              "a charge counts toward lone pairs (NH4+ has none)")
+        r = build("SF6")
+        check(r.ok and r.details["matched_by"] == "formula" and r.details["shape"] == "octahedral",
+              "a formula is looked up when no compound has that name")
+        r = build("ethane")
+        check(not r.ok and "more than one central atom" in r.reason and not (tmp / "mol" / "ethane").exists(),
+              "no 3D record, several centers and no RDKit -> can't build, with the reason, and no files")
+        r = build("unobtainium")
+        check(not r.ok and "no compound named" in r.reason, "an unknown compound -> can't build")
+
+        # The builder route
+        mol_route = routing.routes_for("model").get("builder:molecule", "")
+        check("PubChem" in mol_route and "Options: lone_pairs" in mol_route
+              and "builder:molecule" not in routing.routes_for("texture") and builders.get("builder:molecule"),
+              "the molecule builder is offered as a model route, with its options")
+        lab = tiny_lab()
+        lab_path = tmp / "tiny_lab_output.json"
+        reqs = {(r.kind, r.key): r for r in audit.audit_lab(audit.load_lab(lab_path))}
+        helix = reqs[("model", "dnahelixprefab")]
+        base = {"name": "dnaHelixPrefab", "kind": "model", "description": "d", "search_keywords": ["a", "b"],
+                "form": "structure", "route": "builder:molecule", "reason": "r"}
+        try:
+            with routing.routing_scope([helix]):
+                routing.LabAssetPlan.model_validate({"assets": [{**base, "builder_options": ["wireframe"]}]})
+            check(False, "a builder route without its input, or with an unknown option, is refused")
+        except lib.ValidationError as exc:
+            check("needs builder_input" in str(exc) and "no option 'wireframe'" in str(exc),
+                  "a builder route without its input, or with an unknown option, is refused")
+        with routing.routing_scope([helix]):
+            plain = routing.LabAssetPlan.model_validate({"assets": [{
+                **base, "route": "search", "form": "object", "builder_input": "x", "builder_options": ["y"]}]})
+        check(plain.assets[0].builder_input is None and plain.assets[0].builder_options == [],
+              "builder fields are dropped from a route that isn't a builder")
+
+        # build_assets.py: plan -> build -> save -> found by name next time
+        out = tmp / "prov_out6"
+        library_path = str(tmp / "libMol")
+
+        def run(mod, *args, call_fn=None):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+                if mod is provision_lab:
+                    code = mod.main(list(args), call_fn=call_fn, output_root=out)
+                else:
+                    code = mod.main(list(args))
+            return code, buf.getvalue()
+
+        plan = {"dnaHelixPrefab": {"route": "builder:molecule", "form": "structure", "builder_input": "methane",
+                                   "builder_options": ["lone_pairs"]},
+                "dnaDoubleHelixPrefab": {"same_as": "dnaHelixPrefab"},
+                "summaryPanelPrefab": {"route": "builder:molecule", "form": "structure",
+                                       "builder_input": "unobtainium"}}
+        code, text = run(provision_lab, str(lab_path), "--dry-run", "--no-reuse", "--library", library_path,
+                         call_fn=fake_router(plan))
+        run_dir = max(out.glob("*"), key=os.path.getmtime)
+        check(code == 0 and "builder:molecule" in text and "'methane' [lone_pairs]" in text,
+              "a dry run routes an asset to the builder and prints its input and options")
+        code, text = run(build_assets, str(run_dir), "--only", "nothere")
+        check(code == 2, "build_assets: --only with an asset not routed to a builder -> exit 2")
+        code, text = run(build_assets, str(run_dir), "--save", "--library", library_path)
+        res = json.loads((run_dir / "build_results.json").read_text(encoding="utf-8"))
+        by = {a["name"]: a for a in res["assets"]}
+        check(code == 1 and res["counts"] == {"assets": 2, "built": 1, "failed": 1, "saved": 1}
+              and (run_dir / "built" / "dnaHelixPrefab" / "model.glb").is_file()
+              and by["dnaHelixPrefab"]["files"]["model"] == "built/dnaHelixPrefab/model.glb"
+              and "FAILED" in text and "no compound named" in by["summaryPanelPrefab"]["reason"],
+              "build_assets builds what the plan routed to a builder, records failures, exit 1 if any")
+        entry = lib.LocalFolderStore(tmp / "libMol").get("pubchem_297")
+        check(by["dnaHelixPrefab"]["saved"] == {"asset_id": "pubchem_297", "added": False,
+                                                "aliases": ["dnaHelixPrefab", "dnaDoubleHelixPrefab"]}
+              and {"dnaHelixPrefab", "dnaDoubleHelixPrefab"} <= set(entry.aliases),
+              "--save adds the lab's names (and the merged one) as aliases of the entry already there")
+        code, text = run(provision_lab, str(lab_path), "--dry-run", "--no-reuse", "--library", library_path,
+                         call_fn=fake_router({}))
+        m = json.loads(next(max(out.glob("*"), key=os.path.getmtime).glob(MANIFEST_NAME)).read_text(encoding="utf-8"))
+        a = {x["name"]: x for x in m["assets"]}
+        check(a["dnaHelixPrefab"]["status"] == "available" and a["dnaHelixPrefab"]["library"]["asset_id"]
+              == "pubchem_297" and a["dnaDoubleHelixPrefab"]["status"] == "available",
+              "the next dry run finds the built molecule by the lab's names")
+    finally:
+        srv.close()
+        M.PUBCHEM, M.USE_RDKIT = saved
+
+
+MANIFEST_NAME = "provisioning_manifest.json"
+
+
 def main() -> int:
     saved_env = os.environ.pop(lib.LIBRARY_ENV, None)
     tmp = Path(tempfile.mkdtemp(prefix="provisioning_smoke_"))
@@ -1373,6 +1588,7 @@ def main() -> int:
         part3(tmp)
         part4(tmp)
         part5(tmp)
+        part6(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         if saved_env is not None:

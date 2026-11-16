@@ -100,7 +100,7 @@ python "Code/Narration/bundle.py" validate "<Name>Lab.zip"
 python "Code/Narration/smoke_test.py"   # offline check, no API keys (fake TTS + mock OpenAI/Gemini)
 ```
 
-Provisioning (models and textures for labs; so far the asset library and the plan, #106, #108):
+Provisioning (models and textures for labs; so far the asset library, the plan and the molecule builder, #106-#108, #111):
 
 ```bash
 # --dry-run: audit + library lookup + reuse judge + describe and route (two LLM calls); builds nothing.
@@ -108,6 +108,10 @@ Provisioning (models and textures for labs; so far the asset library and the pla
 # Output: Artifacts/Data/Provisioning/[<run group>/]<lab>_<ts>/
 python "Code/Provisioning/provision_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --dry-run
 python "Code/Provisioning/provision_lab.py" "Artifacts/Data/Benchmark/Outputs/<run>_output.json" --dry-run --no-llm
+# Build what a dry run routed to a builder (molecules from PubChem): <run>/built/, build_results.json;
+# --save stores them in the library with the lab's names as aliases.
+python "Code/Provisioning/build_assets.py" "Artifacts/Data/Provisioning/testing/<run>" --save
+python "Code/Provisioning/molecule.py" "xenon tetrafluoride" --lone-pairs --out <folder>   # one molecule, to check by eye
 ```
 
 Asset library:
@@ -434,7 +438,16 @@ not reused. Built so far:
   `impossible` for behaviour named as an asset: those are `flagged` for a reviewer in the
   manifest's `review_items`, never provided), `same_as` merges. Checked under a `routing_scope` ContextVar (one error for all problems → one
   reask). Same client/guards/tracker as every entry point; default model Claude Haiku 5.5.
-  **`builders.py`**: the builder registry, empty until #111.
+  A builder route also carries `builder_input` and `builder_options` (checked against the builder).
+  **`builders.py`**: the builder plug-in interface (`BuilderInfo` with description, needs,
+  options and `build(request, out_dir) -> BuildResult`) and `registry()`, loaded lazily.
+- **`molecule.py`** (#111): the `molecule` builder. PubChem (name, else formula) → its 3D
+  conformer, else an idealized VSEPR geometry for one-center molecules (PubChem has no 3D for
+  XeF4, PF5, SF6), else RDKit if installed → ball-and-stick GLB with `trimesh` (CPK colors, one
+  material per element, multiple bonds, optional translucent lone-pair lobes on central atoms),
+  unit-cube scaled, plus a matplotlib thumbnail. Deterministic; provenance records the CID.
+  **`build_assets.py`**: builds a dry-run manifest's builder-routed assets into `<run>/built/`
+  and `build_results.json`; `--save` stores them in the library with the lab's names as aliases.
 - **`reuse.py`** (#108): the reuse judge, run before routing on assets with no name or alias
   hit. One LLM call per lab (`ReusePlan`) over a shortlist of reusable entries (whole library
   up to 200, else per-asset word matches): `reuse` an entry of the same kind (a model may add
@@ -452,8 +465,9 @@ not reused. Built so far:
   `provisioning_manifest.json` (library identity, routing record with cost, served models,
   transient retries and reask restarts, per-asset status and plan; anything merged into a
   flagged asset is flagged too).
-- **`smoke_test.py`**: offline (mock download server, throwaway library, fake LLM, and the
-  real client against a mock Anthropic server; never the real library).
+- **`smoke_test.py`**: offline (mock download server, throwaway library, fake LLM, the
+  real client against a mock Anthropic server, and the molecule builder against a mock
+  PubChem; never the real library).
 
 
 
