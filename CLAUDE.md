@@ -395,8 +395,8 @@ not reused. Built so far:
   reask). Same client/guards/tracker as every entry point; default model Claude Haiku 5.5.
   **`builders.py`**: the builder registry, empty until #111.
 - **`provision_lab.py`** (#106): the CLI; only `--dry-run` so far. With no library at the
-  default location it falls back to the seed list's built-ins; a broken library or a
-  `--library` path with none is an error. Assets are keyed by kind and name (a model and a
+  default location it falls back to the seed list's built-ins; a broken library, or a
+  `--library` / `$ARLEM_ASSET_LIBRARY` path with none, is an error. Assets are keyed by kind and name (a model and a
   texture can share a name). No call and no key when the library has everything. Writes
   `provisioning_manifest.json` (library identity, routing record with cost, served models,
   transient retries and reask restarts, per-asset status and plan; anything merged into a

@@ -890,11 +890,11 @@ def part3(tmp: Path) -> None:
     check(run(str(lab_path))[0] == 2, "CLI: without --dry-run -> exit 2 (the full run is #113)")
     check(run(str(lab_path), "--dry-run", "--run-group", "bad name")[0] == 2, "CLI: a bad run group -> exit 2")
     check(run(str(tmp / "bad.json"), "--dry-run", "--no-llm")[0] == 2, "CLI: not a lab -> exit 2")
-    os.environ[lib.LIBRARY_ENV] = str(tmp / "no_library")   # the default location, empty
+    saved_default, lib.DEFAULT_LIBRARY = lib.DEFAULT_LIBRARY, tmp / "no_library"  # empty default
     try:
         code, text = run(str(lab_path), "--dry-run", "--no-llm")
     finally:
-        del os.environ[lib.LIBRARY_ENV]
+        lib.DEFAULT_LIBRARY = saved_default
     m = last_manifest()
     by = {a["name"]: a for a in m["assets"]}
     check(code == 0 and m["status"] == "audited" and "no asset library" in text
@@ -964,6 +964,13 @@ def part3(tmp: Path) -> None:
     finally:
         del os.environ[lib.LIBRARY_ENV]
     check(code == 2, "CLI: a broken library at the default location is an error too")
+    os.environ[lib.LIBRARY_ENV] = str(tmp / "typo_library")
+    try:
+        code, text = run(str(lab_path), "--dry-run", "--no-llm")
+    finally:
+        del os.environ[lib.LIBRARY_ENV]
+    check(code == 2 and f"${lib.LIBRARY_ENV}=" in text and "no asset library there" in text,
+          f"CLI: ${lib.LIBRARY_ENV} pointing at a folder with no library -> exit 2")
 
     # Metrics files
     (tmp / "list.json").write_text("[1, 2]", encoding="utf-8")
@@ -990,7 +997,7 @@ def part3(tmp: Path) -> None:
 
     routing._benchmark()  # loads .env, as a real run would
     saved = {k: os.environ.pop(k) for ks in routing.API_KEY_ENV.values() for k in ks if k in os.environ}
-    os.environ[lib.LIBRARY_ENV] = str(tmp / "no_library")
+    saved_default, lib.DEFAULT_LIBRARY = lib.DEFAULT_LIBRARY, tmp / "no_library"
     try:
         code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libB"))
         check(code == 2 and "no API key" in text, "CLI: no API key -> exit 2, before any call")
@@ -1009,7 +1016,7 @@ def part3(tmp: Path) -> None:
               "CLI: a lab whose assets are all in the library needs no API key and makes no call")
     finally:
         os.environ.update(saved)
-        os.environ.pop(lib.LIBRARY_ENV, None)
+        lib.DEFAULT_LIBRARY = saved_default
 
 
 def main() -> int:

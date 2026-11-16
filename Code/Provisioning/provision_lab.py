@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import json
+import os
 import re
 import subprocess
 import sys
@@ -77,13 +78,17 @@ class Known:
     built-ins (so a machine with no library still knows what the headset has)."""
 
     def __init__(self, library_path: Optional[str]):
-        """Opens the library. A library that exists but can't be read, or a ``--library``
-        path with no library, raises ``LibraryError``: only the default location (or
-        ``$ARLEM_ASSET_LIBRARY``) falls back to the seed list when empty."""
+        """Opens the library. A library that exists but can't be read, or a path chosen
+        by ``--library`` or ``$ARLEM_ASSET_LIBRARY`` with no library, raises
+        ``LibraryError``: only the default location falls back to the seed list when
+        empty."""
         path = library.resolve_library_path(library_path)
-        if library_path and not (path / library.INDEX_NAME).is_file():
-            raise library.LibraryError(f"--library {library_path}: no asset library there "
-                                       f"(build one with library.py seed --library {library_path})")
+        env = os.environ.get(library.LIBRARY_ENV)
+        chosen = (f"--library {library_path}" if library_path
+                  else f"${library.LIBRARY_ENV}={env}" if env else None)
+        if chosen and not (path / library.INDEX_NAME).is_file():
+            raise library.LibraryError(f"{chosen}: no asset library there "
+                                       f"(build one with library.py seed --library {path})")
         if (path / library.INDEX_NAME).is_file():
             self.store: Optional[library.LocalFolderStore] = library.LocalFolderStore(path)
             self.identity = self.store.identity()

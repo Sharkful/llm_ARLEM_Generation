@@ -159,10 +159,10 @@ the invented assets `lab_metrics.analyze_assets` counts.
 
 Each asset is then looked up in the library by name or alias (`find`; a different
 kind or a non-reusable entry such as `demoPrefab` doesn't count). When the default
-location (or `$ARLEM_ASSET_LIBRARY`) holds no library, the seed list's built-ins are
-used, so the headset's own assets are never planned. A library that exists but can't
-be read, or a `--library` path with no library, stops the run (exit 2) with the real
-error. Only what the library doesn't have goes to the LLM; when that is nothing, no
+location holds no library, the seed list's built-ins are used, so the headset's own
+assets are never planned. A library that exists but can't be read, or a path chosen by
+`--library` or `$ARLEM_ASSET_LIBRARY` with no library, stops the run (exit 2) with the
+real error. Only what the library doesn't have goes to the LLM; when that is nothing, no
 call is made and no API key is needed.
 
 `routing.py` makes the one call per lab (`LabAssetPlan`): for each asset a
@@ -574,7 +574,8 @@ Built so far (#106): the plan. `--dry-run` is required until #113.
 - Exit codes: **0** planned (or audited with `--no-llm`); **1** the call failed
   (recorded in the manifest); **2** bad input or environment (not a lab, bad run
   group, a metrics file that isn't a JSON object, a library that can't be read or a
-  `--library` path with none, unknown model, missing SDK or API key).
+  `--library` or `$ARLEM_ASSET_LIBRARY` path with none, unknown model, missing SDK or
+  API key).
 - The plan manifest records: `status` (`planned`, `audited`, `failed`); the source
   (input, `labId`, metrics file and any skipped ones, source model, level, lab name,
   whether hierarchical); the library identity (or a note that there is none); the
