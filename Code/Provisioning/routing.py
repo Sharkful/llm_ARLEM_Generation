@@ -13,8 +13,8 @@ The call goes through ``benchmark.create_instructor_client`` and
 guards, inside ``_transient_retryer``; shared with the hierarchical pipeline), tracked
 by ``InstructorTracker``, like every LLM entry point. The response is checked under
 ``routing_scope``: every listed asset (a kind and a name: a lab can use one name for a
-model and a texture) planned exactly once, an allowed form and route, 2 to 6 search
-keywords, and ``same_as`` merges that point at another listed asset of the same kind.
+model and a texture) planned exactly once, an allowed form and route,
+``MIN_KEYWORDS`` to ``MAX_KEYWORDS`` search keywords, and ``same_as`` merges that point at another listed asset of the same kind.
 Fields are lenient so all problems come back in one error, and instructor reasks
 once for all of them.
 """
@@ -28,7 +28,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 import builders
 from audit import AssetRequest
@@ -134,10 +134,24 @@ def routing_scope(requests: list[AssetRequest]):
         _SCOPE.reset(token)
 
 
+def _strict_tool_schema(schema: dict) -> None:
+    """The tool schema the LLM sees stays strict: every field but the optional ones is
+    required, and no field shows the lenient default (kind's "" isn't in its enum)."""
+    optional = {"must_be_right", "same_as"}
+    props = schema.get("properties", {})
+    schema["required"] = [k for k in props if k not in optional]
+    for k, prop in props.items():
+        if k not in optional:
+            prop.pop("default", None)
+
+
 class PlannedAsset(BaseModel):
-    # Only name is required here: everything else is checked in LabAssetPlan._check,
-    # so all problems in a response come back in one error (field errors would stop
-    # validation before that check runs, and cost a reask each).
+    # Only name is required when validating: everything else is checked in
+    # LabAssetPlan._check, so all problems in a response come back in one error (field
+    # errors would stop validation before that check runs, and cost a reask each). The
+    # schema sent to the LLM still marks them required (_strict_tool_schema).
+    model_config = ConfigDict(json_schema_extra=_strict_tool_schema)
+
     name: str = Field(description="The asset's name, exactly as listed.")
     kind: str = Field("", description="The asset's kind, as listed.",
                       json_schema_extra={"enum": list(KINDS)})
@@ -152,7 +166,8 @@ class PlannedAsset(BaseModel):
                     "Empty when nothing specific.")
     search_keywords: list[str] = Field(
         default_factory=list,
-        description="2 to 6 short phrases a person would type into a 3D model or texture library to "
+        description=f"{MIN_KEYWORDS} to {MAX_KEYWORDS} short phrases a person would type into a 3D "
+                    "model or texture library to "
                     "find it (identity words, not filler).")
     form: str = Field("", description="One of the listed forms for its kind.")
     route: str = Field("", description="One of the listed routes for its kind.")
@@ -174,6 +189,7 @@ class LabAssetPlan(BaseModel):
             return self
         problems: list[str] = []
         seen: dict[tuple[str, str], PlannedAsset] = {}
+        wrong_kind: set[tuple[str, str]] = set()   # answered, but with the wrong kind
         kinds_of = {}
         for kind, k in listed:
             kinds_of.setdefault(k, set()).add(kind)
@@ -186,7 +202,7 @@ class LabAssetPlan(BaseModel):
                 listed_as = " and a ".join(sorted(kinds_of[k]))
                 problems.append(f"{a.name!r} is listed as a {listed_as}, not a {a.kind or 'kind-less'} asset")
                 if len(kinds_of[k]) == 1:   # clearly that asset: don't also call it missing
-                    seen.setdefault((next(iter(kinds_of[k])), k), a)
+                    wrong_kind.add((next(iter(kinds_of[k])), k))
                 continue
             key = (a.kind, k)
             name = listed[key]
@@ -209,11 +225,12 @@ class LabAssetPlan(BaseModel):
             if not MIN_KEYWORDS <= n <= MAX_KEYWORDS:
                 problems.append(f"{name!r}: give {MIN_KEYWORDS} to {MAX_KEYWORDS} search keywords "
                                 f"(got {n})")
-        missing = [f"{name} ({kind})" for (kind, k), name in listed.items() if (kind, k) not in seen]
+        missing = [f"{name} ({kind})" for (kind, k), name in listed.items()
+                   if (kind, k) not in seen and (kind, k) not in wrong_kind]
         if missing:
             problems.append("these listed assets are missing: " + ", ".join(missing))
         for (kind, k), a in seen.items():
-            if not a.same_as or a.kind != kind:
+            if not a.same_as:
                 continue
             t = name_key(a.same_as)
             target = seen.get((kind, t))
