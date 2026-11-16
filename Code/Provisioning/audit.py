@@ -174,6 +174,14 @@ def _behaviours(components) -> list[str]:
     return out
 
 
+def _merge_behaviours(names: list[str]) -> list[str]:
+    """An object's components over the whole lab (its own and clip changes'), each once.
+    A component draggable in any clip counts as draggable: students drag it at some point,
+    so "pointerReceiver" is dropped when "pointerReceiver (draggable)" is there."""
+    names = list(dict.fromkeys(names))
+    return [n for n in names if f"{n} (draggable)" not in names]
+
+
 def audit_lab(lab: dict, purposes: Optional[dict[str, str]] = None) -> list[AssetRequest]:
     """Every model and texture the lab references, in order of first use."""
     purposes = purposes or {}
@@ -191,8 +199,8 @@ def audit_lab(lab: dict, purposes: Optional[dict[str, str]] = None) -> list[Asse
         for obj in module.get("objects", []):
             prefab, texture = obj.get("prefab"), obj.get("texture")
             text = _texts(obj.get("components")) + changes_text.get(obj.get("name", ""), [])
-            behaviour = list(dict.fromkeys(_behaviours(obj.get("components"))
-                                           + changes_behaviour.get(obj.get("name", ""), [])))
+            behaviour = _merge_behaviours(_behaviours(obj.get("components"))
+                                          + changes_behaviour.get(obj.get("name", ""), []))
             for kind, value, paired in (("model", prefab, texture), ("texture", texture, prefab)):
                 if not value or not str(value).strip():
                     continue

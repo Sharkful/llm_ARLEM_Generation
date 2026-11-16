@@ -117,7 +117,9 @@ class TrackedLLM:
             record["completion_tokens"] = sum(c.total_usage.completion_tokens for c in calls)
             record["cost_usd"] = round(sum(self.tracker.pricing.calculate_cost(c.total_usage)
                                            for c in calls), 6)
-            record["served_models"] = self.tracker.served_models()
+            # This step's calls only (tracker.served_models() covers the whole run)
+            record["served_models"] = sorted({a.served_model for c in calls for a in c.attempts
+                                              if a.served_model})
         else:
             record["calls"] = 1
         if error:

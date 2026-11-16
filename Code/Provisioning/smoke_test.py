@@ -31,7 +31,13 @@ throwaway library (never the real one):
   can't collide; library.json is 0644
 - credit lines, the GLB check, library path resolution and the CLI exit codes
 
-Requires the project venv (pydantic, Pillow). Exit code 1 on any failure.
+Parts 3 and 4: the audit, describe and route, the reuse judge and the CLI, with a fake
+LLM. Part 5: the same CLI on the real client (create_instructor_client, guarded_create,
+the tracker) against a local mock Anthropic server: per-step calls, tokens, cost and
+served models.
+
+Requires the project venv (pydantic, Pillow; Part 5 also anthropic and instructor).
+Exit code 1 on any failure.
 """
 
 from __future__ import annotations
@@ -1138,8 +1144,9 @@ def part4(tmp: Path) -> None:
         {"name": "dragMe", "prefab": "domainPrefab",
          "components": [{"componentType": "pointerReceiver", "draggable": True}]},
         {"name": "later", "prefab": "domainPrefab"}],
-        "clips": [{"narration": "", "changes": [{"target": "later",
-                                                 "components": [{"componentType": "simpleOrbit"}]}]}]}]}
+        "clips": [{"narration": "", "changes": [
+            {"target": "later", "components": [{"componentType": "simpleOrbit"}]},
+            {"target": "dragMe", "components": [{"componentType": "pointerReceiver", "draggable": False}]}]}]}]}
     dom = audit.audit_lab(ball_lab)[0]
     block = routing.asset_block(dom)
     check(dom.components == {"pointerReceiver (draggable)": 1, "simpleOrbit": 1}
@@ -1147,6 +1154,10 @@ def part4(tmp: Path) -> None:
           and "components on its objects: pointerReceiver (draggable) on 1 of 3, simpleOrbit on 1 of 3" in block
           and 'object "dragMe" in module 1 "M", components pointerReceiver (draggable)' in block,
           "the asset block shows each object's components and a count over all its objects (clip changes too)")
+    check(dom.uses[1].components == ["pointerReceiver (draggable)"],
+          "an object draggable in any clip counts as draggable once (a change turning drag off isn't a second entry)")
+    check(reuse.SHAPES == routing.HEADSET_PRIMITIVES and "torus" not in reuse.SHAPES,
+          "a textured shape is one the headset makes today (Unity's primitives)")
     prompt = reuse.build_prompt(lab, asked, pool)
     check("- 2k_mars [texture] 2k_mars:" in prompt and "[model] dnaHelixPrefab" in prompt
           and "text_prefab [model, built-in]" in prompt, "the prompt lists library entries and the assets")
@@ -1197,6 +1208,29 @@ def part4(tmp: Path) -> None:
     check(m["aliases"] == {"saved": False, "proposed": [{"name": "summaryPanelPrefab", "asset_id": "summary_board"}]}
           and "1 proposed" in text and m["reuse"]["shortlist"] > 0 and "reuse: claude-haiku-5.5" in text,
           "a single-entry reuse is proposed as an alias, not saved by default")
+    check(by["dnaDoubleHelixPrefab"]["reuse"] == {"decision": "none", "reason": "test"}
+          and by["dnaDoubleHelixPrefab"]["status"] == "planned",
+          "the judge's 'none' and its reason are kept for a reviewer")
+    check(by["dnaHelixPrefab"]["components"] == {} and "components" in by["summaryPanelPrefab"],
+          "the manifest records each asset's component counts")
+    merge = {"reuse": {"dnaHelixPrefab": behaviour["reuse"]["dnaHelixPrefab"]},
+             "dnaDoubleHelixPrefab": {"same_as": "dnaHelixPrefab"}}
+    code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), call_fn=fake_router(merge))
+    m = last_manifest()
+    twin = {a["name"]: a for a in m["assets"]}["dnaDoubleHelixPrefab"]
+    check(code == 0 and "ALREADY IN THE LIBRARY" in merge["prompt"] and "- dnaHelixPrefab (model)" in merge["prompt"]
+          and twin["status"] == "reused" and twin["reuse"]["same_as"] == "dnaHelixPrefab"
+          and twin["reuse"]["texture_id"] == "2k_mars" and "(same as dnaHelixPrefab)" in text,
+          "a duplicate of a reused asset can be same_as it, and follows the library match")
+    try:
+        with routing.routing_scope([reqs[("model", "dnadoublehelixprefab")]]):
+            routing.LabAssetPlan.model_validate({"assets": [{
+                "name": "dnaDoubleHelixPrefab", "kind": "model", "description": "d", "search_keywords": ["a", "b"],
+                "form": "object", "route": "search", "reason": "r", "same_as": "dnaHelixPrefab"}]})
+        check(False, "same_as a reused asset is refused when it isn't passed as reused")
+    except lib.ValidationError as exc:
+        check("not a listed or reused model" in str(exc),
+              "same_as a reused asset is refused when it isn't passed as reused")
     rev = lib.LocalFolderStore(tmp / "libP3").identity()["revision"]
     code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), "--save-aliases",
                      call_fn=fake_router(dict(behaviour)))
@@ -1206,6 +1240,10 @@ def part4(tmp: Path) -> None:
           and store.find("summaryPanelPrefab").asset_id == "summary_board"
           and store.identity()["revision"] == rev + 1 and m["aliases"]["library_after"]["revision"] == rev + 1,
           "--save-aliases saves the match as an alias and records the library after")
+    again_saved = provision_lab.save_aliases(store, [{"name": "summaryPanelPrefab", "asset_id": "summary_board"}])
+    check(again_saved == [{"name": "summaryPanelPrefab", "asset_id": "summary_board", "saved": True}]
+          and store.identity()["revision"] == rev + 1,
+          "an alias already there (another run saved it) counts as saved, with no write")
     again = {"reuse": {"dnaHelixPrefab": behaviour["reuse"]["dnaHelixPrefab"]}}
     code, text = run(str(lab_path), "--dry-run", "--library", str(tmp / "libP3"), call_fn=fake_router(again))
     a = {x["name"]: x for x in last_manifest()["assets"]}["summaryPanelPrefab"]
@@ -1232,6 +1270,84 @@ def part4(tmp: Path) -> None:
           "a failed reuse call -> exit 1, and nothing is routed")
 
 
+# ── Part 5 ────────────────────────────────────────────────────────────
+
+
+def part5(tmp: Path) -> None:
+    print("Part 5: the real client path (mock Anthropic server)")
+    try:
+        import anthropic  # noqa: F401
+        import instructor  # noqa: F401
+    except ImportError:
+        check(False, "Part 5 needs the project venv (anthropic, instructor)")
+        return
+    import provision_lab
+    import reuse
+    import routing
+
+    answer = fake_router({"reuse": {"dnaHelixPrefab": {"decision": "textured_shape", "shape": "sphere",
+                                                       "texture_id": "2k_mars", "reason": "test"}}})
+    sent: list[dict] = []
+
+    class MockAnthropic(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            sent.append(body)
+            tool = body["tools"][0]["name"]
+            content = body["messages"][0]["content"]
+            prompt = content if isinstance(content, str) else "".join(b.get("text", "") for b in content)
+            model = reuse.ReusePlan if tool == "ReusePlan" else routing.LabAssetPlan
+            data = answer(model, [{"role": "user", "content": prompt}], 1).model_dump()
+            payload = json.dumps({
+                "id": "msg_mock", "type": "message", "role": "assistant",
+                # the reuse step is "served" by another model, to tell the steps apart
+                "model": body["model"] + ("-other" if tool == "ReusePlan" else ""),
+                "content": [{"type": "tool_use", "id": "toolu_mock", "name": tool, "input": data}],
+                "stop_reason": "tool_use", "stop_sequence": None,
+                "usage": {"input_tokens": 1000, "output_tokens": 200}}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), MockAnthropic)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    saved = {k: os.environ.get(k) for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY")}
+    os.environ["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{srv.server_port}"
+    os.environ["ANTHROPIC_API_KEY"] = "test"
+    out = tmp / "prov_out5"
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            code = provision_lab.main([str(tmp / "tiny_lab_output.json"), "--dry-run", "--library",
+                                       str(tmp / "libP3"), "--model", "claude-haiku-5.5"], output_root=out)
+    finally:
+        srv.shutdown()
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    m = json.loads(next(out.rglob("provisioning_manifest.json")).read_text(encoding="utf-8"))
+    model_id = sent[0]["model"] if sent else ""
+    check(code == 0 and [b["tools"][0]["name"] for b in sent] == ["ReusePlan", "LabAssetPlan"]
+          and sent[0].get("tool_choice") == {"type": "auto", "disable_parallel_tool_use": True},
+          "CLI on the real client: one reuse request, then one routing request, with the Anthropic guard")
+    r, t = m["reuse"], m["routing"]
+    check(r["calls"] == 1 and t["calls"] == 1 and r["prompt_tokens"] == t["prompt_tokens"] == 1000
+          and r["completion_tokens"] == t["completion_tokens"] == 200,
+          "each step records only its own calls and tokens")
+    check(r["cost_usd"] > 0 and abs(r["cost_usd"] + t["cost_usd"] - m["llm"]["cost"]["total_usd"]) < 1e-6
+          and m["llm"]["total_calls"] == 2,
+          "the steps' costs add up to the run's tracker total")
+    check(r["served_models"] == [model_id + "-other"] and t["served_models"] == [model_id],
+          "each step records the models that served its own calls")
+
+
 def main() -> int:
     saved_env = os.environ.pop(lib.LIBRARY_ENV, None)
     tmp = Path(tempfile.mkdtemp(prefix="provisioning_smoke_"))
@@ -1240,6 +1356,7 @@ def main() -> int:
         part2(tmp)
         part3(tmp)
         part4(tmp)
+        part5(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         if saved_env is not None:

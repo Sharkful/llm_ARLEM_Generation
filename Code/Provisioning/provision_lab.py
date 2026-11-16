@@ -126,7 +126,7 @@ class Known:
 def _asset_record(r: audit.AssetRequest) -> dict:
     rec = r.to_json()
     return {k: rec[k] for k in ("name", "kind", "spellings", "use_count", "modules", "uses",
-                                "narration", "purpose")}
+                                "components", "narration", "purpose")}
 
 
 def _reuse_record(d) -> dict:
@@ -154,6 +154,10 @@ def save_aliases(store: library.LocalFolderStore, proposals: list[dict]) -> list
     for p in proposals:
         rec = {**p, "saved": False}
         for attempt in (1, 2):
+            already = store.find(p["name"])
+            if already is not None and already.asset_id == p["asset_id"]:
+                rec["saved"] = True   # there already (e.g. another run saved it meanwhile)
+                break
             try:
                 store.add_alias(p["asset_id"], p["name"])
                 rec["saved"] = True
@@ -174,9 +178,14 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
                    no_llm: bool, aliases: Optional[dict] = None, llm_summary: Optional[dict] = None,
                    metrics_problems: Optional[list[str]] = None) -> dict:
     """``hits``: (kind, name key) -> the library entry found by name, from ``main``."""
-    reused = {(d.kind, library.name_key(d.name)): d
-              for d in (reuse_plan.decisions if reuse_plan else []) if d.decision != "none"}
+    decided = {(d.kind, library.name_key(d.name)): d for d in (reuse_plan.decisions if reuse_plan else [])}
+    reused = {key: d for key, d in decided.items() if d.decision != "none"}
     planned = {(p.kind, library.name_key(p.name)): p for p in (plan.assets if plan else [])}
+
+    def p_reused(p):
+        """The reuse decision a planned asset merged into, if its same_as is reused."""
+        return reused.get((p.kind, library.name_key(p.same_as))) if p.same_as else None
+
     assets = []
     for r in requests:
         rec = _asset_record(r)
@@ -188,6 +197,12 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
         elif (r.kind, r.key) in reused:
             rec["status"] = "reused"
             rec["reuse"] = _reuse_record(reused[(r.kind, r.key)])
+        elif (r.kind, r.key) in planned and p_reused(planned[(r.kind, r.key)]) is not None:
+            # Merged into an asset the judge reused: it follows that library match.
+            p = planned[(r.kind, r.key)]
+            rec["status"] = "reused"
+            rec["reuse"] = {**_reuse_record(p_reused(p)), "same_as": p.same_as}
+            rec["plan"] = p.model_dump(exclude={"name", "kind"}, exclude_none=True)
         elif (r.kind, r.key) in planned:
             p = planned[(r.kind, r.key)]
             rec["plan"] = p.model_dump(exclude={"name", "kind"}, exclude_none=True)
@@ -207,6 +222,9 @@ def build_manifest(input_path: Path, lab: dict, metrics: Optional[dict], known: 
                 rec["status"] = "planned"
         else:
             rec["status"] = "unplanned"
+        d = decided.get((r.kind, r.key))
+        if d is not None and d.decision == "none" and "reuse" not in rec:
+            rec["reuse"] = _reuse_record(d)   # the judge's reason, for a reviewer
         assets.append(rec)
     statuses = Counter(a["status"] for a in assets)
     review_items = []
@@ -287,7 +305,8 @@ def _print_plan(manifest: dict) -> None:
             u = a["reuse"]
             base = u.get("asset_id") or u.get("shape", "")
             what = (f"reused     {base}" + (f" + {u['texture_id']}" if u.get("texture_id") else "")
-                    + f"  ({u.get('reason', '')[:60]})")
+                    + (f"  (same as {u['same_as']})" if u.get("same_as")
+                       else f"  ({u.get('reason', '')[:60]})"))
         elif a["status"] in ("planned", "merged", "flagged"):
             p = a["plan"]
             if a["status"] == "merged":
@@ -418,7 +437,8 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
                     to_plan = [r for r in unmatched if (r.kind, r.key) not in taken]
             if args.no_reuse or reuse_plan is not None:
                 print(f"planning {len(to_plan)} of {len(requests)} assets with {args.model}...")
-                plan, record = routing.plan_routes(run_llm, lab, to_plan)
+                reused_requests = [r for r in unmatched if r not in to_plan]
+                plan, record = routing.plan_routes(run_llm, lab, to_plan, reused_requests)
             if args.save_aliases and reuse_plan is not None:
                 proposals = alias_proposals(reuse_plan, known.entries())
                 aliases = {"saved": True, "proposed": save_aliases(known.store, proposals),

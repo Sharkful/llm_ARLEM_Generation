@@ -66,9 +66,13 @@ REVIEW_ROUTES = {
     "impossible": "Can't be provided as a 3D model or texture from what the lab gives: it needs data, "
                   "content or behaviour the lab doesn't specify. Flagged for a reviewer.",
 }
+# Unity's built-in primitives: the headset makes these itself (PROVISIONING.md, "Simple
+# shapes"). Shapes Unity lacks are provided once as library models (#109).
+HEADSET_PRIMITIVES = ("sphere", "cube", "plane", "capsule", "cylinder", "quad")
+
 MODEL_ROUTES = {
     "shape": "A simple shape, colored and scaled by the lab, optionally with a real image on it found "
-             "in a texture library. The headset makes sphere, cube, plane, capsule, cylinder and quad "
+             f"in a texture library. The headset makes {', '.join(HEADSET_PRIMITIVES)} "
              "itself; arrow, ring or torus, cone, dome, grid and rounded panel are provided once. For "
              "diagram elements in any subject (vectors, axes, orbit rings, ground planes, markers, "
              "regions, blocks) and for things whose look is an image on a simple shape (planets, moons, "
@@ -109,17 +113,20 @@ def routes_for(kind: str) -> dict[str, str]:
 
 # ── Response model ────────────────────────────────────────────────────
 
-# Listed assets for the call being checked: (kind, name key) -> name. Keyed by kind
-# too, because a lab can use one name for a model and a texture (two assets).
-_SCOPE: contextvars.ContextVar[Optional[dict[tuple[str, str], str]]] = \
+# For the call being checked: (listed assets, reused assets), each (kind, name key) ->
+# name. Keyed by kind too, because a lab can use one name for a model and a texture (two
+# assets). Reused assets aren't planned, but a listed one may be same_as one of them.
+_SCOPE: contextvars.ContextVar[Optional[tuple[dict, dict]]] = \
     contextvars.ContextVar("routing_scope", default=None)
 MIN_KEYWORDS, MAX_KEYWORDS = 2, 6
 
 
 @contextmanager
-def routing_scope(requests: list[AssetRequest]):
-    """Check ``LabAssetPlan`` responses against these assets while inside."""
-    token = _SCOPE.set({(r.kind, r.key): r.name for r in requests})
+def routing_scope(requests: list[AssetRequest], reused: list[AssetRequest] = ()):
+    """Check ``LabAssetPlan`` responses against these assets while inside; ``same_as``
+    may also name one of the ``reused`` assets (the reuse judge matched it)."""
+    token = _SCOPE.set(({(r.kind, r.key): r.name for r in requests},
+                        {(r.kind, r.key): r.name for r in reused}))
     try:
         yield
     finally:
@@ -215,9 +222,10 @@ class LabAssetPlan(BaseModel):
 
     @model_validator(mode="after")
     def _check(self):
-        listed = _SCOPE.get()
-        if listed is None:
+        scope = _SCOPE.get()
+        if scope is None:
             return self
+        listed, reused = scope
         seen, problems = match_listed(self.assets, listed, "planned")
         forms = {kind: forms_for(kind) for kind in KINDS}     # once per validation
         routes = {kind: routes_for(kind) for kind in KINDS}
@@ -244,9 +252,11 @@ class LabAssetPlan(BaseModel):
             target = seen.get((kind, t))
             if t == k:
                 problems.append(f"{a.name!r}: same_as can't name the asset itself")
+            elif target is None and (kind, t) in reused:
+                a.same_as = reused[(kind, t)]    # follows the library match
             elif target is None:
                 other = next((x for (kk, tt), x in seen.items() if tt == t), None)
-                problems.append(f"{a.name!r}: same_as {a.same_as!r} is not a listed {kind}"
+                problems.append(f"{a.name!r}: same_as {a.same_as!r} is not a listed or reused {kind}"
                                 + (f" (it is a {other.kind})" if other is not None else ""))
             elif target.same_as:
                 problems.append(f"{a.name!r}: same_as {target.name!r}, which is itself merged into "
@@ -273,7 +283,7 @@ def _use_line(u, kind: str) -> str:
                     else f"textured with {u.paired_with}")
     if u.parent and u.parent != "[CURRENT_LAB]":
         bits.append(f'child of "{u.parent}"')
-    if getattr(u, "components", None):
+    if u.components:
         bits.append("components " + ", ".join(u.components))
     line = ", ".join(bits)
     if u.text:
@@ -304,6 +314,13 @@ def _options(title: str, options: dict[str, str]) -> str:
     return title + "\n" + "\n".join(f"- {k}: {v}" for k, v in options.items())
 
 
+# How an asset block (asset_block) reads; every provisioning prompt that lists assets uses it.
+ASSET_CONTEXT = ("Each asset shows how the lab uses it: the objects, their module, scale [x, y, z], color "
+                 "[r, g, b, a], the texture or model it is paired with, text shown on it, its components "
+                 "(what students do with it, with a count over all its objects), narration that mentions "
+                 "it, and its planned purpose when known.")
+
+
 def lab_summary(lab: dict) -> str:
     """The LAB block every provisioning prompt opens with."""
     modules = "\n".join(
@@ -319,9 +336,14 @@ modules:
 {modules}"""
 
 
-def build_prompt(lab: dict, requests: list[AssetRequest]) -> str:
+def build_prompt(lab: dict, requests: list[AssetRequest], reused: list[AssetRequest] = ()) -> str:
     models = sum(r.kind == "model" for r in requests)
     textures = len(requests) - models
+    library_block = ""
+    if reused:
+        library_block = ("\nALREADY IN THE LIBRARY (not planned here; same_as may name one when a listed "
+                         "asset is the same object)\n"
+                         + "\n".join(f"- {r.name} ({r.kind})" for r in reused) + "\n")
     return f"""You plan how to provide the 3D models and textures for an augmented-reality science lab \
 shown on a headset. The lab was generated with names for assets that don't exist yet. For each asset \
 listed below, say what it should look like and how it should be provided.
@@ -329,12 +351,10 @@ listed below, say what it should look like and how it should be provided.
 {lab_summary(lab)}
 
 ASSETS TO PLAN ({models} model(s), {textures} texture(s))
-Each asset shows how the lab uses it: the objects, their module, scale [x, y, z], color [r, g, b, a], \
-the texture or model it is paired with, text shown on it, its components (what students do with it), narration that mentions it, and its planned \
-purpose when known.
+{ASSET_CONTEXT}
 
 {chr(10).join(asset_block(r) for r in requests)}
-
+{library_block}
 {_options("FORMS FOR MODELS", MODEL_FORMS)}
 
 {_options("FORMS FOR TEXTURES", TEXTURE_FORMS)}
@@ -363,11 +383,13 @@ a reviewer reads it.
 # ── The call ──────────────────────────────────────────────────────────
 
 
-def plan_routes(llm, lab: dict, requests: list[AssetRequest]) -> tuple[Optional[LabAssetPlan], dict]:
-    """(plan, record) from one call through ``llm`` (an ``llm.TrackedLLM``). With
-    nothing to plan, no call is made and the plan is empty. On failure the plan is None
-    and the record carries the error."""
+def plan_routes(llm, lab: dict, requests: list[AssetRequest],
+                reused: list[AssetRequest] = ()) -> tuple[Optional[LabAssetPlan], dict]:
+    """(plan, record) from one call through ``llm`` (an ``llm.TrackedLLM``). ``reused``
+    are the assets the reuse judge matched: listed so a duplicate can be same_as one.
+    With nothing to plan, no call is made and the plan is empty. On failure the plan is
+    None and the record carries the error."""
     if not requests:
         return LabAssetPlan(assets=[]), {**llm.describe(), "calls": 0}
-    with routing_scope(requests):
-        return llm.call(LabAssetPlan, build_prompt(lab, requests))
+    with routing_scope(requests, reused):
+        return llm.call(LabAssetPlan, build_prompt(lab, requests, reused))

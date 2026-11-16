@@ -452,8 +452,8 @@ not reused. Built so far:
   `provisioning_manifest.json` (library identity, routing record with cost, served models,
   transient retries and reask restarts, per-asset status and plan; anything merged into a
   flagged asset is flagged too).
-- **`smoke_test.py`**: offline (mock download server, throwaway library, fake LLM; never the
-  real library).
+- **`smoke_test.py`**: offline (mock download server, throwaway library, fake LLM, and the
+  real client against a mock Anthropic server; never the real library).
 
 
 

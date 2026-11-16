@@ -405,10 +405,18 @@ route, so only what the library lacks is planned:
    - `reuse`: a library entry of the same kind *is* this asset; the lab's `color` and
      `scale` adapt it (`adapt` says how). A model may also take a library texture
      (`texture_id`), e.g. a built-in sphere with a planet map.
-   - `textured_shape`: a model that is a simple shape the headset makes (§ Simple
-     shapes) with a library texture on it: a planet map on a sphere.
+   - `textured_shape`: a model that is one of the primitives the headset makes today
+     (sphere, cube, plane, capsule, cylinder, quad: `routing.HEADSET_PRIMITIVES`, § Simple
+     shapes) with a library texture on it: a planet map on a sphere. The shapes Unity
+     lacks aren't offered until #109 provides them.
    - `none`: nothing in the library is this asset (related is not enough: a heart is
-     not a lung, an Earth map is not a Mars map). It goes on to describe and route.
+     not a lung, an Earth map is not a Mars map). It goes on to describe and route,
+     and its reason stays in the manifest for a reviewer.
+
+   Describe and route also lists the reused assets (not to plan them), so a duplicate
+   the judge left for planning can be `same_as` one of them (`H2OPrefab` same as a
+   reused `waterModelPrefab`); it then follows that library match (`reused`, with the
+   target's decision and `same_as`).
 
    The prompt lists the lab, the shortlisted entries (id, kind, built-in, name,
    description, mapping, tags) and each asset's context, and says to choose `none`
@@ -632,15 +640,19 @@ Built so far (#106, #108): the plan. `--dry-run` is required until #113.
   (input, `labId`, metrics file and any skipped ones, source model, level, lab name,
   whether hierarchical); the library identity (or a note that there is none); the
   `reuse` record and the `routing` record (each: model, model id, provider,
-  reasoning effort, `tool_choice`, calls, prompt and completion tokens, seconds,
-  transient retries, reask restarts, served models, cost, any error; reuse also the
+  reasoning effort, `tool_choice`, and for that step's calls only: calls, prompt and
+  completion tokens, seconds, transient retries, reask restarts, served models, cost,
+  any error; reuse also the
   shortlist size); `aliases` (`saved`, the proposals and whether each was saved, and
-  `library_after` when saved); `llm`, the tracker summary for the whole run; the
+  `library_after` when saved; an alias already on its entry, e.g. saved by another
+  run meanwhile, counts as saved); `llm`, the tracker summary for the whole run; the
   routes offered; counts by status, reuse decision, route (each asset that would be
   provided or reviewed once; merged ones follow their target) and form;
-  `review_items`; and per asset its spellings, uses, narration, purpose, `status`
+  `review_items`; and per asset its spellings, uses, component counts, narration,
+  purpose, the judge's `none` and its reason when it decided one, `status`
   (`available` with the library entry and whether it matched by name or alias,
-  `reused` with the judge's decision, `planned`, `merged` into another, `flagged` for
+  `reused` with the judge's decision (or, merged into a reused asset, that asset's
+  decision and `same_as`), `planned`, `merged` into another, `flagged` for
   a reviewer with its `review_route` and `review_reason`, or `unplanned`) and the
   plan.
 

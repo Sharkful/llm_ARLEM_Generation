@@ -38,7 +38,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from audit import AssetRequest, name_words
 from library import LibraryEntry
-from routing import KINDS, asset_block, lab_summary, match_listed, strict_schema
+from routing import (ASSET_CONTEXT, HEADSET_PRIMITIVES, KINDS, asset_block, lab_summary,
+                     match_listed, strict_schema)
 
 SHORTLIST_LIMIT = 200   # send the whole library up to this many reusable entries
 SHORTLIST_SIZE = 20     # above it, this many per asset
@@ -52,10 +53,10 @@ DECISIONS = {
     "none": "nothing in the library is this asset; it will be planned and provided. Related is not "
             "enough: a heart is not a lung, an Earth map is not a Mars map.",
 }
-# The simple shapes the headset makes itself (PROVISIONING.md, "Simple shapes";
-# Sharkful/Quest3_CyberAR#39).
-SHAPES = ("sphere", "cube", "plane", "capsule", "cylinder", "quad",
-          "arrow", "torus", "cone", "dome", "grid", "panel")
+# A textured_shape is one of the shapes the headset makes itself (Unity's primitives,
+# routing.HEADSET_PRIMITIVES): the shapes Unity lacks (arrow, torus, ...) aren't
+# provided yet (#109, Sharkful/Quest3_CyberAR#39), so an asset needing one is planned.
+SHAPES = HEADSET_PRIMITIVES
 
 _WORD = re.compile(r"[a-z0-9]+")
 
@@ -218,9 +219,7 @@ LIBRARY ({len(entries)} entries: id [kind] name: description)
 {chr(10).join(_entry_line(e) for e in entries)}
 
 ASSETS TO CHECK ({len(requests)})
-Each asset shows how the lab uses it: the objects, their module, scale [x, y, z], color [r, g, b, a], \
-the texture or model it is paired with, text shown on it, its components (what students do with it), narration that mentions it, and its planned \
-purpose when known.
+{ASSET_CONTEXT}
 
 {chr(10).join(asset_block(r) for r in requests)}
 
