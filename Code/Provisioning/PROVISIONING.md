@@ -155,7 +155,11 @@ The manifest is rewritten after every asset, so a run can resume (§ CLI).
 `audit.py` lists the assets (step 1), with up to 8 uses each (all are counted), up
 to 3 narration sentences that mention the object or asset by its name's words
 (`dnaHelix` → "dna helix"), text shown on the object (also text added by clip
-changes), and the hierarchical `purpose`. On all 104 wave-2 labs it finds exactly
+changes), the behaviour components on each object (also added by clip changes;
+`pointerReceiver (draggable)`, `simpleOrbit`, a new script by name) with a count
+over all the asset's objects, and the hierarchical `purpose`. The components were
+added after the first live reuse runs: without them the judge couldn't tell a marker
+from a sphere students drag (`electronDomainPrefab`, 4 of 10 objects draggable). On all 104 wave-2 labs it finds exactly
 the invented assets `lab_metrics.analyze_assets` counts.
 
 Each asset is then looked up in the library by name or alias (`find`; a different

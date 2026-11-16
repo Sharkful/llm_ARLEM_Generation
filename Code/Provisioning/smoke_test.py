@@ -1046,6 +1046,7 @@ def part4(tmp: Path) -> None:
     import audit
     import provision_lab
     import reuse
+    import routing
 
     lab = tiny_lab()
     lab_path = tmp / "tiny_lab_output.json"   # written by Part 3
@@ -1126,6 +1127,26 @@ def part4(tmp: Path) -> None:
         reuse.SHORTLIST_LIMIT, reuse.SHORTLIST_SIZE = saved_limit, saved_size
     check(len(short) == 3 and target in short, "a big library is shortlisted to each asset's best word matches")
     check(len(reuse.shortlist([helix], many)) == 30, "a small library is sent whole")
+    # What students do with an asset's objects reaches both judges
+    check(audit._behaviours([{"componentType": "pointerReceiver", "draggable": True},
+                             {"type": "SimpleOrbitComponent"}, {"componentType": "newscript", "scriptName": "Spin"},
+                             {"componentType": "textMeshPro", "text": "x"}])
+          == ["pointerReceiver (draggable)", "simpleOrbit", "Spin"],
+          "object components are named (saved or schema form, new scripts by name, draggable marked), text left out")
+    ball_lab = {"modules": [{"moduleName": "M", "objects": [
+        {"name": "marker", "prefab": "domainPrefab"},
+        {"name": "dragMe", "prefab": "domainPrefab",
+         "components": [{"componentType": "pointerReceiver", "draggable": True}]},
+        {"name": "later", "prefab": "domainPrefab"}],
+        "clips": [{"narration": "", "changes": [{"target": "later",
+                                                 "components": [{"componentType": "simpleOrbit"}]}]}]}]}
+    dom = audit.audit_lab(ball_lab)[0]
+    block = routing.asset_block(dom)
+    check(dom.components == {"pointerReceiver (draggable)": 1, "simpleOrbit": 1}
+          and dom.uses[1].components == ["pointerReceiver (draggable)"]
+          and "components on its objects: pointerReceiver (draggable) on 1 of 3, simpleOrbit on 1 of 3" in block
+          and 'object "dragMe" in module 1 "M", components pointerReceiver (draggable)' in block,
+          "the asset block shows each object's components and a count over all its objects (clip changes too)")
     prompt = reuse.build_prompt(lab, asked, pool)
     check("- 2k_mars [texture] 2k_mars:" in prompt and "[model] dnaHelixPrefab" in prompt
           and "text_prefab [model, built-in]" in prompt, "the prompt lists library entries and the assets")

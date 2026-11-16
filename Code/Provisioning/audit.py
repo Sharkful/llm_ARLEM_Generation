@@ -45,6 +45,7 @@ class AssetUse:
     color: Optional[list] = None
     paired_with: Optional[str] = None   # a model's texture, or a texture's prefab
     text: list[str] = field(default_factory=list)
+    components: list[str] = field(default_factory=list)   # behaviour on the object (not text)
 
 
 @dataclass
@@ -57,6 +58,9 @@ class AssetRequest:
     modules: list[int] = field(default_factory=list)
     narration: list[str] = field(default_factory=list)
     purpose: Optional[str] = None
+    # behaviour component -> how many of the asset's objects carry it (all uses, not
+    # only the kept ones), so a judge can tell a marker from something students drag
+    components: dict[str, int] = field(default_factory=dict)
 
     @property
     def key(self) -> str:
@@ -147,6 +151,29 @@ def _texts(components) -> list[str]:
     return [_clip(c["text"]) for c in components or [] if _is_text(c) and c.get("text")]
 
 
+def _behaviours(components) -> list[str]:
+    """The non-text components on an object, as short names: the saved ``componentType``
+    (or the schema's ``type`` without "Component"), a new component's ``scriptName``,
+    and "(draggable)" on a pointer receiver students can drag."""
+    out = []
+    for c in components or []:
+        if not isinstance(c, dict) or _is_text(c):
+            continue
+        name = c.get("componentType") or ""
+        if not name and isinstance(c.get("type"), str):
+            t = c["type"].removesuffix("Component")
+            name = t[:1].lower() + t[1:]
+        if name in ("newscript", "new") and c.get("scriptName"):
+            name = str(c["scriptName"])
+        if not name:
+            continue
+        if c.get("draggable") is True:
+            name += " (draggable)"
+        if name not in out:
+            out.append(name)
+    return out
+
+
 def audit_lab(lab: dict, purposes: Optional[dict[str, str]] = None) -> list[AssetRequest]:
     """Every model and texture the lab references, in order of first use."""
     purposes = purposes or {}
@@ -156,12 +183,16 @@ def audit_lab(lab: dict, purposes: Optional[dict[str, str]] = None) -> list[Asse
     for m_index, module in enumerate(lab.get("modules", []), start=1):
         m_name = module.get("moduleName", "")
         changes_text: dict[str, list[str]] = {}
+        changes_behaviour: dict[str, list[str]] = {}
         for clip in module.get("clips") or []:
             for ch in clip.get("changes") or []:
                 changes_text.setdefault(ch.get("target", ""), []).extend(_texts(ch.get("components")))
+                changes_behaviour.setdefault(ch.get("target", ""), []).extend(_behaviours(ch.get("components")))
         for obj in module.get("objects", []):
             prefab, texture = obj.get("prefab"), obj.get("texture")
             text = _texts(obj.get("components")) + changes_text.get(obj.get("name", ""), [])
+            behaviour = list(dict.fromkeys(_behaviours(obj.get("components"))
+                                           + changes_behaviour.get(obj.get("name", ""), [])))
             for kind, value, paired in (("model", prefab, texture), ("texture", texture, prefab)):
                 if not value or not str(value).strip():
                     continue
@@ -175,6 +206,8 @@ def audit_lab(lab: dict, purposes: Optional[dict[str, str]] = None) -> list[Asse
                 if value.strip() not in req.spellings:
                     req.spellings.append(value.strip())
                 req.use_count += 1
+                for b in behaviour:
+                    req.components[b] = req.components.get(b, 0) + 1
                 if m_index not in req.modules:
                     req.modules.append(m_index)
                 if len(req.uses) < MAX_USES:
@@ -182,7 +215,7 @@ def audit_lab(lab: dict, purposes: Optional[dict[str, str]] = None) -> list[Asse
                         module=m_index, module_name=m_name, object=obj.get("name", ""),
                         parent=obj.get("parent"), scale=obj.get("scale"), color=obj.get("color"),
                         paired_with=paired.strip() if paired and str(paired).strip() else None,
-                        text=list(dict.fromkeys(text))[:3]))
+                        text=list(dict.fromkeys(text))[:3], components=behaviour))
                 phrases = mentions.setdefault(k, set())
                 for p in (name_words(obj.get("name", "")), name_words(value)):
                     if p:

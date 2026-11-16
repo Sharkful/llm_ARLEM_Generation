@@ -273,6 +273,8 @@ def _use_line(u, kind: str) -> str:
                     else f"textured with {u.paired_with}")
     if u.parent and u.parent != "[CURRENT_LAB]":
         bits.append(f'child of "{u.parent}"')
+    if getattr(u, "components", None):
+        bits.append("components " + ", ".join(u.components))
     line = ", ".join(bits)
     if u.text:
         line += "; text on it: " + " | ".join(f'"{t}"' for t in u.text)
@@ -288,6 +290,9 @@ def asset_block(r: AssetRequest) -> str:
         lines.append(f"  - {_use_line(u, r.kind)}")
     if r.use_count > len(r.uses):
         lines.append(f"  - ...and {r.use_count - len(r.uses)} more use(s)")
+    if r.components:
+        lines.append("  components on its objects: " + ", ".join(
+            f"{c} on {n} of {r.use_count}" for c, n in r.components.items()))
     for n in r.narration:
         lines.append(f'  narration: "{n}"')
     if r.purpose:
@@ -325,7 +330,7 @@ listed below, say what it should look like and how it should be provided.
 
 ASSETS TO PLAN ({models} model(s), {textures} texture(s))
 Each asset shows how the lab uses it: the objects, their module, scale [x, y, z], color [r, g, b, a], \
-the texture or model it is paired with, text shown on it, narration that mentions it, and its planned \
+the texture or model it is paired with, text shown on it, its components (what students do with it), narration that mentions it, and its planned \
 purpose when known.
 
 {chr(10).join(asset_block(r) for r in requests)}

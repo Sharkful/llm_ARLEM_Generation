@@ -219,7 +219,7 @@ LIBRARY ({len(entries)} entries: id [kind] name: description)
 
 ASSETS TO CHECK ({len(requests)})
 Each asset shows how the lab uses it: the objects, their module, scale [x, y, z], color [r, g, b, a], \
-the texture or model it is paired with, text shown on it, narration that mentions it, and its planned \
+the texture or model it is paired with, text shown on it, its components (what students do with it), narration that mentions it, and its planned \
 purpose when known.
 
 {chr(10).join(asset_block(r) for r in requests)}
@@ -238,8 +238,11 @@ marker, a ball, an atom drawn as a colored ball. A specific real object with its
 a named molecule) is not a plain shape tinted: reuse an entry that is that object, put its library \
 texture on a sphere (texture_id, or textured_shape), or choose none so it gets the right look. Mars with \
 no Mars map in the library is none, not a red sphere.
-- Prefer a built-in prefab when the lab uses it the way it works (a sphere students grab); otherwise \
-prefer textured_shape for a surface on a simple shape.
+- Prefer a built-in prefab when the lab uses it the way it works; otherwise prefer textured_shape for a \
+surface on a simple shape. Pick the built-in sphere by what students do with the asset's objects (their \
+components, names and narration): moveable_sphere when any of them is dragged or grabbed (a draggable \
+pointerReceiver, "drag" in a name or the narration), clickable_sphere when one is clicked or selected (a \
+pointerReceiver), tiny_sphere for a marker nobody touches.
 - adapt: how the lab's color or scale changes the reused entry, if at all; else empty.
 - reason: one sentence a reviewer can check.
 """

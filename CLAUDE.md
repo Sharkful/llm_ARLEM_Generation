@@ -424,8 +424,8 @@ not reused. Built so far:
   seed run; a built-in whose file can't be downloaded is still recorded (`partial`),
   keeping its current file if intact.
 - **`audit.py`** (#106): every `prefab` / `texture` a lab references (grouped ignoring case;
-  `demoPrefab` excluded; clip changes can't set either), with uses, text on the object (also
-  from clip changes, by `target`), narration sentences that mention it and the hierarchical
+  `demoPrefab` excluded; clip changes can't set either), with uses, text on the object and its
+  behaviour components (both also from clip changes, by `target`), narration sentences that mention it and the hierarchical
   `purpose`. Matches `lab_metrics.analyze_assets` on all wave-2 labs.
 - **`routing.py`** (#106): one LLM call per lab (`LabAssetPlan`) for the assets the library
   doesn't have: description, `must_be_right`, search keywords, **form** and **route** (chosen
