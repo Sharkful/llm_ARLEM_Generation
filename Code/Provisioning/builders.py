@@ -36,6 +36,9 @@ class BuilderInfo:
     # (option, what it does): what the route step may ask for in builder_options
     options: tuple[tuple[str, str], ...] = ()
     build: Optional[Callable[["BuildRequest", Path], "BuildResult"]] = None
+    # Bumped whenever the builder's output changes; recorded in what it builds, so a
+    # library entry made by an older version is replaced, not kept (build_assets --save).
+    version: str = "1"
 
     def option_names(self) -> tuple[str, ...]:
         return tuple(o for o, _ in self.options)
@@ -84,11 +87,11 @@ def registry() -> list[BuilderInfo]:
     """Every registered builder, the default ones included."""
     global _defaults_loaded
     if not _defaults_loaded:
-        _defaults_loaded = True
-        for module in DEFAULT_BUILDERS:
+        for module in DEFAULT_BUILDERS:   # an import error propagates; the next call retries
             info = importlib.import_module(module).INFO
             if not any(b.name == info.name for b in REGISTRY):
                 REGISTRY.append(info)
+        _defaults_loaded = True
     return REGISTRY
 
 

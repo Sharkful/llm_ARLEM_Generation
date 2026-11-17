@@ -515,8 +515,11 @@ key; public domain):
    bipyramid's equatorial positions and an octahedron's axial ones first; bond
    lengths from covalent radii, shortened for double and triple bonds), from the 2D
    record, because PubChem has no 3D record for hypervalent molecules (XeF4, PF5,
-   SF6), which are what VSEPR labs show; RDKit embedding, if installed; else "can't
-   build".
+   SF6), which are what VSEPR labs show; RDKit embedding, if installed; a single atom
+   as one ball; else "can't build". PubChem bond types other than single, double and
+   triple (quadruple, dative, complex, unknown) are drawn as one stick and reported in
+   the details, with no lone pairs on their atoms; an idealized geometry refuses them;
+   ionic bonds aren't drawn. PubChem replies are cached for the process.
 3. Ball and stick: Jmol CPK colors, balls a fifth of the van der Waals radius, bonds
    split into halves colored by their atoms, double and triple bonds as two or three
    sticks, one material per element.
@@ -524,14 +527,20 @@ key; public domain):
    orders − charge) / 2; terminal atoms are skipped, as VSEPR drawings do) as
    translucent lobes, along the free domain positions (ideal, or found by repulsion
    from the real bonds).
-5. Model convention: centered, largest side 1.0; a thumbnail drawn with matplotlib in
-   a 3/4 view of the molecule's main axes, to check by eye.
+5. Model convention: centered, largest side 1.0, at most `library.MAX_MODEL_TRIANGLES`
+   (50,000; the library warns above it): an over-budget model is rebuilt with coarser
+   balls and sticks, and refused if still over. A thumbnail drawn with matplotlib in a
+   3/4 view of the molecule's main axes (always a right-handed frame, so a chiral
+   molecule is never shown mirrored), turned only when atoms or lobes would overlap.
+6. The builder's `version` goes into the entry's provenance note.
 
 **`build_assets.py`** builds everything a dry-run plan routed to a builder until the
 full run (#113) does: files in `<run>/built/<asset>/`, results in
-`<run>/build_results.json`, and with `--save` the library entry (the lab's names, and
-the names merged into it, become aliases; an entry already there just gains them), so
-the next dry run finds them by name.
+`<run>/build_results.json` (an asset's earlier files are removed before it is rebuilt,
+so a failed rebuild leaves none), and with `--save` the library entry (the lab's names,
+and the names merged into it, become aliases; an entry already there gains them, and
+is replaced, keeping its aliases, when an older version of the same builder made it),
+so the next dry run finds them by name.
 
 First builders:
 

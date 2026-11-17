@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -73,6 +74,8 @@ def build_one(asset: dict, out_root: Path) -> dict:
         options=tuple(plan.get("builder_options") or ()), description=plan.get("description", ""),
         must_be_right=tuple(plan.get("must_be_right") or ()))
     folder = out_root / _folder_name(asset["name"])
+    if folder.exists():   # an earlier build's files must not outlive a failed rebuild
+        shutil.rmtree(folder)
     try:
         result = info.build(request, folder)
     except Exception as exc:  # a builder bug fails its asset, not the run
@@ -90,8 +93,10 @@ def build_one(asset: dict, out_root: Path) -> dict:
 
 
 def save(store: library.LocalFolderStore, rec: dict) -> None:
-    """Store a built asset in the library with the lab's names as aliases (or add the
-    aliases to the entry already there). Sets ``saved`` / ``save_error`` on ``rec``."""
+    """Store a built asset in the library with the lab's names as aliases. An entry
+    already there gains the aliases; if an older version of the same builder made it
+    (its provenance note differs), its files and fields are replaced, keeping its
+    aliases. Sets ``saved`` / ``save_error`` / ``save_notes`` on ``rec``."""
     names = [rec["name"], *rec["merged_names"]]
     entry = library.LibraryEntry(**rec["entry"])
     for attempt in (1, 2):
@@ -107,13 +112,20 @@ def save(store: library.LocalFolderStore, rec: dict) -> None:
                 elif hit is not None and hit.asset_id != target:
                     rec.setdefault("save_notes", []).append(
                         f"{n!r} already names {hit.asset_id}, so it isn't an alias of {target}")
-            if existing is None:
-                entry.aliases = free
-                store.put(entry, rec["_files"])
+            stale = (existing is not None and existing.provenance is not None
+                     and existing.provenance.method == "builder"
+                     and existing.provenance.notes != entry.provenance.notes)
+            if existing is None or stale:
+                entry.aliases = list(dict.fromkeys([*(existing.aliases if existing else []), *free]))
+                store.put(entry, rec["_files"], keep_files=False)
             else:
+                if existing.provenance is None or existing.provenance.method != "builder":
+                    rec.setdefault("save_notes", []).append(
+                        f"{target} wasn't made by a builder, so it was kept as it is")
                 for n in free:
                     store.add_alias(target, n)
-            rec["saved"] = {"asset_id": target, "added": existing is None, "aliases": free}
+            rec["saved"] = {"asset_id": target, "added": existing is None, "replaced": stale,
+                            "aliases": free}
             return
         except library.ConcurrentWriteError as exc:   # the store has reloaded: try again once
             if attempt == 2:

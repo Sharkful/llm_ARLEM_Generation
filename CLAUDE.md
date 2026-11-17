@@ -445,7 +445,9 @@ not reused. Built so far:
   conformer, else an idealized VSEPR geometry for one-center molecules (PubChem has no 3D for
   XeF4, PF5, SF6), else RDKit if installed → ball-and-stick GLB with `trimesh` (CPK colors, one
   material per element, multiple bonds, optional translucent lone-pair lobes on central atoms),
-  unit-cube scaled, plus a matplotlib thumbnail. Deterministic; provenance records the CID.
+  unit-cube scaled and within `library.MAX_MODEL_TRIANGLES` (coarser if over, refused if still
+  over), plus a matplotlib thumbnail (right-handed view, never mirrored). Deterministic;
+  provenance records the CID and the builder version (`--save` replaces an older version's entry).
   **`build_assets.py`**: builds a dry-run manifest's builder-routed assets into `<run>/built/`
   and `build_results.json`; `--save` stores them in the library with the lab's names as aliases.
 - **`reuse.py`** (#108): the reuse judge, run before routing on assets with no name or alias

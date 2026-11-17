@@ -80,6 +80,7 @@ LICENSE_URLS = {
 
 # Headset limits (proposals; set in #105). Textures load as JPG today.
 MAX_TEXTURE_SIDE = 2048
+MAX_MODEL_TRIANGLES = 50_000
 THUMBNAIL_SIDE = 256
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
 DOWNLOAD_TIMEOUT = 60
@@ -300,6 +301,8 @@ def check_entry(entry: LibraryEntry, folder: Optional[Path] = None) -> list[Prob
             err("texture has no known size (pixels is required)")
     if entry.kind == "texture" and entry.mapping is None:
         warn("texture has no mapping (equirectangular, tileable or uv)")
+    if entry.triangles and entry.triangles > MAX_MODEL_TRIANGLES:
+        warn(f"model has {entry.triangles} triangles, more than {MAX_MODEL_TRIANGLES}")
     if entry.pixels and max(entry.pixels) > MAX_TEXTURE_SIDE:
         warn(f"texture is {entry.pixels[0]}x{entry.pixels[1]}, larger than {MAX_TEXTURE_SIDE} px")
     if not entry.builtin and entry.file(primary) is not None and entry.file("thumbnail") is None:

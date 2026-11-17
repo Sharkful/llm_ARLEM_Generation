@@ -1426,6 +1426,13 @@ def part6(tmp: Path) -> None:
     serve("ammonium", 223, "Ammonium", "H4N+", rec2d=pc_record([7, 1, 1, 1, 1], four, charges=[(0, 1)]))
     serve("SF6", 17358, "Sulfur Hexafluoride", "F6S", by_formula="SF6",
           rec2d=pc_record([16, 9, 9, 9, 9, 9, 9], [(0, k, 1) for k in range(1, 7)]))
+    serve("argon", 23968, "Argon", "Ar", rec2d=pc_record([18], []))
+    serve("boron tetrafluoride test", 9001, "Test dative", "BF4", rec2d=pc_record(
+        [5, 9, 9, 9, 9], [(0, 1, 1), (0, 2, 1), (0, 3, 1), (0, 4, 5)]))
+    serve("ammonia borane", 6328, "Ammonia borane", "BH6N", rec3d=pc_record(
+        [5, 7, 1, 1, 1, 1, 1, 1], [(1, 0, 5), (0, 2, 1), (0, 3, 1), (0, 4, 1), (1, 5, 1), (1, 6, 1), (1, 7, 1)],
+        [(0, 0, 0), (0, 0, 1.6), (1.1, 0, -0.4), (-0.55, 0.95, -0.4), (-0.55, -0.95, -0.4),
+         (0.95, 0, 2.0), (-0.48, 0.82, 2.0), (-0.48, -0.82, 2.0)]))
     serve("ethane", 6324, "Ethane", "C2H6", rec2d=pc_record(
         [6, 6, 1, 1, 1, 1, 1, 1], [(0, 1, 1), (0, 2, 1), (0, 3, 1), (0, 4, 1), (1, 5, 1), (1, 6, 1), (1, 7, 1)]))
 
@@ -1453,6 +1460,26 @@ def part6(tmp: Path) -> None:
         check(again.files["model"].read_bytes() == r.files["model"].read_bytes()
               and again.files["thumbnail"].read_bytes() == r.files["thumbnail"].read_bytes(),
               "the same PubChem data gives byte-identical files")
+        check(srv.hits["/rest/pug/compound/name/methane/cids/JSON"] == 2,
+              "PubChem replies are cached: building methane again asks nothing")
+        rng = np.random.default_rng(7)
+        clouds = [rng.normal(size=(9, 3)) * [3, 2, 1] for _ in range(20)]
+        check(all(np.linalg.det(M.main_axes(c)) > 0 and np.linalg.det(M.main_axes(c * [-1, 1, 1])) > 0
+                  for c in clouds),
+              "the thumbnail's view frame is always right-handed (never a mirror image)")
+        standard = r.details["triangles"]
+        saved_budget = lib.MAX_MODEL_TRIANGLES
+        try:
+            lib.MAX_MODEL_TRIANGLES = standard - 1
+            small = build("methane", folder="methane_small")
+            lib.MAX_MODEL_TRIANGLES = 10
+            none = build("methane", folder="methane_none")
+        finally:
+            lib.MAX_MODEL_TRIANGLES = saved_budget
+        check(small.ok and small.details["detail"] == "reduced" and small.details["triangles"] < standard
+              and not none.ok and "even at reduced detail" in none.reason
+              and r.details["detail"] == "standard",
+              "over the triangle budget: rebuilt coarser, refused if still over")
         mol_lib = lib.LocalFolderStore(tmp / "libMol", create=True)
         mol_lib.put(lib.LibraryEntry(**r.entry), r.files)
         stored = mol_lib.get("pubchem_297")
@@ -1499,6 +1526,33 @@ def part6(tmp: Path) -> None:
         r = build("ethane")
         check(not r.ok and "more than one central atom" in r.reason and not (tmp / "mol" / "ethane").exists(),
               "no 3D record, several centers and no RDKit -> can't build, with the reason, and no files")
+        try:
+            import rdkit  # noqa: F401
+            have_rdkit = True
+        except ImportError:
+            have_rdkit = False
+        if have_rdkit:
+            M.USE_RDKIT = True
+            try:
+                r = build("ethane", folder="ethane_rdkit")
+                mol, _ = M.fetch(6324)
+                M._rdkit_coords(mol)
+                cc = float(np.linalg.norm(np.subtract(mol.coords[0], mol.coords[1])))
+            finally:
+                M.USE_RDKIT = False
+            check(r.ok and r.details["geometry"] == "rdkit" and 1.45 < cc < 1.6,
+                  "with RDKit installed, a multi-center molecule with no 3D record is embedded (C-C ~1.53 A)")
+        else:
+            print("  skip RDKit isn't installed: its fallback wasn't exercised")
+        r = build("argon")
+        check(r.ok and r.details["geometry"] == "single_atom" and r.details["atoms"] == 1,
+              "a single atom is one ball")
+        r = build("boron tetrafluoride test")
+        check(not r.ok and "dative bonds" in r.reason, "an idealized geometry refuses a dative bond")
+        r = build("ammonia borane", "lone_pairs")
+        check(r.ok and r.details["unusual_bonds"] == ["dative"] and r.details["lone_pairs"] == {}
+              and r.details["bond_orders"] == [1] * 7,
+              "a dative bond (3D record) is one stick, reported, and its atoms get no lone pairs")
         r = build("unobtainium")
         check(not r.ok and "no compound named" in r.reason, "an unknown compound -> can't build")
 
@@ -1560,10 +1614,40 @@ def part6(tmp: Path) -> None:
               and "FAILED" in text and "no compound named" in by["summaryPanelPrefab"]["reason"],
               "build_assets builds what the plan routed to a builder, records failures, exit 1 if any")
         entry = lib.LocalFolderStore(tmp / "libMol").get("pubchem_297")
-        check(by["dnaHelixPrefab"]["saved"] == {"asset_id": "pubchem_297", "added": False,
+        check(by["dnaHelixPrefab"]["saved"] == {"asset_id": "pubchem_297", "added": False, "replaced": False,
                                                 "aliases": ["dnaHelixPrefab", "dnaDoubleHelixPrefab"]}
               and {"dnaHelixPrefab", "dnaDoubleHelixPrefab"} <= set(entry.aliases),
               "--save adds the lab's names (and the merged one) as aliases of the entry already there")
+        store6 = lib.LocalFolderStore(tmp / "libMol")
+        old = store6.get("pubchem_297")
+        store6.put(old.model_copy(update={"provenance": old.provenance.model_copy(
+            update={"notes": "built by the molecule builder, version 1 (#111)"})}))
+        code, text = run(build_assets, str(run_dir), "--save", "--library", library_path,
+                         "--only", "dnaHelixPrefab")
+        res = json.loads((run_dir / "build_results.json").read_text(encoding="utf-8"))
+        entry = lib.LocalFolderStore(tmp / "libMol").get("pubchem_297")
+        check(code == 0 and res["assets"][0]["saved"]["replaced"] and entry.provenance.notes == M.builder_note()
+              and {"dnaHelixPrefab", "dnaDoubleHelixPrefab"} <= set(entry.aliases),
+              "an entry made by an older builder version is replaced, keeping its aliases")
+        stale_dir = run_dir / "built" / "summaryPanelPrefab"
+        stale_dir.mkdir(parents=True, exist_ok=True)
+        (stale_dir / "model.glb").write_bytes(b"old")
+        failed = build_assets.build_one({"name": "summaryPanelPrefab", "kind": "model", "merged_names": [],
+                                         "plan": {"route": "builder:molecule", "builder_input": "unobtainium"}},
+                                        run_dir / "built")
+        check(not failed["ok"] and not stale_dir.exists(),
+              "a failed rebuild leaves no earlier files behind")
+        saved_defaults = builders.DEFAULT_BUILDERS
+        builders._defaults_loaded, builders.DEFAULT_BUILDERS = False, ("no_such_builder_module",)
+        try:
+            builders.registry()
+            check(False, "a default builder that fails to import is retried on the next call")
+        except ImportError:
+            builders.DEFAULT_BUILDERS = saved_defaults
+            check(builders.get("molecule") is not None and builders._defaults_loaded,
+                  "a default builder that fails to import is retried on the next call")
+        finally:
+            builders.DEFAULT_BUILDERS = saved_defaults
         code, text = run(provision_lab, str(lab_path), "--dry-run", "--no-reuse", "--library", library_path,
                          call_fn=fake_router({}))
         m = json.loads(next(max(out.glob("*"), key=os.path.getmtime).glob(MANIFEST_NAME)).read_text(encoding="utf-8"))

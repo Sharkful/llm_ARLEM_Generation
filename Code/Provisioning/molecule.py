@@ -13,15 +13,23 @@ given its name or formula, as a ball-and-stick model from PubChem data.
      covalent radii (``idealized_vsepr``). PubChem has no 3D record for hypervalent
      molecules such as XeF4, PF5 or SF6, and these are exactly what VSEPR labs show;
    - RDKit, if installed, embedding PubChem's 2D connectivity (``rdkit``);
+   - a single atom (argon) is one ball (``single_atom``);
    - otherwise "can't build", and the asset falls through to search.
+   PubChem bond types other than single, double and triple (quadruple, dative,
+   complex, unknown) are drawn as one stick and reported in the details; their atoms get
+   no lone pairs, and an idealized geometry refuses them. Ionic bonds are not drawn.
 3. **Model**: CPK (Jmol) colors, balls at a fifth of each atom's van der Waals
    radius, bonds split in two halves colored by their atoms, double and triple bonds
    as two or three sticks, one material per element. With the ``lone_pairs`` option,
    each central atom's lone pairs (valence electrons minus bond orders minus charge,
    halved) are translucent lobes in the free electron-domain directions.
 4. **Model convention** (PROVISIONING.md): GLB, +Y up, centered on its bounding box,
-   scaled so the largest side is 1.0. A thumbnail is drawn with matplotlib, to check
-   the result by eye.
+   scaled so the largest side is 1.0, within ``library.MAX_MODEL_TRIANGLES``: a model
+   over it is rebuilt with coarser balls and sticks, and refused if still over. A
+   thumbnail is drawn with matplotlib, to check the result by eye.
+
+PubChem replies are cached for the process, so building one compound for two assets
+asks PubChem once.
 
 Deterministic: the same PubChem data gives byte-identical files. PubChem's data is in
 the public domain (NCBI); the CID, source and geometry method go into the provenance.
@@ -64,8 +72,11 @@ MULTI_BOND_GAP = {2: 0.16, 3: 0.12}
 BOND_SHORTENING = {1: 1.0, 2: 0.87, 3: 0.78}   # idealized bond length factor by order
 LONE_PAIR_COLOR = (180, 200, 255, 90)
 LONE_PAIR_SIZE = (0.3, 0.55)   # lobe radius across and along its direction
-SPHERE_SUBDIVISIONS = 2         # 320 triangles per ball
-CYLINDER_SECTIONS = 16
+# (ball subdivisions, stick sections): standard, then coarser when over the budget
+DETAIL = {"standard": (2, 16), "reduced": (1, 8)}   # 320 / 80 triangles per ball
+VERSION = "2"   # BuilderInfo.version: bump when the output changes
+# PubChem bond types (PC_BondType) that aren't single, double or triple
+UNUSUAL_BONDS = {4: "quadruple", 5: "dative", 6: "complex", 7: "ionic", 255: "unknown"}
 
 # Z: (symbol, covalent radius (Cordero 2008), van der Waals radius (Bondi/Alvarez),
 #     Jmol CPK color, valence electrons for lone pairs or None for transition metals)
@@ -125,10 +136,20 @@ class BuildError(Exception):
 # ── PubChem ───────────────────────────────────────────────────────────
 
 
+_CACHE: dict[str, Optional[dict]] = {}   # url -> reply (None for 404), for this process
+
+
 def _get_json(path: str) -> Optional[dict]:
     """GET ``PUBCHEM + path`` as JSON with the library's download (shared retry
-    policy, size limit, network-failure classification). None on 404."""
+    policy, size limit, network-failure classification). None on 404. Cached per URL
+    (404s included) for the process; failures aren't cached."""
     url = PUBCHEM + path
+    if url not in _CACHE:
+        _CACHE[url] = _fetch_json(url)
+    return _CACHE[url]
+
+
+def _fetch_json(url: str) -> Optional[dict]:
     with tempfile.TemporaryDirectory() as tmp:
         dest = Path(tmp) / "reply.json"
         try:
@@ -169,6 +190,11 @@ class Molecule:
     charges: list[int]
     bonds: list[tuple[int, int, int]]        # (atom index, atom index, order)
     coords: list[tuple[float, float, float]] = field(default_factory=list)
+    # bonds PubChem types as other than single/double/triple: (atom, atom, type name)
+    unusual: list[tuple[int, int, str]] = field(default_factory=list)
+
+    def unusual_atoms(self) -> set[int]:
+        return {i for a, b, _ in self.unusual for i in (a, b)}
 
     def neighbors(self, i: int) -> list[int]:
         return [b if a == i else a for a, b, _ in self.bonds if i in (a, b)]
@@ -188,9 +214,17 @@ def _parse_record(record: dict, with_coords: bool) -> Molecule:
             charges[index[c["aid"]]] = int(c["value"])
         bonds_raw = comp.get("bonds") or {}
         bonds = []
+        unusual = []
         for a, b, o in zip(bonds_raw.get("aid1", []), bonds_raw.get("aid2", []), bonds_raw.get("order", [])):
-            bonds.append((index[a], index[b], int(o) if int(o) in (1, 2, 3) else 1))
-        mol = Molecule(elements, charges, bonds)
+            o = int(o)
+            if o in (1, 2, 3):
+                bonds.append((index[a], index[b], o))
+                continue
+            kind = UNUSUAL_BONDS.get(o, "unknown")
+            unusual.append((index[a], index[b], kind))
+            if kind != "ionic":   # drawn as one stick; an ionic bond isn't drawn
+                bonds.append((index[a], index[b], 1))
+        mol = Molecule(elements, charges, bonds, unusual=unusual)
         if with_coords:
             c = comp["coords"][0]
             conf = c["conformers"][0]
@@ -222,7 +256,7 @@ def _element(z: int):
 def lone_pair_count(mol: Molecule, i: int) -> int:
     """Lone pairs on atom ``i``: (valence electrons - bond orders - charge) / 2."""
     valence = _element(mol.elements[i])[4]
-    if valence is None:
+    if valence is None or i in mol.unusual_atoms():   # can't count through a dative bond
         return 0
     return max(0, (valence - mol.bond_order_sum(i) - mol.charges[i]) // 2)
 
@@ -282,6 +316,10 @@ def idealize(mol: Molecule) -> tuple[dict[int, list], str]:
     if c is None:
         raise BuildError("PubChem has no 3D coordinates, and the molecule has more than one "
                          "central atom (an idealized geometry needs exactly one)")
+    if mol.unusual:
+        kinds = ", ".join(sorted({k for _, _, k in mol.unusual}))
+        raise BuildError(f"PubChem has no 3D coordinates, and the molecule has {kinds} bonds, "
+                         "which an idealized VSEPR geometry can't place")
     neighbors = mol.neighbors(c)
     pairs = lone_pair_count(mol, c)
     slots = _ideal_slots(len(neighbors) + pairs)
@@ -362,12 +400,13 @@ def _bond_offset(mol: Molecule, a: int, b: int, pos):
     return np.array([1.0, 0.0, 0.0])
 
 
-def build_scene(mol: Molecule, lone_pairs: dict[int, list]):
+def build_scene(mol: Molecule, lone_pairs: dict[int, list], detail: str = "standard"):
     """The ball-and-stick ``trimesh.Scene`` (one mesh per material), unscaled, and the
     centers of its atoms and lone-pair lobes (for the thumbnail's view)."""
     import numpy as np
     import trimesh
 
+    subdivisions, sections = DETAIL[detail]
     pos = [np.asarray(p, dtype=float) for p in mol.coords]
     centers = list(pos)
     parts: dict[str, list] = {}       # material name -> meshes, in first-seen order
@@ -382,7 +421,7 @@ def build_scene(mol: Molecule, lone_pairs: dict[int, list]):
 
     for i, z in enumerate(mol.elements):
         sym, _, vdw, rgb, _ = _element(z)
-        ball = trimesh.creation.icosphere(subdivisions=SPHERE_SUBDIVISIONS, radius=BALL_FACTOR * vdw)
+        ball = trimesh.creation.icosphere(subdivisions=subdivisions, radius=BALL_FACTOR * vdw)
         ball.apply_translation(pos[i])
         add(sym, (*rgb, 255), ball)
     for a, b, order in mol.bonds:
@@ -395,13 +434,13 @@ def build_scene(mol: Molecule, lone_pairs: dict[int, list]):
             shift = across * off
             for atom, end in ((a, pos[a]), (b, pos[b])):
                 stick = trimesh.creation.cylinder(radius=radius, segment=[end + shift, mid + shift],
-                                                  sections=CYLINDER_SECTIONS)
+                                                  sections=sections)
                 add(symbol(atom), (*_element(mol.elements[atom])[3], 255), stick)
     across_r, along_r = LONE_PAIR_SIZE
     for i, directions in lone_pairs.items():
         ball_r = BALL_FACTOR * _element(mol.elements[i])[2]
         for d in directions:
-            lobe = trimesh.creation.icosphere(subdivisions=SPHERE_SUBDIVISIONS, radius=1.0)
+            lobe = trimesh.creation.icosphere(subdivisions=subdivisions, radius=1.0)
             lobe.apply_scale([across_r, across_r, along_r])
             # rotate the lobe's z axis onto d, then move it just outside the ball
             lobe.apply_transform(trimesh.geometry.align_vectors([0, 0, 1], d))
@@ -436,6 +475,22 @@ def normalize(scene) -> tuple[list[float], int, "np.ndarray"]:
     return bounds, int(sum(len(g.faces) for g in scene.geometry.values())), matrix
 
 
+def main_axes(points):
+    """The points' main axes as rows (largest spread first), each with a fixed sign,
+    forming a right-handed frame: a left-handed one would show the mirror image (the
+    other enantiomer of a chiral molecule) and turn every triangle inside out."""
+    import numpy as np
+    pts = np.asarray(points, dtype=float)
+    pts = pts - pts.mean(axis=0)
+    _, vecs = np.linalg.eigh(pts.T @ pts)          # ascending spread
+    axes = vecs[:, ::-1].T.copy()                   # rows: largest, middle, smallest
+    for k in range(2):                              # a fixed sign for the first two
+        if axes[k][np.argmax(np.abs(axes[k]))] < 0:
+            axes[k] = -axes[k]
+    axes[2] = np.cross(axes[0], axes[1])            # right-handed, never a reflection
+    return axes
+
+
 def _rotation(rot_y: float, rot_x: float):
     import numpy as np
     ry = np.array([[math.cos(rot_y), 0, math.sin(rot_y)], [0, 1, 0], [-math.sin(rot_y), 0, math.cos(rot_y)]])
@@ -456,13 +511,7 @@ def draw_thumbnail(scene, dest: Path, points=None) -> None:
     import numpy as np
     from matplotlib.collections import PolyCollection
 
-    pts = np.vstack([g.vertices for g in scene.geometry.values()])
-    pts = pts - pts.mean(axis=0)
-    _, vecs = np.linalg.eigh(pts.T @ pts)          # ascending spread
-    axes = vecs[:, ::-1].T                          # rows: largest, middle, smallest
-    for k in range(3):                              # a fixed sign per axis
-        if axes[k][np.argmax(np.abs(axes[k]))] < 0:
-            axes[k] = -axes[k]
+    axes = main_axes(np.vstack([g.vertices for g in scene.geometry.values()]))
     default = (30, -35)
     turns = sorted({(y, x) for x in (-20, -35, -50) for y in range(0, 360, 15)} | {default},
                    key=lambda t: (abs(t[1] - default[1]) / 15 + min(abs(t[0] - default[0]),
@@ -470,10 +519,13 @@ def draw_thumbnail(scene, dest: Path, points=None) -> None:
     views = [_rotation(math.radians(y), math.radians(x)) @ axes for y, x in turns]
     view = views[0]
     if points is not None and len(points) >= 2:
+        pts2 = np.asarray(points, dtype=float)
+        upper = np.triu_indices(len(pts2), k=1)
+
         def spread(v):   # the closest two points on screen (rounded: no float-noise picks)
-            flat = np.asarray(points) @ v.T
-            return round(min(float(np.linalg.norm(flat[i, :2] - flat[j, :2]))
-                             for i in range(len(flat)) for j in range(i)), 4)
+            flat = (pts2 @ v.T)[:, :2]
+            gaps = np.linalg.norm(flat[:, None, :] - flat[None, :, :], axis=-1)[upper]
+            return round(float(gaps.min()), 4)
         scores = [spread(v) for v in views]
         enough = 0.6 * max(scores)
         view = next(v for v, sc in zip(views, scores) if sc >= enough)
@@ -563,6 +615,8 @@ def build(request: BuildRequest, out_dir: Path) -> BuildResult:
         center_pairs: dict[int, list] = {}
         if has_3d:
             geometry = "pubchem_3d"
+        elif len(mol.elements) == 1:
+            mol.coords, geometry = [(0.0, 0.0, 0.0)], "single_atom"
         elif central_atom(mol) is not None:
             center_pairs, shape = idealize(mol)
             geometry = "idealized_vsepr"
@@ -586,8 +640,14 @@ def build(request: BuildRequest, out_dir: Path) -> BuildResult:
             for i, n in pairs_per_atom.items():
                 lone_pairs[i] = center_pairs.get(i) or free_directions(
                     [pos[j] - pos[i] for j in mol.neighbors(i)], n)
-        scene, centers = build_scene(mol, lone_pairs)
-        bounds, triangles, matrix = normalize(scene)
+        for detail in DETAIL:
+            scene, centers = build_scene(mol, lone_pairs, detail)
+            bounds, triangles, matrix = normalize(scene)
+            if triangles <= library.MAX_MODEL_TRIANGLES:
+                break
+        else:
+            raise BuildError(f"the model has {triangles} triangles even at reduced detail, more "
+                             f"than the headset budget of {library.MAX_MODEL_TRIANGLES}")
     except BuildError as exc:
         return BuildResult(False, str(exc))
 
@@ -602,7 +662,8 @@ def build(request: BuildRequest, out_dir: Path) -> BuildResult:
     suffix = "_lone_pairs" if lone_pairs else ""
     method = {"pubchem_3d": "PubChem's 3D conformer",
               "idealized_vsepr": "an idealized VSEPR geometry from PubChem's 2D record",
-              "rdkit": "RDKit embedding of PubChem's 2D record"}[geometry]
+              "rdkit": "RDKit embedding of PubChem's 2D record",
+              "single_atom": "PubChem's record of a single atom"}[geometry]
     look = "ball-and-stick, CPK colors" + (", lone pairs as translucent lobes" if lone_pairs else "")
     entry = {
         "asset_id": f"pubchem_{cid}{suffix}",
@@ -619,7 +680,7 @@ def build(request: BuildRequest, out_dir: Path) -> BuildResult:
             "record_id": str(cid), "title": title, "license": "public-domain",
             "license_url": PUBCHEM_LICENSE_URL,
             "modifications": [f"{look}, built from {method}", "scaled to fit a unit cube"],
-            "notes": "built by the molecule builder (#111)",
+            "notes": builder_note(),
         },
     }
     details = {
@@ -628,8 +689,15 @@ def build(request: BuildRequest, out_dir: Path) -> BuildResult:
         "bond_orders": sorted(o for _, _, o in mol.bonds),
         "lone_pairs": {f"{_element(mol.elements[i])[0]}{i + 1}": n for i, n in pairs_per_atom.items()},
         "lone_pairs_drawn": bool(lone_pairs), "bounds": bounds, "triangles": triangles,
+        "detail": detail, "unusual_bonds": sorted(k for _, _, k in mol.unusual),
+        "builder_version": VERSION,
     }
     return BuildResult(True, files={"model": model, "thumbnail": thumb}, entry=entry, details=details)
+
+
+def builder_note() -> str:
+    """The provenance note naming the builder version that made an entry."""
+    return f"built by the molecule builder, version {VERSION} (#111)"
 
 
 INFO = BuilderInfo(
@@ -642,6 +710,7 @@ INFO = BuilderInfo(
           "or its formula when there is no name",
     options=INFO_OPTIONS,
     build=build,
+    version=VERSION,
 )
 
 
