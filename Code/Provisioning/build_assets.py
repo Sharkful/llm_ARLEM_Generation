@@ -60,7 +60,7 @@ def targets(manifest: dict) -> list[dict]:
     return out
 
 
-def build_one(asset: dict, out_root: Path) -> dict:
+def build_one(asset: dict, out_root: Path, folder_name: Optional[str] = None) -> dict:
     plan = asset["plan"]
     rec = {"name": asset["name"], "kind": asset["kind"], "builder": plan["route"],
            "input": plan.get("builder_input"), "options": plan.get("builder_options") or [],
@@ -73,7 +73,7 @@ def build_one(asset: dict, out_root: Path) -> dict:
         name=asset["name"], kind=asset["kind"], input=plan.get("builder_input") or "",
         options=tuple(plan.get("builder_options") or ()), description=plan.get("description", ""),
         must_be_right=tuple(plan.get("must_be_right") or ()))
-    folder = out_root / _folder_name(asset["name"])
+    folder = out_root / (folder_name or _folder_name(asset["name"]))
     if folder.exists():   # an earlier build's files must not outlive a failed rebuild
         shutil.rmtree(folder)
     try:
@@ -90,6 +90,27 @@ def build_one(asset: dict, out_root: Path) -> dict:
                     for role, p in result.files.items()}
     rec["_files"] = result.files
     return rec
+
+
+def _keep_reason(existing: library.LibraryEntry, new: library.LibraryEntry) -> Optional[str]:
+    """Why the library's entry stays as it is ("same": made by this builder version),
+    or None when the new build replaces it: only an entry an older version of the same
+    builder made (an entry saved before versions were recorded counts as older), never
+    one a reviewer has reviewed, a newer one, or one no builder made."""
+    old, cur = existing.provenance, new.provenance
+    if old is None or old.method != "builder":
+        return "it wasn't made by a builder"
+    if old.builder not in (None, cur.builder):
+        return f"the {old.builder} builder made it"
+    old_v, new_v = old.builder_version or 0, cur.builder_version or 0
+    if old_v == new_v:
+        return "same"
+    if old_v > new_v:
+        return f"a newer builder version ({old_v}) made it than this one ({new_v})"
+    if existing.review == "reviewed":
+        return (f"a reviewer reviewed it (made by builder version {old_v}; this build, "
+                f"version {new_v}, is in the run folder)")
+    return None
 
 
 def save(store: library.LocalFolderStore, rec: dict) -> None:
@@ -112,16 +133,18 @@ def save(store: library.LocalFolderStore, rec: dict) -> None:
                 elif hit is not None and hit.asset_id != target:
                     rec.setdefault("save_notes", []).append(
                         f"{n!r} already names {hit.asset_id}, so it isn't an alias of {target}")
-            stale = (existing is not None and existing.provenance is not None
-                     and existing.provenance.method == "builder"
-                     and existing.provenance.notes != entry.provenance.notes)
+            stale = False
+            if existing is not None:
+                keep = _keep_reason(existing, entry)
+                stale = keep is None
+                if keep and keep != "same":
+                    rec.setdefault("save_notes", []).append(f"{target} kept as it is: {keep}")
             if existing is None or stale:
-                entry.aliases = list(dict.fromkeys([*(existing.aliases if existing else []), *free]))
+                old_names = [*existing.aliases, existing.name] if existing else []
+                entry.aliases = [n for n in dict.fromkeys([*old_names, *free])
+                                 if library.name_key(n) != library.name_key(entry.name)]
                 store.put(entry, rec["_files"], keep_files=False)
             else:
-                if existing.provenance is None or existing.provenance.method != "builder":
-                    rec.setdefault("save_notes", []).append(
-                        f"{target} wasn't made by a builder, so it was kept as it is")
                 for n in free:
                     store.add_alias(target, n)
             rec["saved"] = {"asset_id": target, "added": existing is None, "replaced": stale,
@@ -174,8 +197,14 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     print(f"building {len(todo)} asset(s) routed to a builder...")
     results = []
+    used: set[str] = set()   # folder names, compared ignoring case (Windows)
     for asset in todo:
-        rec = build_one(asset, run_dir / "built")
+        folder = base = _folder_name(asset["name"])
+        n = 2
+        while folder.lower() in used:
+            folder, n = f"{base}_{n}", n + 1
+        used.add(folder.lower())
+        rec = build_one(asset, run_dir / "built", folder)
         if rec["ok"] and store is not None:
             save(store, rec)
         rec.pop("_files", None)

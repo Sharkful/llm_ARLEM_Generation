@@ -157,6 +157,10 @@ class Provenance(BaseModel):
     modifications: list[str] = Field(default_factory=list)
     notes: Optional[str] = None
     obtained: Optional[str] = None
+    # For method "builder": which builder made it, and that builder's version (an
+    # entry from an older version is replaced when the asset is saved again).
+    builder: Optional[str] = None
+    builder_version: Optional[int] = None
 
 
 class AssetFile(BaseModel):

@@ -1548,7 +1548,24 @@ def part6(tmp: Path) -> None:
         check(r.ok and r.details["geometry"] == "single_atom" and r.details["atoms"] == 1,
               "a single atom is one ball")
         r = build("boron tetrafluoride test")
-        check(not r.ok and "dative bonds" in r.reason, "an idealized geometry refuses a dative bond")
+        check(not r.ok and "dative bonds" in r.reason and "the RDKit fallback is turned off" in r.reason,
+              "an idealized geometry refuses a dative bond, and the reason says why RDKit didn't help")
+        if have_rdkit:
+            M.USE_RDKIT = True
+            try:
+                r = build("boron tetrafluoride test", folder="bf4_rdkit")
+            finally:
+                M.USE_RDKIT = False
+            check(not r.ok and "RDKit couldn't embed it" in r.reason and "isn't installed" not in r.reason,
+                  "an RDKit failure is reported as one, not as RDKit missing")
+        octahedron = np.array([[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]], float)
+        tetra = np.array([[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]], float)
+        line = np.array([[0, 0, 0], [0, 0, 1.2], [0, 0, -1.2]], float)
+        check(np.allclose(np.abs(M.main_axes(octahedron)), np.eye(3))
+              and np.allclose(np.abs(M.main_axes(tetra)), np.eye(3))
+              and np.allclose(np.abs(M.main_axes(line)[0]), [0, 0, 1])
+              and np.allclose(np.abs(M.main_axes(line)[1:]), np.eye(3)[:2]),
+              "equal spreads take the world axes, so every machine picks the same thumbnail view")
         r = build("ammonia borane", "lone_pairs")
         check(r.ok and r.details["unusual_bonds"] == ["dative"] and r.details["lone_pairs"] == {}
               and r.details["bond_orders"] == [1] * 7,
@@ -1619,16 +1636,54 @@ def part6(tmp: Path) -> None:
               and {"dnaHelixPrefab", "dnaDoubleHelixPrefab"} <= set(entry.aliases),
               "--save adds the lab's names (and the merged one) as aliases of the entry already there")
         store6 = lib.LocalFolderStore(tmp / "libMol")
-        old = store6.get("pubchem_297")
-        store6.put(old.model_copy(update={"provenance": old.provenance.model_copy(
-            update={"notes": "built by the molecule builder, version 1 (#111)"})}))
-        code, text = run(build_assets, str(run_dir), "--save", "--library", library_path,
-                         "--only", "dnaHelixPrefab")
-        res = json.loads((run_dir / "build_results.json").read_text(encoding="utf-8"))
-        entry = lib.LocalFolderStore(tmp / "libMol").get("pubchem_297")
-        check(code == 0 and res["assets"][0]["saved"]["replaced"] and entry.provenance.notes == M.builder_note()
-              and {"dnaHelixPrefab", "dnaDoubleHelixPrefab"} <= set(entry.aliases),
-              "an entry made by an older builder version is replaced, keeping its aliases")
+        def set_entry(**fields):
+            st = lib.LocalFolderStore(tmp / "libMol")
+            e = st.get("pubchem_297")
+            prov = {k: v for k, v in fields.items() if k in ("builder", "builder_version", "notes")}
+            rest = {k: v for k, v in fields.items() if k not in prov}
+            st.put(e.model_copy(update={"provenance": e.provenance.model_copy(update=prov), **rest}))
+
+        def save_again():
+            code, _ = run(build_assets, str(run_dir), "--save", "--library", library_path, "--only", "dnaHelixPrefab")
+            res = json.loads((run_dir / "build_results.json").read_text(encoding="utf-8"))
+            return code, res["assets"][0], lib.LocalFolderStore(tmp / "libMol").get("pubchem_297")
+
+        set_entry(builder_version=1, name="methane_old_name")
+        code, a, entry = save_again()
+        check(code == 0 and a["saved"]["replaced"] and entry.provenance.builder_version == M.VERSION
+              and entry.provenance.builder == "molecule" and entry.name == "methane_molecule"
+              and {"dnaHelixPrefab", "dnaDoubleHelixPrefab", "methane_old_name"} <= set(entry.aliases),
+              "an entry made by an older builder version is replaced, keeping its aliases and old name")
+        set_entry(builder=None, builder_version=None)
+        code, a, entry = save_again()
+        check(a["saved"]["replaced"] and entry.provenance.builder_version == M.VERSION,
+              "an entry saved before versions were recorded counts as older")
+        set_entry(builder_version=M.VERSION + 1)
+        code, a, entry = save_again()
+        check(not a["saved"]["replaced"] and entry.provenance.builder_version == M.VERSION + 1
+              and "a newer builder version" in " ".join(a["save_notes"]),
+              "an entry from a newer builder version is kept, with a note")
+        set_entry(builder_version=1, review="reviewed")
+        code, a, entry = save_again()
+        check(not a["saved"]["replaced"] and entry.review == "reviewed" and entry.provenance.builder_version == 1
+              and "a reviewer reviewed it" in " ".join(a["save_notes"]),
+              "a reviewed entry is never replaced, with a note")
+        set_entry(builder_version=M.VERSION, review="auto")
+        code, a, entry = save_again()
+        check(not a["saved"]["replaced"] and "save_notes" not in a,
+              "an entry from this builder version just gains aliases, silently")
+        twin_manifest = tmp / "twins" / MANIFEST_NAME
+        twin_manifest.parent.mkdir()
+        twin_plan = {"route": "builder:molecule", "builder_input": "methane", "builder_options": []}
+        twin_manifest.write_text(json.dumps({"tool": "provision_lab", "assets": [
+            {"name": n, "kind": "model", "status": "planned", "plan": twin_plan}
+            for n in ("CO2 Prefab", "co2_prefab")]}), encoding="utf-8")
+        code, _ = run(build_assets, str(twin_manifest.parent))
+        twins = json.loads((twin_manifest.parent / "build_results.json").read_text(encoding="utf-8"))
+        check(code == 0 and [a["files"]["model"] for a in twins["assets"]]
+              == ["built/CO2_Prefab/model.glb", "built/co2_prefab_2/model.glb"]
+              and all((twin_manifest.parent / a["files"]["model"]).is_file() for a in twins["assets"]),
+              "two names that make the same folder (ignoring case) get folders of their own")
         stale_dir = run_dir / "built" / "summaryPanelPrefab"
         stale_dir.mkdir(parents=True, exist_ok=True)
         (stale_dir / "model.glb").write_bytes(b"old")

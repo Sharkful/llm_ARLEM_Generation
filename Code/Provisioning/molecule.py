@@ -31,7 +31,8 @@ given its name or formula, as a ball-and-stick model from PubChem data.
 PubChem replies are cached for the process, so building one compound for two assets
 asks PubChem once.
 
-Deterministic: the same PubChem data gives byte-identical files. PubChem's data is in
+Deterministic: the same PubChem data gives byte-identical models, and thumbnails from
+the same view on every machine (equal spreads take the world axes). PubChem's data is in
 the public domain (NCBI); the CID, source and geometry method go into the provenance.
 
     python "Code/Provisioning/molecule.py" "xenon tetrafluoride" --lone-pairs --out <folder>
@@ -74,7 +75,7 @@ LONE_PAIR_COLOR = (180, 200, 255, 90)
 LONE_PAIR_SIZE = (0.3, 0.55)   # lobe radius across and along its direction
 # (ball subdivisions, stick sections): standard, then coarser when over the budget
 DETAIL = {"standard": (2, 16), "reduced": (1, 8)}   # 320 / 80 triangles per ball
-VERSION = "2"   # BuilderInfo.version: bump when the output changes
+VERSION = 2   # BuilderInfo.version: bump when the output changes
 # PubChem bond types (PC_BondType) that aren't single, double or triple
 UNUSUAL_BONDS = {4: "quadruple", 5: "dative", 6: "complex", 7: "ionic", 255: "unknown"}
 
@@ -482,8 +483,29 @@ def main_axes(points):
     import numpy as np
     pts = np.asarray(points, dtype=float)
     pts = pts - pts.mean(axis=0)
-    _, vecs = np.linalg.eigh(pts.T @ pts)          # ascending spread
-    axes = vecs[:, ::-1].T.copy()                   # rows: largest, middle, smallest
+    vals, vecs = np.linalg.eigh(pts.T @ pts)       # ascending spread
+    vals, axes = vals[::-1], vecs[:, ::-1].T.copy()  # rows: largest, middle, smallest
+    # Equal spreads (a tetrahedron, an octahedron, around a linear molecule's axis) leave
+    # the axes free within their subspace, and LAPACK builds pick them differently; there
+    # the world axes, projected into the subspace, choose them, so every machine draws
+    # the same view.
+    tol = 1e-6 * max(float(vals[0]), 1e-12)
+    k = 0
+    while k < 3:
+        j = k
+        while j + 1 < 3 and abs(vals[j + 1] - vals[k]) <= tol:
+            j += 1
+        if j > k:
+            basis = axes[k:j + 1]
+            chosen = []
+            for w in np.eye(3):
+                v = basis.T @ (basis @ w)          # the world axis projected into the subspace
+                for c in chosen:
+                    v = v - np.dot(v, c) * c
+                if np.linalg.norm(v) > 1e-6 and len(chosen) < j - k + 1:
+                    chosen.append(v / np.linalg.norm(v))
+            axes[k:j + 1] = chosen
+        k = j + 1
     for k in range(2):                              # a fixed sign for the first two
         if axes[k][np.argmax(np.abs(axes[k]))] < 0:
             axes[k] = -axes[k]
@@ -565,15 +587,16 @@ def draw_thumbnail(scene, dest: Path, points=None) -> None:
 # ── The builder ───────────────────────────────────────────────────────
 
 
-def _rdkit_coords(mol: Molecule) -> bool:
-    """Embed the molecule with RDKit (optional). False when RDKit is missing or fails."""
+def _rdkit_coords(mol: Molecule) -> Optional[str]:
+    """Embed the molecule with RDKit (optional). None when it worked, else why not."""
     if not USE_RDKIT:
-        return False
+        return "the RDKit fallback is turned off"
     try:
-        from rdkit import Chem
+        from rdkit import Chem, RDLogger
         from rdkit.Chem import AllChem
+        RDLogger.DisableLog("rdApp.*")   # its reason goes into the result, not stderr
     except ImportError:
-        return False
+        return "RDKit isn't installed to embed it"
     rw = Chem.RWMol()
     for z, q in zip(mol.elements, mol.charges):
         atom = Chem.Atom(z)
@@ -587,13 +610,13 @@ def _rdkit_coords(mol: Molecule) -> bool:
         m = rw.GetMol()
         Chem.SanitizeMol(m)
         if AllChem.EmbedMolecule(m, randomSeed=0xA51) != 0:
-            return False
+            return "RDKit couldn't embed it"
         AllChem.MMFFOptimizeMolecule(m)
-    except Exception:
-        return False
+    except Exception as exc:
+        return f"RDKit couldn't embed it ({type(exc).__name__}: {' '.join(str(exc).split())[:200]})"
     conf = m.GetConformer()
     mol.coords = [tuple(float(x) for x in conf.GetAtomPosition(i)) for i in range(m.GetNumAtoms())]
-    return True
+    return None
 
 
 def _slug(text: str) -> str:
@@ -617,14 +640,19 @@ def build(request: BuildRequest, out_dir: Path) -> BuildResult:
             geometry = "pubchem_3d"
         elif len(mol.elements) == 1:
             mol.coords, geometry = [(0.0, 0.0, 0.0)], "single_atom"
-        elif central_atom(mol) is not None:
+        elif central_atom(mol) is not None and not mol.unusual:
             center_pairs, shape = idealize(mol)
             geometry = "idealized_vsepr"
-        elif _rdkit_coords(mol):
-            geometry = "rdkit"
         else:
-            raise BuildError("PubChem has no 3D coordinates for it, it has more than one central "
-                             "atom (no idealized geometry), and RDKit isn't installed to embed it")
+            rdkit_problem = _rdkit_coords(mol)
+            if rdkit_problem:
+                if mol.unusual:
+                    kinds = ", ".join(sorted({k for _, _, k in mol.unusual}))
+                    why = f"it has {kinds} bonds, which an idealized geometry can't place"
+                else:
+                    why = "it has more than one central atom (no idealized geometry)"
+                raise BuildError(f"PubChem has no 3D coordinates for it, {why}, and {rdkit_problem}")
+            geometry = "rdkit"
         lone_pairs: dict[int, list] = {}
         pairs_per_atom = {}
         for i in range(len(mol.elements)):
@@ -680,7 +708,7 @@ def build(request: BuildRequest, out_dir: Path) -> BuildResult:
             "record_id": str(cid), "title": title, "license": "public-domain",
             "license_url": PUBCHEM_LICENSE_URL,
             "modifications": [f"{look}, built from {method}", "scaled to fit a unit cube"],
-            "notes": builder_note(),
+            "notes": builder_note(), "builder": "molecule", "builder_version": VERSION,
         },
     }
     details = {
