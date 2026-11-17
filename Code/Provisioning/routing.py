@@ -6,7 +6,7 @@ already have, what it should look like and how to provide it.
 Routes are chosen by the asset's **form** (a surface on a simple shape, a diagram
 element, a UI element, a structure from a public database, a recognizable object),
 never by the lab's subject, so the tool works for STEM topics we have no labs for.
-Builders are offered by their own descriptions (``builders.REGISTRY``).
+Builders are offered by their own descriptions (``builders.registry()``).
 
 The call goes through the run's ``llm.TrackedLLM`` (the repo's client factory and
 ``benchmark.guarded_create``, tracked). The response is checked under
@@ -105,9 +105,9 @@ def forms_for(kind: str) -> dict[str, str]:
 def routes_for(kind: str) -> dict[str, str]:
     """The routes for a kind: the fixed ones plus every registered builder of that kind."""
     base = dict(MODEL_ROUTES if kind == "model" else TEXTURE_ROUTES)
-    for b in builders.REGISTRY:
+    for b in builders.registry():
         if b.kind == kind:
-            base[f"builder:{b.name}"] = f"{b.description} Needs: {b.needs}."
+            base[f"builder:{b.name}"] = b.route_text()
     return base
 
 
@@ -188,7 +188,8 @@ class PlannedAsset(BaseModel):
     # LabAssetPlan._check, so all problems in a response come back in one error (field
     # errors would stop validation before that check runs, and cost a reask each). The
     # schema sent to the LLM still marks them required (strict_schema).
-    model_config = ConfigDict(json_schema_extra=strict_schema({"must_be_right", "same_as"}))
+    model_config = ConfigDict(json_schema_extra=strict_schema(
+        {"must_be_right", "same_as", "builder_input", "builder_options"}))
 
     name: str = Field(description="The asset's name, exactly as listed.")
     kind: str = Field("", description="The asset's kind, as listed.",
@@ -215,6 +216,14 @@ class PlannedAsset(BaseModel):
         description="Only when this asset is clearly the same object as another listed asset of the "
                     "same kind (two names for one thing): that asset's name. It is then provided once. "
                     "Otherwise null.")
+    builder_input: Optional[str] = Field(
+        None,
+        description="Only for a builder route: what that builder needs (its 'Needs'), e.g. the "
+                    "compound's name 'ammonia'. Otherwise null.")
+    builder_options: list[str] = Field(
+        default_factory=list,
+        description="Only for a builder route: the options from that builder's list that this lab "
+                    "needs (e.g. lone_pairs). Otherwise empty.")
 
 
 class LabAssetPlan(BaseModel):
@@ -241,6 +250,17 @@ class LabAssetPlan(BaseModel):
                 problems.append(f"{name!r}: the description is empty")
             if not a.reason.strip():
                 problems.append(f"{name!r}: the reason is empty")
+            builder = builders.get(a.route) if a.route.startswith("builder:") else None
+            if builder is None:
+                a.builder_input, a.builder_options = None, []   # only builder routes take them
+            else:
+                if not (a.builder_input or "").strip():
+                    problems.append(f"{name!r}: route {a.route} needs builder_input ({builder.needs})")
+                unknown = [o for o in a.builder_options if o not in builder.option_names()]
+                if unknown:
+                    offered = ", ".join(builder.option_names()) or "none"
+                    problems.append(f"{name!r}: {a.route} has no option {', '.join(map(repr, unknown))} "
+                                    f"(its options: {offered})")
             n = len([w for w in a.search_keywords if w.strip()])
             if not MIN_KEYWORDS <= n <= MAX_KEYWORDS:
                 problems.append(f"{name!r}: give {MIN_KEYWORDS} to {MAX_KEYWORDS} search keywords "
@@ -379,6 +399,8 @@ RULES
 shows. Don't add detail the lab doesn't need.
 - must_be_right: only facts a teacher would check (counts, shapes, angles, colors that carry meaning).
 - search_keywords: what a person would type to find it, e.g. "human heart anatomy", "jupiter texture map".
+- A builder route makes the asset exactly from data; choose it whenever its description covers the \
+asset, and give builder_input (what it needs) and only the builder_options this lab calls for.
 - same_as: only when two listed names are clearly one object in this lab (e.g. 'dnaHelixPrefab' and \
 'dnaDoubleHelixPrefab' both showing the same double helix). Different states, cut-aways or views of a \
 thing (a heart and a heart cross-section) are different assets.
