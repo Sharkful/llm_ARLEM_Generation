@@ -45,7 +45,6 @@ import json
 import math
 import re
 import sys
-import tempfile
 import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -151,18 +150,12 @@ def _get_json(path: str) -> Optional[dict]:
 
 
 def _fetch_json(url: str) -> Optional[dict]:
-    with tempfile.TemporaryDirectory() as tmp:
-        dest = Path(tmp) / "reply.json"
-        try:
-            library.download(url, dest)
-        except library.DownloadError as exc:
-            if exc.status == 404:
-                return None
-            raise BuildError(f"PubChem request failed: {exc}") from exc
-        try:
-            return json.loads(dest.read_text(encoding="utf-8"))
-        except ValueError as exc:
-            raise BuildError(f"PubChem sent a reply that isn't JSON ({url})") from exc
+    try:
+        return library.fetch_json(url)
+    except library.DownloadError as exc:
+        raise BuildError(f"PubChem request failed: {exc}") from exc
+    except ValueError as exc:
+        raise BuildError(f"PubChem sent a reply that isn't JSON ({url})") from exc
 
 
 def lookup(query: str) -> dict:

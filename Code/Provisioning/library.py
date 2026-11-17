@@ -732,6 +732,24 @@ def download(url: str, dest: Path) -> int:
     return attempts - 1
 
 
+def fetch_json(url: str):
+    """GET ``url`` as JSON through ``download`` (the shared retry policy, size limit
+    and network-failure classification). None on 404; a ``DownloadError`` otherwise,
+    or ``ValueError`` when the reply isn't JSON."""
+    with tempfile.TemporaryDirectory() as tmp:
+        dest = Path(tmp) / "reply.json"
+        try:
+            download(url, dest)
+        except DownloadError as exc:
+            if exc.status == 404:
+                return None
+            raise
+        try:
+            return json.loads(dest.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            raise ValueError(f"{url} sent a reply that isn't JSON") from exc
+
+
 def make_thumbnail(src: Path, dest: Path) -> None:
     from PIL import Image
     with Image.open(src) as img:

@@ -38,8 +38,13 @@ served models. Part 6: the molecule builder (#111) against a mock PubChem server
 (3D records, idealized VSEPR geometry, lone pairs, formula lookup, failures), the
 builder route in describe and route, and ``build_assets.py`` (build, save, alias).
 
+Part 7: search (#110) against mock Poly Haven, GitHub and NASA servers with a fake
+vision ranker: collecting, the license / format / budget filters, the text pass, the
+ranking checks, auto-pick, glTF to GLB, texture resizing, a Git LFS pointer, no match,
+text-only ranking, a reviewer's choice, resume, a model over budget, and --save.
+
 Requires the project venv (pydantic, Pillow; Part 5 also anthropic and instructor;
-Part 6 trimesh and matplotlib).
+Parts 6 and 7 trimesh and matplotlib).
 Exit code 1 on any failure.
 """
 
@@ -1718,6 +1723,248 @@ def part6(tmp: Path) -> None:
 MANIFEST_NAME = "provisioning_manifest.json"
 
 
+# ── Part 7 ────────────────────────────────────────────────────────────
+
+
+class Routes:
+    """A mock HTTP server answering by path and query: ``routes[(path, frozenset(query))]``
+    or ``routes[path]`` (any query) -> (status, bytes)."""
+
+    def __init__(self):
+        self.routes: dict = {}
+        self.hits: list[str] = []
+        outer = self
+        from urllib.parse import parse_qsl, urlsplit
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                outer.hits.append(self.path)
+                u = urlsplit(self.path)
+                from urllib.parse import unquote
+                path = unquote(u.path)
+                q = frozenset(parse_qsl(u.query))
+                hit = outer.routes.get((path, q), outer.routes.get(path))
+                status, body = hit if hit else (404, b"{}")
+                self.send_response(status)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.base = f"http://127.0.0.1:{self.httpd.server_port}"
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+
+    def json(self, path, data, query=None, status=200):
+        key = (path, frozenset(query.items())) if query is not None else path
+        self.routes[key] = (status, json.dumps(data).encode())
+
+    def file(self, path, body, status=200):
+        self.routes[path] = (status, body)
+
+    def close(self):
+        self.httpd.shutdown()
+
+
+def part7(tmp: Path) -> None:
+    print("Part 7: search (#110), against mock Poly Haven, GitHub and NASA")
+    try:
+        import trimesh
+    except ImportError:
+        check(False, "Part 7 needs the project venv (trimesh)")
+        return
+    import search_assets as S
+    import sources as src
+
+    srv = Routes()
+    saved = (src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA)
+    src.POLYHAVEN_API, src.GITHUB_API = srv.base + "/ph", srv.base + "/gh"
+    src.GITHUB_RAW, src.GITHUB_MEDIA = srv.base + "/raw", srv.base + "/media"
+    src.SOURCES["polyhaven"].__init__()
+    src.SOURCES["nasa"].__init__()
+
+    def glb(extents, triangles_x=1):
+        mesh = trimesh.creation.box(extents=extents)
+        if triangles_x > 1:
+            mesh = trimesh.creation.icosphere(subdivisions=triangles_x)
+        return trimesh.Scene(mesh).export(file_type="glb")
+
+    # Poly Haven: two models and two textures
+    heart = trimesh.Scene(trimesh.creation.icosphere(subdivisions=2, radius=3.0))
+    gltf = heart.export(file_type="gltf")   # model.gltf + gltf_buffer_*.bin
+    for name, body in gltf.items():
+        srv.file(f"/cdn/human_heart/{name}", body)
+    srv.json("/ph/assets", {
+        "human_heart": {"name": "Human Heart", "tags": ["anatomy", "heart", "organ"], "categories": ["props"],
+                        "authors": {"Jane Doe": "All"}, "thumbnail_url": srv.base + "/thumb/human_heart.png"},
+        "heart_shaped_box": {"name": "Heart Shaped Box", "tags": ["box", "valentine"], "authors": {"A": "All"},
+                             "thumbnail_url": srv.base + "/thumb/heart_shaped_box.png"},
+        "office_chair": {"name": "Office Chair", "tags": ["chair", "furniture"], "authors": {"B": "All"},
+                         "thumbnail_url": srv.base + "/thumb/office_chair.png"}},
+        query={"type": "models", "t": "models"})
+    srv.json("/ph/assets", {
+        "red_brick": {"name": "Red Brick Wall", "tags": ["brick", "wall", "red"], "authors": {"C": "All"},
+                      "thumbnail_url": srv.base + "/thumb/red_brick.png"}},
+        query={"type": "textures", "t": "textures"})
+    srv.json("/ph/search", {"results": [{"slug": "human_heart", "score": 0.91},
+                                        {"slug": "heart_shaped_box", "score": 0.62},
+                                        {"slug": "office_chair", "score": 0.2}], "total": 3},
+             query={"q": "human heart anatomy", "t": "models", "limit": "15"})
+    srv.json("/ph/files/human_heart", {"gltf": {"1k": {"gltf": {
+        "url": srv.base + "/cdn/human_heart/model.gltf",
+        "include": {n: {"url": srv.base + f"/cdn/human_heart/{n}"} for n in gltf if n != "model.gltf"}}}}})
+    srv.file("/cdn/box.glb", glb([1, 1, 1]))
+    srv.json("/ph/files/heart_shaped_box", {"gltf": {"1k": {"gltf": {"url": srv.base + "/cdn/box.glb",
+                                                                    "include": {}}}}})
+    srv.file("/cdn/brick.jpg", jpeg_bytes(3000, 1500, (180, 40, 30)))
+    srv.json("/ph/files/red_brick", {"Diffuse": {"4k": {"jpg": {"url": srv.base + "/cdn/brick.jpg"}}},
+                                     "nor_gl": {"4k": {"jpg": {"url": srv.base + "/cdn/none.jpg"}}}})
+    for slug in ("human_heart", "heart_shaped_box", "office_chair", "red_brick"):
+        srv.file(f"/thumb/{slug}.png", png_bytes())
+    # NASA: the tree, a GLB stored with Git LFS, and its picture
+    srv.json("/gh/repos/nasa/NASA-3D-Resources/git/trees/master", {"tree": [
+        {"path": "3D Models/Saturn V/Saturn V.glb", "type": "blob", "size": 2000},
+        {"path": "3D Models/Saturn V/Saturn V.png", "type": "blob"},
+        {"path": "3D Models/Mars Rover/rover.obj", "type": "blob"},
+        {"path": "README.md", "type": "blob"}], "truncated": False}, query={"recursive": "1"})
+    srv.file("/raw/nasa/NASA-3D-Resources/master/3D Models/Saturn V/Saturn V.glb",
+             b"version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 2000\n")
+    srv.file("/media/nasa/NASA-3D-Resources/master/3D Models/Saturn V/Saturn V.glb", glb([0.4, 0.4, 4.0]))
+    srv.file("/raw/nasa/NASA-3D-Resources/master/3D Models/Saturn V/Saturn V.png", png_bytes())
+
+    # A plan with four search assets (one merged duplicate)
+    run_dir = tmp / "search_run"
+    run_dir.mkdir()
+    def planned(name, kind, keywords, description, form="object", status="planned", same_as=None):
+        plan = {"route": "search", "form": form, "description": description, "search_keywords": keywords,
+                "must_be_right": ["four chambers"] if name == "heartPrefab" else []}
+        if same_as:
+            plan["same_as"] = same_as
+        return {"name": name, "kind": kind, "status": status, "plan": plan}
+    (run_dir / MANIFEST_NAME).write_text(json.dumps({"tool": "provision_lab", "assets": [
+        planned("heartPrefab", "model", ["human heart anatomy"], "A human heart seen from the front", "organism"),
+        planned("heartModel2", "model", ["heart"], "same", status="merged", same_as="heartPrefab"),
+        planned("brickTexture", "texture", ["red brick"], "A red brick wall surface", "real_surface"),
+        planned("rocketPrefab", "model", ["saturn v rocket"], "The Saturn V rocket"),
+        planned("unicornPrefab", "model", ["unicorn"], "A unicorn")]}), encoding="utf-8")
+
+    fits = {"Human Heart", "Red Brick Wall", "Saturn V"}
+    seen = {"calls": 0, "prompts": []}
+
+    def ranker(response_model, messages, max_retries):
+        seen["calls"] += 1
+        content = messages[0]["content"]
+        seen["prompts"].append(content)
+        names = [re.match(r"Candidate (\d+): (.+?) \(from", c).groups() for c in content
+                 if isinstance(c, str) and c.startswith("Candidate ")]
+        order = sorted(names, key=lambda x: (x[1] not in fits, int(x[0])))
+        return response_model.model_validate({"ranking": [
+            {"number": int(n), "fits": nm in fits, "reason": "test"} for n, nm in order]})
+
+    def run(*args, call_fn=ranker):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            code = S.main([str(run_dir), *args], call_fn=call_fn)
+        res = json.loads((run_dir / "search_results.json").read_text(encoding="utf-8"))
+        return code, buf.getvalue(), {a["name"]: a for a in res["assets"]}, res
+
+    try:
+        # filters and ranking checks (units)
+        c = lambda **kw: src.Candidate(**{"source": "x", "id": "i", "kind": "model", "name": "n",  # noqa: E731
+                                          "page_url": "u", "thumbnail_url": None, "license": "CC0-1.0",
+                                          "format": "glb", **kw})
+        kept, dropped = S.filter_candidates([c(id="a"), c(id="b", license="CC-BY-NC-4.0"),
+                                             c(id="c", license="CC-BY-4.0"), c(id="d", format="fbx"),
+                                             c(id="e", triangles=10 ** 6)], "model")
+        check([k.id for k in kept] == ["a"] and dropped == {"license": ["x:b"], "license_without_author": ["x:c"],
+                                                             "format": ["x:d"], "over_budget": ["x:e"]},
+              "hits outside the license tier, in other formats or over budget are dropped and counted")
+        try:
+            with S.ranking_scope(3):
+                S.CandidateRanking.model_validate({"ranking": [{"number": 1, "fits": True, "reason": "r"},
+                                                               {"number": 1, "fits": False, "reason": ""},
+                                                               {"number": 7, "fits": False, "reason": "r"}]})
+            check(False, "a bad ranking is refused with every problem at once")
+        except lib.ValidationError as exc:
+            m = str(exc)
+            check(all(x in m for x in ("ranked more than once", "wasn't shown", "reason is empty",
+                                       "aren't ranked: 2, 3")),
+                  "a bad ranking is refused with every problem at once")
+
+        code, text, by, res = run()
+        h = by["heartPrefab"]
+        check(code == 1 and h["status"] == "found" and h["chosen"] == {"rank": 1, "by": "auto"}
+              and h["ranked"][0]["name"] == "Human Heart" and h["ranked"][0]["license"] == "CC0-1.0"
+              and h["ranked"][0]["author"] == "Jane Doe" and h["ranked"][1]["fits"] is False
+              and h["dropped"] == {"text_mismatch": 1} and h["merged_names"] == ["heartModel2"],
+              "the heart: collected, the mismatch dropped, ranked by the vision call, rank 1 auto-picked")
+        prompt = seen["prompts"][0]
+        check(sum(isinstance(p, Path) for p in prompt) == 2 and "four chambers" in prompt[0]
+              and all(p.suffix == ".png" and p.is_file() for p in prompt if isinstance(p, Path)),
+              "the ranking call sees the description, the must-be-right facts and each thumbnail")
+        model = trimesh.load(run_dir / h["files"]["model"], force="scene")
+        check(abs(max(model.extents) - 1.0) < 1e-6 and (run_dir / h["files"]["thumbnail"]).is_file()
+              and "converted from glTF to GLB" in h["entry"]["provenance"]["modifications"]
+              and h["entry"]["provenance"]["license"] == "CC0-1.0" and h["entry"]["triangles"] == 320,
+              "the chosen glTF (with its buffers) is converted to a centered unit-cube GLB, provenance kept")
+        b, r = by["brickTexture"], by["rocketPrefab"]
+        check(b["status"] == "found" and b["entry"]["pixels"] == [2048, 1024] and b["entry"]["mapping"] == "tileable",
+              "a texture: its color map, resized to 2048 px, as JPG")
+        check(r["status"] == "found" and r["ranked"][0]["source"] == "nasa"
+              and r["entry"]["provenance"]["license"] == "public-domain"
+              and trimesh.load(run_dir / r["files"]["model"], force="scene").extents.max() > 0.99,
+              "a NASA model stored with Git LFS is fetched from the LFS media host")
+        u = by["unicornPrefab"]
+        check(u["status"] == "no_match" and "no usable candidate" in u["reason"] and "_files" not in u
+              and "  NO MATCH unicornPrefab" in text and res["counts"]["found"] == 3,
+              "nothing found -> no match, left for the composite builder or a reviewer")
+
+        calls = seen["calls"]
+        code, text, by, res = run()
+        check(seen["calls"] == calls and "searching 0 of 4" in text and by["heartPrefab"]["status"] == "found",
+              "a rerun searches only what isn't decided (resume), with no ranking calls for the rest")
+        code, text, by, res = run("--only", "heartPrefab", "--redo", "--no-vision", call_fn=None)
+        h = by["heartPrefab"]
+        check(h["status"] == "needs_review" and "chosen" not in h and h["ranked"][0]["fits"] is None
+              and by["brickTexture"]["status"] == "found",
+              "--no-vision ranks by text, picks nothing and leaves it for a reviewer")
+        code, text, by, res = run("--choose", "heartPrefab=2", call_fn=None)
+        h = by["heartPrefab"]
+        check(h["status"] == "found" and h["chosen"] == {"rank": 2, "by": "reviewer"}
+              and h["entry"]["provenance"]["record_id"] == h["ranked"][1]["id"] and seen["calls"] == calls,
+              "--choose takes a candidate from the saved ranking, with no new search or call")
+        code, text, _, _ = run("--choose", "nothing=1", call_fn=None)
+        check(code == 2, "--choose for an asset with no saved ranking -> exit 2")
+
+        saved_budget = lib.MAX_MODEL_TRIANGLES
+        lib.MAX_MODEL_TRIANGLES = 100
+        try:
+            code, text, by, res = run("--only", "heartPrefab", "--redo")
+        finally:
+            lib.MAX_MODEL_TRIANGLES = saved_budget
+        h = by["heartPrefab"]
+        check(h["status"] == "failed" and "more than the budget" in h["fetch_errors"][0]["error"],
+              "a chosen model over the triangle budget fails its check; nothing else fits -> failed")
+
+        store = lib.LocalFolderStore(tmp / "libSearch", create=True)
+        code, text, by, res = run("--only", "heartPrefab", "--redo", "--save", "--library", str(tmp / "libSearch"))
+        h = by["heartPrefab"]
+        entry = lib.LocalFolderStore(tmp / "libSearch").get("polyhaven_human_heart")
+        check(h["saved"]["asset_id"] == "polyhaven_human_heart" and entry is not None
+              and {"heartPrefab", "heartModel2"} <= set(entry.aliases)
+              and entry.provenance.method == "search" and entry.provenance.page_url.endswith("/a/human_heart")
+              and res["library_after"]["entries"] == 1 and not [p for p in lib.check_index(store.index, store.root)
+                                                                if p.level == "error"],
+              "--save stores the found model with search provenance and the lab's names as aliases")
+    finally:
+        srv.close()
+        src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA = saved
+        src.SOURCES["polyhaven"].__init__()
+        src.SOURCES["nasa"].__init__()
+
+
 def main() -> int:
     saved_env = os.environ.pop(lib.LIBRARY_ENV, None)
     tmp = Path(tempfile.mkdtemp(prefix="provisioning_smoke_"))
@@ -1728,6 +1975,7 @@ def main() -> int:
         part4(tmp)
         part5(tmp)
         part6(tmp)
+        part7(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         if saved_env is not None:

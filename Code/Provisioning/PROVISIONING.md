@@ -454,40 +454,68 @@ tokens, cost, retries, time and served models, and the manifest's `llm` holds th
 tracker summary for the whole run. A failed judge call fails the run (exit 1) before
 anything is routed.
 
-## Search (#110)
+## Search (#110, first sources built)
 
-**Sources** (one adapter each, all returning the same candidate record):
+**Sources** (`sources.py`, one adapter each, all returning the same `Candidate`):
 
-| Source | Content | License | Access |
-|---|---|---|---|
-| Poly Haven | Props, furniture, nature; PBR textures | CC0 | Public API, no key |
-| NASA 3D Resources | Spacecraft, planets, moons | Public domain | GitHub repository |
-| Smithsonian Open Access | Scanned objects and specimens | CC0 per item | API (api.data.gov key) |
-| Poly Pizza | Low-poly models | CC0 or CC-BY per model | API, free key |
-| ambientCG | PBR materials | CC0 | API, no key |
+| Source | Content | License | Access | State |
+|---|---|---|---|---|
+| Poly Haven | Props, furniture, nature; PBR textures | CC0 | Public API, no key | **built** |
+| NASA 3D Resources | Spacecraft, planets, moons | No copyright (NASA media guidelines) | GitHub repository | **built** |
+| Smithsonian Open Access | Scanned objects and specimens | CC0 per item | API (api.data.gov key) | to do |
+| Poly Pizza | Low-poly models | CC0 or CC-BY per model | API, free key | to do |
+| ambientCG | PBR materials | CC0 | API, no key | to do |
+
+Terms checked before building:
+
+- **Poly Haven** (Public-API ToS): free for any use, no key; every call must carry a
+  User-Agent naming the software (`library.USER_AGENT`); live API content shown to
+  people must credit Poly Haven (stored CC0 assets need no credit). `/search` ranks
+  assets for a query (falling back to word matching over `/assets` if it fails);
+  models come as glTF with buffers and textures (`include`) and are converted to GLB.
+- **NASA 3D Resources** (README): "free and without copyright"; the NASA media
+  guidelines apply (no endorsement, no insignia), recorded as a note. One folder per
+  model under `3D Models/` with a `.glb` and usually a picture; the tree is listed once
+  per process through the GitHub API and matched by words. A Git LFS pointer is
+  fetched again from GitHub's LFS media host.
+
+The docs of Smithsonian, Poly Pizza and ambientCG couldn't be read from the build
+machine (DNS); their adapters wait until their terms are checked.
 
 To evaluate before adding: **Objaverse** (about 800,000 Sketchfab-derived objects
 with captions; per-object license) and **Sketchfab** (needs a user login; owner
 changed in August 2026). NIH 3D has no documented API and is a manual source.
-Each source's terms are checked before its adapter is built.
 
-**Candidate record:** source, record id, name, page URL, thumbnail URL, download
-URL and format, license, author, triangle count and file size if known.
+**Candidate record:** source, record id, kind, name, page URL, thumbnail URL, license
+(and its URL), author, format, triangle count and file size if known, tags,
+description, the source's own relevance score, notes.
 
-**Ranking:**
+**Ranking** (`search_assets.py`):
 
-1. Up to 30 hits per asset across sources, from the asset's search keywords.
-2. Drop hits outside the license policy, in formats we can't read, or over budget
-   (counted).
-3. A cheap text pass drops obvious mismatches by name and tags.
-4. **One vision call ranks the remaining thumbnails** against the description:
-   order, pass or fail, one-line reason each.
-5. An automatic run takes rank 1 if it passed; otherwise the asset goes to
-   `composite`.
+1. Up to 30 hits per asset across sources, from the plan's search keywords.
+2. Drop hits outside the license policy (CC-BY also needs an author to credit), in
+   formats we can't read, or with a known triangle count over the budget, counted
+   per reason.
+3. A text pass drops obvious mismatches: a hit sharing no word with the asset that
+   its source didn't rank as relevant either; the best 12 go on.
+4. **One vision call ranks their thumbnails** (`CandidateRanking`, through
+   `llm.TrackedLLM`, which sends image files as `instructor.Image`s for every
+   provider) against the description and must-be-right facts: every candidate once,
+   best first, fits or not, a one-line reason. When unsure, it doesn't fit.
+5. Auto-pick: the best candidate that fits is fetched, converted (glTF to GLB; a
+   texture to JPG within 2048 px), centered and scaled to a unit cube, and checked
+   against the triangle budget; if that fails, the next one that fits (up to 3). None
+   fits: `no_match` (composite, #112, or a reviewer); all that fit fail: `failed`.
+   `--no-vision` ranks by text and picks nothing (`needs_review`).
 
-The manifest keeps the **ranked top 10** with thumbnails, links, licenses and
-reasons, and who chose (`auto` / `reviewer`). A reviewer's choice is applied with
-`--resume` and no new search (#116).
+`search_results.json` in the run folder keeps, per asset, the **ranked top 10** with
+thumbnails (`search/<asset>/NN.png`), links, licenses, authors, fits and reasons,
+what was dropped and why, each source's hit count or error, and who chose (`auto` /
+`reviewer`). The chosen file and its thumbnail go to `found/<asset>/`. A rerun
+searches only undecided assets (`--redo` all); `--choose NAME=RANK` applies a
+reviewer's choice from the saved ranking with no new search or call (#116 adds a
+tool for it); `--save` stores the found asset in the library with search provenance
+and the lab's names as aliases.
 
 ## Builders (#111 built, #114)
 

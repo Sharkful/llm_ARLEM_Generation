@@ -46,13 +46,14 @@ def _folder_name(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", name).strip("._") or "asset"
 
 
-def targets(manifest: dict) -> list[dict]:
-    """The assets routed to a builder, each with the names merged into it."""
+def targets(manifest: dict, route=lambda r: r.startswith("builder:")) -> list[dict]:
+    """The planned assets whose route passes ``route`` (default: a builder), each with
+    the names merged into it."""
     assets = manifest.get("assets") or []
     out = []
     for a in assets:
         plan = a.get("plan") or {}
-        if a.get("status") == "planned" and str(plan.get("route", "")).startswith("builder:"):
+        if a.get("status") == "planned" and route(str(plan.get("route", ""))):
             merged = [m["name"] for m in assets if m.get("status") == "merged" and m["kind"] == a["kind"]
                       and library.name_key((m.get("plan") or {}).get("same_as") or "")
                       == library.name_key(a["name"])]

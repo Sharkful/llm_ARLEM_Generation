@@ -56,6 +56,20 @@ def check_environment(model_key: str) -> None:
         raise KeyError(f"no API key for {model_key}: set {' or '.join(names)} in .env")
 
 
+def _with_images(messages: list) -> list:
+    """Image files in a message's content list as ``instructor.Image``s, which instructor
+    converts for each provider (Anthropic, OpenAI, Gemini)."""
+    out = []
+    for m in messages:
+        content = m.get("content")
+        if isinstance(content, list) and any(isinstance(c, Path) for c in content):
+            import instructor
+            content = [instructor.Image.from_path(c) if isinstance(c, Path) else c for c in content]
+            m = {**m, "content": content}
+        out.append(m)
+    return out
+
+
 class TrackedLLM:
     """The run's LLM: one tracked client (or ``call_fn``, for tests)."""
 
@@ -81,7 +95,8 @@ class TrackedLLM:
 
     def _llm_call(self, response_model, messages, max_retries):
         return _benchmark().guarded_create(self._client, self.tracker, self.model_config,
-                                           response_model, messages, max_retries, self.stats)
+                                           response_model, _with_images(messages), max_retries,
+                                           self.stats)
 
     def describe(self) -> dict:
         """The model fields every step record starts with."""
@@ -93,11 +108,16 @@ class TrackedLLM:
                           tool_choice=_benchmark().tool_choice_for(self.model_config))
         return record
 
-    def call(self, response_model: type, prompt: str) -> tuple[Optional[BaseModel], dict]:
-        """(result, record). The caller enters any validation scope around this call.
-        On failure the result is None and the record carries the error."""
+    def call(self, response_model: type, prompt) -> tuple[Optional[BaseModel], dict]:
+        """(result, record). ``prompt`` is text, or a list of text and image files
+        (``Path``s, sent as images in that order). The caller enters any validation scope
+        around this call. On failure the result is None and the record carries the error."""
         record = self.describe()
-        record["prompt_characters"] = len(prompt)
+        parts = [prompt] if isinstance(prompt, str) else list(prompt)
+        record["prompt_characters"] = sum(len(p) for p in parts if isinstance(p, str))
+        images = sum(isinstance(p, Path) for p in parts)
+        if images:
+            record["images"] = images
         before = dict(self.stats)
         first = len(self.tracker.aggregate.calls) if self.tracker is not None else 0
         t0 = time.monotonic()
