@@ -112,7 +112,7 @@ python "Code/Provisioning/provision_lab.py" "Artifacts/Data/Benchmark/Outputs/<r
 # --save stores them in the library with the lab's names as aliases.
 python "Code/Provisioning/build_assets.py" "Artifacts/Data/Provisioning/testing/<run>" --save
 python "Code/Provisioning/molecule.py" "xenon tetrafluoride" --lone-pairs --out <folder>   # one molecule, to check by eye
-# Search what a dry run routed to search (Poly Haven, NASA 3D): rank by one vision call per asset,
+# Search what a dry run routed to search (Poly Haven, NASA 3D, ambientCG): rank by one vision call per asset,
 # auto-pick, keep the top 10 (search_results.json); --no-vision (no key), --choose NAME=RANK, --save.
 python "Code/Provisioning/search_assets.py" "Artifacts/Data/Provisioning/testing/<run>"
 python "Code/Provisioning/search_assets.py" "Artifacts/Data/Provisioning/testing/<run>" --choose heartPrefab=2 --save
@@ -455,8 +455,9 @@ not reused. Built so far:
   an older version of the same builder made, never a newer or reviewed one).
 - **`sources.py`** + **`search_assets.py`** (#110): search for `search`-routed assets. Sources so
   far: Poly Haven (CC0; `/search`, glTF converted to GLB; a User-Agent naming the software is
-  required) and NASA 3D Resources (GitHub tree, `.glb`, Git LFS pointers followed); Smithsonian,
-  Poly Pizza and ambientCG wait for their terms to be checked. Per asset: up to 30 hits, dropped by
+  required), NASA 3D Resources (GitHub tree, `.glb`, Git LFS pointers followed) and ambientCG
+  (CC0 textures; the color map read out of the 2K JPG zip); Smithsonian and Poly Pizza wait for
+  their terms to be checked. Per asset: up to 30 hits, dropped by
   license / format / budget (counted), a text pass, then one vision call (`CandidateRanking`; images
   through `llm.TrackedLLM`) ranks the thumbnails; the best that fits is fetched, unit-cube scaled and
   budget-checked, else `no_match`. `search_results.json` keeps the ranked top 10 and who chose

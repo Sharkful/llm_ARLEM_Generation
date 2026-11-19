@@ -17,8 +17,14 @@ Built so far, the sources that need no key or login, their terms checked:
   per process through the GitHub API, and names are matched by words. A file stored
   with Git LFS is fetched from ``media.githubusercontent.com``.
 
-Not built yet (#110): ambientCG and Poly Pizza (a free key), Smithsonian Open Access
-(an api.data.gov key); their docs couldn't be checked from the build machine.
+- **ambientCG** (``ambientcg``; textures; CC0, credit not required but appreciated,
+  kept as a note). ``/api/v3/assets?type=material&q=...`` (keywords combine with AND;
+  each query alone, then single words if nothing matched). Downloads are zips per
+  resolution; the 2K JPG zip (else 1K) is fetched and only its color map is read from
+  it, never extracted, and only for materials that have a ``color`` map.
+
+Not built yet (#110): Poly Pizza (a free key) and Smithsonian Open Access (an
+api.data.gov key); their docs couldn't be checked from the build machine.
 
 Every request goes through ``library.download`` / ``library.fetch_json``: the shared
 retry policy, the size limit and the network-failure classification. Base URLs are
@@ -30,6 +36,7 @@ from __future__ import annotations
 import re
 import sys
 import urllib.parse
+import zipfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -42,6 +49,9 @@ import library  # noqa: E402
 
 POLYHAVEN_API = "https://api.polyhaven.com"
 POLYHAVEN_PAGE = "https://polyhaven.com/a/{slug}"
+AMBIENTCG_API = "https://ambientcg.com/api/v3"
+AMBIENTCG_ZIPS = ("2K-JPG", "1K-JPG", "2K-PNG", "1K-PNG")   # preferred first; never 4K+ (huge)
+MAX_MAP_BYTES = 64 * 1024 * 1024   # the color map read out of a zip
 GITHUB_API = "https://api.github.com"
 GITHUB_RAW = "https://raw.githubusercontent.com"
 GITHUB_MEDIA = "https://media.githubusercontent.com/media"
@@ -77,6 +87,7 @@ class Candidate:
     source_score: float = 0.0    # the source's own relevance, 0-1 (0 when it has none)
     license_url: Optional[str] = None
     notes: str = ""
+    mapping: Optional[str] = None   # textures: "tileable", "uv"... (library.LibraryEntry.mapping)
 
     @property
     def key(self) -> str:
@@ -174,7 +185,7 @@ class PolyHaven(Source):
             format="gltf" if kind == "model" else "jpg",
             tags=list(dict.fromkeys([*(info.get("tags") or []), *(info.get("categories") or [])])),
             description=info.get("description") or "", source_score=score,
-            license_url=library.LICENSE_URLS["CC0-1.0"])
+            license_url=library.LICENSE_URLS["CC0-1.0"], mapping="tileable" if kind == "texture" else None)
 
     def fetch(self, cand, dest_dir):
         files = _json(f"{POLYHAVEN_API}/files/{urllib.parse.quote(cand.id)}")
@@ -272,7 +283,79 @@ class Nasa(Source):
         return dest
 
 
-SOURCES: dict[str, Source] = {s.name: s for s in (PolyHaven(), Nasa())}
+# ── ambientCG ─────────────────────────────────────────────────────────
+
+
+class AmbientCG(Source):
+    name = "ambientcg"
+    kinds = ("texture",)
+    CREDIT = ("Created using {title} from ambientCG.com, licensed under the Creative Commons "
+              "CC0 1.0 Universal License.")
+
+    def _query(self, q: str, limit: int) -> list[dict]:
+        reply = _json(f"{AMBIENTCG_API}/assets?type=material&q={urllib.parse.quote(q)}&limit={limit}"
+                      "&include=title,tags,url,downloads,thumbnails,maps,dimensions") or {}
+        return [a for a in reply.get("assets") or [] if isinstance(a, dict) and a.get("id")]
+
+    def search(self, queries, kind, limit=PER_SOURCE):
+        if kind != "texture":
+            return []
+        found: dict[str, dict] = {}
+        for q in queries:
+            for a in self._query(q, limit):
+                found.setdefault(a["id"], a)
+        if not found:   # keywords combine with AND: try each word alone
+            for w in sorted(set().union(*(words(q) for q in queries)) if queries else set()):
+                for a in self._query(w, limit):
+                    found.setdefault(a["id"], a)
+        out = []
+        for a in found.values():
+            if "color" not in (a.get("maps") or []):
+                continue
+            zips = {d.get("attributes"): d for d in a.get("downloads") or [] if d.get("extension") == "zip"}
+            pick = next((zips[z] for z in AMBIENTCG_ZIPS if z in zips), None)
+            if pick is None:
+                continue
+            title = a.get("title") or a["id"]
+            out.append(Candidate(
+                source=self.name, id=a["id"], kind="texture", name=title,
+                page_url=a.get("url") or f"https://ambientcg.com/a/{a['id']}",
+                thumbnail_url=(a.get("thumbnails") or {}).get("256-PNG"), license="CC0-1.0",
+                author="ambientCG", format=pick["attributes"].split("-")[1].lower(),
+                file_size=pick.get("size"), tags=list(a.get("tags") or []),
+                license_url=library.LICENSE_URLS["CC0-1.0"], mapping="tileable",
+                notes=self.CREDIT.format(title=title)))
+        return out[:limit]
+
+    def fetch(self, cand, dest_dir):
+        reply = _json(f"{AMBIENTCG_API}/assets?id={urllib.parse.quote(cand.id)}&include=downloads") or {}
+        asset = next((a for a in reply.get("assets") or [] if a.get("id") == cand.id), None)
+        zips = {d.get("attributes"): d for d in (asset or {}).get("downloads") or [] if d.get("extension") == "zip"}
+        pick = next((zips[z] for z in AMBIENTCG_ZIPS if z in zips), None)
+        if pick is None:
+            raise SourceError(f"ambientCG has no 1K or 2K download for {cand.id!r}")
+        archive = dest_dir / "download.zip"
+        _download(pick["url"], archive)
+        try:
+            with zipfile.ZipFile(archive) as z:
+                colors = [i for i in z.infolist() if not i.is_dir()
+                          and re.search(r"_color\.(jpe?g|png)$", i.filename, re.IGNORECASE)]
+                if not colors:
+                    raise SourceError(f"ambientCG's {cand.id!r} zip has no color map")
+                info = colors[0]
+                if info.file_size > MAX_MAP_BYTES:
+                    raise SourceError(f"ambientCG's {cand.id!r} color map is larger than {MAX_MAP_BYTES} bytes")
+                # read the one member's bytes: nothing is extracted, so no path in the zip is used
+                dest = dest_dir / f"texture{Path(info.filename).suffix.lower()}"
+                dest.write_bytes(z.read(info))
+        except zipfile.BadZipFile as exc:
+            raise SourceError(f"ambientCG's {cand.id!r} download isn't a zip ({exc})") from exc
+        finally:
+            archive.unlink(missing_ok=True)
+        return dest
+
+
+SOURCES: dict[str, Source] = {s.name: s for s in (PolyHaven(), Nasa(), AmbientCG())}
 
 
 def sources_for(kind: str, names: Optional[list[str]] = None) -> list[Source]:

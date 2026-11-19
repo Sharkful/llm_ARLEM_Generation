@@ -464,7 +464,7 @@ anything is routed.
 | NASA 3D Resources | Spacecraft, planets, moons | No copyright (NASA media guidelines) | GitHub repository | **built** |
 | Smithsonian Open Access | Scanned objects and specimens | CC0 per item | API (api.data.gov key) | to do |
 | Poly Pizza | Low-poly models | CC0 or CC-BY per model | API, free key | to do |
-| ambientCG | PBR materials | CC0 | API, no key | to do |
+| ambientCG | PBR materials | CC0 | API, no key | **built** |
 
 Terms checked before building:
 
@@ -479,8 +479,16 @@ Terms checked before building:
   per process through the GitHub API and matched by words. A Git LFS pointer is
   fetched again from GitHub's LFS media host.
 
-The docs of Smithsonian, Poly Pizza and ambientCG couldn't be read from the build
-machine (DNS); their adapters wait until their terms are checked.
+- **ambientCG** (license page, read 2026-11-19): every asset CC0 1.0; credit not
+  required but appreciated, so its suggested credit line is kept as a note.
+  `/api/v3/assets?type=material&q=...` (keywords combine with AND, so each query
+  alone, then single words if nothing matched); only materials with a `color` map;
+  downloads are zips per resolution, of which the 2K JPG (else 1K) is fetched and only
+  the color map read out of it (nothing is extracted; 4K and 8K zips, 128 MB and up,
+  are never fetched).
+
+The docs of Smithsonian and Poly Pizza couldn't be read from the build machine (DNS);
+their adapters wait until their terms are checked.
 
 To evaluate before adding: **Objaverse** (about 800,000 Sketchfab-derived objects
 with captions; per-object license) and **Sketchfab** (needs a user login; owner

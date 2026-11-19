@@ -275,7 +275,7 @@ def prepare(cand: sources.Candidate, asset: dict, work: Path, out: Path, thumb: 
                     mods.append(f"resized to at most {library.MAX_TEXTURE_SIDE} px")
                 files["texture"] = out / library.ROLE_FILES["texture"]
                 img.save(files["texture"], format="JPEG", quality=90)
-                entry.update(pixels=list(img.size), mapping="tileable" if cand.source == "polyhaven" else "uv")
+                entry.update(pixels=list(img.size), mapping=cand.mapping or "uv")
         except OSError as exc:
             raise sources.SourceError(f"the texture couldn't be read ({exc})") from exc
         if main.suffix.lower() not in (".jpg", ".jpeg"):

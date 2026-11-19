@@ -1779,8 +1779,9 @@ def part7(tmp: Path) -> None:
     import sources as src
 
     srv = Routes()
-    saved = (src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA)
+    saved = (src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA, src.AMBIENTCG_API)
     src.POLYHAVEN_API, src.GITHUB_API = srv.base + "/ph", srv.base + "/gh"
+    src.AMBIENTCG_API = srv.base + "/acg"
     src.GITHUB_RAW, src.GITHUB_MEDIA = srv.base + "/raw", srv.base + "/media"
     src.SOURCES["polyhaven"].__init__()
     src.SOURCES["nasa"].__init__()
@@ -1834,6 +1835,27 @@ def part7(tmp: Path) -> None:
     srv.file("/media/nasa/NASA-3D-Resources/master/3D Models/Saturn V/Saturn V.glb", glb([0.4, 0.4, 4.0]))
     srv.file("/raw/nasa/NASA-3D-Resources/master/3D Models/Saturn V/Saturn V.png", png_bytes())
 
+    # ambientCG: the reply shape of /api/v3/assets (2026-11-19), and a zip of maps
+    import zipfile as _zip
+    buf = io.BytesIO()
+    with _zip.ZipFile(buf, "w") as z:
+        z.writestr("Bricks090_2K-JPG_NormalGL.jpg", jpeg_bytes(64, 64, (128, 128, 255)))
+        z.writestr("Bricks090_2K-JPG_Color.jpg", jpeg_bytes(96, 48, (170, 60, 40)))
+        z.writestr("../evil_Color.txt", b"not read")
+    srv.file("/acg/get", buf.getvalue())
+    srv.file("/thumb/Bricks090.png", png_bytes())
+    srv.json("/acg/assets", {"totalResults": 2, "nextPageHttp": None, "assets": [
+        {"id": "Bricks090", "title": "Bricks 090", "tags": ["brick", "red", "wall"],
+         "url": "https://ambientcg.com/a/Bricks090",
+         "downloads": [{"attributes": "1K-JPG", "extension": "zip", "url": srv.base + "/acg/get?file=x1", "size": 9},
+                       {"attributes": "2K-JPG", "extension": "zip", "url": srv.base + "/acg/get?file=x2", "size": 34},
+                       {"attributes": "8K-PNG", "extension": "zip", "url": srv.base + "/acg/huge", "size": 10 ** 9}],
+         "thumbnails": {"64-PNG": "x", "256-PNG": srv.base + "/thumb/Bricks090.png"},
+         "maps": ["color", "displacement", "normal", "roughness"], "dimensions": {"width": 280, "height": 280}},
+        {"id": "BrickDecal001", "title": "Brick Decal", "tags": ["brick"], "url": "u",
+         "downloads": [{"attributes": "1K-PNG", "extension": "zip", "url": "u", "size": 1}],
+         "thumbnails": {}, "maps": ["opacity"]}]})
+
     # A plan with four search assets (one merged duplicate)
     run_dir = tmp / "search_run"
     run_dir.mkdir()
@@ -1850,7 +1872,7 @@ def part7(tmp: Path) -> None:
         planned("rocketPrefab", "model", ["saturn v rocket"], "The Saturn V rocket"),
         planned("unicornPrefab", "model", ["unicorn"], "A unicorn")]}), encoding="utf-8")
 
-    fits = {"Human Heart", "Red Brick Wall", "Saturn V"}
+    fits = {"Human Heart", "Red Brick Wall", "Saturn V", "Bricks 090"}
     seen = {"calls": 0, "prompts": []}
 
     def ranker(response_model, messages, max_retries):
@@ -1948,6 +1970,18 @@ def part7(tmp: Path) -> None:
         check(h["status"] == "failed" and "more than the budget" in h["fetch_errors"][0]["error"],
               "a chosen model over the triangle budget fails its check; nothing else fits -> failed")
 
+        acg = src.SOURCES["ambientcg"].search(["red brick"], "texture")
+        check([c.id for c in acg] == ["Bricks090"] and acg[0].format == "jpg" and acg[0].mapping == "tileable"
+              and "Created using Bricks 090 from ambientCG.com" in acg[0].notes
+              and src.SOURCES["ambientcg"].search(["red brick"], "model") == [],
+              "ambientCG: materials with a color map, the 2K JPG zip, its credit line; textures only")
+        code, text, by, res = run("--only", "brickTexture", "--redo", "--sources", "ambientcg")
+        b = by["brickTexture"]
+        check(b["status"] == "found" and b["ranked"][0]["source"] == "ambientcg" and b["entry"]["pixels"] == [96, 48]
+              and b["entry"]["mapping"] == "tileable" and not (run_dir / "evil_Color.txt").exists()
+              and "/acg/huge" not in " ".join(srv.hits) and "/acg/get?file=x2" in srv.hits,
+              "ambientCG: only the color map is read out of the 2K zip (nothing extracted, no 8K download)")
+
         store = lib.LocalFolderStore(tmp / "libSearch", create=True)
         code, text, by, res = run("--only", "heartPrefab", "--redo", "--save", "--library", str(tmp / "libSearch"))
         h = by["heartPrefab"]
@@ -1960,7 +1994,7 @@ def part7(tmp: Path) -> None:
               "--save stores the found model with search provenance and the lab's names as aliases")
     finally:
         srv.close()
-        src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA = saved
+        src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA, src.AMBIENTCG_API = saved
         src.SOURCES["polyhaven"].__init__()
         src.SOURCES["nasa"].__init__()
 
