@@ -23,8 +23,16 @@ Built so far, the sources that need no key or login, their terms checked:
   resolution; the 2K JPG zip (else 1K) is fetched and only its color map is read from
   it, never extracted, and only for materials that have a ``color`` map.
 
-Not built yet (#110): Poly Pizza (a free key) and Smithsonian Open Access (an
-api.data.gov key); their docs couldn't be checked from the build machine.
+- **Poly Pizza** (``polypizza``; models; CC0 or CC-BY 3.0 per model; API v1.1 spec read
+  2026-11-19). A free key (``POLY_PIZZA_API_KEY``, from poly.pizza/settings/api, kept out of
+  git) goes in an ``x-auth-token`` header, to the API and to ``static.poly.pizza`` where the
+  files are, and to no other host. ``/search/{keyword}`` returns GLB downloads with a
+  triangle count (so the budget is checked before downloading), the licence, the creator
+  and an attribution line, required by law for CC-BY and kept as the note. Without a
+  key the source is skipped.
+
+Not built yet (#110): Smithsonian Open Access (an api.data.gov key); its docs couldn't
+be checked from the build machine.
 
 Every request goes through ``library.download`` / ``library.fetch_json``: the shared
 retry policy, the size limit and the network-failure classification. Base URLs are
@@ -33,6 +41,7 @@ module attributes, so tests point them at a mock server.
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 import urllib.parse
@@ -52,6 +61,10 @@ POLYHAVEN_PAGE = "https://polyhaven.com/a/{slug}"
 AMBIENTCG_API = "https://ambientcg.com/api/v3"
 AMBIENTCG_ZIPS = ("2K-JPG", "1K-JPG", "2K-PNG", "1K-PNG")   # preferred first; never 4K+ (huge)
 MAX_MAP_BYTES = 64 * 1024 * 1024   # the color map read out of a zip
+POLYPIZZA_API = "https://api.poly.pizza/v1.1"
+POLYPIZZA_HOSTS = ("api.poly.pizza", "static.poly.pizza")   # the only hosts that get the key
+POLYPIZZA_KEY_ENV = "POLY_PIZZA_API_KEY"
+POLYPIZZA_LICENCES = {"CC0 1.0": "CC0-1.0", "CC-BY 3.0": "CC-BY-3.0", "CC-BY 4.0": "CC-BY-4.0"}
 GITHUB_API = "https://api.github.com"
 GITHUB_RAW = "https://raw.githubusercontent.com"
 GITHUB_MEDIA = "https://media.githubusercontent.com/media"
@@ -103,19 +116,19 @@ def words(text: str) -> set[str]:
     return {w for w in _WORD.findall(text.lower()) if len(w) > 2}
 
 
-def _json(url: str):
+def _json(url: str, headers: Optional[dict] = None):
     try:
-        return library.fetch_json(url)
+        return library.fetch_json(url, headers)
     except library.DownloadError as exc:
         raise SourceError(str(exc)) from exc
     except ValueError as exc:
         raise SourceError(str(exc)) from exc
 
 
-def _download(url: str, dest: Path) -> None:
+def _download(url: str, dest: Path, headers: Optional[dict] = None) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     try:
-        library.download(url, dest)
+        library.download(url, dest, headers)
     except library.DownloadError as exc:
         raise SourceError(str(exc)) from exc
 
@@ -123,6 +136,14 @@ def _download(url: str, dest: Path) -> None:
 class Source:
     name = ""
     kinds: tuple[str, ...] = ()
+
+    def unavailable(self) -> Optional[str]:
+        """Why this source can't be used now (e.g. no key), else None."""
+        return None
+
+    def headers_for(self, url: str) -> dict:
+        """Extra request headers for a URL of this source (an API key, only to its hosts)."""
+        return {}
 
     def search(self, queries: list[str], kind: str, limit: int = PER_SOURCE) -> list[Candidate]:
         raise NotImplementedError
@@ -355,7 +376,68 @@ class AmbientCG(Source):
         return dest
 
 
-SOURCES: dict[str, Source] = {s.name: s for s in (PolyHaven(), Nasa(), AmbientCG())}
+# ── Poly Pizza ────────────────────────────────────────────────────────
+
+
+class PolyPizza(Source):
+    name = "polypizza"
+    kinds = ("model",)
+
+    def _key(self) -> Optional[str]:
+        return (os.environ.get(POLYPIZZA_KEY_ENV) or "").strip() or None
+
+    def unavailable(self):
+        return None if self._key() else f"no API key (set {POLYPIZZA_KEY_ENV} in .env)"
+
+    def headers_for(self, url):
+        host = (urllib.parse.urlsplit(url).hostname or "").lower()
+        key = self._key()
+        return {"x-auth-token": key} if key and host in POLYPIZZA_HOSTS else {}
+
+    def search(self, queries, kind, limit=PER_SOURCE):
+        if kind != "model":
+            return []
+        if self.unavailable():
+            raise SourceError(self.unavailable())
+        found: dict[str, dict] = {}
+        for q in queries:
+            url = f"{POLYPIZZA_API}/search/{urllib.parse.quote(q, safe='')}?Limit={min(limit, 32)}"
+            for m in (_json(url, self.headers_for(url)) or {}).get("results") or []:
+                if isinstance(m, dict) and m.get("ID") and m.get("Download"):
+                    found.setdefault(m["ID"], m)
+        out = []
+        for m in list(found.values())[:limit]:
+            licence = str(m.get("Licence") or "")
+            tris = m.get("Tri Count")
+            out.append(Candidate(
+                source=self.name, id=m["ID"], kind="model", name=m.get("Title") or m["ID"],
+                page_url=f"https://poly.pizza/m/{m['ID']}", thumbnail_url=m.get("Thumbnail"),
+                license=POLYPIZZA_LICENCES.get(licence, licence),
+                author=((m.get("Creator") or {}).get("Username") or None),
+                format=Path(urllib.parse.urlsplit(m["Download"]).path).suffix.lstrip(".").lower(),
+                triangles=int(tris) if isinstance(tris, (int, float)) else None,
+                tags=[*(m.get("Tags") or []), *([m["Category"]] if m.get("Category") else [])],
+                description=" ".join(str(m.get("Description") or "").split()),
+                license_url=library.LICENSE_URLS.get(POLYPIZZA_LICENCES.get(licence, "")),
+                notes=" ".join(filter(None, [m.get("Attribution"),
+                                             "animated" if m.get("Animated") else None])),
+            ))
+            out[-1].download_url = m["Download"]
+        return out
+
+    def fetch(self, cand, dest_dir):
+        url = getattr(cand, "download_url", None)
+        if not url:   # a candidate from a saved ranking: ask for the model again
+            info = f"{POLYPIZZA_API}/model/{urllib.parse.quote(cand.id, safe='')}"
+            url = (_json(info, self.headers_for(info)) or {}).get("Download")
+            if not url:
+                raise SourceError(f"Poly Pizza has no download for {cand.id!r}")
+        dest = dest_dir / "model.glb"
+        _download(url, dest, self.headers_for(url))
+        return dest
+
+
+SOURCES: dict[str, Source] = {s.name: s for s in (PolyHaven(), Nasa(), AmbientCG(), PolyPizza())}
 
 
 def sources_for(kind: str, names: Optional[list[str]] = None) -> list[Source]:
@@ -368,8 +450,9 @@ def fetch_thumbnail(cand: Candidate, dest: Path) -> bool:
     if not cand.thumbnail_url:
         return False
     raw = dest.with_suffix(".download")
+    src = SOURCES.get(cand.source)
     try:
-        _download(cand.thumbnail_url, raw)
+        _download(cand.thumbnail_url, raw, src.headers_for(cand.thumbnail_url) if src else None)
         library.make_thumbnail(raw, dest)   # any format Pillow reads (webp too) -> PNG
         return True
     except (SourceError, OSError, ValueError):

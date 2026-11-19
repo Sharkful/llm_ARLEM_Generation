@@ -463,7 +463,7 @@ anything is routed.
 | Poly Haven | Props, furniture, nature; PBR textures | CC0 | Public API, no key | **built** |
 | NASA 3D Resources | Spacecraft, planets, moons | No copyright (NASA media guidelines) | GitHub repository | **built** |
 | Smithsonian Open Access | Scanned objects and specimens | CC0 per item | API (api.data.gov key) | to do |
-| Poly Pizza | Low-poly models | CC0 or CC-BY per model | API, free key | to do |
+| Poly Pizza | Low-poly models | CC0 or CC-BY per model | API, free key | **built** |
 | ambientCG | PBR materials | CC0 | API, no key | **built** |
 
 Terms checked before building:
@@ -487,8 +487,18 @@ Terms checked before building:
   the color map read out of it (nothing is extracted; 4K and 8K zips, 128 MB and up,
   are never fetched).
 
-The docs of Smithsonian and Poly Pizza couldn't be read from the build machine (DNS);
-their adapters wait until their terms are checked.
+- **Poly Pizza** (API v1.1 spec, read 2026-11-19): a free key from
+  poly.pizza/settings/api, kept secret (`POLY_PIZZA_API_KEY` in `.env`), sent in an
+  `x-auth-token` header to the API and to `static.poly.pizza` where the files are, and
+  to no other host. CC-BY use requires attribution by law: the reply's attribution
+  line is kept as the note, with author, title and page in the provenance (the
+  library refuses CC-BY without them). `/search/{keyword}` gives a GLB, a triangle
+  count (checked against the budget before downloading) and the licence (`CC0 1.0`,
+  `CC-BY 3.0`; anything else is dropped). Without a key the source is skipped with a
+  note; naming it with `--sources` is then an error.
+
+Smithsonian Open Access's docs couldn't be read from the build machine (DNS); its
+adapter waits until its terms are checked.
 
 To evaluate before adding: **Objaverse** (about 800,000 Sketchfab-derived objects
 with captions; per-object license) and **Sketchfab** (needs a user login; owner

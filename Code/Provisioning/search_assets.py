@@ -493,7 +493,20 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
         except (library.LibraryError, OSError) as exc:
             return fail(f"--save needs an asset library: {exc}")
 
-    chosen_sources = [sources.SOURCES[n] for n in (args.sources or sources.SOURCES)]
+    try:   # keys for sources such as Poly Pizza live in .env, like the LLM keys
+        from dotenv import load_dotenv
+        load_dotenv(HERE.parent.parent / ".env")
+    except ImportError:
+        pass
+    chosen_sources = []
+    for n in args.sources or sources.SOURCES:
+        why = sources.SOURCES[n].unavailable()
+        if why and args.sources:
+            return fail(f"source {n} can't be used: {why}")
+        if why:
+            print(f"note: skipping {n}: {why}")
+        else:
+            chosen_sources.append(sources.SOURCES[n])
     to_search = [a for a in todo if library.name_key(a["name"]) not in choices
                  and (args.redo or previous.get(library.name_key(a["name"]), {}).get("status")
                       in (None, "failed"))]

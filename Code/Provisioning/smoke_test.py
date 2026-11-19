@@ -455,7 +455,7 @@ def part2(tmp: Path) -> None:
         check(not classify("unknown url type: ftp").transient, "an unsupported URL is permanent")
         real_fetch, tries = lib._fetch_once, []
 
-        def refused(url, dest):
+        def refused(url, dest, headers=None):
             tries.append(url)
             raise classify(OSError("Tunnel connection failed: 403 Forbidden"))
 
@@ -1733,6 +1733,7 @@ class Routes:
     def __init__(self):
         self.routes: dict = {}
         self.hits: list[str] = []
+        self.headers: list[tuple[str, dict]] = []   # (path, request headers)
         outer = self
         from urllib.parse import parse_qsl, urlsplit
 
@@ -1742,6 +1743,7 @@ class Routes:
 
             def do_GET(self):
                 outer.hits.append(self.path)
+                outer.headers.append((self.path, {k.lower(): v for k, v in self.headers.items()}))
                 u = urlsplit(self.path)
                 from urllib.parse import unquote
                 path = unquote(u.path)
@@ -1779,9 +1781,12 @@ def part7(tmp: Path) -> None:
     import sources as src
 
     srv = Routes()
-    saved = (src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA, src.AMBIENTCG_API)
+    saved = (src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA, src.AMBIENTCG_API,
+             src.POLYPIZZA_API, src.POLYPIZZA_HOSTS)
+    saved_key = os.environ.pop(src.POLYPIZZA_KEY_ENV, None)
     src.POLYHAVEN_API, src.GITHUB_API = srv.base + "/ph", srv.base + "/gh"
     src.AMBIENTCG_API = srv.base + "/acg"
+    src.POLYPIZZA_API, src.POLYPIZZA_HOSTS = srv.base + "/pp", ("127.0.0.1",)
     src.GITHUB_RAW, src.GITHUB_MEDIA = srv.base + "/raw", srv.base + "/media"
     src.SOURCES["polyhaven"].__init__()
     src.SOURCES["nasa"].__init__()
@@ -1856,6 +1861,19 @@ def part7(tmp: Path) -> None:
          "downloads": [{"attributes": "1K-PNG", "extension": "zip", "url": "u", "size": 1}],
          "thumbnails": {}, "maps": ["opacity"]}]})
 
+    # Poly Pizza: the /search/{keyword} reply shape of the v1.1 spec
+    srv.file("/static/heart.glb", glb([1, 2, 1]))
+    srv.file("/static/heart.webp", png_bytes())
+    pp_model = lambda **kw: {"ID": "x", "Title": "t", "Attribution": "a", "Thumbnail": srv.base + "/static/heart.webp",  # noqa: E731
+                             "Download": srv.base + "/static/heart.glb", "Tri Count": 900,
+                             "Creator": {"Username": "drx", "DPURL": ""}, "Category": "Objects",
+                             "Tags": ["heart"], "Licence": "CC-BY 3.0", "Animated": False, **kw}
+    srv.json("/pp/search/human heart anatomy", {"total": 3, "results": [
+        pp_model(ID="H1", Title="Anatomical Heart", Tags=["heart", "anatomy", "organ"],
+                 Attribution='"Anatomical Heart" by drx, https://poly.pizza/m/H1. Licence at https://creativecommons.org/licenses/by/3.0'),
+        pp_model(ID="H2", Title="Heart Emoji", Licence="CC0 1.0", **{"Tri Count": 10 ** 6}),
+        pp_model(ID="H3", Title="Heart Pillow", Licence="CC-BY-NC 4.0")]})
+
     # A plan with four search assets (one merged duplicate)
     run_dir = tmp / "search_run"
     run_dir.mkdir()
@@ -1872,7 +1890,7 @@ def part7(tmp: Path) -> None:
         planned("rocketPrefab", "model", ["saturn v rocket"], "The Saturn V rocket"),
         planned("unicornPrefab", "model", ["unicorn"], "A unicorn")]}), encoding="utf-8")
 
-    fits = {"Human Heart", "Red Brick Wall", "Saturn V", "Bricks 090"}
+    fits = {"Human Heart", "Red Brick Wall", "Saturn V", "Bricks 090", "Anatomical Heart"}
     seen = {"calls": 0, "prompts": []}
 
     def ranker(response_model, messages, max_retries):
@@ -1982,6 +2000,27 @@ def part7(tmp: Path) -> None:
               and "/acg/huge" not in " ".join(srv.hits) and "/acg/get?file=x2" in srv.hits,
               "ambientCG: only the color map is read out of the 2K zip (nothing extracted, no 8K download)")
 
+        code, text, _, _ = run("--only", "heartPrefab", "--redo", "--sources", "polypizza")
+        check(code == 2 and "POLY_PIZZA_API_KEY" in text, "Poly Pizza named without a key -> exit 2")
+        code, text, _, _ = run("--only", "heartPrefab", "--redo", "--no-vision", call_fn=None)
+        check("note: skipping polypizza: no API key" in text, "by default, Poly Pizza without a key is skipped with a note")
+        os.environ[src.POLYPIZZA_KEY_ENV] = "test-key"
+        check(src.SOURCES["polypizza"].headers_for("https://evil.example/x.glb") == {}
+              and src.SOURCES["polypizza"].headers_for(srv.base + "/pp/x") == {"x-auth-token": "test-key"},
+              "the Poly Pizza key goes only to Poly Pizza's own hosts")
+        srv.headers.clear()
+        code, text, by, res = run("--only", "heartPrefab", "--redo", "--sources", "polypizza")
+        h = by["heartPrefab"]
+        sent = {path.split("?")[0]: hd.get("x-auth-token") for path, hd in srv.headers}
+        prov = h["entry"]["provenance"] if "entry" in h else {}
+        check(h["status"] == "found" and h["dropped"] == {"license": 1, "over_budget": 1}
+              and prov.get("license") == "CC-BY-3.0" and prov.get("author") == "drx"
+              and prov.get("title") == "Anatomical Heart" and "Licence at" in (prov.get("notes") or "")
+              and sent.get("/pp/search/human%20heart%20anatomy") == "test-key" and sent.get("/static/heart.glb") == "test-key"
+              and sent.get("/static/heart.webp") == "test-key",
+              "Poly Pizza: CC-BY credited (author, title, attribution line), NC and over-budget hits dropped, the key sent")
+        os.environ.pop(src.POLYPIZZA_KEY_ENV, None)
+
         store = lib.LocalFolderStore(tmp / "libSearch", create=True)
         code, text, by, res = run("--only", "heartPrefab", "--redo", "--save", "--library", str(tmp / "libSearch"))
         h = by["heartPrefab"]
@@ -1994,7 +2033,11 @@ def part7(tmp: Path) -> None:
               "--save stores the found model with search provenance and the lab's names as aliases")
     finally:
         srv.close()
-        src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA, src.AMBIENTCG_API = saved
+        (src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA, src.AMBIENTCG_API,
+         src.POLYPIZZA_API, src.POLYPIZZA_HOSTS) = saved
+        os.environ.pop(src.POLYPIZZA_KEY_ENV, None)
+        if saved_key is not None:
+            os.environ[src.POLYPIZZA_KEY_ENV] = saved_key
         src.SOURCES["polyhaven"].__init__()
         src.SOURCES["nasa"].__init__()
 
