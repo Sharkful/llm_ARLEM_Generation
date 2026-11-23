@@ -126,6 +126,22 @@ def words(text: str) -> set[str]:
     return {w for w in _WORD.findall(text.lower()) if len(w) > 2}
 
 
+# Words too general to search for alone (a source matching words literally would return
+# everything): kept inside phrases, never tried by themselves.
+GENERIC_WORDS = {"model", "models", "anatomy", "anatomical", "diagram", "structure", "object",
+                 "prefab", "texture", "three", "dimensional", "realistic", "simple", "detailed",
+                 "human", "map", "surface", "view", "cross", "section", "scan", "replica"}
+
+
+def query_terms(queries: list[str]) -> tuple[list[str], list[str]]:
+    """(phrases, single words) to try in order on a source that matches words literally
+    and often requires all of them: the plan's phrases first, then each meaningful word
+    alone ("human heart anatomy" -> "heart"), longest first."""
+    phrases = list(dict.fromkeys(" ".join(q.split()) for q in queries if q.strip()))
+    singles = sorted({w for q in phrases for w in words(q)} - GENERIC_WORDS, key=lambda w: (-len(w), w))
+    return phrases, [w for w in singles if w not in phrases]
+
+
 def _json(url: str, headers: Optional[dict] = None):
     try:
         return library.fetch_json(url, headers)
@@ -410,11 +426,14 @@ class PolyPizza(Source):
         if self.unavailable():
             raise SourceError(self.unavailable())
         found: dict[str, dict] = {}
-        for q in queries:
-            url = f"{POLYPIZZA_API}/search/{urllib.parse.quote(q, safe='')}?Limit={min(limit, 32)}"
-            for m in (_json(url, self.headers_for(url)) or {}).get("results") or []:
-                if isinstance(m, dict) and m.get("ID") and m.get("Download"):
-                    found.setdefault(m["ID"], m)
+        for terms in query_terms(queries):   # phrases, then single words if nothing matched
+            for q in terms:
+                url = f"{POLYPIZZA_API}/search/{urllib.parse.quote(q, safe='')}?Limit={min(limit, 32)}"
+                for m in (_json(url, self.headers_for(url)) or {}).get("results") or []:
+                    if isinstance(m, dict) and m.get("ID") and m.get("Download"):
+                        found.setdefault(m["ID"], m)
+            if found:
+                break
         out = []
         for m in list(found.values())[:limit]:
             licence = str(m.get("Licence") or "")
@@ -460,9 +479,20 @@ class Smithsonian(Source):
     def unavailable(self):
         return None if self._key() else f"no API key (set {SMITHSONIAN_KEY_ENV} in .env)"
 
-    def _search(self, q: str, rows: int, three_d_only: bool) -> list[dict]:
+    # How to ask for records with 3D models, tried in order; the first that finds any is
+    # kept for the rest of the run. The docs allow fielded queries in q; the sample record
+    # with a 3D model was indexed only as "Images", hence the unfiltered last resort.
+    FORMS = ("fielded", "fqs", "plain")
+
+    def __init__(self):
+        self._form: Optional[str] = None
+        self.note = ""
+
+    def _search(self, q: str, rows: int, form: str) -> list[dict]:
+        if form == "fielded":
+            q = f'({q}) AND online_media_type:"3D Models"'
         url = f"{SMITHSONIAN_API}/search?q={urllib.parse.quote(q)}&rows={rows}"
-        if three_d_only:
+        if form == "fqs":
             url += "&fqs=" + urllib.parse.quote('["online_media_type:\\"3D Models\\""]')
         key = self._key()
         try:
@@ -494,13 +524,21 @@ class Smithsonian(Source):
         if self.unavailable():
             raise SourceError(self.unavailable())
         out: dict[str, Candidate] = {}
-        for three_d_only in (True, False):
-            for q in queries:
-                for row in self._search(q, limit if three_d_only else 50, three_d_only):
-                    for c in self._candidates(row):
-                        out.setdefault(c.id, c)
+        forms = [self._form] if self._form else list(self.FORMS)
+        requests = 0
+        for form in forms:
+            for terms in query_terms(queries):   # phrases, then single words
+                for q in terms:
+                    requests += 1
+                    for row in self._search(q, 50 if form == "plain" else limit, form):
+                        for c in self._candidates(row):
+                            out.setdefault(c.id, c)
+                if out:
+                    break
             if out:
+                self._form = form
                 break
+        self.note = f"{requests} request(s); query form: {self._form or 'none found 3D models'}"
         return list(out.values())[:limit]
 
     def _candidates(self, row: dict) -> list[Candidate]:

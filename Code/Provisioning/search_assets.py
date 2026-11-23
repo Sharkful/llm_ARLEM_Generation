@@ -14,7 +14,8 @@ Per asset:
    plan's search keywords.
 2. **Filter**, counting what is dropped and why (never hidden): a license outside the
    tier (CC0, public domain, CC-BY with an author), an unusable format, a known
-   triangle count over the budget.
+   triangle count over ``SIMPLIFY_CEILING`` times the budget. A model over the budget
+   but under that stays in, marked ``needs_simplifying``.
 3. **Text pass**: a hit sharing no word with the asset (name, description, keywords),
    that its source didn't rank as relevant either, is an obvious mismatch; the rest
    are ordered and the best ``TOP_FOR_VISION`` kept.
@@ -24,8 +25,9 @@ Per asset:
 5. **Auto-pick** the best candidate that fits, fetch it, convert (glTF to GLB; a
    texture to JPG within ``library.MAX_TEXTURE_SIDE``), center it and scale it to a
    unit cube, and check the triangle budget; if that fails, the next one that fits
-   (up to ``FETCH_TRIES``). None fits: ``no_match`` (the composite builder, #112, or a
-   reviewer takes over). ``--no-vision`` ranks by text only and picks nothing
+   (up to ``FETCH_TRIES``). If the best that fits is only over the triangle budget:
+   ``needs_simplifying``, with that candidate kept as ``pending`` for the simplify step
+   (#113). None fits: ``no_match`` (the composite builder, #112, or a reviewer takes over). ``--no-vision`` ranks by text only and picks nothing
    (``needs_review``).
 
 Output, in the run folder: ``search_results.json`` (rewritten after every asset: the
@@ -72,6 +74,15 @@ TOP_FOR_VISION = 12    # shown to the vision ranking
 KEEP = 10              # ranked candidates kept for a reviewer
 FETCH_TRIES = 3        # candidates that fit, tried in rank order
 SOURCE_RELEVANT = 0.5  # a source's own score that keeps a hit through the text pass
+# A model over the triangle budget is kept and ranked, marked as needing simplification
+# (#113), unless it is over this many times the budget: then simplifying it that far
+# would lose too much, and it is dropped before downloading.
+SIMPLIFY_CEILING = 10
+
+
+class OverBudget(sources.SourceError):
+    """The model is over the triangle budget: usable once simplified (#113)."""
+
 FORMATS = {"model": ("glb", "gltf"), "texture": ("jpg", "jpeg", "png")}
 
 
@@ -93,6 +104,8 @@ def collect(asset: dict, chosen_sources: list) -> tuple[list[sources.Candidate],
         try:
             found = src.search(queries_for(asset), asset["kind"])
             per_source[src.name] = {"hits": len(found)}
+            if getattr(src, "note", ""):
+                per_source[src.name]["note"] = src.note
             if getattr(src, "truncated", False):
                 per_source[src.name]["note"] = "the source's listing was cut short"
         except sources.SourceError as exc:
@@ -114,8 +127,8 @@ def filter_candidates(cands: list[sources.Candidate], kind: str):
             why = "license_without_author"   # CC-BY needs the author to credit
         elif c.format.lower() not in FORMATS[kind]:
             why = "format"
-        elif c.triangles and c.triangles > library.MAX_MODEL_TRIANGLES:
-            why = "over_budget"
+        elif c.triangles and c.triangles > library.MAX_MODEL_TRIANGLES * SIMPLIFY_CEILING:
+            why = "too_many_triangles"
         else:
             kept.append(c)
             continue
@@ -254,8 +267,8 @@ def prepare(cand: sources.Candidate, asset: dict, work: Path, out: Path, thumb: 
             raise sources.SourceError("the model has no size")
         triangles = int(sum(len(m.faces) for m in scene.dump()))
         if triangles > library.MAX_MODEL_TRIANGLES:
-            raise sources.SourceError(f"the model has {triangles} triangles, more than the budget "
-                                      f"of {library.MAX_MODEL_TRIANGLES}")
+            raise OverBudget(f"the model has {triangles} triangles, more than the budget of "
+                             f"{library.MAX_MODEL_TRIANGLES}; simplifying (#113) will make it usable")
         scene.apply_transform(trimesh.transformations.scale_matrix(1.0 / size)
                               @ trimesh.transformations.translation_matrix(-(lo + hi) / 2))
         lo, hi = scene.bounds
@@ -356,6 +369,7 @@ def search_one(asset: dict, run_dir: Path, folder: str, chosen_sources, run_llm)
         "rank": i, **c.to_json(), "text_score": round(scores[c.key], 3),
         "thumbnail": _rel(thumbs[c.key], run_dir) if c.key in thumbs else None,
         "fits": fits, "reason": reason,
+        "needs_simplifying": bool(c.triangles and c.triangles > library.MAX_MODEL_TRIANGLES),
     } for i, (c, fits, reason) in enumerate(order[:KEEP], start=1)]
 
     if run_llm is None:
@@ -369,7 +383,7 @@ def search_one(asset: dict, run_dir: Path, folder: str, chosen_sources, run_llm)
             got = prepare(c, asset, run_dir / "search" / folder / "fetch", run_dir / "found" / folder,
                           thumbs.get(c.key))
         except sources.SourceError as exc:
-            tries.append({"rank": r["rank"], "error": str(exc)})
+            tries.append({"rank": r["rank"], "error": str(exc), "over_budget": isinstance(exc, OverBudget)})
             continue
         rec.update(status="found", chosen={"rank": r["rank"], "by": "auto"}, entry=got["entry"],
                    files={k: _rel(v, run_dir) for k, v in got["files"].items()}, _files=got["files"])
@@ -377,9 +391,15 @@ def search_one(asset: dict, run_dir: Path, folder: str, chosen_sources, run_llm)
     if tries:
         rec["fetch_errors"] = tries
     if rec["status"] != "found":
-        rec["reason"] = ("no candidate fits" if not any(f for _, f, _ in order)
-                         else "every candidate that fits failed to fetch or check")
-        rec["status"] = "no_match" if not tries else "failed"
+        over = [t for t in tries if t["over_budget"]]
+        if over:   # kept for the simplify step: the best match that fits, over the budget
+            rec.update(status="needs_simplifying", pending={"rank": over[0]["rank"]},
+                       reason=f"the best match that fits is over the triangle budget of "
+                              f"{library.MAX_MODEL_TRIANGLES}; simplifying (#113) will make it usable")
+        else:
+            rec["reason"] = ("no candidate fits" if not any(f for _, f, _ in order)
+                             else "every candidate that fits failed to fetch or check")
+            rec["status"] = "no_match" if not tries else "failed"
     return rec
 
 
@@ -423,7 +443,8 @@ def _line(rec: dict) -> str:
                 f"{c['license']}, by {rec['chosen']['by']})"
                 + (f" -> library {saved['asset_id']}" if saved else "")
                 + (f" (not saved: {rec['save_error']})" if rec.get("save_error") else ""))
-    label = {"no_match": "NO MATCH", "needs_review": "REVIEW", "failed": "FAILED"}[rec["status"]]
+    label = {"no_match": "NO MATCH", "needs_review": "REVIEW", "failed": "FAILED",
+             "needs_simplifying": "SIMPLIFY"}[rec["status"]]
     return f"  {label:7} {name:32} {rec.get('hits', 0)} hit(s): {rec.get('reason', '')}"
 
 
@@ -439,7 +460,8 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
     ap.add_argument("--redo", action="store_true", help="search again assets already decided")
     ap.add_argument("--max-triangles", type=int, metavar="N",
                     help=f"triangle limit for this run (default library.MAX_MODEL_TRIANGLES, "
-                         f"{library.MAX_MODEL_TRIANGLES}); scans are often 100k-150k")
+                         f"{library.MAX_MODEL_TRIANGLES}); a model over it but under "
+                         f"{SIMPLIFY_CEILING}x is kept for simplifying (#113)")
     ap.add_argument("--choose", nargs="+", metavar="NAME=RANK",
                     help="take this candidate from the saved ranking (no new search)")
     ap.add_argument("--save", action="store_true",
@@ -540,7 +562,7 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
             "llm": run_llm.summary() if run_llm is not None else None,
             "library_after": store.identity() if store is not None else None,
             "counts": {s: sum(r["status"] == s for r in results.values())
-                       for s in ("found", "no_match", "needs_review", "failed")},
+                       for s in ("found", "needs_simplifying", "no_match", "needs_review", "failed")},
             "assets": [{k: v for k, v in r.items() if not k.startswith("_")} for r in results.values()],
         }
         library.write_json_atomic(results_path, record)
@@ -572,10 +594,11 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
     write()
     c = {s: sum(results[library.name_key(a["name"])]["status"] == s for a in todo
                 if library.name_key(a["name"]) in results)
-         for s in ("found", "no_match", "needs_review", "failed")}
+         for s in ("found", "needs_simplifying", "no_match", "needs_review", "failed")}
     summary = run_llm.summary() if run_llm is not None else None
     cost = f", ranking ${summary['cost']['total_usd']:.4f}" if summary and summary.get("cost") else ""
-    print(f"{c['found']} found, {c['no_match']} no match, {c['needs_review']} for review, "
+    print(f"{c['found']} found, {c['needs_simplifying']} to simplify, {c['no_match']} no match, "
+          f"{c['needs_review']} for review, "
           f"{c['failed']} failed{cost}; results: {results_path}")
     if summary and summary.get("served_models"):
         llm._benchmark().warn_served_model(run_llm.model_config.model_id, summary["served_models"])

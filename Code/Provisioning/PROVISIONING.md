@@ -504,15 +504,19 @@ Terms checked before building:
   `3d_voyager` list resources by format (GLB, glTF/OBJ zips, usdz), Draco compression,
   size and a resolution tag in the file name (`-150k-4096`); the smallest uncompressed
   GLB is used (trimesh can't read Draco), and the triangle count read from the file
-  name drops big scans before downloading. The `online_media_type:"3D Models"` filter
-  is tried first, then once without it (the sample's record has a 3D model but is
-  indexed only as "Images").
+  name marks big scans for simplifying before downloading. Three query forms are tried
+  in order, and the first that finds a 3D model is kept for the run (recorded in the
+  source's note): the filter inside the query (`(heart) AND online_media_type:"3D
+  Models"`, fielded queries being documented), the `fqs` filter parameter, then no
+  filter (50 rows; the sample's record has a 3D model but is indexed only as "Images").
+  The first live run (2026-11-23, heart lab, phrases with the `fqs` filter only) found
+  nothing, which led to the word fallback and the fielded form.
 
 **Scans are big.** The sample's GLBs are 100k and 150k triangles with 4096 px
-textures, 3x the proposed budget (#105), so with today's budget they are dropped.
-`search_assets.py --max-triangles N` raises the limit for a run (recorded in the
-results). Decimating a textured scan while keeping its texture belongs with the
-normalize step (#113).
+textures, 3x the proposed budget (#105). They are kept and ranked, marked for
+simplifying; when one is the best match the asset is `needs_simplifying` until the
+simplify step (#113, pymeshlab, keeping the texture) makes it usable.
+`search_assets.py --max-triangles N` overrides the budget for a run (recorded).
 
 To evaluate before adding: **Objaverse** (about 800,000 Sketchfab-derived objects
 with captions; per-object license) and **Sketchfab** (needs a user login; owner
@@ -526,8 +530,9 @@ description, the source's own relevance score, notes.
 
 1. Up to 30 hits per asset across sources, from the plan's search keywords.
 2. Drop hits outside the license policy (CC-BY also needs an author to credit), in
-   formats we can't read, or with a known triangle count over the budget, counted
-   per reason.
+   formats we can't read, or with a known triangle count over 10x the budget
+   (`SIMPLIFY_CEILING`), counted per reason. A model over the budget but under that
+   is kept and marked `needs_simplifying`, so the simplify step (#113) gets its chance.
 3. A text pass drops obvious mismatches: a hit sharing no word with the asset that
    its source didn't rank as relevant either; the best 12 go on.
 4. **One vision call ranks their thumbnails** (`CandidateRanking`, through
@@ -536,8 +541,15 @@ description, the source's own relevance score, notes.
    best first, fits or not, a one-line reason. When unsure, it doesn't fit.
 5. Auto-pick: the best candidate that fits is fetched, converted (glTF to GLB; a
    texture to JPG within 2048 px), centered and scaled to a unit cube, and checked
-   against the triangle budget; if that fails, the next one that fits (up to 3). None
-   fits: `no_match` (composite, #112, or a reviewer); all that fit fail: `failed`.
+   against the triangle budget; if that fails, the next one that fits (up to 3). If the
+   best that fits is only over the budget: `needs_simplifying`, kept as `pending` for
+   #113. None fits: `no_match` (composite, #112, or a reviewer); all that fit fail:
+   `failed`.
+
+Sources that match words literally (Poly Pizza, the Smithsonian; ambientCG already)
+try the plan's keyword phrases first, then each meaningful word alone ("human heart
+anatomy" -> "heart"), never generic words such as "model" or "anatomy" by themselves
+(`sources.query_terms`, `GENERIC_WORDS`).
    `--no-vision` ranks by text and picks nothing (`needs_review`).
 
 `search_results.json` in the run folder keeps, per asset, the **ranked top 10** with

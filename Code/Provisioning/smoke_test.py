@@ -1871,7 +1871,7 @@ def part7(tmp: Path) -> None:
                              "Download": srv.base + "/static/heart.glb", "Tri Count": 900,
                              "Creator": {"Username": "drx", "DPURL": ""}, "Category": "Objects",
                              "Tags": ["heart"], "Licence": "CC-BY 3.0", "Animated": False, **kw}
-    srv.json("/pp/search/human heart anatomy", {"total": 3, "results": [
+    srv.json("/pp/search/heart", {"total": 3, "results": [
         pp_model(ID="H1", Title="Anatomical Heart", Tags=["heart", "anatomy", "organ"],
                  Attribution='"Anatomical Heart" by drx, https://poly.pizza/m/H1. Licence at https://creativecommons.org/licenses/by/3.0'),
         pp_model(ID="H2", Title="Heart Emoji", Licence="CC0 1.0", **{"Tri Count": 10 ** 6}),
@@ -1951,9 +1951,15 @@ def part7(tmp: Path) -> None:
         kept, dropped = S.filter_candidates([c(id="a"), c(id="b", license="CC-BY-NC-4.0"),
                                              c(id="c", license="CC-BY-4.0"), c(id="d", format="fbx"),
                                              c(id="e", triangles=10 ** 6)], "model")
-        check([k.id for k in kept] == ["a"] and dropped == {"license": ["x:b"], "license_without_author": ["x:c"],
-                                                             "format": ["x:d"], "over_budget": ["x:e"]},
-              "hits outside the license tier, in other formats or over budget are dropped and counted")
+        kept, dropped = S.filter_candidates([c(id="a"), c(id="b", license="CC-BY-NC-4.0"),
+                                             c(id="c", license="CC-BY-4.0"), c(id="d", format="fbx"),
+                                             c(id="e", triangles=10 ** 6), c(id="f", triangles=120_000)], "model")
+        check([k.id for k in kept] == ["a", "f"] and dropped == {"license": ["x:b"], "license_without_author": ["x:c"],
+                                                                  "format": ["x:d"], "too_many_triangles": ["x:e"]},
+              "dropped and counted: license, format, and over 10x the triangle budget; a model a few times over is kept")
+        check(src.query_terms(["human heart anatomy", "red blood cell"])
+              == (["human heart anatomy", "red blood cell"], ["blood", "heart", "cell", "red"]),
+              "literal-match sources try the phrases, then each meaningful word alone (not 'human', 'anatomy')")
         try:
             with S.ranking_scope(3):
                 S.CandidateRanking.model_validate({"ranking": [{"number": 1, "fits": True, "reason": "r"},
@@ -2018,8 +2024,9 @@ def part7(tmp: Path) -> None:
         finally:
             lib.MAX_MODEL_TRIANGLES = saved_budget
         h = by["heartPrefab"]
-        check(h["status"] == "failed" and "more than the budget" in h["fetch_errors"][0]["error"],
-              "a chosen model over the triangle budget fails its check; nothing else fits -> failed")
+        check(h["status"] == "needs_simplifying" and h["pending"] == {"rank": 1} and h["fetch_errors"][0]["over_budget"]
+              and "simplifying (#113)" in h["reason"] and "SIMPLIFY" in text,
+              "the best match over the triangle budget is kept for the simplify step, not failed")
 
         acg = src.SOURCES["ambientcg"].search(["red brick"], "texture")
         check([c.id for c in acg] == ["Bricks090"] and acg[0].format == "jpg" and acg[0].mapping == "tileable"
@@ -2046,12 +2053,13 @@ def part7(tmp: Path) -> None:
         h = by["heartPrefab"]
         sent = {path.split("?")[0]: hd.get("x-auth-token") for path, hd in srv.headers}
         prov = h["entry"]["provenance"] if "entry" in h else {}
-        check(h["status"] == "found" and h["dropped"] == {"license": 1, "over_budget": 1}
+        check(h["status"] == "found" and h["dropped"] == {"license": 1, "too_many_triangles": 1}
               and prov.get("license") == "CC-BY-3.0" and prov.get("author") == "drx"
               and prov.get("title") == "Anatomical Heart" and "Licence at" in (prov.get("notes") or "")
-              and sent.get("/pp/search/human%20heart%20anatomy") == "test-key" and sent.get("/static/heart.glb") == "test-key"
+              and sent.get("/pp/search/heart") == "test-key" and sent.get("/static/heart.glb") == "test-key"
               and sent.get("/static/heart.webp") == "test-key",
-              "Poly Pizza: CC-BY credited (author, title, attribution line), NC and over-budget hits dropped, the key sent")
+              "Poly Pizza: found by the word 'heart' after the phrase found nothing; CC-BY credited, NC and "
+              "far-over-budget hits dropped, the key sent")
         os.environ.pop(src.POLYPIZZA_KEY_ENV, None)
 
         os.environ[src.SMITHSONIAN_KEY_ENV] = "si-secret-key"
@@ -2065,17 +2073,24 @@ def part7(tmp: Path) -> None:
         code, text, by, res = run("--only", "heartPrefab", "--redo", "--sources", "smithsonian")
         h = by["heartPrefab"]
         paths = [p for p, _ in srv.headers]
+        q_sent = [p for p in paths if p.startswith("/si/search")]
+        from urllib.parse import parse_qs, urlsplit
+        first_q = parse_qs(urlsplit(q_sent[0]).query)["q"][0] if q_sent else ""
+        specimen = next((r for r in h["ranked"] if r["name"] == "Heart Specimen"), {})
         check(h["status"] == "found" and h["ranked"][0]["name"] == "Human Heart Model"
-              and h["dropped"] == {"over_budget": 1, "license": 1}
+              and h["dropped"] == {"license": 1} and specimen.get("needs_simplifying") is True
+              and first_q == '(human heart anatomy) AND online_media_type:"3D Models"'
+              and "query form: fielded" in h["sources"]["smithsonian"]["note"]
               and h["entry"]["provenance"]["license"] == "CC0-1.0"
               and all("api_key=si-secret-key" in p for p in paths if p.startswith("/si/"))
               and not any("si-secret-key" in p for p in paths if not p.startswith("/si/")),
-              "Smithsonian: CC0 only, a 150k scan over budget dropped, the key only on the API")
+              "Smithsonian: the 3D filter inside the query, CC0 only, a 150k scan kept and marked for "
+              "simplifying, the key only on the API")
         code, text, by, res = run("--only", "heartPrefab", "--redo", "--sources", "smithsonian",
                                   "--max-triangles", "200000")
         h = by["heartPrefab"]
         check(h["dropped"] == {"license": 1} and res["max_triangles"] == 200000
-              and any(r["name"] == "Heart Specimen" for r in h["ranked"]),
+              and any(r["name"] == "Heart Specimen" and not r["needs_simplifying"] for r in h["ranked"]),
               "--max-triangles raises the limit for a run (recorded), keeping big scans")
         lib.MAX_MODEL_TRIANGLES = saved[-1]
         src.SMITHSONIAN_API = srv.base + "/si-broken"

@@ -462,7 +462,10 @@ not reused. Built so far:
   triangle counts; `POLY_PIZZA_API_KEY` sent only to its hosts, skipped without a key; the CC-BY
   attribution line kept) and the Smithsonian (CC0 `3d_voyager` media, the smallest uncompressed
   GLB, its triangle count from the file name; `SMITHSONIAN_API_KEY` only to `api.si.edu` and
-  redacted from errors; scans are 100k-150k triangles, so `--max-triangles` raises the limit). Per asset: up to 30 hits, dropped by
+  redacted from errors; three query forms, the 3D filter inside the query first). Literal-match
+  sources try phrases, then single meaningful words. Models over the triangle budget but under
+  10x are kept and marked; a best match that is only over budget is `needs_simplifying` (pending
+  for #113), not dropped; `--max-triangles` overrides the budget for a run. Per asset: up to 30 hits, dropped by
   license / format / budget (counted), a text pass, then one vision call (`CandidateRanking`; images
   through `llm.TrackedLLM`) ranks the thumbnails; the best that fits is fetched, unit-cube scaled and
   budget-checked, else `no_match`. `search_results.json` keeps the ranked top 10 and who chose
