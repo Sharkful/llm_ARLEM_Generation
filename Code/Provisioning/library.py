@@ -669,8 +669,8 @@ def _network_failure(url: str, exc: BaseException) -> DownloadError:
     return DownloadError(text, transient=transient)
 
 
-def _fetch_once(url: str, dest: Path) -> None:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+def _fetch_once(url: str, dest: Path, headers: Optional[dict] = None) -> None:
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
     try:
         with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT) as resp, open(dest, "wb") as out:
             expected = resp.headers.get("Content-Length")
@@ -700,7 +700,7 @@ def _policy():
     return transient_policy
 
 
-def download(url: str, dest: Path) -> int:
+def download(url: str, dest: Path, headers: Optional[dict] = None) -> int:
     """Download ``url`` to ``dest``. Transient failures (HTTP statuses in
     ``transient_policy.STATUS``, see ``_network_failure`` for the rest) are retried with
     the shared policy's attempts and back-off; others never. Returns the retries used;
@@ -715,7 +715,7 @@ def download(url: str, dest: Path) -> int:
         nonlocal attempts
         attempts += 1
         try:
-            _fetch_once(url, dest)
+            _fetch_once(url, dest, headers)
         except DownloadError as exc:
             dest.unlink(missing_ok=True)
             exc.retries = attempts - 1
@@ -730,6 +730,24 @@ def download(url: str, dest: Path) -> int:
     )
     retryer(once)
     return attempts - 1
+
+
+def fetch_json(url: str, headers: Optional[dict] = None):
+    """GET ``url`` as JSON through ``download`` (the shared retry policy, size limit
+    and network-failure classification). None on 404; a ``DownloadError`` otherwise,
+    or ``ValueError`` when the reply isn't JSON."""
+    with tempfile.TemporaryDirectory() as tmp:
+        dest = Path(tmp) / "reply.json"
+        try:
+            download(url, dest, headers)
+        except DownloadError as exc:
+            if exc.status == 404:
+                return None
+            raise
+        try:
+            return json.loads(dest.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            raise ValueError(f"{url} sent a reply that isn't JSON") from exc
 
 
 def make_thumbnail(src: Path, dest: Path) -> None:

@@ -28,6 +28,8 @@ API keys go in `.env` (git-ignored):
 OPENAI_API_KEY=...
 GEMINI_API_KEY=...
 ANTHROPIC_API_KEY=...
+POLY_PIZZA_API_KEY=...    # optional: provisioning search (Code/Provisioning/sources.py)
+SMITHSONIAN_API_KEY=...   # optional: provisioning search (an api.data.gov key)
 ```
 
 ## Running Scripts
@@ -112,6 +114,10 @@ python "Code/Provisioning/provision_lab.py" "Artifacts/Data/Benchmark/Outputs/<r
 # --save stores them in the library with the lab's names as aliases.
 python "Code/Provisioning/build_assets.py" "Artifacts/Data/Provisioning/testing/<run>" --save
 python "Code/Provisioning/molecule.py" "xenon tetrafluoride" --lone-pairs --out <folder>   # one molecule, to check by eye
+# Search what a dry run routed to search (Poly Haven, NASA 3D, ambientCG, Poly Pizza, Smithsonian): rank by one vision call per asset,
+# auto-pick, keep the top 10 (search_results.json); --no-vision (no key), --choose NAME=RANK, --save.
+python "Code/Provisioning/search_assets.py" "Artifacts/Data/Provisioning/testing/<run>"
+python "Code/Provisioning/search_assets.py" "Artifacts/Data/Provisioning/testing/<run>" --choose heartPrefab=2 --save
 ```
 
 Asset library:
@@ -449,6 +455,21 @@ not reused. Built so far:
   over), plus a matplotlib thumbnail (right-handed view, never mirrored). Deterministic;
   provenance records the CID, `builder` and `builder_version` (`--save` replaces only an entry
   an older version of the same builder made, never a newer or reviewed one).
+- **`sources.py`** + **`search_assets.py`** (#110): search for `search`-routed assets. Sources so
+  far: Poly Haven (CC0; `/search`, glTF converted to GLB; a User-Agent naming the software is
+  required), NASA 3D Resources (GitHub tree, `.glb`, Git LFS pointers followed), ambientCG
+  (CC0 textures; the color map read out of the 2K JPG zip) and Poly Pizza (CC0 / CC-BY GLBs with
+  triangle counts; `POLY_PIZZA_API_KEY` sent only to its hosts, skipped without a key; the CC-BY
+  attribution line kept) and the Smithsonian (CC0 `3d_voyager` media, the smallest uncompressed
+  GLB, its triangle count from the file name; `SMITHSONIAN_API_KEY` only to `api.si.edu` and
+  redacted from errors; three query forms, the 3D filter inside the query first). Literal-match
+  sources try phrases, then single meaningful words. Models over the triangle budget but under
+  10x are kept and marked; a best match that is only over budget is `needs_simplifying` (pending
+  for #113), not dropped; `--max-triangles` overrides the budget for a run. Per asset: up to 30 hits, dropped by
+  license / format / budget (counted), a text pass, then one vision call (`CandidateRanking`; images
+  through `llm.TrackedLLM`) ranks the thumbnails; the best that fits is fetched, unit-cube scaled and
+  budget-checked, else `no_match`. `search_results.json` keeps the ranked top 10 and who chose
+  (`auto` / `reviewer`); `--choose NAME=RANK` re-picks with no new search; `--save` stores it.
   **`build_assets.py`**: builds a dry-run manifest's builder-routed assets into `<run>/built/`
   and `build_results.json`; `--save` stores them in the library with the lab's names as aliases.
 - **`reuse.py`** (#108): the reuse judge, run before routing on assets with no name or alias
@@ -469,8 +490,9 @@ not reused. Built so far:
   transient retries and reask restarts, per-asset status and plan; anything merged into a
   flagged asset is flagged too).
 - **`smoke_test.py`**: offline (mock download server, throwaway library, fake LLM, the
-  real client against a mock Anthropic server, and the molecule builder against a mock
-  PubChem; never the real library).
+  real client against a mock Anthropic server, the molecule builder against a mock
+  PubChem, and search against mock Poly Haven / GitHub / NASA servers with a fake vision
+  ranker; never the real library).
 
 
 

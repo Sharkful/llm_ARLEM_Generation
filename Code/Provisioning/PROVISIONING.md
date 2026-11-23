@@ -454,40 +454,121 @@ tokens, cost, retries, time and served models, and the manifest's `llm` holds th
 tracker summary for the whole run. A failed judge call fails the run (exit 1) before
 anything is routed.
 
-## Search (#110)
+## Search (#110, first sources built)
 
-**Sources** (one adapter each, all returning the same candidate record):
+**Sources** (`sources.py`, one adapter each, all returning the same `Candidate`):
 
-| Source | Content | License | Access |
-|---|---|---|---|
-| Poly Haven | Props, furniture, nature; PBR textures | CC0 | Public API, no key |
-| NASA 3D Resources | Spacecraft, planets, moons | Public domain | GitHub repository |
-| Smithsonian Open Access | Scanned objects and specimens | CC0 per item | API (api.data.gov key) |
-| Poly Pizza | Low-poly models | CC0 or CC-BY per model | API, free key |
-| ambientCG | PBR materials | CC0 | API, no key |
+| Source | Content | License | Access | State |
+|---|---|---|---|---|
+| Poly Haven | Props, furniture, nature; PBR textures | CC0 | Public API, no key | **built** |
+| NASA 3D Resources | Spacecraft, planets, moons | No copyright (NASA media guidelines) | GitHub repository | **built** |
+| Smithsonian Open Access | Scanned objects and specimens | CC0 per item | API (api.data.gov key) | **built** |
+| Poly Pizza | Low-poly models | CC0 or CC-BY per model | API, free key | **built** |
+| ambientCG | PBR materials | CC0 | API, no key | **built** |
+
+Terms checked before building:
+
+- **Poly Haven** (Public-API ToS): free for any use, no key; every call must carry a
+  User-Agent naming the software (`library.USER_AGENT`); live API content shown to
+  people must credit Poly Haven (stored CC0 assets need no credit). `/search` ranks
+  assets for a query (falling back to word matching over `/assets` if it fails);
+  models come as glTF with buffers and textures (`include`) and are converted to GLB.
+- **NASA 3D Resources** (README): "free and without copyright"; the NASA media
+  guidelines apply (no endorsement, no insignia), recorded as a note. One folder per
+  model under `3D Models/` with a `.glb` and usually a picture; the tree is listed once
+  per process through the GitHub API and matched by words. A Git LFS pointer is
+  fetched again from GitHub's LFS media host.
+
+- **ambientCG** (license page, read 2026-11-19): every asset CC0 1.0; credit not
+  required but appreciated, so its suggested credit line is kept as a note.
+  `/api/v3/assets?type=material&q=...` (keywords combine with AND, so each query
+  alone, then single words if nothing matched); only materials with a `color` map;
+  downloads are zips per resolution, of which the 2K JPG (else 1K) is fetched and only
+  the color map read out of it (nothing is extracted; 4K and 8K zips, 128 MB and up,
+  are never fetched).
+
+- **Poly Pizza** (API v1.1 spec, read 2026-11-19): a free key from
+  poly.pizza/settings/api, kept secret (`POLY_PIZZA_API_KEY` in `.env`), sent in an
+  `x-auth-token` header to the API and to `static.poly.pizza` where the files are, and
+  to no other host. CC-BY use requires attribution by law: the reply's attribution
+  line is kept as the note, with author, title and page in the provenance (the
+  library refuses CC-BY without them). `/search/{keyword}` gives a GLB, a triangle
+  count (checked against the budget before downloading) and the licence (`CC0 1.0`,
+  `CC-BY 3.0`; anything else is dropped). Without a key the source is skipped with a
+  note; naming it with `--sources` is then an error.
+
+- **Smithsonian Open Access** (API docs and a sample reply, 2026-11-23): an api.data.gov
+  key (`SMITHSONIAN_API_KEY` in `.env`) in the `api_key` query parameter, only to
+  `api.si.edu`, removed from every recorded error. Only media whose own
+  `usage.access` is `CC0` are used. Each record's `online_media.media` entries of type
+  `3d_voyager` list resources by format (GLB, glTF/OBJ zips, usdz), Draco compression,
+  size and a resolution tag in the file name (`-150k-4096`); the smallest uncompressed
+  GLB is used (trimesh can't read Draco), and the triangle count read from the file
+  name marks big scans for simplifying before downloading. Three query forms are tried
+  in order, and the first that finds a 3D model is kept for the run (recorded in the
+  source's note): the filter inside the query (`(heart) AND online_media_type:"3D
+  Models"`, fielded queries being documented), the `fqs` filter parameter, then no
+  filter (50 rows; the sample's record has a 3D model but is indexed only as "Images").
+  The first live run (2026-11-23, heart lab, phrases with the `fqs` filter only) found
+  nothing, which led to the word fallback and the fielded form.
+
+**Scans are big.** The sample's GLBs are 100k and 150k triangles with 4096 px
+textures, 3x the proposed budget (#105). They are kept and ranked, marked for
+simplifying; when one is the best match the asset is `needs_simplifying` until the
+simplify step (#113, pymeshlab, keeping the texture) makes it usable.
+`search_assets.py --max-triangles N` overrides the budget for a run (recorded).
 
 To evaluate before adding: **Objaverse** (about 800,000 Sketchfab-derived objects
 with captions; per-object license) and **Sketchfab** (needs a user login; owner
 changed in August 2026). NIH 3D has no documented API and is a manual source.
-Each source's terms are checked before its adapter is built.
 
-**Candidate record:** source, record id, name, page URL, thumbnail URL, download
-URL and format, license, author, triangle count and file size if known.
+**Candidate record:** source, record id, kind, name, page URL, thumbnail URL, license
+(and its URL), author, format, triangle count and file size if known, tags,
+description, the source's own relevance score, notes.
 
-**Ranking:**
+**Ranking** (`search_assets.py`):
 
-1. Up to 30 hits per asset across sources, from the asset's search keywords.
-2. Drop hits outside the license policy, in formats we can't read, or over budget
-   (counted).
-3. A cheap text pass drops obvious mismatches by name and tags.
-4. **One vision call ranks the remaining thumbnails** against the description:
-   order, pass or fail, one-line reason each.
-5. An automatic run takes rank 1 if it passed; otherwise the asset goes to
-   `composite`.
+1. Up to 30 hits per asset across sources, from the plan's search keywords.
+2. Drop hits outside the license policy (CC-BY also needs an author to credit), in
+   formats we can't read, or with a known triangle count over 10x the budget
+   (`SIMPLIFY_CEILING`), counted per reason. A model over the budget but under that
+   is kept and marked `needs_simplifying`, so the simplify step (#113) gets its chance.
+3. A text pass drops obvious mismatches: a hit sharing no word with the asset that
+   its source didn't rank as relevant either; the best 10 go on (all of them are kept, so any can be picked).
+4. **One vision call ranks their thumbnails** (`CandidateRanking`, through
+   `llm.TrackedLLM`, which sends image files as `instructor.Image`s for every
+   provider) against the description and must-be-right facts: every candidate once,
+   best first, fits or not, a one-line reason. When unsure, it doesn't fit.
+5. Auto-pick: the best candidate that fits is fetched, converted (glTF to GLB; a
+   texture to JPG within 2048 px), centered and scaled to a unit cube, and checked
+   against the triangle budget; if that fails, the next one that fits (up to 3). Fits
+   whose triangle count is already known to be over the budget are never downloaded
+   here and use no try. If the best that fits is only over the budget:
+   `needs_simplifying`, kept as `pending` for #113. Any error in one candidate fails
+   that candidate only. The chosen files are built in a staging folder and replace
+   `found/<asset>/` only once every check passed, so a failed `--choose` keeps the
+   earlier pick and its files. None fits: `no_match` (composite, #112, or a reviewer); all that fit fail:
+   `failed`.
 
-The manifest keeps the **ranked top 10** with thumbnails, links, licenses and
-reasons, and who chose (`auto` / `reviewer`). A reviewer's choice is applied with
-`--resume` and no new search (#116).
+Sources that match words literally (Poly Pizza, the Smithsonian; ambientCG already)
+try the plan's keyword phrases first, then each meaningful word alone ("human heart
+anatomy" -> "heart"), never generic words such as "model" or "anatomy" by themselves
+(`sources.query_terms`, `GENERIC_WORDS`).
+   `--no-vision` ranks by text and picks nothing (`needs_review`).
+
+`search_results.json` in the run folder keeps, per asset, the **ranked top 10** with
+thumbnails (`search/<asset>/NN.png`), links, licenses, authors, fits and reasons,
+what was dropped and why, each source's hit count or error, and who chose (`auto` /
+`reviewer`). The chosen file and its thumbnail go to `found/<asset>/`. A rerun
+searches only undecided assets (`--redo` all); `--choose NAME=RANK` applies a
+reviewer's choice from the saved ranking with no new search or call (#116 adds a
+tool for it); `--save` stores the found asset in the library with search provenance
+and the lab's names as aliases, including assets an earlier run found and didn't save.
+A Smithsonian query form that is refused (a 4xx such as 400) falls through to the next,
+keeping any hits it found first; a network failure or a 5xx is raised at once. The form
+that worked is tried first for later assets, then the others when it finds nothing.
+The earlier pick is moved aside before the new one is put in place and comes back if
+anything fails (e.g. a file open in a viewer on Windows).
 
 ## Builders (#111 built, #114)
 

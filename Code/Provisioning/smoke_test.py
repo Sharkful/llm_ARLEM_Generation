@@ -38,8 +38,14 @@ served models. Part 6: the molecule builder (#111) against a mock PubChem server
 (3D records, idealized VSEPR geometry, lone pairs, formula lookup, failures), the
 builder route in describe and route, and ``build_assets.py`` (build, save, alias).
 
+Part 7: search (#110) against mock Poly Haven, GitHub, NASA, ambientCG, Poly Pizza and
+Smithsonian servers with a fake
+vision ranker: collecting, the license / format / budget filters, the text pass, the
+ranking checks, auto-pick, glTF to GLB, texture resizing, a Git LFS pointer, no match,
+text-only ranking, a reviewer's choice, resume, a model over budget, and --save.
+
 Requires the project venv (pydantic, Pillow; Part 5 also anthropic and instructor;
-Part 6 trimesh and matplotlib).
+Parts 6 and 7 trimesh and matplotlib).
 Exit code 1 on any failure.
 """
 
@@ -450,7 +456,7 @@ def part2(tmp: Path) -> None:
         check(not classify("unknown url type: ftp").transient, "an unsupported URL is permanent")
         real_fetch, tries = lib._fetch_once, []
 
-        def refused(url, dest):
+        def refused(url, dest, headers=None):
             tries.append(url)
             raise classify(OSError("Tunnel connection failed: 403 Forbidden"))
 
@@ -1718,6 +1724,530 @@ def part6(tmp: Path) -> None:
 MANIFEST_NAME = "provisioning_manifest.json"
 
 
+# ── Part 7 ────────────────────────────────────────────────────────────
+
+
+class Routes:
+    """A mock HTTP server answering by path and query: ``routes[(path, frozenset(query))]``
+    or ``routes[path]`` (any query) -> (status, bytes)."""
+
+    def __init__(self):
+        self.routes: dict = {}
+        self.hits: list[str] = []
+        self.headers: list[tuple[str, dict]] = []   # (path, request headers)
+        outer = self
+        from urllib.parse import parse_qsl, urlsplit
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                outer.hits.append(self.path)
+                outer.headers.append((self.path, {k.lower(): v for k, v in self.headers.items()}))
+                u = urlsplit(self.path)
+                from urllib.parse import unquote
+                path = unquote(u.path)
+                q = frozenset(parse_qsl(u.query))
+                hit = outer.routes.get((path, q), outer.routes.get(path))
+                status, body = hit if hit else (404, b"{}")
+                self.send_response(status)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.base = f"http://127.0.0.1:{self.httpd.server_port}"
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+
+    def json(self, path, data, query=None, status=200):
+        key = (path, frozenset(query.items())) if query is not None else path
+        self.routes[key] = (status, json.dumps(data).encode())
+
+    def file(self, path, body, status=200):
+        self.routes[path] = (status, body)
+
+    def close(self):
+        self.httpd.shutdown()
+
+
+def part7(tmp: Path) -> None:
+    print("Part 7: search (#110), against mock Poly Haven, GitHub, NASA, ambientCG, Poly Pizza, Smithsonian")
+    try:
+        import trimesh
+    except ImportError:
+        check(False, "Part 7 needs the project venv (trimesh)")
+        return
+    import search_assets as S
+    import sources as src
+
+    srv = Routes()
+    saved = (src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA, src.AMBIENTCG_API,
+             src.POLYPIZZA_API, src.POLYPIZZA_HOSTS, src.SMITHSONIAN_API, lib.MAX_MODEL_TRIANGLES)
+    saved_key = os.environ.pop(src.POLYPIZZA_KEY_ENV, None)
+    saved_si_key = os.environ.pop(src.SMITHSONIAN_KEY_ENV, None)
+    src.SMITHSONIAN_API = srv.base + "/si"
+    src.POLYHAVEN_API, src.GITHUB_API = srv.base + "/ph", srv.base + "/gh"
+    src.AMBIENTCG_API = srv.base + "/acg"
+    src.POLYPIZZA_API, src.POLYPIZZA_HOSTS = srv.base + "/pp", ("127.0.0.1",)
+    src.GITHUB_RAW, src.GITHUB_MEDIA = srv.base + "/raw", srv.base + "/media"
+    src.SOURCES["polyhaven"].__init__()
+    src.SOURCES["nasa"].__init__()
+
+    def glb(extents, triangles_x=1):
+        mesh = trimesh.creation.box(extents=extents)
+        if triangles_x > 1:
+            mesh = trimesh.creation.icosphere(subdivisions=triangles_x)
+        return trimesh.Scene(mesh).export(file_type="glb")
+
+    # Poly Haven: two models and two textures
+    heart = trimesh.Scene(trimesh.creation.icosphere(subdivisions=2, radius=3.0))
+    gltf = heart.export(file_type="gltf")   # model.gltf + gltf_buffer_*.bin
+    for name, body in gltf.items():
+        srv.file(f"/cdn/human_heart/{name}", body)
+    srv.json("/ph/assets", {
+        "human_heart": {"name": "Human Heart", "tags": ["anatomy", "heart", "organ"], "categories": ["props"],
+                        "authors": {"Jane Doe": "All"}, "thumbnail_url": srv.base + "/thumb/human_heart.png"},
+        "heart_shaped_box": {"name": "Heart Shaped Box", "tags": ["box", "valentine"], "authors": {"A": "All"},
+                             "thumbnail_url": srv.base + "/thumb/heart_shaped_box.png"},
+        "office_chair": {"name": "Office Chair", "tags": ["chair", "furniture"], "authors": {"B": "All"},
+                         "thumbnail_url": srv.base + "/thumb/office_chair.png"}},
+        query={"type": "models", "t": "models"})
+    srv.json("/ph/assets", {
+        "red_brick": {"name": "Red Brick Wall", "tags": ["brick", "wall", "red"], "authors": {"C": "All"},
+                      "thumbnail_url": srv.base + "/thumb/red_brick.png"}},
+        query={"type": "textures", "t": "textures"})
+    srv.json("/ph/search", {"results": [{"slug": "human_heart", "score": 0.91},
+                                        {"slug": "heart_shaped_box", "score": 0.62},
+                                        {"slug": "office_chair", "score": 0.2}], "total": 3},
+             query={"q": "human heart anatomy", "t": "models", "limit": "15"})
+    srv.json("/ph/files/human_heart", {"gltf": {"1k": {"gltf": {
+        "url": srv.base + "/cdn/human_heart/model.gltf",
+        "include": {n: {"url": srv.base + f"/cdn/human_heart/{n}"} for n in gltf if n != "model.gltf"}}}}})
+    srv.file("/cdn/box.glb", glb([1, 1, 1]))
+    srv.json("/ph/files/heart_shaped_box", {"gltf": {"1k": {"gltf": {"url": srv.base + "/cdn/box.glb",
+                                                                    "include": {}}}}})
+    srv.file("/cdn/brick.jpg", jpeg_bytes(3000, 1500, (180, 40, 30)))
+    srv.json("/ph/files/red_brick", {"Diffuse": {"4k": {"jpg": {"url": srv.base + "/cdn/brick.jpg"}}},
+                                     "nor_gl": {"4k": {"jpg": {"url": srv.base + "/cdn/none.jpg"}}}})
+    for slug in ("human_heart", "heart_shaped_box", "office_chair", "red_brick"):
+        srv.file(f"/thumb/{slug}.png", png_bytes())
+    # NASA: the tree, a GLB stored with Git LFS, and its picture
+    srv.json("/gh/repos/nasa/NASA-3D-Resources/git/trees/master", {"tree": [
+        {"path": "3D Models/Saturn V/Saturn V.glb", "type": "blob", "size": 2000},
+        {"path": "3D Models/Saturn V/Saturn V.png", "type": "blob"},
+        {"path": "3D Models/Mars Rover/rover.obj", "type": "blob"},
+        {"path": "README.md", "type": "blob"}], "truncated": False}, query={"recursive": "1"})
+    srv.file("/raw/nasa/NASA-3D-Resources/master/3D Models/Saturn V/Saturn V.glb",
+             b"version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 2000\n")
+    srv.file("/media/nasa/NASA-3D-Resources/master/3D Models/Saturn V/Saturn V.glb", glb([0.4, 0.4, 4.0]))
+    srv.file("/raw/nasa/NASA-3D-Resources/master/3D Models/Saturn V/Saturn V.png", png_bytes())
+
+    # ambientCG: the reply shape of /api/v3/assets (2026-11-19), and a zip of maps
+    import zipfile as _zip
+    buf = io.BytesIO()
+    with _zip.ZipFile(buf, "w") as z:
+        z.writestr("Bricks090_2K-JPG_NormalGL.jpg", jpeg_bytes(64, 64, (128, 128, 255)))
+        z.writestr("Bricks090_2K-JPG_Color.jpg", jpeg_bytes(96, 48, (170, 60, 40)))
+        z.writestr("../evil_Color.txt", b"not read")
+    srv.file("/acg/get", buf.getvalue())
+    srv.file("/thumb/Bricks090.png", png_bytes())
+    srv.json("/acg/assets", {"totalResults": 2, "nextPageHttp": None, "assets": [
+        {"id": "Bricks090", "title": "Bricks 090", "tags": ["brick", "red", "wall"],
+         "url": "https://ambientcg.com/a/Bricks090",
+         "downloads": [{"attributes": "1K-JPG", "extension": "zip", "url": srv.base + "/acg/get?file=x1", "size": 9},
+                       {"attributes": "2K-JPG", "extension": "zip", "url": srv.base + "/acg/get?file=x2", "size": 34},
+                       {"attributes": "8K-PNG", "extension": "zip", "url": srv.base + "/acg/huge", "size": 10 ** 9}],
+         "thumbnails": {"64-PNG": "x", "256-PNG": srv.base + "/thumb/Bricks090.png"},
+         "maps": ["color", "displacement", "normal", "roughness"], "dimensions": {"width": 280, "height": 280}},
+        {"id": "BrickDecal001", "title": "Brick Decal", "tags": ["brick"], "url": "u",
+         "downloads": [{"attributes": "1K-PNG", "extension": "zip", "url": "u", "size": 1}],
+         "thumbnails": {}, "maps": ["opacity"]}]})
+
+    # Poly Pizza: the /search/{keyword} reply shape of the v1.1 spec
+    srv.file("/static/heart.glb", glb([1, 2, 1]))
+    srv.file("/static/heart.webp", png_bytes())
+    pp_model = lambda **kw: {"ID": "x", "Title": "t", "Attribution": "a", "Thumbnail": srv.base + "/static/heart.webp",  # noqa: E731
+                             "Download": srv.base + "/static/heart.glb", "Tri Count": 900,
+                             "Creator": {"Username": "drx", "DPURL": ""}, "Category": "Objects",
+                             "Tags": ["heart"], "Licence": "CC-BY 3.0", "Animated": False, **kw}
+    srv.json("/pp/search/heart", {"total": 3, "results": [
+        pp_model(ID="H1", Title="Anatomical Heart", Tags=["heart", "anatomy", "organ"],
+                 Attribution='"Anatomical Heart" by drx, https://poly.pizza/m/H1. Licence at https://creativecommons.org/licenses/by/3.0'),
+        pp_model(ID="H2", Title="Heart Emoji", Licence="CC0 1.0", **{"Tri Count": 10 ** 6}),
+        pp_model(ID="H3", Title="Heart Pillow", Licence="CC-BY-NC 4.0")]})
+
+    # Smithsonian: the /search reply shape (2026-11-23 sample): 3d_voyager media with resources
+    def si_media(vid, files, access="CC0"):
+        return {"id": f"3d_package:{vid}", "type": "3d_voyager", "voyagerId": f"3d_package:{vid}",
+                "usage": {"access": access, "text": "Thanks to a sponsor."},
+                "thumbnail": srv.base + f"/3d/{vid}/thumb.jpg",
+                "resources": [{"url": srv.base + f"/3d/{vid}/{name}", "filename": name, "category": "Low Resolution",
+                               "attributes": [{"MODEL_FILE_TYPE": kind, "DRACO_COMPRESSED": draco}, {"FILE_SIZE": size}]}
+                              for name, kind, draco, size in files]}
+    def si_row(title, media):
+        return {"id": "ld1-" + title, "title": title, "unitCode": "NMNH", "type": "edanmdm",
+                "content": {"freetext": {"notes": [{"label": "Description", "content": f"A scan of a {title}."}]},
+                            "indexedStructured": {"topic": ["Anatomy"], "object_type": ["specimen"],
+                                                  "online_media_type": ["Images"]},
+                            "descriptiveNonRepeating": {"record_link": f"https://collections.si.edu/{title}",
+                                                        "data_source": "NMNH - Anthropology",
+                                                        "online_media": {"media": [
+                                                            {"type": "Images", "usage": {"access": "CC0"}}, media]}}}}
+    srv.json("/si/search", {"status": 200, "response": {"rowCount": 3, "rows": [
+        si_row("Heart Specimen", si_media("big", [("heart-150k-4096-gltf_std.zip", "GLTF", False, 6),
+                                                  ("heart-100k-2048_std_draco.glb", "GLB", True, 1),
+                                                  ("heart-150k-4096_std.glb", "GLB", False, 8)])),
+        si_row("Human Heart Model", si_media("small", [("model-40k-2048_std.glb", "GLB", False, 3),
+                                                       ("model-40k-2048_std_draco.glb", "GLB", True, 1)])),
+        si_row("Ritual ewer (<em>gong</em>) &amp; heart", si_media("ewer", [("e-10k-1024_std.glb", "GLB", False, 1)])),
+        si_row("Heart Drawing", si_media("nc", [("d-10k-1024_std.glb", "GLB", False, 1)],
+                                         access="Usage conditions apply"))]}})
+    srv.file("/3d/small/model-40k-2048_std.glb", glb([1, 1, 2]))
+    for vid in ("big", "small", "nc", "ewer"):
+        srv.file(f"/3d/{vid}/thumb.jpg", jpeg_bytes(32, 32))
+    srv.routes["/si-broken/search"] = (500, b"{}")
+
+    # A plan with four search assets (one merged duplicate)
+    run_dir = tmp / "search_run"
+    run_dir.mkdir()
+    def planned(name, kind, keywords, description, form="object", status="planned", same_as=None):
+        plan = {"route": "search", "form": form, "description": description, "search_keywords": keywords,
+                "must_be_right": ["four chambers"] if name == "heartPrefab" else []}
+        if same_as:
+            plan["same_as"] = same_as
+        return {"name": name, "kind": kind, "status": status, "plan": plan}
+    (run_dir / MANIFEST_NAME).write_text(json.dumps({"tool": "provision_lab", "assets": [
+        planned("heartPrefab", "model", ["human heart anatomy"], "A human heart seen from the front", "organism"),
+        planned("heartModel2", "model", ["heart"], "same", status="merged", same_as="heartPrefab"),
+        planned("brickTexture", "texture", ["red brick"], "A red brick wall surface", "real_surface"),
+        planned("rocketPrefab", "model", ["saturn v rocket"], "The Saturn V rocket"),
+        planned("unicornPrefab", "model", ["unicorn"], "A unicorn")]}), encoding="utf-8")
+
+    fits = {"Human Heart", "Red Brick Wall", "Saturn V", "Bricks 090", "Anatomical Heart", "Human Heart Model",
+            "Heart Specimen"}
+    seen = {"calls": 0, "prompts": []}
+
+    def ranker(response_model, messages, max_retries):
+        seen["calls"] += 1
+        content = messages[0]["content"]
+        seen["prompts"].append(content)
+        names = [re.match(r"Candidate (\d+): (.+?) \(from", c).groups() for c in content
+                 if isinstance(c, str) and c.startswith("Candidate ")]
+        order = sorted(names, key=lambda x: (x[1] not in fits, int(x[0])))
+        return response_model.model_validate({"ranking": [
+            {"number": int(n), "fits": nm in fits, "reason": "test"} for n, nm in order]})
+
+    def run(*args, call_fn=ranker):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            code = S.main([str(run_dir), *args], call_fn=call_fn)
+        res = json.loads((run_dir / "search_results.json").read_text(encoding="utf-8"))
+        return code, buf.getvalue(), {a["name"]: a for a in res["assets"]}, res
+
+    try:
+        # filters and ranking checks (units)
+        c = lambda **kw: src.Candidate(**{"source": "x", "id": "i", "kind": "model", "name": "n",  # noqa: E731
+                                          "page_url": "u", "thumbnail_url": None, "license": "CC0-1.0",
+                                          "format": "glb", **kw})
+        kept, dropped = S.filter_candidates([c(id="a"), c(id="b", license="CC-BY-NC-4.0"),
+                                             c(id="c", license="CC-BY-4.0"), c(id="d", format="fbx"),
+                                             c(id="e", triangles=10 ** 6)], "model")
+        kept, dropped = S.filter_candidates([c(id="a"), c(id="b", license="CC-BY-NC-4.0"),
+                                             c(id="c", license="CC-BY-4.0"), c(id="d", format="fbx"),
+                                             c(id="e", triangles=10 ** 6), c(id="f", triangles=120_000)], "model")
+        check([k.id for k in kept] == ["a", "f"] and dropped == {"license": ["x:b"], "license_without_author": ["x:c"],
+                                                                  "format": ["x:d"], "too_many_triangles": ["x:e"]},
+              "dropped and counted: license, format, and over 10x the triangle budget; a model a few times over is kept")
+        check(src.query_terms(["human heart anatomy", "red blood cell"])
+              == (["human heart anatomy", "red blood cell"], ["blood", "heart", "cell", "red"]),
+              "literal-match sources try the phrases, then each meaningful word alone (not 'human', 'anatomy')")
+        try:
+            with S.ranking_scope(3):
+                S.CandidateRanking.model_validate({"ranking": [{"number": 1, "fits": True, "reason": "r"},
+                                                               {"number": 1, "fits": False, "reason": ""},
+                                                               {"number": 7, "fits": False, "reason": "r"}]})
+            check(False, "a bad ranking is refused with every problem at once")
+        except lib.ValidationError as exc:
+            m = str(exc)
+            check(all(x in m for x in ("ranked more than once", "wasn't shown", "reason is empty",
+                                       "aren't ranked: 2, 3")),
+                  "a bad ranking is refused with every problem at once")
+
+        code, text, by, res = run()
+        h = by["heartPrefab"]
+        check(code == 1 and h["status"] == "found" and h["chosen"] == {"rank": 1, "by": "auto"}
+              and h["ranked"][0]["name"] == "Human Heart" and h["ranked"][0]["license"] == "CC0-1.0"
+              and h["ranked"][0]["author"] == "Jane Doe" and h["ranked"][1]["fits"] is False
+              and h["dropped"] == {"text_mismatch": 1} and h["merged_names"] == ["heartModel2"],
+              "the heart: collected, the mismatch dropped, ranked by the vision call, rank 1 auto-picked")
+        prompt = seen["prompts"][0]
+        check(sum(isinstance(p, Path) for p in prompt) == 2 and "four chambers" in prompt[0]
+              and all(p.suffix == ".png" and p.is_file() for p in prompt if isinstance(p, Path)),
+              "the ranking call sees the description, the must-be-right facts and each thumbnail")
+        model = trimesh.load(run_dir / h["files"]["model"], force="scene")
+        check(abs(max(model.extents) - 1.0) < 1e-6 and (run_dir / h["files"]["thumbnail"]).is_file()
+              and "converted from glTF to GLB" in h["entry"]["provenance"]["modifications"]
+              and h["entry"]["provenance"]["license"] == "CC0-1.0" and h["entry"]["triangles"] == 320,
+              "the chosen glTF (with its buffers) is converted to a centered unit-cube GLB, provenance kept")
+        b, r = by["brickTexture"], by["rocketPrefab"]
+        check(b["status"] == "found" and b["entry"]["pixels"] == [2048, 1024] and b["entry"]["mapping"] == "tileable",
+              "a texture: its color map, resized to 2048 px, as JPG")
+        check(r["status"] == "found" and r["ranked"][0]["source"] == "nasa"
+              and r["entry"]["provenance"]["license"] == "public-domain"
+              and trimesh.load(run_dir / r["files"]["model"], force="scene").extents.max() > 0.99,
+              "a NASA model stored with Git LFS is fetched from the LFS media host")
+        u = by["unicornPrefab"]
+        check(u["status"] == "no_match" and "no usable candidate" in u["reason"] and "_files" not in u
+              and "  NO MATCH unicornPrefab" in text and res["counts"]["found"] == 3,
+              "nothing found -> no match, left for the composite builder or a reviewer")
+
+        calls = seen["calls"]
+        code, text, by, res = run()
+        check(seen["calls"] == calls and "searching 0 of 4" in text and by["heartPrefab"]["status"] == "found",
+              "a rerun searches only what isn't decided (resume), with no ranking calls for the rest")
+        code, text, by, res = run("--only", "heartPrefab", "--redo", "--no-vision", call_fn=None)
+        h = by["heartPrefab"]
+        check(h["status"] == "needs_review" and "chosen" not in h and h["ranked"][0]["fits"] is None
+              and by["brickTexture"]["status"] == "found",
+              "--no-vision ranks by text, picks nothing and leaves it for a reviewer")
+        code, text, by, res = run("--choose", "heartPrefab=2", call_fn=None)
+        h = by["heartPrefab"]
+        check(h["status"] == "found" and h["chosen"] == {"rank": 2, "by": "reviewer"}
+              and h["entry"]["provenance"]["record_id"] == h["ranked"][1]["id"] and seen["calls"] == calls,
+              "--choose takes a candidate from the saved ranking, with no new search or call")
+        code, text, _, _ = run("--choose", "nothing=1", call_fn=None)
+        check(code == 2, "--choose for an asset with no saved ranking -> exit 2")
+        kept_glb = run_dir / h["files"]["model"]
+        before = kept_glb.read_bytes()
+        lib.MAX_MODEL_TRIANGLES = 100   # the 320-triangle heart (rank 1) now fails its check
+        try:
+            code, text, by, res = run("--choose", "heartPrefab=1", call_fn=None)
+        finally:
+            lib.MAX_MODEL_TRIANGLES = saved[-1]
+        h = by["heartPrefab"]
+        check(h["status"] == "found" and h["chosen"]["by"] == "reviewer" and "choose_error" in h
+              and kept_glb.is_file() and kept_glb.read_bytes() == before
+              and not list((run_dir / "found").glob(".*.new")),
+              "a failed --choose keeps the earlier pick and its files (built in a staging folder)")
+        import pathlib
+        real_rename = pathlib.Path.rename
+
+        def locked(self, target):
+            if pathlib.Path(target).name.endswith(".old"):
+                raise PermissionError("model.glb is open in another program")
+            return real_rename(self, target)
+        pathlib.Path.rename = locked
+        try:
+            code, text, by, res = run("--choose", "heartPrefab=1", call_fn=None)
+        finally:
+            pathlib.Path.rename = real_rename
+        h = by["heartPrefab"]
+        check("PermissionError" in h["choose_error"] and kept_glb.read_bytes() == before
+              and all((run_dir / f).is_file() for f in h["files"].values())
+              and not list((run_dir / "found").glob(".*")),
+              "an earlier pick that can't be moved aside (a file open) stays whole; nothing half-swapped")
+        code, text, by, res = run("--choose", "heartPrefab=2", call_fn=None)
+        check(by["heartPrefab"]["status"] == "found" and "choose_error" not in by["heartPrefab"],
+              "a later successful --choose drops the earlier choose_error")
+        later = lib.LocalFolderStore(tmp / "libLater", create=True)
+        code, text, by, res = run("--save", "--library", str(tmp / "libLater"), call_fn=None)
+        later = lib.LocalFolderStore(tmp / "libLater")
+        check("searching 0 of" in text and by["heartPrefab"]["saved"]["added"]
+              and by["brickTexture"]["saved"]["added"] and len(later.entries()) == 3
+              and {"heartPrefab", "heartModel2"} <= set(later.get(by["heartPrefab"]["saved"]["asset_id"]).aliases),
+              "--save on a later run stores what earlier runs found (from found/), with no new search")
+        rev = lib.LocalFolderStore(tmp / "libLater").identity()["revision"]
+        code, text, by, res = run("--save", "--library", str(tmp / "libLater"), call_fn=None)
+        check(lib.LocalFolderStore(tmp / "libLater").identity()["revision"] == rev and "  found" not in text,
+              "saving again writes nothing for what was already saved")
+
+        saved_budget = lib.MAX_MODEL_TRIANGLES
+        lib.MAX_MODEL_TRIANGLES = 100
+        try:
+            code, text, by, res = run("--only", "heartPrefab", "--redo")
+        finally:
+            lib.MAX_MODEL_TRIANGLES = saved_budget
+        h = by["heartPrefab"]
+        check(h["status"] == "needs_simplifying" and h["pending"] == {"rank": 1} and h["fetch_errors"][0]["over_budget"]
+              and "simplifying (#113)" in h["reason"] and "SIMPLIFY" in text,
+              "the best match over the triangle budget is kept for the simplify step, not failed")
+
+        acg = src.SOURCES["ambientcg"].search(["red brick"], "texture")
+        check([c.id for c in acg] == ["Bricks090"] and acg[0].format == "jpg" and acg[0].mapping == "tileable"
+              and "Created using Bricks 090 from ambientCG.com" in acg[0].notes
+              and src.SOURCES["ambientcg"].search(["red brick"], "model") == [],
+              "ambientCG: materials with a color map, the 2K JPG zip, its credit line; textures only")
+        code, text, by, res = run("--only", "brickTexture", "--redo", "--sources", "ambientcg")
+        b = by["brickTexture"]
+        check(b["status"] == "found" and b["ranked"][0]["source"] == "ambientcg" and b["entry"]["pixels"] == [96, 48]
+              and b["entry"]["mapping"] == "tileable" and not (run_dir / "evil_Color.txt").exists()
+              and "/acg/huge" not in " ".join(srv.hits) and "/acg/get?file=x2" in srv.hits,
+              "ambientCG: only the color map is read out of the 2K zip (nothing extracted, no 8K download)")
+
+        code, text, _, _ = run("--only", "heartPrefab", "--redo", "--sources", "polypizza")
+        check(code == 2 and "POLY_PIZZA_API_KEY" in text, "Poly Pizza named without a key -> exit 2")
+        code, text, _, _ = run("--only", "heartPrefab", "--redo", "--no-vision", call_fn=None)
+        check("note: skipping polypizza: no API key" in text, "by default, Poly Pizza without a key is skipped with a note")
+        os.environ[src.POLYPIZZA_KEY_ENV] = "test-key"
+        check(src.SOURCES["polypizza"].headers_for("https://evil.example/x.glb") == {}
+              and src.SOURCES["polypizza"].headers_for(srv.base + "/pp/x") == {"x-auth-token": "test-key"},
+              "the Poly Pizza key goes only to Poly Pizza's own hosts")
+        srv.headers.clear()
+        code, text, by, res = run("--only", "heartPrefab", "--redo", "--sources", "polypizza")
+        h = by["heartPrefab"]
+        sent = {path.split("?")[0]: hd.get("x-auth-token") for path, hd in srv.headers}
+        prov = h["entry"]["provenance"] if "entry" in h else {}
+        check(h["status"] == "found" and h["dropped"] == {"license": 1, "too_many_triangles": 1}
+              and prov.get("license") == "CC-BY-3.0" and prov.get("author") == "drx"
+              and prov.get("title") == "Anatomical Heart" and "Licence at" in (prov.get("notes") or "")
+              and sent.get("/pp/search/heart") == "test-key" and sent.get("/static/heart.glb") == "test-key"
+              and sent.get("/static/heart.webp") == "test-key",
+              "Poly Pizza: found by the word 'heart' after the phrase found nothing; CC-BY credited, NC and "
+              "far-over-budget hits dropped, the key sent")
+        os.environ.pop(src.POLYPIZZA_KEY_ENV, None)
+
+        os.environ[src.SMITHSONIAN_KEY_ENV] = "si-secret-key"
+        si = {c.name: c for c in src.SOURCES["smithsonian"].search(["human heart anatomy"], "model")}
+        check(si["Heart Specimen"].triangles == 150000 and si["Heart Specimen"].download_url.endswith("_std.glb")
+              and si["Human Heart Model"].download_url.endswith("model-40k-2048_std.glb")
+              and si["Heart Drawing"].license == "Usage conditions apply"
+              and "Ritual ewer (gong) & heart" in si
+              and si["Human Heart Model"].page_url.endswith("Human Heart Model") and "3d_package:small" in si["Human Heart Model"].id,
+              "Smithsonian: 3d_voyager media, the smallest uncompressed GLB, its triangle count from the file name")
+        srv.headers.clear()
+        code, text, by, res = run("--only", "heartPrefab", "--redo", "--sources", "smithsonian")
+        h = by["heartPrefab"]
+        paths = [p for p, _ in srv.headers]
+        q_sent = [p for p in paths if p.startswith("/si/search")]
+        from urllib.parse import parse_qs, urlsplit
+        first_q = parse_qs(urlsplit(q_sent[0]).query)["q"][0] if q_sent else ""
+        specimen = next((r for r in h["ranked"] if r["name"] == "Heart Specimen"), {})
+        check(h["status"] == "found" and h["ranked"][0]["name"] == "Human Heart Model"
+              and h["dropped"] == {"license": 1} and specimen.get("needs_simplifying") is True
+              and first_q == '(human heart anatomy) AND online_media_type:"3D Models"'
+              and not any("heart-150k" in p for p in paths)
+              and "query form: fielded" in h["sources"]["smithsonian"]["note"]
+              and h["entry"]["provenance"]["license"] == "CC0-1.0"
+              and all("api_key=si-secret-key" in p for p in paths if p.startswith("/si/"))
+              and not any("si-secret-key" in p for p in paths if not p.startswith("/si/")),
+              "Smithsonian: the 3D filter inside the query, CC0 only, a 150k scan that fits kept and marked "
+              "for simplifying but never downloaded, the in-budget fit found, the key only on the API")
+        code, text, by, res = run("--only", "heartPrefab", "--redo", "--sources", "smithsonian",
+                                  "--max-triangles", "200000")
+        h = by["heartPrefab"]
+        check(h["dropped"] == {"license": 1} and res["max_triangles"] == 200000
+              and any(r["name"] == "Heart Specimen" and not r["needs_simplifying"] for r in h["ranked"]),
+              "--max-triangles raises the limit for a run (recorded), keeping big scans")
+        lib.MAX_MODEL_TRIANGLES = saved[-1]
+        src.SMITHSONIAN_API = srv.base + "/si-broken"
+        try:
+            src.SOURCES["smithsonian"].search(["heart"], "model")
+            check(False, "a failed Smithsonian request never shows the key")
+        except src.SourceError as exc:
+            check("si-secret-key" not in str(exc) and "***" in str(exc) and not isinstance(exc, src.QueryRefused),
+                  "a failed Smithsonian request never shows the key; a 500 is not a refused query")
+        srv.routes["/si-400/search"] = (400, b"{}")
+        src.SMITHSONIAN_API = srv.base + "/si-400"
+        try:
+            src.SOURCES["smithsonian"]._search("heart", 1, "fielded")
+            check(False, "a 400 from the Smithsonian is a refused query")
+        except src.QueryRefused:
+            check(True, "a 400 from the Smithsonian is a refused query")
+        src.SMITHSONIAN_API = srv.base + "/si"
+        os.environ.pop(src.SMITHSONIAN_KEY_ENV, None)
+
+        real_prepare = S.prepare
+
+        def boom(*a, **k):
+            raise RuntimeError("an unexpected bug")
+        S.prepare = boom
+        try:
+            code, text, by, res = run("--only", "brickTexture", "--redo")
+        finally:
+            S.prepare = real_prepare
+        b = by["brickTexture"]
+        check(code == 1 and b["status"] == "failed" and "RuntimeError: an unexpected bug" in b["fetch_errors"][0]["error"],
+              "an unexpected error in one candidate fails that candidate, not the run")
+        si_src = src.SOURCES["smithsonian"]
+        real_search, real_form = si_src._search, si_src._form
+        os.environ[src.SMITHSONIAN_KEY_ENV] = "si-secret-key"
+        row = si_row("Human Heart Model", si_media("small", [("model-40k-2048_std.glb", "GLB", False, 3)]))
+
+        calls = []
+
+        def fake(behaviour):
+            def _search(q, rows, form):
+                calls.append((form, q))
+                return behaviour(q, form)
+            return _search
+
+        def raise_(exc):
+            raise exc
+
+        def run_si(behaviour, form=None):
+            calls.clear()
+            si_src._search, si_src._form = fake(behaviour), form
+            try:
+                return si_src.search(["human heart anatomy"], "model"), None
+            except src.SourceError as exc:
+                return None, exc
+        try:
+            got, _ = run_si(lambda q, form: raise_(src.QueryRefused("HTTP 400")) if form == "fielded" else [row])
+            check(got and si_src._form == "fqs" and "refused: fielded" in si_src.note,
+                  "a query form the Smithsonian refuses (4xx) falls through to the next")
+            got, err = run_si(lambda q, form: raise_(src.QueryRefused("HTTP 400")))
+            check(got is None and "every query form failed" in str(err), "every form refused -> an error")
+            got, err = run_si(lambda q, form: raise_(src.SourceError("HTTP 503 after retries")))
+            check(got is None and len(calls) == 1 and "503" in str(err),
+                  "a network failure or 5xx is raised at once, not tried on every form")
+            got, _ = run_si(lambda q, form: [] if form == "fielded" else ([row] if form == "plain" else []),
+                            form="fielded")
+            check(got and si_src._form == "plain" and [f for f, _ in calls][0] == "fielded",
+                  "the remembered form goes first, and the others are tried when it finds nothing")
+            got, _ = run_si(lambda q, form: [row] if q == "human heart anatomy" else raise_(src.QueryRefused("400")))
+            check(got and si_src._form == "fielded" and {f for f, _ in calls} == {"fielded"},
+                  "hits a form found before a refusal are kept, and that form is remembered")
+        finally:
+            si_src._search, si_src._form = real_search, real_form
+            os.environ.pop(src.SMITHSONIAN_KEY_ENV, None)
+        pick = src.Smithsonian._glb({"resources": [
+            {"url": "u/full_std.glb", "filename": "full_std.glb", "attributes": [{"MODEL_FILE_TYPE": "GLB"}]},
+            {"url": "u/low-40k-2048_std.glb", "filename": "low-40k-2048_std.glb",
+             "attributes": [{"MODEL_FILE_TYPE": "GLB"}, {"FILE_SIZE": 900}]}]})
+        check(pick["url"] == "u/low-40k-2048_std.glb", "a GLB with a known size beats one with none")
+
+        class Noted(src.Source):
+            name, kinds, note, truncated = "noted", ("model",), "form x", True
+
+            def search(self, queries, kind, limit=src.PER_SOURCE):
+                return []
+        _, per = S.collect({"name": "a", "kind": "model", "plan": {}}, [Noted()])
+        check(per["noted"]["note"] == "form x; the source's listing was cut short",
+              "a source's note and the cut-short note are both kept")
+
+        store = lib.LocalFolderStore(tmp / "libSearch", create=True)
+        code, text, by, res = run("--only", "heartPrefab", "--redo", "--save", "--library", str(tmp / "libSearch"))
+        h = by["heartPrefab"]
+        entry = lib.LocalFolderStore(tmp / "libSearch").get("polyhaven_human_heart")
+        check(h["saved"]["asset_id"] == "polyhaven_human_heart" and entry is not None
+              and {"heartPrefab", "heartModel2"} <= set(entry.aliases)
+              and entry.provenance.method == "search" and entry.provenance.page_url.endswith("/a/human_heart")
+              and res["library_after"]["entries"] == 1 and not [p for p in lib.check_index(store.index, store.root)
+                                                                if p.level == "error"],
+              "--save stores the found model with search provenance and the lab's names as aliases")
+    finally:
+        srv.close()
+        (src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA, src.AMBIENTCG_API,
+         src.POLYPIZZA_API, src.POLYPIZZA_HOSTS, src.SMITHSONIAN_API, lib.MAX_MODEL_TRIANGLES) = saved
+        for env, value in ((src.POLYPIZZA_KEY_ENV, saved_key), (src.SMITHSONIAN_KEY_ENV, saved_si_key)):
+            os.environ.pop(env, None)
+            if value is not None:
+                os.environ[env] = value
+        src.SOURCES["polyhaven"].__init__()
+        src.SOURCES["nasa"].__init__()
+
+
 def main() -> int:
     saved_env = os.environ.pop(lib.LIBRARY_ENV, None)
     tmp = Path(tempfile.mkdtemp(prefix="provisioning_smoke_"))
@@ -1728,6 +2258,7 @@ def main() -> int:
         part4(tmp)
         part5(tmp)
         part6(tmp)
+        part7(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         if saved_env is not None:
