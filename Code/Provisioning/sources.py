@@ -48,6 +48,7 @@ module attributes, so tests point them at a mock server.
 
 from __future__ import annotations
 
+import html
 import os
 import re
 import sys
@@ -547,6 +548,7 @@ class Smithsonian(Source):
         free = content.get("freetext") or {}
         idx = content.get("indexedStructured") or {}
         title = row.get("title") or (dnr.get("title") or {}).get("content") or row.get("id", "")
+        title = " ".join(html.unescape(re.sub(r"<[^>]+>", "", title)).split())   # titles carry <em> tags
         desc = next((n.get("content", "") for n in free.get("notes") or []
                      if n.get("label") == "Description"), "")
         out = []

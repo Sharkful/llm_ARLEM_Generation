@@ -1900,10 +1900,11 @@ def part7(tmp: Path) -> None:
                                                   ("heart-150k-4096_std.glb", "GLB", False, 8)])),
         si_row("Human Heart Model", si_media("small", [("model-40k-2048_std.glb", "GLB", False, 3),
                                                        ("model-40k-2048_std_draco.glb", "GLB", True, 1)])),
+        si_row("Ritual ewer (<em>gong</em>) &amp; heart", si_media("ewer", [("e-10k-1024_std.glb", "GLB", False, 1)])),
         si_row("Heart Drawing", si_media("nc", [("d-10k-1024_std.glb", "GLB", False, 1)],
                                          access="Usage conditions apply"))]}})
     srv.file("/3d/small/model-40k-2048_std.glb", glb([1, 1, 2]))
-    for vid in ("big", "small", "nc"):
+    for vid in ("big", "small", "nc", "ewer"):
         srv.file(f"/3d/{vid}/thumb.jpg", jpeg_bytes(32, 32))
     srv.routes["/si-broken/search"] = (500, b"{}")
 
@@ -2067,6 +2068,7 @@ def part7(tmp: Path) -> None:
         check(si["Heart Specimen"].triangles == 150000 and si["Heart Specimen"].download_url.endswith("_std.glb")
               and si["Human Heart Model"].download_url.endswith("model-40k-2048_std.glb")
               and si["Heart Drawing"].license == "Usage conditions apply"
+              and "Ritual ewer (gong) & heart" in si
               and si["Human Heart Model"].page_url.endswith("Human Heart Model") and "3d_package:small" in si["Human Heart Model"].id,
               "Smithsonian: 3d_voyager media, the smallest uncompressed GLB, its triangle count from the file name")
         srv.headers.clear()
