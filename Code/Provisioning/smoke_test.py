@@ -2030,6 +2030,26 @@ def part7(tmp: Path) -> None:
               and kept_glb.is_file() and kept_glb.read_bytes() == before
               and not list((run_dir / "found").glob(".*.new")),
               "a failed --choose keeps the earlier pick and its files (built in a staging folder)")
+        import pathlib
+        real_rename = pathlib.Path.rename
+
+        def locked(self, target):
+            if pathlib.Path(target).name.endswith(".old"):
+                raise PermissionError("model.glb is open in another program")
+            return real_rename(self, target)
+        pathlib.Path.rename = locked
+        try:
+            code, text, by, res = run("--choose", "heartPrefab=1", call_fn=None)
+        finally:
+            pathlib.Path.rename = real_rename
+        h = by["heartPrefab"]
+        check("PermissionError" in h["choose_error"] and kept_glb.read_bytes() == before
+              and all((run_dir / f).is_file() for f in h["files"].values())
+              and not list((run_dir / "found").glob(".*")),
+              "an earlier pick that can't be moved aside (a file open) stays whole; nothing half-swapped")
+        code, text, by, res = run("--choose", "heartPrefab=2", call_fn=None)
+        check(by["heartPrefab"]["status"] == "found" and "choose_error" not in by["heartPrefab"],
+              "a later successful --choose drops the earlier choose_error")
         later = lib.LocalFolderStore(tmp / "libLater", create=True)
         code, text, by, res = run("--save", "--library", str(tmp / "libLater"), call_fn=None)
         later = lib.LocalFolderStore(tmp / "libLater")
@@ -2125,7 +2145,15 @@ def part7(tmp: Path) -> None:
             src.SOURCES["smithsonian"].search(["heart"], "model")
             check(False, "a failed Smithsonian request never shows the key")
         except src.SourceError as exc:
-            check("si-secret-key" not in str(exc) and "***" in str(exc), "a failed Smithsonian request never shows the key")
+            check("si-secret-key" not in str(exc) and "***" in str(exc) and not isinstance(exc, src.QueryRefused),
+                  "a failed Smithsonian request never shows the key; a 500 is not a refused query")
+        srv.routes["/si-400/search"] = (400, b"{}")
+        src.SMITHSONIAN_API = srv.base + "/si-400"
+        try:
+            src.SOURCES["smithsonian"]._search("heart", 1, "fielded")
+            check(False, "a 400 from the Smithsonian is a refused query")
+        except src.QueryRefused:
+            check(True, "a 400 from the Smithsonian is a refused query")
         src.SMITHSONIAN_API = srv.base + "/si"
         os.environ.pop(src.SMITHSONIAN_KEY_ENV, None)
 
@@ -2146,25 +2174,43 @@ def part7(tmp: Path) -> None:
         os.environ[src.SMITHSONIAN_KEY_ENV] = "si-secret-key"
         row = si_row("Human Heart Model", si_media("small", [("model-40k-2048_std.glb", "GLB", False, 3)]))
 
-        def refuse_fielded(q, rows, form):
-            if form == "fielded":
-                raise src.SourceError("HTTP 400: bad request")
-            return [row]
-        si_src._search, si_src._form = refuse_fielded, None
-        try:
-            got = si_src.search(["heart"], "model")
-            note, form = si_src.note, si_src._form
-            si_src._search, si_src._form = (lambda q, rows, form: (_ for _ in ()).throw(src.SourceError("HTTP 400"))), None
+        calls = []
+
+        def fake(behaviour):
+            def _search(q, rows, form):
+                calls.append((form, q))
+                return behaviour(q, form)
+            return _search
+
+        def raise_(exc):
+            raise exc
+
+        def run_si(behaviour, form=None):
+            calls.clear()
+            si_src._search, si_src._form = fake(behaviour), form
             try:
-                si_src.search(["heart"], "model")
-                all_refused = False
+                return si_src.search(["human heart anatomy"], "model"), None
             except src.SourceError as exc:
-                all_refused = "every query form failed" in str(exc)
+                return None, exc
+        try:
+            got, _ = run_si(lambda q, form: raise_(src.QueryRefused("HTTP 400")) if form == "fielded" else [row])
+            check(got and si_src._form == "fqs" and "refused: fielded" in si_src.note,
+                  "a query form the Smithsonian refuses (4xx) falls through to the next")
+            got, err = run_si(lambda q, form: raise_(src.QueryRefused("HTTP 400")))
+            check(got is None and "every query form failed" in str(err), "every form refused -> an error")
+            got, err = run_si(lambda q, form: raise_(src.SourceError("HTTP 503 after retries")))
+            check(got is None and len(calls) == 1 and "503" in str(err),
+                  "a network failure or 5xx is raised at once, not tried on every form")
+            got, _ = run_si(lambda q, form: [] if form == "fielded" else ([row] if form == "plain" else []),
+                            form="fielded")
+            check(got and si_src._form == "plain" and [f for f, _ in calls][0] == "fielded",
+                  "the remembered form goes first, and the others are tried when it finds nothing")
+            got, _ = run_si(lambda q, form: [row] if q == "human heart anatomy" else raise_(src.QueryRefused("400")))
+            check(got and si_src._form == "fielded" and {f for f, _ in calls} == {"fielded"},
+                  "hits a form found before a refusal are kept, and that form is remembered")
         finally:
             si_src._search, si_src._form = real_search, real_form
             os.environ.pop(src.SMITHSONIAN_KEY_ENV, None)
-        check(len(got) == 1 and form == "fqs" and "refused: fielded" in note and all_refused,
-              "a query form the Smithsonian refuses falls through to the next; all refused -> an error")
         pick = src.Smithsonian._glb({"resources": [
             {"url": "u/full_std.glb", "filename": "full_std.glb", "attributes": [{"MODEL_FILE_TYPE": "GLB"}]},
             {"url": "u/low-40k-2048_std.glb", "filename": "low-40k-2048_std.glb",

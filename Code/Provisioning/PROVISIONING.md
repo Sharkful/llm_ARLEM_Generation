@@ -534,7 +534,7 @@ description, the source's own relevance score, notes.
    (`SIMPLIFY_CEILING`), counted per reason. A model over the budget but under that
    is kept and marked `needs_simplifying`, so the simplify step (#113) gets its chance.
 3. A text pass drops obvious mismatches: a hit sharing no word with the asset that
-   its source didn't rank as relevant either; the best 12 go on.
+   its source didn't rank as relevant either; the best 10 go on (all of them are kept, so any can be picked).
 4. **One vision call ranks their thumbnails** (`CandidateRanking`, through
    `llm.TrackedLLM`, which sends image files as `instructor.Image`s for every
    provider) against the description and must-be-right facts: every candidate once,
@@ -564,7 +564,11 @@ searches only undecided assets (`--redo` all); `--choose NAME=RANK` applies a
 reviewer's choice from the saved ranking with no new search or call (#116 adds a
 tool for it); `--save` stores the found asset in the library with search provenance
 and the lab's names as aliases, including assets an earlier run found and didn't save.
-A Smithsonian query form that is refused (e.g. HTTP 400) falls through to the next.
+A Smithsonian query form that is refused (a 4xx such as 400) falls through to the next,
+keeping any hits it found first; a network failure or a 5xx is raised at once. The form
+that worked is tried first for later assets, then the others when it finds nothing.
+The earlier pick is moved aside before the new one is put in place and comes back if
+anything fails (e.g. a file open in a viewer on Windows).
 
 ## Builders (#111 built, #114)
 

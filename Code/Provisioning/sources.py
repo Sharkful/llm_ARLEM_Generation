@@ -92,6 +92,11 @@ class SourceError(Exception):
     """A source couldn't be searched or a file fetched; the message says why."""
 
 
+class QueryRefused(SourceError):
+    """The source answered a request with a client error (4xx other than 429): the
+    request itself was refused, e.g. a query syntax it doesn't accept."""
+
+
 @dataclass
 class Candidate:
     source: str                  # "polyhaven", "nasa"
@@ -499,7 +504,10 @@ class Smithsonian(Source):
         try:
             reply = library.fetch_json(url + f"&api_key={urllib.parse.quote(key)}")
         except (library.DownloadError, ValueError) as exc:
-            raise SourceError(str(exc).replace(key, "***").replace(urllib.parse.quote(key), "***")) from None
+            msg = str(exc).replace(key, "***").replace(urllib.parse.quote(key), "***")
+            status = getattr(exc, "status", None)
+            refused = status is not None and 400 <= status < 500 and status != 429
+            raise (QueryRefused if refused else SourceError)(msg) from None
         return ((reply or {}).get("response") or {}).get("rows") or []
 
     @staticmethod
@@ -527,7 +535,9 @@ class Smithsonian(Source):
         if self.unavailable():
             raise SourceError(self.unavailable())
         out: dict[str, Candidate] = {}
-        forms = [self._form] if self._form else list(self.FORMS)
+        # The form that worked before first, then the others when it finds nothing for this
+        # asset (a record with a 3D model may be indexed only as "Images").
+        forms = [self._form] + [f for f in self.FORMS if f != self._form] if self._form else list(self.FORMS)
         requests, refused = 0, []
         for form in forms:
             try:
@@ -539,9 +549,11 @@ class Smithsonian(Source):
                                 out.setdefault(c.id, c)
                     if out:
                         break
-            except SourceError as exc:   # e.g. a 400 for a query syntax: try the next form
-                refused.append(f"{form}: {exc}")
-                continue
+            except QueryRefused as exc:   # this form's request refused (e.g. a 400): keep what it
+                refused.append(f"{form}: {exc}")   # found, else try the next form
+                if not out:
+                    continue
+            # a network failure or a 5xx (SourceError) is not a form problem: it is raised
             if out:
                 self._form = form
                 break

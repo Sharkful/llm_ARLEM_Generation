@@ -70,8 +70,8 @@ from routing import strict_schema  # noqa: E402
 
 RESULTS = "search_results.json"
 MAX_HITS = 30          # across all sources, per asset
-TOP_FOR_VISION = 12    # shown to the vision ranking
 KEEP = 10              # ranked candidates kept for a reviewer
+TOP_FOR_VISION = KEEP  # shown to the vision ranking: every ranked one is kept, so any can be picked
 FETCH_TRIES = 3        # candidates that fit, tried in rank order
 SOURCE_RELEVANT = 0.5  # a source's own score that keeps a hit through the text pass
 # A model over the triangle budget is kept and ranked, marked as needing simplification
@@ -259,9 +259,23 @@ def prepare(cand: sources.Candidate, asset: dict, work: Path, out: Path, thumb: 
     except BaseException:
         shutil.rmtree(out, ignore_errors=True)
         raise
-    if final.exists():
-        shutil.rmtree(final)
-    out.rename(final)
+    # Swap in: the earlier pick moves aside first and comes back if anything fails (e.g. a
+    # file of it is open in a viewer on Windows), so it is never left half deleted.
+    backup = final.parent / f".{final.name}.old"
+    shutil.rmtree(backup, ignore_errors=True)
+    moved = False
+    try:
+        if final.exists():
+            final.rename(backup)
+            moved = True
+        out.rename(final)
+    except BaseException:
+        if moved and not final.exists():
+            backup.rename(final)
+        shutil.rmtree(out, ignore_errors=True)
+        raise
+    if moved:
+        shutil.rmtree(backup, ignore_errors=True)
     shutil.rmtree(work, ignore_errors=True)
     result["files"] = {role: final / p.name for role, p in result["files"].items()}
     return result
@@ -597,6 +611,7 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
         folder = folders[asset["name"]]
         if key in choices:
             rec = dict(previous[key])
+            rec.pop("choose_error", None)   # an earlier failed choice
             try:
                 rec = choose(rec, choices[key], run_dir, folder, asset)
             except Exception as exc:   # the earlier result and its files stay as they were
@@ -620,6 +635,7 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
         else:
             continue
         if rec["status"] == "found" and store is not None and "_files" in rec:
+            rec.pop("save_error", None)   # an earlier failed save; set again if this one fails
             build_assets.save(store, rec)
         results[key] = rec
         write()
