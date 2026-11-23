@@ -38,7 +38,8 @@ served models. Part 6: the molecule builder (#111) against a mock PubChem server
 (3D records, idealized VSEPR geometry, lone pairs, formula lookup, failures), the
 builder route in describe and route, and ``build_assets.py`` (build, save, alias).
 
-Part 7: search (#110) against mock Poly Haven, GitHub and NASA servers with a fake
+Part 7: search (#110) against mock Poly Haven, GitHub, NASA, ambientCG, Poly Pizza and
+Smithsonian servers with a fake
 vision ranker: collecting, the license / format / budget filters, the text pass, the
 ranking checks, auto-pick, glTF to GLB, texture resizing, a Git LFS pointer, no match,
 text-only ranking, a reviewer's choice, resume, a model over budget, and --save.
@@ -1771,7 +1772,7 @@ class Routes:
 
 
 def part7(tmp: Path) -> None:
-    print("Part 7: search (#110), against mock Poly Haven, GitHub and NASA")
+    print("Part 7: search (#110), against mock Poly Haven, GitHub, NASA, ambientCG, Poly Pizza, Smithsonian")
     try:
         import trimesh
     except ImportError:
@@ -1782,8 +1783,10 @@ def part7(tmp: Path) -> None:
 
     srv = Routes()
     saved = (src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA, src.AMBIENTCG_API,
-             src.POLYPIZZA_API, src.POLYPIZZA_HOSTS)
+             src.POLYPIZZA_API, src.POLYPIZZA_HOSTS, src.SMITHSONIAN_API, lib.MAX_MODEL_TRIANGLES)
     saved_key = os.environ.pop(src.POLYPIZZA_KEY_ENV, None)
+    saved_si_key = os.environ.pop(src.SMITHSONIAN_KEY_ENV, None)
+    src.SMITHSONIAN_API = srv.base + "/si"
     src.POLYHAVEN_API, src.GITHUB_API = srv.base + "/ph", srv.base + "/gh"
     src.AMBIENTCG_API = srv.base + "/acg"
     src.POLYPIZZA_API, src.POLYPIZZA_HOSTS = srv.base + "/pp", ("127.0.0.1",)
@@ -1874,6 +1877,36 @@ def part7(tmp: Path) -> None:
         pp_model(ID="H2", Title="Heart Emoji", Licence="CC0 1.0", **{"Tri Count": 10 ** 6}),
         pp_model(ID="H3", Title="Heart Pillow", Licence="CC-BY-NC 4.0")]})
 
+    # Smithsonian: the /search reply shape (2026-11-23 sample): 3d_voyager media with resources
+    def si_media(vid, files, access="CC0"):
+        return {"id": f"3d_package:{vid}", "type": "3d_voyager", "voyagerId": f"3d_package:{vid}",
+                "usage": {"access": access, "text": "Thanks to a sponsor."},
+                "thumbnail": srv.base + f"/3d/{vid}/thumb.jpg",
+                "resources": [{"url": srv.base + f"/3d/{vid}/{name}", "filename": name, "category": "Low Resolution",
+                               "attributes": [{"MODEL_FILE_TYPE": kind, "DRACO_COMPRESSED": draco}, {"FILE_SIZE": size}]}
+                              for name, kind, draco, size in files]}
+    def si_row(title, media):
+        return {"id": "ld1-" + title, "title": title, "unitCode": "NMNH", "type": "edanmdm",
+                "content": {"freetext": {"notes": [{"label": "Description", "content": f"A scan of a {title}."}]},
+                            "indexedStructured": {"topic": ["Anatomy"], "object_type": ["specimen"],
+                                                  "online_media_type": ["Images"]},
+                            "descriptiveNonRepeating": {"record_link": f"https://collections.si.edu/{title}",
+                                                        "data_source": "NMNH - Anthropology",
+                                                        "online_media": {"media": [
+                                                            {"type": "Images", "usage": {"access": "CC0"}}, media]}}}}
+    srv.json("/si/search", {"status": 200, "response": {"rowCount": 3, "rows": [
+        si_row("Heart Specimen", si_media("big", [("heart-150k-4096-gltf_std.zip", "GLTF", False, 6),
+                                                  ("heart-100k-2048_std_draco.glb", "GLB", True, 1),
+                                                  ("heart-150k-4096_std.glb", "GLB", False, 8)])),
+        si_row("Human Heart Model", si_media("small", [("model-40k-2048_std.glb", "GLB", False, 3),
+                                                       ("model-40k-2048_std_draco.glb", "GLB", True, 1)])),
+        si_row("Heart Drawing", si_media("nc", [("d-10k-1024_std.glb", "GLB", False, 1)],
+                                         access="Usage conditions apply"))]}})
+    srv.file("/3d/small/model-40k-2048_std.glb", glb([1, 1, 2]))
+    for vid in ("big", "small", "nc"):
+        srv.file(f"/3d/{vid}/thumb.jpg", jpeg_bytes(32, 32))
+    srv.routes["/si-broken/search"] = (500, b"{}")
+
     # A plan with four search assets (one merged duplicate)
     run_dir = tmp / "search_run"
     run_dir.mkdir()
@@ -1890,7 +1923,7 @@ def part7(tmp: Path) -> None:
         planned("rocketPrefab", "model", ["saturn v rocket"], "The Saturn V rocket"),
         planned("unicornPrefab", "model", ["unicorn"], "A unicorn")]}), encoding="utf-8")
 
-    fits = {"Human Heart", "Red Brick Wall", "Saturn V", "Bricks 090", "Anatomical Heart"}
+    fits = {"Human Heart", "Red Brick Wall", "Saturn V", "Bricks 090", "Anatomical Heart", "Human Heart Model"}
     seen = {"calls": 0, "prompts": []}
 
     def ranker(response_model, messages, max_retries):
@@ -2021,6 +2054,39 @@ def part7(tmp: Path) -> None:
               "Poly Pizza: CC-BY credited (author, title, attribution line), NC and over-budget hits dropped, the key sent")
         os.environ.pop(src.POLYPIZZA_KEY_ENV, None)
 
+        os.environ[src.SMITHSONIAN_KEY_ENV] = "si-secret-key"
+        si = {c.name: c for c in src.SOURCES["smithsonian"].search(["human heart anatomy"], "model")}
+        check(si["Heart Specimen"].triangles == 150000 and si["Heart Specimen"].download_url.endswith("_std.glb")
+              and si["Human Heart Model"].download_url.endswith("model-40k-2048_std.glb")
+              and si["Heart Drawing"].license == "Usage conditions apply"
+              and si["Human Heart Model"].page_url.endswith("Human Heart Model") and "3d_package:small" in si["Human Heart Model"].id,
+              "Smithsonian: 3d_voyager media, the smallest uncompressed GLB, its triangle count from the file name")
+        srv.headers.clear()
+        code, text, by, res = run("--only", "heartPrefab", "--redo", "--sources", "smithsonian")
+        h = by["heartPrefab"]
+        paths = [p for p, _ in srv.headers]
+        check(h["status"] == "found" and h["ranked"][0]["name"] == "Human Heart Model"
+              and h["dropped"] == {"over_budget": 1, "license": 1}
+              and h["entry"]["provenance"]["license"] == "CC0-1.0"
+              and all("api_key=si-secret-key" in p for p in paths if p.startswith("/si/"))
+              and not any("si-secret-key" in p for p in paths if not p.startswith("/si/")),
+              "Smithsonian: CC0 only, a 150k scan over budget dropped, the key only on the API")
+        code, text, by, res = run("--only", "heartPrefab", "--redo", "--sources", "smithsonian",
+                                  "--max-triangles", "200000")
+        h = by["heartPrefab"]
+        check(h["dropped"] == {"license": 1} and res["max_triangles"] == 200000
+              and any(r["name"] == "Heart Specimen" for r in h["ranked"]),
+              "--max-triangles raises the limit for a run (recorded), keeping big scans")
+        lib.MAX_MODEL_TRIANGLES = saved[-1]
+        src.SMITHSONIAN_API = srv.base + "/si-broken"
+        try:
+            src.SOURCES["smithsonian"].search(["heart"], "model")
+            check(False, "a failed Smithsonian request never shows the key")
+        except src.SourceError as exc:
+            check("si-secret-key" not in str(exc) and "***" in str(exc), "a failed Smithsonian request never shows the key")
+        src.SMITHSONIAN_API = srv.base + "/si"
+        os.environ.pop(src.SMITHSONIAN_KEY_ENV, None)
+
         store = lib.LocalFolderStore(tmp / "libSearch", create=True)
         code, text, by, res = run("--only", "heartPrefab", "--redo", "--save", "--library", str(tmp / "libSearch"))
         h = by["heartPrefab"]
@@ -2034,10 +2100,11 @@ def part7(tmp: Path) -> None:
     finally:
         srv.close()
         (src.POLYHAVEN_API, src.GITHUB_API, src.GITHUB_RAW, src.GITHUB_MEDIA, src.AMBIENTCG_API,
-         src.POLYPIZZA_API, src.POLYPIZZA_HOSTS) = saved
-        os.environ.pop(src.POLYPIZZA_KEY_ENV, None)
-        if saved_key is not None:
-            os.environ[src.POLYPIZZA_KEY_ENV] = saved_key
+         src.POLYPIZZA_API, src.POLYPIZZA_HOSTS, src.SMITHSONIAN_API, lib.MAX_MODEL_TRIANGLES) = saved
+        for env, value in ((src.POLYPIZZA_KEY_ENV, saved_key), (src.SMITHSONIAN_KEY_ENV, saved_si_key)):
+            os.environ.pop(env, None)
+            if value is not None:
+                os.environ[env] = value
         src.SOURCES["polyhaven"].__init__()
         src.SOURCES["nasa"].__init__()
 

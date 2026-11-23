@@ -462,7 +462,7 @@ anything is routed.
 |---|---|---|---|---|
 | Poly Haven | Props, furniture, nature; PBR textures | CC0 | Public API, no key | **built** |
 | NASA 3D Resources | Spacecraft, planets, moons | No copyright (NASA media guidelines) | GitHub repository | **built** |
-| Smithsonian Open Access | Scanned objects and specimens | CC0 per item | API (api.data.gov key) | to do |
+| Smithsonian Open Access | Scanned objects and specimens | CC0 per item | API (api.data.gov key) | **built** |
 | Poly Pizza | Low-poly models | CC0 or CC-BY per model | API, free key | **built** |
 | ambientCG | PBR materials | CC0 | API, no key | **built** |
 
@@ -497,8 +497,22 @@ Terms checked before building:
   `CC-BY 3.0`; anything else is dropped). Without a key the source is skipped with a
   note; naming it with `--sources` is then an error.
 
-Smithsonian Open Access's docs couldn't be read from the build machine (DNS); its
-adapter waits until its terms are checked.
+- **Smithsonian Open Access** (API docs and a sample reply, 2026-11-23): an api.data.gov
+  key (`SMITHSONIAN_API_KEY` in `.env`) in the `api_key` query parameter, only to
+  `api.si.edu`, removed from every recorded error. Only media whose own
+  `usage.access` is `CC0` are used. Each record's `online_media.media` entries of type
+  `3d_voyager` list resources by format (GLB, glTF/OBJ zips, usdz), Draco compression,
+  size and a resolution tag in the file name (`-150k-4096`); the smallest uncompressed
+  GLB is used (trimesh can't read Draco), and the triangle count read from the file
+  name drops big scans before downloading. The `online_media_type:"3D Models"` filter
+  is tried first, then once without it (the sample's record has a 3D model but is
+  indexed only as "Images").
+
+**Scans are big.** The sample's GLBs are 100k and 150k triangles with 4096 px
+textures, 3x the proposed budget (#105), so with today's budget they are dropped.
+`search_assets.py --max-triangles N` raises the limit for a run (recorded in the
+results). Decimating a textured scan while keeping its texture belongs with the
+normalize step (#113).
 
 To evaluate before adding: **Objaverse** (about 800,000 Sketchfab-derived objects
 with captions; per-object license) and **Sketchfab** (needs a user login; owner

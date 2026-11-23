@@ -31,8 +31,15 @@ Built so far, the sources that need no key or login, their terms checked:
   and an attribution line, required by law for CC-BY and kept as the note. Without a
   key the source is skipped.
 
-Not built yet (#110): Smithsonian Open Access (an api.data.gov key); its docs couldn't
-be checked from the build machine.
+- **Smithsonian Open Access** (``smithsonian``; models; CC0 media only; API docs and a
+  sample reply read 2026-11-23). A free api.data.gov key (``SMITHSONIAN_API_KEY``) goes in
+  the ``api_key`` query parameter, only to ``api.si.edu``; it is removed from every error
+  message. ``/search`` with the ``online_media_type:"3D Models"`` filter (once more without
+  it when nothing comes back: a record with a 3D model can be indexed only as "Images");
+  each record's ``online_media.media`` entries of type ``3d_voyager`` with
+  ``usage.access`` CC0 are candidates, using the smallest uncompressed GLB (trimesh
+  can't read Draco). The triangle count is read from the file name (``-150k-``), so
+  big scans are dropped before downloading (raise the limit with ``--max-triangles``).
 
 Every request goes through ``library.download`` / ``library.fetch_json``: the shared
 retry policy, the size limit and the network-failure classification. Base URLs are
@@ -65,6 +72,8 @@ POLYPIZZA_API = "https://api.poly.pizza/v1.1"
 POLYPIZZA_HOSTS = ("api.poly.pizza", "static.poly.pizza")   # the only hosts that get the key
 POLYPIZZA_KEY_ENV = "POLY_PIZZA_API_KEY"
 POLYPIZZA_LICENCES = {"CC0 1.0": "CC0-1.0", "CC-BY 3.0": "CC-BY-3.0", "CC-BY 4.0": "CC-BY-4.0"}
+SMITHSONIAN_API = "https://api.si.edu/openaccess/api/v1.0"
+SMITHSONIAN_KEY_ENV = "SMITHSONIAN_API_KEY"
 GITHUB_API = "https://api.github.com"
 GITHUB_RAW = "https://raw.githubusercontent.com"
 GITHUB_MEDIA = "https://media.githubusercontent.com/media"
@@ -101,6 +110,7 @@ class Candidate:
     license_url: Optional[str] = None
     notes: str = ""
     mapping: Optional[str] = None   # textures: "tileable", "uv"... (library.LibraryEntry.mapping)
+    download_url: Optional[str] = None   # the file, when the search reply names it
 
     @property
     def key(self) -> str:
@@ -411,6 +421,7 @@ class PolyPizza(Source):
             tris = m.get("Tri Count")
             out.append(Candidate(
                 source=self.name, id=m["ID"], kind="model", name=m.get("Title") or m["ID"],
+                download_url=m["Download"],
                 page_url=f"https://poly.pizza/m/{m['ID']}", thumbnail_url=m.get("Thumbnail"),
                 license=POLYPIZZA_LICENCES.get(licence, licence),
                 author=((m.get("Creator") or {}).get("Username") or None),
@@ -422,12 +433,11 @@ class PolyPizza(Source):
                 notes=" ".join(filter(None, [m.get("Attribution"),
                                              "animated" if m.get("Animated") else None])),
             ))
-            out[-1].download_url = m["Download"]
         return out
 
     def fetch(self, cand, dest_dir):
-        url = getattr(cand, "download_url", None)
-        if not url:   # a candidate from a saved ranking: ask for the model again
+        url = cand.download_url
+        if not url:   # no link recorded: ask for the model again
             info = f"{POLYPIZZA_API}/model/{urllib.parse.quote(cand.id, safe='')}"
             url = (_json(info, self.headers_for(info)) or {}).get("Download")
             if not url:
@@ -437,7 +447,101 @@ class PolyPizza(Source):
         return dest
 
 
-SOURCES: dict[str, Source] = {s.name: s for s in (PolyHaven(), Nasa(), AmbientCG(), PolyPizza())}
+# ── Smithsonian Open Access ───────────────────────────────────────────
+
+
+class Smithsonian(Source):
+    name = "smithsonian"
+    kinds = ("model",)
+
+    def _key(self) -> Optional[str]:
+        return (os.environ.get(SMITHSONIAN_KEY_ENV) or "").strip() or None
+
+    def unavailable(self):
+        return None if self._key() else f"no API key (set {SMITHSONIAN_KEY_ENV} in .env)"
+
+    def _search(self, q: str, rows: int, three_d_only: bool) -> list[dict]:
+        url = f"{SMITHSONIAN_API}/search?q={urllib.parse.quote(q)}&rows={rows}"
+        if three_d_only:
+            url += "&fqs=" + urllib.parse.quote('["online_media_type:\\"3D Models\\""]')
+        key = self._key()
+        try:
+            reply = library.fetch_json(url + f"&api_key={urllib.parse.quote(key)}")
+        except (library.DownloadError, ValueError) as exc:
+            raise SourceError(str(exc).replace(key, "***").replace(urllib.parse.quote(key), "***")) from None
+        return ((reply or {}).get("response") or {}).get("rows") or []
+
+    @staticmethod
+    def _glb(media: dict) -> Optional[dict]:
+        """The smallest uncompressed GLB of a 3D media entry: {url, size, triangles}."""
+        best = None
+        for r in media.get("resources") or []:
+            attrs = {}
+            for a in r.get("attributes") or []:
+                attrs.update(a if isinstance(a, dict) else {})
+            if str(attrs.get("MODEL_FILE_TYPE", "")).upper() != "GLB" or attrs.get("DRACO_COMPRESSED"):
+                continue
+            m = re.search(r"-(\d+)k-", r.get("filename") or r.get("url") or "")
+            rec = {"url": r.get("url"), "size": attrs.get("FILE_SIZE"),
+                   "triangles": int(m.group(1)) * 1000 if m else None}
+            if rec["url"] and (best is None or (rec["size"] or 0) < (best["size"] or 0)):
+                best = rec
+        return best
+
+    def search(self, queries, kind, limit=PER_SOURCE):
+        if kind != "model":
+            return []
+        if self.unavailable():
+            raise SourceError(self.unavailable())
+        out: dict[str, Candidate] = {}
+        for three_d_only in (True, False):
+            for q in queries:
+                for row in self._search(q, limit if three_d_only else 50, three_d_only):
+                    for c in self._candidates(row):
+                        out.setdefault(c.id, c)
+            if out:
+                break
+        return list(out.values())[:limit]
+
+    def _candidates(self, row: dict) -> list[Candidate]:
+        content = row.get("content") or {}
+        dnr = content.get("descriptiveNonRepeating") or {}
+        free = content.get("freetext") or {}
+        idx = content.get("indexedStructured") or {}
+        title = row.get("title") or (dnr.get("title") or {}).get("content") or row.get("id", "")
+        desc = next((n.get("content", "") for n in free.get("notes") or []
+                     if n.get("label") == "Description"), "")
+        out = []
+        for media in (dnr.get("online_media") or {}).get("media") or []:
+            if media.get("type") != "3d_voyager":
+                continue
+            access = str((media.get("usage") or {}).get("access") or "")
+            glb = self._glb(media)
+            fmt = "glb" if glb else "glb-draco-or-none"   # no readable GLB: dropped as a format
+            out.append(Candidate(
+                source=self.name, id=media.get("voyagerId") or media.get("id") or row.get("id", ""),
+                kind="model", name=title, page_url=dnr.get("record_link") or dnr.get("guid") or "",
+                thumbnail_url=media.get("thumbnail"),
+                license="CC0-1.0" if access == "CC0" else (access or "unknown"),
+                author=dnr.get("data_source") or row.get("unitCode"), format=fmt,
+                triangles=glb["triangles"] if glb else None, file_size=glb["size"] if glb else None,
+                tags=[*(idx.get("topic") or []), *(idx.get("object_type") or [])],
+                description=" ".join(desc.split())[:600], license_url=library.LICENSE_URLS["CC0-1.0"],
+                download_url=glb["url"] if glb else None,
+                notes=" ".join(filter(None, [(media.get("usage") or {}).get("text"),
+                                             "Smithsonian Open Access (CC0)"]))))
+        return out
+
+    def fetch(self, cand, dest_dir):
+        if not cand.download_url:
+            raise SourceError(f"the Smithsonian record {cand.id!r} has no uncompressed GLB")
+        dest = dest_dir / "model.glb"
+        _download(cand.download_url, dest)   # 3d-api.si.edu: public files, no key
+        return dest
+
+
+SOURCES: dict[str, Source] = {s.name: s for s in (PolyHaven(), Nasa(), AmbientCG(), PolyPizza(),
+                                                   Smithsonian())}
 
 
 def sources_for(kind: str, names: Optional[list[str]] = None) -> list[Source]:

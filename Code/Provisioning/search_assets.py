@@ -437,6 +437,9 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
     ap.add_argument("--no-vision", action="store_true",
                     help="rank by text only and pick nothing (no API key needed)")
     ap.add_argument("--redo", action="store_true", help="search again assets already decided")
+    ap.add_argument("--max-triangles", type=int, metavar="N",
+                    help=f"triangle limit for this run (default library.MAX_MODEL_TRIANGLES, "
+                         f"{library.MAX_MODEL_TRIANGLES}); scans are often 100k-150k")
     ap.add_argument("--choose", nargs="+", metavar="NAME=RANK",
                     help="take this candidate from the saved ranking (no new search)")
     ap.add_argument("--save", action="store_true",
@@ -458,6 +461,10 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
     if not isinstance(manifest, dict) or manifest.get("tool") != "provision_lab":
         return fail(f"{manifest_path} is not a provision_lab manifest")
     run_dir = manifest_path.parent
+    if args.max_triangles is not None:
+        if args.max_triangles <= 0:
+            return fail("--max-triangles must be positive")
+        library.MAX_MODEL_TRIANGLES = args.max_triangles   # both the filter and the fetch check read it
     todo = build_assets.targets(manifest, route=lambda r: r == "search")
     folders = _folders(todo)
     by_key = {library.name_key(a["name"]): a for a in todo}
@@ -529,6 +536,7 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
             "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "sources": [s.name for s in chosen_sources],
             "vision_model": None if args.no_vision else args.model,
+            "max_triangles": library.MAX_MODEL_TRIANGLES,
             "llm": run_llm.summary() if run_llm is not None else None,
             "library_after": store.identity() if store is not None else None,
             "counts": {s: sum(r["status"] == s for r in results.values())
