@@ -541,9 +541,13 @@ description, the source's own relevance score, notes.
    best first, fits or not, a one-line reason. When unsure, it doesn't fit.
 5. Auto-pick: the best candidate that fits is fetched, converted (glTF to GLB; a
    texture to JPG within 2048 px), centered and scaled to a unit cube, and checked
-   against the triangle budget; if that fails, the next one that fits (up to 3). If the
-   best that fits is only over the budget: `needs_simplifying`, kept as `pending` for
-   #113. None fits: `no_match` (composite, #112, or a reviewer); all that fit fail:
+   against the triangle budget; if that fails, the next one that fits (up to 3). Fits
+   whose triangle count is already known to be over the budget are never downloaded
+   here and use no try. If the best that fits is only over the budget:
+   `needs_simplifying`, kept as `pending` for #113. Any error in one candidate fails
+   that candidate only. The chosen files are built in a staging folder and replace
+   `found/<asset>/` only once every check passed, so a failed `--choose` keeps the
+   earlier pick and its files. None fits: `no_match` (composite, #112, or a reviewer); all that fit fail:
    `failed`.
 
 Sources that match words literally (Poly Pizza, the Smithsonian; ambientCG already)
@@ -559,7 +563,8 @@ what was dropped and why, each source's hit count or error, and who chose (`auto
 searches only undecided assets (`--redo` all); `--choose NAME=RANK` applies a
 reviewer's choice from the saved ranking with no new search or call (#116 adds a
 tool for it); `--save` stores the found asset in the library with search provenance
-and the lab's names as aliases.
+and the lab's names as aliases, including assets an earlier run found and didn't save.
+A Smithsonian query form that is refused (e.g. HTTP 400) falls through to the next.
 
 ## Builders (#111 built, #114)
 

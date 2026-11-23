@@ -515,8 +515,10 @@ class Smithsonian(Source):
             m = re.search(r"-(\d+)k-", r.get("filename") or r.get("url") or "")
             rec = {"url": r.get("url"), "size": attrs.get("FILE_SIZE"),
                    "triangles": int(m.group(1)) * 1000 if m else None}
-            if rec["url"] and (best is None or (rec["size"] or 0) < (best["size"] or 0)):
-                best = rec
+            if rec["url"]:
+                rank = (rec["size"] is None, rec["size"] or 0)   # a known size first, then the smallest
+                if best is None or rank < (best["size"] is None, best["size"] or 0):
+                    best = rec
         return best
 
     def search(self, queries, kind, limit=PER_SOURCE):
@@ -526,20 +528,27 @@ class Smithsonian(Source):
             raise SourceError(self.unavailable())
         out: dict[str, Candidate] = {}
         forms = [self._form] if self._form else list(self.FORMS)
-        requests = 0
+        requests, refused = 0, []
         for form in forms:
-            for terms in query_terms(queries):   # phrases, then single words
-                for q in terms:
-                    requests += 1
-                    for row in self._search(q, 50 if form == "plain" else limit, form):
-                        for c in self._candidates(row):
-                            out.setdefault(c.id, c)
-                if out:
-                    break
+            try:
+                for terms in query_terms(queries):   # phrases, then single words
+                    for q in terms:
+                        requests += 1
+                        for row in self._search(q, 50 if form == "plain" else limit, form):
+                            for c in self._candidates(row):
+                                out.setdefault(c.id, c)
+                    if out:
+                        break
+            except SourceError as exc:   # e.g. a 400 for a query syntax: try the next form
+                refused.append(f"{form}: {exc}")
+                continue
             if out:
                 self._form = form
                 break
-        self.note = f"{requests} request(s); query form: {self._form or 'none found 3D models'}"
+        if not out and refused and len(refused) == len(forms):
+            raise SourceError("every query form failed: " + "; ".join(refused))
+        self.note = (f"{requests} request(s); query form: {self._form or 'none found 3D models'}"
+                     + (f"; refused: {'; '.join(refused)}" if refused else ""))
         return list(out.values())[:limit]
 
     def _candidates(self, row: dict) -> list[Candidate]:

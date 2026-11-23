@@ -1924,7 +1924,8 @@ def part7(tmp: Path) -> None:
         planned("rocketPrefab", "model", ["saturn v rocket"], "The Saturn V rocket"),
         planned("unicornPrefab", "model", ["unicorn"], "A unicorn")]}), encoding="utf-8")
 
-    fits = {"Human Heart", "Red Brick Wall", "Saturn V", "Bricks 090", "Anatomical Heart", "Human Heart Model"}
+    fits = {"Human Heart", "Red Brick Wall", "Saturn V", "Bricks 090", "Anatomical Heart", "Human Heart Model",
+            "Heart Specimen"}
     seen = {"calls": 0, "prompts": []}
 
     def ranker(response_model, messages, max_retries):
@@ -2017,6 +2018,29 @@ def part7(tmp: Path) -> None:
               "--choose takes a candidate from the saved ranking, with no new search or call")
         code, text, _, _ = run("--choose", "nothing=1", call_fn=None)
         check(code == 2, "--choose for an asset with no saved ranking -> exit 2")
+        kept_glb = run_dir / h["files"]["model"]
+        before = kept_glb.read_bytes()
+        lib.MAX_MODEL_TRIANGLES = 100   # the 320-triangle heart (rank 1) now fails its check
+        try:
+            code, text, by, res = run("--choose", "heartPrefab=1", call_fn=None)
+        finally:
+            lib.MAX_MODEL_TRIANGLES = saved[-1]
+        h = by["heartPrefab"]
+        check(h["status"] == "found" and h["chosen"]["by"] == "reviewer" and "choose_error" in h
+              and kept_glb.is_file() and kept_glb.read_bytes() == before
+              and not list((run_dir / "found").glob(".*.new")),
+              "a failed --choose keeps the earlier pick and its files (built in a staging folder)")
+        later = lib.LocalFolderStore(tmp / "libLater", create=True)
+        code, text, by, res = run("--save", "--library", str(tmp / "libLater"), call_fn=None)
+        later = lib.LocalFolderStore(tmp / "libLater")
+        check("searching 0 of" in text and by["heartPrefab"]["saved"]["added"]
+              and by["brickTexture"]["saved"]["added"] and len(later.entries()) == 3
+              and {"heartPrefab", "heartModel2"} <= set(later.get(by["heartPrefab"]["saved"]["asset_id"]).aliases),
+              "--save on a later run stores what earlier runs found (from found/), with no new search")
+        rev = lib.LocalFolderStore(tmp / "libLater").identity()["revision"]
+        code, text, by, res = run("--save", "--library", str(tmp / "libLater"), call_fn=None)
+        check(lib.LocalFolderStore(tmp / "libLater").identity()["revision"] == rev and "  found" not in text,
+              "saving again writes nothing for what was already saved")
 
         saved_budget = lib.MAX_MODEL_TRIANGLES
         lib.MAX_MODEL_TRIANGLES = 100
@@ -2082,12 +2106,13 @@ def part7(tmp: Path) -> None:
         check(h["status"] == "found" and h["ranked"][0]["name"] == "Human Heart Model"
               and h["dropped"] == {"license": 1} and specimen.get("needs_simplifying") is True
               and first_q == '(human heart anatomy) AND online_media_type:"3D Models"'
+              and not any("heart-150k" in p for p in paths)
               and "query form: fielded" in h["sources"]["smithsonian"]["note"]
               and h["entry"]["provenance"]["license"] == "CC0-1.0"
               and all("api_key=si-secret-key" in p for p in paths if p.startswith("/si/"))
               and not any("si-secret-key" in p for p in paths if not p.startswith("/si/")),
-              "Smithsonian: the 3D filter inside the query, CC0 only, a 150k scan kept and marked for "
-              "simplifying, the key only on the API")
+              "Smithsonian: the 3D filter inside the query, CC0 only, a 150k scan that fits kept and marked "
+              "for simplifying but never downloaded, the in-budget fit found, the key only on the API")
         code, text, by, res = run("--only", "heartPrefab", "--redo", "--sources", "smithsonian",
                                   "--max-triangles", "200000")
         h = by["heartPrefab"]
@@ -2103,6 +2128,57 @@ def part7(tmp: Path) -> None:
             check("si-secret-key" not in str(exc) and "***" in str(exc), "a failed Smithsonian request never shows the key")
         src.SMITHSONIAN_API = srv.base + "/si"
         os.environ.pop(src.SMITHSONIAN_KEY_ENV, None)
+
+        real_prepare = S.prepare
+
+        def boom(*a, **k):
+            raise RuntimeError("an unexpected bug")
+        S.prepare = boom
+        try:
+            code, text, by, res = run("--only", "brickTexture", "--redo")
+        finally:
+            S.prepare = real_prepare
+        b = by["brickTexture"]
+        check(code == 1 and b["status"] == "failed" and "RuntimeError: an unexpected bug" in b["fetch_errors"][0]["error"],
+              "an unexpected error in one candidate fails that candidate, not the run")
+        si_src = src.SOURCES["smithsonian"]
+        real_search, real_form = si_src._search, si_src._form
+        os.environ[src.SMITHSONIAN_KEY_ENV] = "si-secret-key"
+        row = si_row("Human Heart Model", si_media("small", [("model-40k-2048_std.glb", "GLB", False, 3)]))
+
+        def refuse_fielded(q, rows, form):
+            if form == "fielded":
+                raise src.SourceError("HTTP 400: bad request")
+            return [row]
+        si_src._search, si_src._form = refuse_fielded, None
+        try:
+            got = si_src.search(["heart"], "model")
+            note, form = si_src.note, si_src._form
+            si_src._search, si_src._form = (lambda q, rows, form: (_ for _ in ()).throw(src.SourceError("HTTP 400"))), None
+            try:
+                si_src.search(["heart"], "model")
+                all_refused = False
+            except src.SourceError as exc:
+                all_refused = "every query form failed" in str(exc)
+        finally:
+            si_src._search, si_src._form = real_search, real_form
+            os.environ.pop(src.SMITHSONIAN_KEY_ENV, None)
+        check(len(got) == 1 and form == "fqs" and "refused: fielded" in note and all_refused,
+              "a query form the Smithsonian refuses falls through to the next; all refused -> an error")
+        pick = src.Smithsonian._glb({"resources": [
+            {"url": "u/full_std.glb", "filename": "full_std.glb", "attributes": [{"MODEL_FILE_TYPE": "GLB"}]},
+            {"url": "u/low-40k-2048_std.glb", "filename": "low-40k-2048_std.glb",
+             "attributes": [{"MODEL_FILE_TYPE": "GLB"}, {"FILE_SIZE": 900}]}]})
+        check(pick["url"] == "u/low-40k-2048_std.glb", "a GLB with a known size beats one with none")
+
+        class Noted(src.Source):
+            name, kinds, note, truncated = "noted", ("model",), "form x", True
+
+            def search(self, queries, kind, limit=src.PER_SOURCE):
+                return []
+        _, per = S.collect({"name": "a", "kind": "model", "plan": {}}, [Noted()])
+        check(per["noted"]["note"] == "form x; the source's listing was cut short",
+              "a source's note and the cut-short note are both kept")
 
         store = lib.LocalFolderStore(tmp / "libSearch", create=True)
         code, text, by, res = run("--only", "heartPrefab", "--redo", "--save", "--library", str(tmp / "libSearch"))

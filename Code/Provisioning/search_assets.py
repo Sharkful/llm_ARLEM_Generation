@@ -104,10 +104,11 @@ def collect(asset: dict, chosen_sources: list) -> tuple[list[sources.Candidate],
         try:
             found = src.search(queries_for(asset), asset["kind"])
             per_source[src.name] = {"hits": len(found)}
-            if getattr(src, "note", ""):
-                per_source[src.name]["note"] = src.note
-            if getattr(src, "truncated", False):
-                per_source[src.name]["note"] = "the source's listing was cut short"
+            notes = [n for n in (getattr(src, "note", ""),
+                                 "the source's listing was cut short" if getattr(src, "truncated", False) else "")
+                     if n]
+            if notes:
+                per_source[src.name]["note"] = "; ".join(notes)
         except sources.SourceError as exc:
             per_source[src.name] = {"error": str(exc)}
             continue
@@ -249,9 +250,25 @@ def prepare(cand: sources.Candidate, asset: dict, work: Path, out: Path, thumb: 
         shutil.rmtree(work)
     work.mkdir(parents=True)
     main = sources.SOURCES[cand.source].fetch(cand, work)
+    final, out = out, out.parent / f".{out.name}.new"   # built here; replaces final only when all passed
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
+    try:
+        result = _prepare_files(cand, asset, main, out, thumb)
+    except BaseException:
+        shutil.rmtree(out, ignore_errors=True)
+        raise
+    if final.exists():
+        shutil.rmtree(final)
+    out.rename(final)
+    shutil.rmtree(work, ignore_errors=True)
+    result["files"] = {role: final / p.name for role, p in result["files"].items()}
+    return result
+
+
+def _prepare_files(cand: sources.Candidate, asset: dict, main: Path, out: Path, thumb: Optional[Path]) -> dict:
+    """Convert and check ``main`` into ``out`` (prepare's staging folder)."""
     files: dict[str, Path] = {}
     entry: dict = {}
     mods = []
@@ -299,7 +316,6 @@ def prepare(cand: sources.Candidate, asset: dict, work: Path, out: Path, thumb: 
     elif asset["kind"] == "texture":
         files["thumbnail"] = out / library.ROLE_FILES["thumbnail"]
         library.make_thumbnail(files["texture"], files["thumbnail"])
-    shutil.rmtree(work, ignore_errors=True)
     plan = asset.get("plan") or {}
     asset_id = f"{cand.source}_{_slug(cand.id)}"[:120]
     entry.update({
@@ -376,14 +392,21 @@ def search_one(asset: dict, run_dir: Path, folder: str, chosen_sources, run_llm)
         rec.update(status="needs_review", reason="ranked by text only (--no-vision); a reviewer chooses")
         return rec
     tries = []
-    for r, (c, fits, _) in zip(rec["ranked"], order):
-        if not fits or len(tries) >= FETCH_TRIES:
+    fitting = [(r, c) for r, (c, fits, _) in zip(rec["ranked"], order) if fits]
+    # Known to be over the budget (a source's triangle count): never downloaded here, and
+    # never using up a try that an in-budget candidate further down could have.
+    known_over = [r["rank"] for r, c in fitting if r["needs_simplifying"]]
+    for r, c in fitting:
+        if r["needs_simplifying"]:
             continue
+        if len(tries) >= FETCH_TRIES:
+            break
         try:
             got = prepare(c, asset, run_dir / "search" / folder / "fetch", run_dir / "found" / folder,
                           thumbs.get(c.key))
-        except sources.SourceError as exc:
-            tries.append({"rank": r["rank"], "error": str(exc), "over_budget": isinstance(exc, OverBudget)})
+        except Exception as exc:   # anything wrong with this candidate fails it, not the run
+            msg = str(exc) if isinstance(exc, sources.SourceError) else f"{type(exc).__name__}: {exc}"
+            tries.append({"rank": r["rank"], "error": msg, "over_budget": isinstance(exc, OverBudget)})
             continue
         rec.update(status="found", chosen={"rank": r["rank"], "by": "auto"}, entry=got["entry"],
                    files={k: _rel(v, run_dir) for k, v in got["files"].items()}, _files=got["files"])
@@ -391,9 +414,9 @@ def search_one(asset: dict, run_dir: Path, folder: str, chosen_sources, run_llm)
     if tries:
         rec["fetch_errors"] = tries
     if rec["status"] != "found":
-        over = [t for t in tries if t["over_budget"]]
+        over = sorted(known_over + [t["rank"] for t in tries if t["over_budget"]])
         if over:   # kept for the simplify step: the best match that fits, over the budget
-            rec.update(status="needs_simplifying", pending={"rank": over[0]["rank"]},
+            rec.update(status="needs_simplifying", pending={"rank": over[0]},
                        reason=f"the best match that fits is over the triangle budget of "
                               f"{library.MAX_MODEL_TRIANGLES}; simplifying (#113) will make it usable")
         else:
@@ -576,14 +599,24 @@ def main(argv: Optional[list[str]] = None, *, call_fn: Optional[llm.CallFn] = No
             rec = dict(previous[key])
             try:
                 rec = choose(rec, choices[key], run_dir, folder, asset)
-            except (ValueError, sources.SourceError) as exc:
-                rec["choose_error"] = str(exc)
+            except Exception as exc:   # the earlier result and its files stay as they were
+                rec["choose_error"] = (str(exc) if isinstance(exc, (ValueError, sources.SourceError))
+                                       else f"{type(exc).__name__}: {exc}")
                 print(f"  FAILED  {asset['name'][:32]:32} choosing rank {choices[key]}: {exc}")
                 results[key] = rec
                 write()
                 continue
         elif asset in to_search:
             rec = search_one(asset, run_dir, folder, chosen_sources, run_llm)
+        elif store is not None and previous.get(key, {}).get("status") == "found" \
+                and "saved" not in previous[key]:
+            # found by an earlier run, not saved yet: save it from its found/ files now
+            rec = dict(previous[key])
+            files = {role: run_dir / path for role, path in (rec.get("files") or {}).items()}
+            if files and all(p.is_file() for p in files.values()):
+                rec["_files"] = files
+            else:
+                rec["save_error"] = "its found/ files are missing; search it again with --redo"
         else:
             continue
         if rec["status"] == "found" and store is not None and "_files" in rec:
